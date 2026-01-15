@@ -1,6 +1,6 @@
 import React, { createContext, useState, useEffect, ReactNode } from 'react';
-import { authService } from '../services/authServices';
-import { User, LoginCredentials, RegisterCredentials } from '../types/user';
+import { authServices } from '../services/authServices';
+import { User, LoginCredentials, RegisterCredentials } from '../types/auth';
 
 /**
  * Interface do contexto de autenticação
@@ -35,7 +35,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   useEffect(() => {
     // Observar mudanças no estado de autenticação
-    const unsubscribe = authService.onAuthStateChange((user) => {
+    const unsubscribe = authServices.onAuthStateChange((user) => {
       setUser(user);
       setLoading(false);
     });
@@ -52,8 +52,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     console.log('🟢 [AUTH CONTEXT] Credentials:', { email: credentials.email, passwordLength: credentials.password.length });
     try {
       setLoading(true);
-      console.log('🟢 [AUTH CONTEXT] Chamando authService.login...');
-      const userData = await authService.login(credentials);
+      console.log('🟢 [AUTH CONTEXT] Chamando authServices.login...');
+      const userData = await authServices.login(credentials);
       console.log('🟢 [AUTH CONTEXT] Login bem-sucedido, user:', userData);
       setUser(userData);
       console.log('🟢 [AUTH CONTEXT] Estado do usuário atualizado');
@@ -74,7 +74,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const signUp = async (credentials: RegisterCredentials): Promise<void> => {
     try {
       setLoading(true);
-      const userData = await authService.register(credentials);
+      const userData = await authServices.register(credentials);
       setUser(userData);
     } catch (error: any) {
       console.error('Erro ao registrar:', error);
@@ -90,7 +90,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const signOut = async (): Promise<void> => {
     try {
       setLoading(true);
-      await authService.logout();
+      await authServices.logout();
       setUser(null);
     } catch (error: any) {
       console.error('Erro ao fazer logout:', error);

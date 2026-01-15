@@ -1,7 +1,8 @@
 import React from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { AuthProvider } from './src/contexts/AuthContext';
-import { AppRoutes } from './src/routes/AppRoutes';
+import { NavigationProvider } from './src/routes/NavigationContext';
+import { Router } from './src/routes/Router';
 
 /**
  * Componente principal da aplicação
@@ -10,8 +11,10 @@ import { AppRoutes } from './src/routes/AppRoutes';
 export default function App() {
   return (
     <AuthProvider>
-      <AppRoutes />
-      <StatusBar style="auto" />
+      <NavigationProvider>
+        <Router />
+        <StatusBar style="auto" />
+      </NavigationProvider>
     </AuthProvider>
   );
 }

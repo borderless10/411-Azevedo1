@@ -10,30 +10,84 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../hooks/useAuth';
+import { useNavigation } from '../../routes/NavigationContext';
 import { getErrorMessage } from '../../components/ui/ErrorMessage';
 
-export const LoginScreen = ({ navigation }: any) => {
+export const LoginScreen = () => {
+  const { navigate } = useNavigation();
   const { signIn } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState({
+    email: '',
+    password: '',
+    general: '',
+  });
+
+  // Validar email em tempo real
+  const validateEmail = (text: string): string => {
+    if (!text.trim()) {
+      return 'Email é obrigatório';
+    }
+    if (!text.includes('@')) {
+      return 'Email deve conter @';
+    }
+    if (!text.includes('.')) {
+      return 'Email inválido';
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(text)) {
+      return 'Formato de email inválido';
+    }
+    return '';
+  };
+
+  // Validar senha em tempo real
+  const validatePassword = (text: string): string => {
+    if (!text.trim()) {
+      return 'Senha é obrigatória';
+    }
+    if (text.length < 6) {
+      return 'Senha deve ter pelo menos 6 caracteres';
+    }
+    return '';
+  };
+
+  // Handler para mudança de email
+  const handleEmailChange = (text: string) => {
+    setEmail(text);
+    if (errors.email || text.trim()) {
+      setErrors(prev => ({ ...prev, email: validateEmail(text) }));
+    }
+  };
+
+  // Handler para mudança de senha
+  const handlePasswordChange = (text: string) => {
+    setPassword(text);
+    if (errors.password || text.trim()) {
+      setErrors(prev => ({ ...prev, password: validatePassword(text) }));
+    }
+  };
 
   const handleLogin = async () => {
     console.log('🔵 [LOGIN] Iniciando processo de login...');
-    console.log('🔵 [LOGIN] Email:', email);
-    console.log('🔵 [LOGIN] Password length:', password.length);
     
-    // Validações
-    if (!email.trim()) {
-      console.log('❌ [LOGIN] Email vazio');
-      Alert.alert('Erro', 'Por favor, informe seu email');
-      return;
-    }
-
-    if (!password.trim()) {
-      console.log('❌ [LOGIN] Senha vazia');
-      Alert.alert('Erro', 'Por favor, informe sua senha');
+    // Limpar erros anteriores
+    setErrors({ email: '', password: '', general: '' });
+    
+    // Validar campos
+    const emailError = validateEmail(email);
+    const passwordError = validatePassword(password);
+    
+    if (emailError || passwordError) {
+      setErrors({
+        email: emailError,
+        password: passwordError,
+        general: '',
+      });
       return;
     }
 
@@ -42,21 +96,25 @@ export const LoginScreen = ({ navigation }: any) => {
       setLoading(true);
       await signIn({ email: email.trim(), password });
       console.log('✅ [LOGIN] Login bem-sucedido!');
-      // Navegação automática via AppRoutes
     } catch (error: any) {
       console.log('❌ [LOGIN] Erro:', error);
-      console.log('❌ [LOGIN] Error code:', error.code);
-      console.log('❌ [LOGIN] Error message:', error.message);
-      const message = getErrorMessage(error.code);
-      Alert.alert('Erro ao fazer login', message);
+      let errorMessage = getErrorMessage(error.code);
+      
+      // Mapear erros específicos para os campos
+      if (error.code === 'auth/invalid-email' || error.code === 'auth/user-not-found') {
+        setErrors(prev => ({ ...prev, email: errorMessage }));
+      } else if (error.code === 'auth/wrong-password') {
+        setErrors(prev => ({ ...prev, password: 'Senha incorreta' }));
+      } else {
+        setErrors(prev => ({ ...prev, general: errorMessage }));
+      }
     } finally {
       setLoading(false);
-      console.log('🔵 [LOGIN] Loading finalizado');
     }
   };
 
   const handleGoToRegister = () => {
-    navigation.navigate('Register');
+    navigate('Register');
   };
 
   return (
@@ -67,37 +125,90 @@ export const LoginScreen = ({ navigation }: any) => {
       <View style={styles.content}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>💰 Controle Financeiro</Text>
+          <View style={styles.iconContainer}>
+            <Ionicons name="wallet" size={64} color="#007AFF" />
+          </View>
+          <Text style={styles.title}>Controle Financeiro</Text>
           <Text style={styles.subtitle}>Faça login para continuar</Text>
         </View>
 
         {/* Form */}
         <View style={styles.form}>
+          {/* Mensagem de erro geral */}
+          {errors.general ? (
+            <View style={styles.errorContainer}>
+              <Ionicons name="alert-circle" size={20} color="#F44336" />
+              <Text style={styles.errorText}>{errors.general}</Text>
+            </View>
+          ) : null}
+
           <View style={styles.inputContainer}>
-            <Text style={styles.label}>Email</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="seu@email.com"
-              placeholderTextColor="#999"
-              value={email}
-              onChangeText={setEmail}
-              autoCapitalize="none"
-              keyboardType="email-address"
-              editable={!loading}
-            />
+            <Text style={styles.label}>
+              <Ionicons name="mail" size={16} color="#007AFF" /> Email
+            </Text>
+            <View style={[
+              styles.inputWrapper,
+              errors.email ? styles.inputWrapperError : null
+            ]}>
+              <Ionicons 
+                name="mail-outline" 
+                size={20} 
+                color={errors.email ? "#F44336" : "#999"} 
+                style={styles.inputIcon} 
+              />
+              <TextInput
+                style={styles.inputWithIcon}
+                placeholder="seu@email.com"
+                placeholderTextColor="#999"
+                value={email}
+                onChangeText={handleEmailChange}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                editable={!loading}
+              />
+              {errors.email ? (
+                <Ionicons name="close-circle" size={20} color="#F44336" style={styles.errorIcon} />
+              ) : email.trim() && !errors.email ? (
+                <Ionicons name="checkmark-circle" size={20} color="#4CAF50" style={styles.errorIcon} />
+              ) : null}
+            </View>
+            {errors.email ? (
+              <Text style={styles.errorTextSmall}>{errors.email}</Text>
+            ) : null}
           </View>
 
           <View style={styles.inputContainer}>
-            <Text style={styles.label}>Senha</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="••••••••"
-              placeholderTextColor="#999"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              editable={!loading}
-            />
+            <Text style={styles.label}>
+              <Ionicons name="lock-closed" size={16} color="#007AFF" /> Senha
+            </Text>
+            <View style={[
+              styles.inputWrapper,
+              errors.password ? styles.inputWrapperError : null
+            ]}>
+              <Ionicons 
+                name="lock-closed-outline" 
+                size={20} 
+                color={errors.password ? "#F44336" : "#999"} 
+                style={styles.inputIcon} 
+              />
+              <TextInput
+                style={styles.inputWithIcon}
+                placeholder="••••••••"
+                placeholderTextColor="#999"
+                value={password}
+                onChangeText={handlePasswordChange}
+                secureTextEntry
+                editable={!loading}
+              />
+              {errors.password ? (
+                <Ionicons name="close-circle" size={20} color="#F44336" style={styles.errorIcon} />
+              ) : password.trim() && !errors.password ? (
+                <Ionicons name="checkmark-circle" size={20} color="#4CAF50" style={styles.errorIcon} />
+              ) : null}
+            </View>
+            {errors.password ? (
+              <Text style={styles.errorTextSmall}>{errors.password}</Text>
+            ) : null}
           </View>
 
           <TouchableOpacity
@@ -108,7 +219,10 @@ export const LoginScreen = ({ navigation }: any) => {
             {loading ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.buttonText}>Entrar</Text>
+              <View style={styles.buttonContent}>
+                <Ionicons name="log-in" size={20} color="#fff" />
+                <Text style={styles.buttonText}>Entrar</Text>
+              </View>
             )}
           </TouchableOpacity>
 
@@ -141,6 +255,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 48,
   },
+  iconContainer: {
+    marginBottom: 16,
+    padding: 20,
+    backgroundColor: '#E3F2FD',
+    borderRadius: 100,
+  },
   title: {
     fontSize: 32,
     fontWeight: 'bold',
@@ -162,6 +282,28 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#333',
     marginBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    paddingLeft: 16,
+    paddingRight: 16,
+  },
+  inputWrapperError: {
+    borderColor: '#F44336',
+    borderWidth: 2,
+  },
+  inputIcon: {
+    marginRight: 12,
+  },
+  errorIcon: {
+    marginLeft: 8,
   },
   input: {
     backgroundColor: '#fff',
@@ -170,6 +312,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     borderWidth: 1,
     borderColor: '#e0e0e0',
+    color: '#333',
+  },
+  inputWithIcon: {
+    flex: 1,
+    padding: 16,
+    fontSize: 16,
     color: '#333',
   },
   button: {
@@ -189,10 +337,16 @@ const styles = StyleSheet.create({
     shadowOpacity: 0,
     elevation: 0,
   },
+  buttonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   buttonText: {
     color: '#fff',
     fontSize: 18,
     fontWeight: 'bold',
+    marginLeft: 8,
   },
   linkButton: {
     marginTop: 24,
@@ -205,6 +359,27 @@ const styles = StyleSheet.create({
   linkTextBold: {
     color: '#007AFF',
     fontWeight: 'bold',
+  },
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFEBEE',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+    gap: 8,
+  },
+  errorText: {
+    flex: 1,
+    color: '#F44336',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  errorTextSmall: {
+    color: '#F44336',
+    fontSize: 12,
+    marginTop: 4,
+    marginLeft: 4,
   },
 });
 
