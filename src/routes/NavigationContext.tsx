@@ -8,7 +8,7 @@ export type ScreenName =
   | "IncomeList"
   | "AddExpense"
   | "ExpenseList"
-  | "Dashboard"
+  | "Dashboard" 
   | "Profile"
   | "Settings";
 
