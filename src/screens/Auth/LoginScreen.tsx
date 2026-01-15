@@ -20,26 +20,38 @@ export const LoginScreen = ({ navigation }: any) => {
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async () => {
+    console.log('🔵 [LOGIN] Iniciando processo de login...');
+    console.log('🔵 [LOGIN] Email:', email);
+    console.log('🔵 [LOGIN] Password length:', password.length);
+    
     // Validações
     if (!email.trim()) {
+      console.log('❌ [LOGIN] Email vazio');
       Alert.alert('Erro', 'Por favor, informe seu email');
       return;
     }
 
     if (!password.trim()) {
+      console.log('❌ [LOGIN] Senha vazia');
       Alert.alert('Erro', 'Por favor, informe sua senha');
       return;
     }
 
     try {
+      console.log('🔵 [LOGIN] Chamando signIn...');
       setLoading(true);
       await signIn({ email: email.trim(), password });
+      console.log('✅ [LOGIN] Login bem-sucedido!');
       // Navegação automática via AppRoutes
     } catch (error: any) {
+      console.log('❌ [LOGIN] Erro:', error);
+      console.log('❌ [LOGIN] Error code:', error.code);
+      console.log('❌ [LOGIN] Error message:', error.message);
       const message = getErrorMessage(error.code);
       Alert.alert('Erro ao fazer login', message);
     } finally {
       setLoading(false);
+      console.log('🔵 [LOGIN] Loading finalizado');
     }
   };
 

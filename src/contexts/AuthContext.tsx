@@ -48,15 +48,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
    * Função de login
    */
   const signIn = async (credentials: LoginCredentials): Promise<void> => {
+    console.log('🟢 [AUTH CONTEXT] signIn chamado');
+    console.log('🟢 [AUTH CONTEXT] Credentials:', { email: credentials.email, passwordLength: credentials.password.length });
     try {
       setLoading(true);
+      console.log('🟢 [AUTH CONTEXT] Chamando authService.login...');
       const userData = await authService.login(credentials);
+      console.log('🟢 [AUTH CONTEXT] Login bem-sucedido, user:', userData);
       setUser(userData);
+      console.log('🟢 [AUTH CONTEXT] Estado do usuário atualizado');
     } catch (error: any) {
-      console.error('Erro ao fazer login:', error);
+      console.error('❌ [AUTH CONTEXT] Erro ao fazer login:', error);
+      console.error('❌ [AUTH CONTEXT] Error code:', error.code);
+      console.error('❌ [AUTH CONTEXT] Error message:', error.message);
       throw error;
     } finally {
       setLoading(false);
+      console.log('🟢 [AUTH CONTEXT] Loading finalizado');
     }
   };
 

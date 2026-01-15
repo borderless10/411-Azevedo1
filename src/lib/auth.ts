@@ -30,16 +30,24 @@ export const convertFirebaseUser = (firebaseUser: FirebaseUser): User => {
 export const loginUser = async (
   credentials: LoginCredentials
 ): Promise<User> => {
+  console.log('🟡 [LIB/AUTH] loginUser chamado');
+  console.log('🟡 [LIB/AUTH] Email:', credentials.email);
   try {
+    console.log('🟡 [LIB/AUTH] Chamando signInWithEmailAndPassword...');
     const userCredential: UserCredential = await signInWithEmailAndPassword(
       auth,
       credentials.email,
       credentials.password
     );
+    console.log('🟡 [LIB/AUTH] Firebase retornou credenciais:', userCredential.user.uid);
     
-    return convertFirebaseUser(userCredential.user);
+    const user = convertFirebaseUser(userCredential.user);
+    console.log('🟡 [LIB/AUTH] Usuário convertido:', user);
+    return user;
   } catch (error: any) {
-    console.error('Erro ao fazer login:', error);
+    console.error('❌ [LIB/AUTH] Erro ao fazer login:', error);
+    console.error('❌ [LIB/AUTH] Error code:', error.code);
+    console.error('❌ [LIB/AUTH] Error message:', error.message);
     throw error;
   }
 };
