@@ -88,10 +88,12 @@ export const isYesterday = (date: Date): boolean => {
 };
 
 /**
- * Obter primeiro dia do mês
+ * Obter primeiro dia do mês (início do dia: 00:00:00)
  */
 export const getFirstDayOfMonth = (date: Date): Date => {
-  return new Date(date.getFullYear(), date.getMonth(), 1);
+  const result = new Date(date.getFullYear(), date.getMonth(), 1);
+  result.setHours(0, 0, 0, 0);
+  return result;
 };
 
 /**

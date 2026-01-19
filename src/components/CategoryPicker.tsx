@@ -23,6 +23,7 @@ interface CategoryPickerProps {
   error?: string;
   editable?: boolean;
   style?: ViewStyle;
+  required?: boolean;
 }
 
 export const CategoryPicker: React.FC<CategoryPickerProps> = ({
@@ -33,6 +34,7 @@ export const CategoryPicker: React.FC<CategoryPickerProps> = ({
   error,
   editable = true,
   style,
+  required = false,
 }) => {
   const [modalVisible, setModalVisible] = useState(false);
   const categories = getCategoriesByType(type);
@@ -48,6 +50,7 @@ export const CategoryPicker: React.FC<CategoryPickerProps> = ({
     <View style={[styles.container, style]}>
       <Text style={styles.label}>
         <Ionicons name="pricetag" size={16} color="#007AFF" /> {label}
+        {required && <Text style={styles.required}> *</Text>}
       </Text>
 
       <TouchableOpacity
@@ -64,7 +67,7 @@ export const CategoryPicker: React.FC<CategoryPickerProps> = ({
             <Ionicons
               name={selectedCat.icon as any}
               size={20}
-              color={selectedCat.color}
+              color={error ? '#F44336' : selectedCat.color}
               style={styles.inputIcon}
             />
             <Text style={styles.categoryText}>{selectedCat.name}</Text>
@@ -74,13 +77,20 @@ export const CategoryPicker: React.FC<CategoryPickerProps> = ({
             <Ionicons
               name="pricetag-outline"
               size={20}
-              color="#999"
+              color={error ? '#F44336' : '#999'}
               style={styles.inputIcon}
             />
-            <Text style={styles.placeholderText}>Selecione uma categoria</Text>
+            <Text style={styles.placeholderText}>
+              Selecione uma categoria{required ? ' *' : ''}
+            </Text>
           </>
         )}
-        <Ionicons name="chevron-down" size={20} color="#999" style={styles.icon} />
+        <Ionicons 
+          name={error ? "close-circle" : "chevron-down"} 
+          size={20} 
+          color={error ? "#F44336" : "#999"} 
+          style={styles.icon} 
+        />
       </TouchableOpacity>
 
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
@@ -145,6 +155,9 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#333',
     marginBottom: 8,
+  },
+  required: {
+    color: '#F44336',
   },
   inputWrapper: {
     flexDirection: 'row',

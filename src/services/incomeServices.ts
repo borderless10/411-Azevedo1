@@ -146,33 +146,47 @@ export const incomeServices = {
     console.log('💰 [INCOME SERVICE] Filtros:', filters);
 
     try {
+      // Buscar todas as rendas do usuário (evita problemas de índice)
       let q = query(
         getIncomesCollection(),
-        where('userId', '==', userId),
-        orderBy('date', 'desc')
+        where('userId', '==', userId)
       );
 
-      // Aplicar filtros se fornecidos
-      if (filters?.startDate) {
-        q = query(q, where('date', '>=', Timestamp.fromDate(filters.startDate)));
-      }
-
-      if (filters?.endDate) {
-        q = query(q, where('date', '<=', Timestamp.fromDate(filters.endDate)));
-      }
-
-      if (filters?.category) {
-        q = query(q, where('category', '==', filters.category));
-      }
-
       const snapshot = await getDocs(q);
-      console.log('💰 [INCOME SERVICE] Encontradas', snapshot.size, 'rendas');
+      console.log('💰 [INCOME SERVICE] Encontradas', snapshot.size, 'rendas no total');
 
+      // Converter todos os documentos
       let incomes = snapshot.docs.map((doc) =>
         convertIncomeFromFirestore(getDocData(doc))
       );
 
-      // Filtros adicionais (não suportados por índices compostos)
+      // Aplicar filtros no cliente (mais confiável)
+      if (filters?.startDate) {
+        const startDate = new Date(filters.startDate);
+        startDate.setHours(0, 0, 0, 0);
+        incomes = incomes.filter((income) => {
+          const incomeDate = new Date(income.date);
+          incomeDate.setHours(0, 0, 0, 0);
+          return incomeDate >= startDate;
+        });
+        console.log('💰 [INCOME SERVICE] Após filtrar por data inicial:', incomes.length, 'rendas');
+      }
+
+      if (filters?.endDate) {
+        const endDate = new Date(filters.endDate);
+        endDate.setHours(23, 59, 59, 999);
+        incomes = incomes.filter((income) => {
+          const incomeDate = new Date(income.date);
+          return incomeDate <= endDate;
+        });
+        console.log('💰 [INCOME SERVICE] Após filtrar por data final:', incomes.length, 'rendas');
+      }
+
+      if (filters?.category) {
+        incomes = incomes.filter((income) => income.category === filters.category);
+        console.log('💰 [INCOME SERVICE] Após filtrar por categoria:', incomes.length, 'rendas');
+      }
+
       if (filters?.minValue) {
         incomes = incomes.filter((income) => income.value >= filters.minValue!);
       }
@@ -188,6 +202,10 @@ export const incomeServices = {
         );
       }
 
+      // Ordenar por data (mais recente primeiro)
+      incomes.sort((a, b) => b.date.getTime() - a.date.getTime());
+
+      console.log('💰 [INCOME SERVICE] Total final de rendas:', incomes.length);
       return incomes;
     } catch (error) {
       console.error('❌ [INCOME SERVICE] Erro ao buscar rendas:', error);
@@ -434,22 +452,31 @@ export const incomeServices = {
     console.log('💰 [INCOME SERVICE] Buscando últimas', limitCount, 'rendas');
 
     try {
+      // Buscar todas as rendas e ordenar no cliente (evita necessidade de índice composto)
       const q = query(
         getIncomesCollection(),
-        where('userId', '==', userId),
-        orderBy('createdAt', 'desc'),
-        limit(limitCount)
+        where('userId', '==', userId)
       );
 
       const snapshot = await getDocs(q);
-      const incomes = snapshot.docs.map((doc) =>
+      let incomes = snapshot.docs.map((doc) =>
         convertIncomeFromFirestore(getDocData(doc))
       );
 
+      // Ordenar por data de criação (mais recente primeiro) e limitar
+      incomes = incomes
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+        .slice(0, limitCount);
+
       console.log('💰 [INCOME SERVICE] Rendas recentes:', incomes.length);
       return incomes;
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ [INCOME SERVICE] Erro ao buscar rendas recentes:', error);
+      // Se houver erro de índice, retornar array vazio
+      if (error?.code === 'failed-precondition') {
+        console.warn('⚠️ [INCOME SERVICE] Índice não encontrado, retornando array vazio');
+        return [];
+      }
       throw error;
     }
   },

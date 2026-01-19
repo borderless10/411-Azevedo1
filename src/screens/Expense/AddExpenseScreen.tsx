@@ -1,5 +1,5 @@
 /**
- * Tela de Cadastro de Renda
+ * Tela de Cadastro de Gasto
  */
 
 import React, { useState } from 'react';
@@ -21,22 +21,23 @@ import { Button } from '../../components/ui/Button/Button';
 import { CurrencyInput } from '../../components/CurrencyInput';
 import { DatePicker } from '../../components/DatePicker';
 import { CategoryPicker } from '../../components/CategoryPicker';
-import incomeServices from '../../services/incomeServices';
+import expenseServices from '../../services/expenseServices';
 import { formatCurrency } from '../../utils/currencyUtils';
 
-export const AddIncomeScreen = () => {
+export const AddExpenseScreen = () => {
   const { user } = useAuth();
   const { navigate } = useNavigation();
 
   const [value, setValue] = useState(0);
   const [description, setDescription] = useState('');
   const [date, setDate] = useState(new Date());
-  const [category, setCategory] = useState<string>('Outros');
+  const [category, setCategory] = useState<string>('Alimentação');
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({
     value: '',
     description: '',
     date: '',
+    category: '',
     general: '',
   });
 
@@ -76,6 +77,13 @@ export const AddIncomeScreen = () => {
     return '';
   };
 
+  const validateCategory = (cat: string): string => {
+    if (!cat || cat.trim().length === 0) {
+      return 'Categoria é obrigatória';
+    }
+    return '';
+  };
+
   // Handlers
   const handleValueChange = (val: number) => {
     setValue(val);
@@ -96,22 +104,29 @@ export const AddIncomeScreen = () => {
     setErrors((prev) => ({ ...prev, date: validateDate(selectedDate) }));
   };
 
+  const handleCategoryChange = (cat: string) => {
+    setCategory(cat);
+    setErrors((prev) => ({ ...prev, category: validateCategory(cat) }));
+  };
+
   const handleSave = async () => {
-    console.log('💰 Salvando renda...');
+    console.log('💸 Salvando gasto...');
 
     // Limpar erros
-    setErrors({ value: '', description: '', date: '', general: '' });
+    setErrors({ value: '', description: '', date: '', category: '', general: '' });
 
     // Validar todos os campos
     const valueError = validateValue(value);
     const descriptionError = validateDescription(description);
     const dateError = validateDate(date);
+    const categoryError = validateCategory(category);
 
-    if (valueError || descriptionError || dateError) {
+    if (valueError || descriptionError || dateError || categoryError) {
       setErrors({
         value: valueError,
         description: descriptionError,
         date: dateError,
+        category: categoryError,
         general: 'Por favor, corrija os erros antes de salvar',
       });
       return;
@@ -125,15 +140,15 @@ export const AddIncomeScreen = () => {
     try {
       setLoading(true);
 
-      const incomeData = {
+      const expenseData = {
         value,
         description: description.trim(),
         date,
         category,
       };
 
-      const newIncome = await incomeServices.createIncome(user.id, incomeData);
-      console.log('✅ Renda criada:', newIncome);
+      const newExpense = await expenseServices.createExpense(user.id, expenseData);
+      console.log('✅ Gasto criado:', newExpense);
 
       // Armazenar valor antes de limpar para usar na mensagem
       const savedValue = value;
@@ -142,7 +157,7 @@ export const AddIncomeScreen = () => {
       setValue(0);
       setDescription('');
       setDate(new Date());
-      setCategory('Outros');
+      setCategory('Alimentação');
 
       // Parar loading antes de mostrar alert
       setLoading(false);
@@ -150,12 +165,12 @@ export const AddIncomeScreen = () => {
       // Mostrar mensagem de confirmação e navegar para Home
       Alert.alert(
         'Sucesso! ✅',
-        `Renda de ${formatCurrency(savedValue)} registrada com sucesso!`,
+        `Gasto de ${formatCurrency(savedValue)} registrado com sucesso!`,
         [
           {
             text: 'OK',
             onPress: () => {
-              console.log('🏠 Navegando para Home após salvar renda...');
+              console.log('🏠 Navegando para Home após salvar gasto...');
               navigate('Home');
             },
             style: 'default',
@@ -164,10 +179,10 @@ export const AddIncomeScreen = () => {
         { cancelable: false }
       );
     } catch (error: any) {
-      console.error('❌ Erro ao salvar renda:', error);
+      console.error('❌ Erro ao salvar gasto:', error);
       setErrors((prev) => ({
         ...prev,
-        general: error.message || 'Erro ao salvar renda. Tente novamente.',
+        general: error.message || 'Erro ao salvar gasto. Tente novamente.',
       }));
       setLoading(false);
     }
@@ -179,7 +194,7 @@ export const AddIncomeScreen = () => {
 
   return (
     <Layout 
-      title="Nova Renda"
+      title="Novo Gasto"
       showBackButton={true}
       showSidebar={false}
     >
@@ -195,127 +210,138 @@ export const AddIncomeScreen = () => {
             {/* Header visual */}
             <View style={styles.header}>
               <View style={styles.iconContainer}>
-                <Ionicons name="add-circle" size={64} color="#4CAF50" />
+                <Ionicons name="remove-circle" size={64} color="#F44336" />
               </View>
               <Text style={styles.subtitle}>
-                Registre uma entrada de dinheiro
+                Registre uma saída de dinheiro
               </Text>
             </View>
 
-          {/* Erro geral */}
-          {errors.general ? (
-            <View style={styles.errorContainer}>
-              <Ionicons name="alert-circle" size={20} color="#F44336" />
-              <Text style={styles.errorText}>{errors.general}</Text>
-            </View>
-          ) : null}
+            {/* Erro geral */}
+            {errors.general ? (
+              <View style={styles.errorContainer}>
+                <Ionicons name="alert-circle" size={20} color="#F44336" />
+                <Text style={styles.errorText}>{errors.general}</Text>
+              </View>
+            ) : null}
 
-          {/* Form */}
-          <View style={styles.form}>
-            {/* Valor */}
-            <CurrencyInput
-              label="Valor"
-              value={value}
-              onChangeValue={handleValueChange}
-              error={errors.value}
-              icon="cash"
-              editable={!loading}
-            />
+            {/* Form */}
+            <View style={styles.form}>
+              {/* Valor */}
+              <CurrencyInput
+                label="Valor"
+                value={value}
+                onChangeValue={handleValueChange}
+                error={errors.value}
+                icon="cash-outline"
+                editable={!loading}
+              />
 
-            {/* Descrição */}
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>
-                <Ionicons name="document-text" size={16} color="#007AFF" />{' '}
-                Descrição
-              </Text>
-              <View
-                style={[
-                  styles.inputWrapper,
-                  errors.description ? styles.inputWrapperError : null,
-                ]}
-              >
-                <Ionicons
-                  name="document-text-outline"
-                  size={20}
-                  color={errors.description ? '#F44336' : '#999'}
-                  style={styles.inputIcon}
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Ex: Salário, Freelance, Presente..."
-                  placeholderTextColor="#999"
-                  value={description}
-                  onChangeText={handleDescriptionChange}
-                  editable={!loading}
-                  maxLength={100}
-                />
+              {/* Descrição */}
+              <View style={styles.inputContainer}>
+                <Text style={styles.label}>
+                  <Ionicons name="document-text" size={16} color="#007AFF" />{' '}
+                  Descrição
+                </Text>
+                <View
+                  style={[
+                    styles.inputWrapper,
+                    errors.description ? styles.inputWrapperError : null,
+                  ]}
+                >
+                  <Ionicons
+                    name="document-text-outline"
+                    size={20}
+                    color={errors.description ? '#F44336' : '#999'}
+                    style={styles.inputIcon}
+                  />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Ex: Mercado, Combustível, Almoço..."
+                    placeholderTextColor="#999"
+                    value={description}
+                    onChangeText={handleDescriptionChange}
+                    editable={!loading}
+                    maxLength={100}
+                  />
+                  {errors.description ? (
+                    <Ionicons
+                      name="close-circle"
+                      size={20}
+                      color="#F44336"
+                      style={styles.icon}
+                    />
+                  ) : description.trim().length >= 3 ? (
+                    <Ionicons
+                      name="checkmark-circle"
+                      size={20}
+                      color="#4CAF50"
+                      style={styles.icon}
+                    />
+                  ) : null}
+                </View>
                 {errors.description ? (
-                  <Ionicons
-                    name="close-circle"
-                    size={20}
-                    color="#F44336"
-                    style={styles.icon}
-                  />
-                ) : description.trim().length >= 3 ? (
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={20}
-                    color="#4CAF50"
-                    style={styles.icon}
-                  />
+                  <Text style={styles.errorTextSmall}>{errors.description}</Text>
+                ) : null}
+                <Text style={styles.charCount}>
+                  {description.length}/100 caracteres
+                </Text>
+              </View>
+
+              {/* Data */}
+              <View style={styles.inputContainer}>
+                <DatePicker
+                  label="Data"
+                  date={date}
+                  onChangeDate={handleDateChange}
+                  error={errors.date}
+                  maxDate={new Date()}
+                  editable={!loading}
+                />
+                {errors.date ? (
+                  <Text style={styles.errorTextSmall}>{errors.date}</Text>
                 ) : null}
               </View>
-              {errors.description ? (
-                <Text style={styles.errorTextSmall}>{errors.description}</Text>
-              ) : null}
-              <Text style={styles.charCount}>
-                {description.length}/100 caracteres
-              </Text>
-            </View>
 
-            {/* Data */}
-            <DatePicker
-              label="Data"
-              date={date}
-              onChangeDate={handleDateChange}
-              error={errors.date}
-              maxDate={new Date()}
-              editable={!loading}
-            />
+              {/* Categoria - OBRIGATÓRIA */}
+              <View style={styles.inputContainer}>
+                <CategoryPicker
+                  label="Categoria *"
+                  type="expense"
+                  selectedCategory={category}
+                  onSelectCategory={handleCategoryChange}
+                  error={errors.category}
+                  editable={!loading}
+                />
+                {errors.category ? (
+                  <Text style={styles.errorTextSmall}>{errors.category}</Text>
+                ) : null}
+              </View>
 
-            {/* Categoria */}
-            <CategoryPicker
-              label="Categoria (opcional)"
-              type="income"
-              selectedCategory={category}
-              onSelectCategory={setCategory}
-              editable={!loading}
-            />
+              {/* Botões */}
+              <View style={styles.buttonContainer}>
+                <Button
+                  title="Cancelar"
+                  onPress={handleCancel}
+                  variant="secondary"
+                  icon="close"
+                  disabled={loading}
+                  style={styles.button}
+                />
 
-            {/* Botões */}
-            <View style={styles.buttonContainer}>
-              <Button
-                title="Cancelar"
-                onPress={handleCancel}
-                variant="secondary"
-                icon="close"
-                disabled={loading}
-                style={styles.button}
-              />
-
-              <Button
-                title="Salvar"
-                onPress={handleSave}
-                variant="success"
-                icon="checkmark"
-                loading={loading}
-                disabled={loading}
-                style={styles.button}
-              />
+                <Button
+                  title="Salvar"
+                  onPress={handleSave}
+                  variant="danger"
+                  icon="checkmark"
+                  loading={loading}
+                  disabled={loading}
+                  style={styles.button}
+                />
+              </View>
             </View>
           </View>
-        </View>
-      </ScrollView>
+        </ScrollView>
       </KeyboardAvoidingView>
     </Layout>
   );
@@ -340,7 +366,7 @@ const styles = StyleSheet.create({
   iconContainer: {
     marginBottom: 16,
     padding: 20,
-    backgroundColor: '#E8F5E9',
+    backgroundColor: '#FFEBEE',
     borderRadius: 100,
   },
   subtitle: {
@@ -422,4 +448,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default AddIncomeScreen;
+export default AddExpenseScreen;
