@@ -304,7 +304,7 @@ export const HomeScreen = () => {
           activeOpacity={0.9}
         >
           <View style={[styles.actionIconContainer, { backgroundColor: `${color}15` }]}>
-            <Ionicons name={icon} size={40} color={color} />
+            <Ionicons name={icon} size={32} color={color} />
           </View>
           <Text style={styles.actionLabel}>{label}</Text>
         </TouchableOpacity>
@@ -518,7 +518,7 @@ export const HomeScreen = () => {
                   <Text style={styles.summarySubtext}>Disponível</Text>
                 </View>
                 <View style={styles.balanceIconContainer}>
-                  <Ionicons name="wallet" size={40} color={balance < 0 ? '#F44336' : '#007AFF'} />
+                  <Ionicons name="wallet" size={28} color={balance < 0 ? '#F44336' : '#007AFF'} />
                 </View>
               </View>
             </Animated.View>
@@ -536,10 +536,10 @@ export const HomeScreen = () => {
                 ]}
               >
                 <View style={styles.cardIconContainer}>
-                  <Ionicons name="trending-up" size={24} color="#4CAF50" />
+                  <Ionicons name="trending-up" size={18} color="#4CAF50" />
                 </View>
                 <Text style={styles.summaryLabelIncome}>Total Recebido</Text>
-                <Text style={styles.summaryValue}>{formatCurrency(totalIncome)}</Text>
+                <Text style={styles.summaryValueSquare}>{formatCurrency(totalIncome)}</Text>
                 <Text style={styles.summarySubtext}>Este mês</Text>
               </Animated.View>
 
@@ -554,10 +554,10 @@ export const HomeScreen = () => {
                 ]}
               >
                 <View style={styles.cardIconContainer}>
-                  <Ionicons name="trending-down" size={24} color="#F44336" />
+                  <Ionicons name="trending-down" size={18} color="#F44336" />
                 </View>
                 <Text style={styles.summaryLabelExpense}>Total Gasto</Text>
-                <Text style={styles.summaryValue}>{formatCurrency(totalExpense)}</Text>
+                <Text style={styles.summaryValueSquare}>{formatCurrency(totalExpense)}</Text>
                 <Text style={styles.summarySubtext}>Este mês</Text>
               </Animated.View>
             </View>
@@ -636,17 +636,18 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    padding: 20,
+    padding: 12,
   },
   summaryContainer: {
-    marginBottom: 24,
+    marginBottom: 16,
   },
   // Card Horizontal (Saldo Atual)
   summaryCardHorizontal: {
     backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    marginBottom: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
@@ -664,24 +665,25 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   balanceIconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: '#f8f9fa',
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: 16,
+    marginLeft: 10,
   },
   // Cards Quadrados (Total Gasto e Total Recebido)
   summaryRow: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 8,
   },
   summaryCardSquare: {
     flex: 1,
     backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 16,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
@@ -689,18 +691,18 @@ const styles = StyleSheet.create({
     elevation: 3,
     borderWidth: 1,
     borderColor: '#f0f0f0',
-    aspectRatio: 1,
+    minHeight: 110,
     alignItems: 'center',
     justifyContent: 'center',
   },
   cardIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: '#f8f9fa',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 8,
+    marginBottom: 4,
   },
   cardGreen: {
     borderLeftWidth: 4,
@@ -722,47 +724,47 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
   summaryLabelBalance: {
-    fontSize: 16,
+    fontSize: 13,
     color: '#007AFF',
-    marginTop: 2,
+    marginTop: 0,
     fontWeight: '700',
     letterSpacing: 0.2,
   },
   summaryLabelIncome: {
-    fontSize: 16,
+    fontSize: 13,
     color: '#4CAF50',
-    marginTop: 2,
+    marginTop: 0,
     fontWeight: '700',
     letterSpacing: 0.2,
   },
   summaryLabelExpense: {
-    fontSize: 16,
+    fontSize: 13,
     color: '#F44336',
-    marginTop: 2,
+    marginTop: 0,
     fontWeight: '700',
     letterSpacing: 0.2,
   },
   summaryValue: {
-    fontSize: 20,
+    fontSize: 17,
     fontWeight: '700',
     color: '#1a1a1a',
-    marginTop: 4,
+    marginTop: 1,
     letterSpacing: -0.3,
   },
   summaryValueSquare: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: '700',
     color: '#1a1a1a',
-    marginTop: 4,
+    marginTop: 1,
     letterSpacing: -0.3,
   },
   summarySubtext: {
-    fontSize: 11,
+    fontSize: 10,
     color: '#999',
-    marginTop: 2,
+    marginTop: 0,
   },
   actionsContainer: {
-    marginBottom: 24,
+    marginBottom: 16,
   },
   sectionTitle: {
     fontSize: 22,
@@ -774,7 +776,7 @@ const styles = StyleSheet.create({
   actionsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    gap: 8,
   },
   actionCardWrapper: {
     flex: 1,
@@ -782,8 +784,9 @@ const styles = StyleSheet.create({
   },
   actionCard: {
     backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 24,
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
@@ -794,15 +797,15 @@ const styles = StyleSheet.create({
     borderTopWidth: 4,
     borderWidth: 1,
     borderColor: '#f0f0f0',
-    minHeight: 120,
+    minHeight: 85,
   },
   actionIconContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 12,
+    marginBottom: 6,
   },
   actionGreen: {
     borderTopWidth: 3,
@@ -821,10 +824,10 @@ const styles = StyleSheet.create({
     borderTopColor: '#FF9800',
   },
   actionLabel: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
     color: '#1a1a1a',
-    marginTop: 4,
+    marginTop: 2,
     textAlign: 'center',
     letterSpacing: 0.2,
   },
@@ -869,7 +872,7 @@ const styles = StyleSheet.create({
   },
   transactionsList: {
     backgroundColor: '#fff',
-    borderRadius: 16,
+    borderRadius: 12,
     overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -880,7 +883,7 @@ const styles = StyleSheet.create({
   transactionItem: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    padding: 20,
+    padding: 14,
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
   },
