@@ -13,6 +13,7 @@ import {
   RefreshControl,
   Alert,
   Animated,
+  TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '../../routes/NavigationContext';
@@ -36,10 +37,12 @@ export const HomeScreen = () => {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [hasLoaded, setHasLoaded] = useState(false);
-  const [recentTransactions, setRecentTransactions] = useState<Array<{
+  const [allTransactions, setAllTransactions] = useState<Array<{
     item: Income | Expense;
     type: 'income' | 'expense';
   }>>([]);
+  const [filterType, setFilterType] = useState<'all' | 'income' | 'expense'>('all');
+  const [searchTerm, setSearchTerm] = useState('');
   
   // Animações
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -69,8 +72,8 @@ export const HomeScreen = () => {
 
       console.log('🏠 [HOME] Buscando dados do período:', { startOfMonth, endOfToday });
 
-      // Carregar totais do mês em paralelo
-      const [incomeTotal, expenseTotal, recentIncomes, recentExpenses] = await Promise.all([
+      // Carregar totais do mês e todas as transações em paralelo
+      const [incomeTotal, expenseTotal, allIncomes, allExpenses] = await Promise.all([
         incomeServices.getIncomesTotal(user.id, startOfMonth, endOfToday).catch(err => {
           console.error('❌ [HOME] Erro ao buscar totais de renda:', err);
           return 0;
@@ -79,12 +82,12 @@ export const HomeScreen = () => {
           console.error('❌ [HOME] Erro ao buscar totais de gastos:', err);
           return 0;
         }),
-        incomeServices.getRecentIncomes(user.id, 5).catch(err => {
-          console.error('❌ [HOME] Erro ao buscar rendas recentes:', err);
+        incomeServices.getIncomes(user.id).catch(err => {
+          console.error('❌ [HOME] Erro ao buscar rendas:', err);
           return [];
         }),
-        expenseServices.getRecentExpenses(user.id, 5).catch(err => {
-          console.error('❌ [HOME] Erro ao buscar gastos recentes:', err);
+        expenseServices.getExpenses(user.id).catch(err => {
+          console.error('❌ [HOME] Erro ao buscar gastos:', err);
           return [];
         }),
       ]);
@@ -92,19 +95,18 @@ export const HomeScreen = () => {
       console.log('🏠 [HOME] Dados recebidos:', {
         incomeTotal,
         expenseTotal,
-        recentIncomesCount: recentIncomes.length,
-        recentExpensesCount: recentExpenses.length,
+        allIncomesCount: allIncomes.length,
+        allExpensesCount: allExpenses.length,
         startOfMonth: startOfMonth.toISOString(),
         endOfToday: endOfToday.toISOString(),
       });
 
       // Combinar e ordenar por data de criação
       const allTransactionsWithType = [
-        ...recentIncomes.map(inc => ({ item: inc as Income | Expense, type: 'income' as const, createdAt: inc.createdAt })),
-        ...recentExpenses.map(exp => ({ item: exp as Income | Expense, type: 'expense' as const, createdAt: exp.createdAt })),
+        ...allIncomes.map(inc => ({ item: inc as Income | Expense, type: 'income' as const, createdAt: inc.createdAt })),
+        ...allExpenses.map(exp => ({ item: exp as Income | Expense, type: 'expense' as const, createdAt: exp.createdAt })),
       ]
         .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-        .slice(0, 10)
         .map(t => ({ item: t.item, type: t.type }));
 
       const calculatedBalance = incomeTotal - expenseTotal;
@@ -113,7 +115,7 @@ export const HomeScreen = () => {
       setTotalIncome(incomeTotal);
       setTotalExpense(expenseTotal);
       setBalance(calculatedBalance);
-      setRecentTransactions(allTransactionsWithType);
+      setAllTransactions(allTransactionsWithType);
       setHasLoaded(true);
 
       // Animar entrada
@@ -151,7 +153,7 @@ export const HomeScreen = () => {
       setTotalIncome(0);
       setTotalExpense(0);
       setBalance(0);
-      setRecentTransactions([]);
+      setAllTransactions([]);
       setHasLoaded(true); // Marcar como carregado mesmo com erro para mostrar estado vazio
     } finally {
       console.log('🏠 [HOME] Finalizando carregamento...');
@@ -452,6 +454,25 @@ export const HomeScreen = () => {
     }
   };
 
+  // Filtrar transações baseado no filtro e busca
+  const filteredTransactions = allTransactions.filter(transaction => {
+    // Aplicar filtro de tipo
+    if (filterType === 'income' && transaction.type !== 'income') return false;
+    if (filterType === 'expense' && transaction.type !== 'expense') return false;
+    
+    // Aplicar busca por descrição
+    if (searchTerm.trim()) {
+      const description = transaction.type === 'income' 
+        ? (transaction.item as Income).description 
+        : (transaction.item as Expense).description;
+      if (!description.toLowerCase().includes(searchTerm.toLowerCase())) {
+        return false;
+      }
+    }
+    
+    return true;
+  });
+
   // Renderizar item de transação
   const renderTransactionItem = (transaction: { item: Income | Expense; type: 'income' | 'expense' }, index: number) => {
     return <TransactionItem transaction={transaction} index={index} />;
@@ -582,27 +603,110 @@ export const HomeScreen = () => {
                 onPress={() => navigate('AddExpense')}
                 delay={100}
               />
-              <ActionCard
-                icon="list"
-                label="Ver Rendas"
-                color="#007AFF"
-                onPress={() => navigate('IncomeList')}
-                delay={200}
-              />
-              <ActionCard
-                icon="basket"
-                label="Ver Gastos"
-                color="#FF9800"
-                onPress={() => navigate('ExpenseList')}
-                delay={300}
-              />
             </View>
           </View>
 
-          {/* Últimas transações */}
+          {/* Filtros e Busca */}
+          <View style={styles.filtersContainer}>
+            <Text style={styles.sectionTitle}>Transações</Text>
+            
+            {/* Campo de Busca */}
+            <View style={styles.searchContainer}>
+              <Ionicons name="search-outline" size={20} color="#999" style={styles.searchIcon} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Buscar por descrição..."
+                placeholderTextColor="#666"
+                value={searchTerm}
+                onChangeText={setSearchTerm}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              {searchTerm.length > 0 && (
+                <TouchableOpacity
+                  onPress={() => setSearchTerm('')}
+                  style={styles.clearButton}
+                >
+                  <Ionicons name="close-circle" size={20} color="#999" />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* Filtros de Tipo */}
+            <View style={styles.filterButtons}>
+              <TouchableOpacity
+                style={[
+                  styles.filterButton,
+                  filterType === 'all' && styles.filterButtonActive,
+                ]}
+                onPress={() => setFilterType('all')}
+              >
+                <Ionicons
+                  name="list"
+                  size={18}
+                  color={filterType === 'all' ? '#fff' : '#999'}
+                />
+                <Text
+                  style={[
+                    styles.filterButtonText,
+                    filterType === 'all' && styles.filterButtonTextActive,
+                  ]}
+                >
+                  Todas
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.filterButton,
+                  filterType === 'income' && styles.filterButtonActive,
+                ]}
+                onPress={() => setFilterType('income')}
+              >
+                <Ionicons
+                  name="trending-up"
+                  size={18}
+                  color={filterType === 'income' ? '#4CAF50' : '#999'}
+                />
+                <Text
+                  style={[
+                    styles.filterButtonText,
+                    filterType === 'income' && styles.filterButtonTextActive,
+                    filterType === 'income' && { color: '#4CAF50' },
+                  ]}
+                >
+                  Rendas
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.filterButton,
+                  filterType === 'expense' && styles.filterButtonActive,
+                ]}
+                onPress={() => setFilterType('expense')}
+              >
+                <Ionicons
+                  name="trending-down"
+                  size={18}
+                  color={filterType === 'expense' ? '#F44336' : '#999'}
+                />
+                <Text
+                  style={[
+                    styles.filterButtonText,
+                    filterType === 'expense' && styles.filterButtonTextActive,
+                    filterType === 'expense' && { color: '#F44336' },
+                  ]}
+                >
+                  Gastos
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Lista de transações */}
           <View style={styles.transactionsContainer}>
-            <Text style={styles.sectionTitle}>Últimas Transações</Text>
-            {recentTransactions.length === 0 ? (
+            {filteredTransactions.length === 0 ? (
               <View style={styles.emptyState}>
                 <Ionicons name="file-tray-outline" size={48} color="#ccc" />
                 <Text style={styles.emptyText}>Nenhuma transação ainda</Text>
@@ -619,7 +723,7 @@ export const HomeScreen = () => {
                   },
                 ]}
               >
-                {recentTransactions.map((item, index) =>
+                {filteredTransactions.map((item, index) =>
                   renderTransactionItem(item, index)
                 )}
               </Animated.View>
@@ -637,24 +741,25 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 12,
+    backgroundColor: '#000',
   },
   summaryContainer: {
     marginBottom: 16,
   },
   // Card Horizontal (Saldo Atual)
   summaryCardHorizontal: {
-    backgroundColor: '#fff',
+    backgroundColor: '#1a1a1a',
     borderRadius: 12,
     paddingVertical: 10,
     paddingHorizontal: 14,
     marginBottom: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
+    shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 3,
     borderWidth: 1,
-    borderColor: '#f0f0f0',
+    borderColor: '#333',
   },
   balanceContent: {
     flexDirection: 'row',
@@ -668,7 +773,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#2a2a2a',
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: 10,
@@ -680,17 +785,17 @@ const styles = StyleSheet.create({
   },
   summaryCardSquare: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#1a1a1a',
     borderRadius: 12,
     paddingVertical: 10,
     paddingHorizontal: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
+    shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 3,
     borderWidth: 1,
-    borderColor: '#f0f0f0',
+    borderColor: '#333',
     minHeight: 110,
     alignItems: 'center',
     justifyContent: 'center',
@@ -699,7 +804,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#2a2a2a',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 4,
@@ -747,14 +852,14 @@ const styles = StyleSheet.create({
   summaryValue: {
     fontSize: 17,
     fontWeight: '700',
-    color: '#1a1a1a',
+    color: '#fff',
     marginTop: 1,
     letterSpacing: -0.3,
   },
   summaryValueSquare: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#1a1a1a',
+    color: '#fff',
     marginTop: 1,
     letterSpacing: -0.3,
   },
@@ -769,7 +874,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 22,
     fontWeight: '700',
-    color: '#1a1a1a',
+    color: '#fff',
     marginBottom: 20,
     letterSpacing: -0.3,
   },
@@ -783,7 +888,7 @@ const styles = StyleSheet.create({
     minWidth: '45%',
   },
   actionCard: {
-    backgroundColor: '#fff',
+    backgroundColor: '#1a1a1a',
     borderRadius: 16,
     paddingVertical: 12,
     paddingHorizontal: 16,
@@ -791,12 +896,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.3,
     shadowRadius: 12,
     elevation: 4,
     borderTopWidth: 4,
     borderWidth: 1,
-    borderColor: '#f0f0f0',
+    borderColor: '#333',
     minHeight: 85,
   },
   actionIconContainer: {
@@ -826,10 +931,65 @@ const styles = StyleSheet.create({
   actionLabel: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#1a1a1a',
+    color: '#fff',
     marginTop: 2,
     textAlign: 'center',
     letterSpacing: 0.2,
+  },
+  filtersContainer: {
+    marginBottom: 16,
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1a1a1a',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#333',
+  },
+  searchIcon: {
+    marginRight: 12,
+  },
+  searchInput: {
+    flex: 1,
+    color: '#fff',
+    fontSize: 16,
+  },
+  clearButton: {
+    marginLeft: 8,
+    padding: 4,
+  },
+  filterButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  filterButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1a1a1a',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: '#333',
+    gap: 8,
+  },
+  filterButtonActive: {
+    backgroundColor: '#2a2a2a',
+    borderColor: '#007AFF',
+  },
+  filterButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#999',
+  },
+  filterButtonTextActive: {
+    color: '#fff',
   },
   transactionsContainer: {
     marginTop: 10,
@@ -838,13 +998,13 @@ const styles = StyleSheet.create({
   emptyState: {
     alignItems: 'center',
     padding: 40,
-    backgroundColor: '#fff',
+    backgroundColor: '#1a1a1a',
     borderRadius: 16,
   },
   emptyText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#666',
+    color: '#ccc',
     marginTop: 16,
   },
   emptySubtext: {
@@ -857,12 +1017,12 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#000',
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#666',
+    color: '#ccc',
   },
   cardNegative: {
     borderLeftColor: '#F44336',
@@ -871,12 +1031,12 @@ const styles = StyleSheet.create({
     color: '#F44336',
   },
   transactionsList: {
-    backgroundColor: '#fff',
+    backgroundColor: '#1a1a1a',
     borderRadius: 12,
     overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 3,
   },
@@ -885,7 +1045,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     padding: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: '#333',
   },
   transactionIcon: {
     marginRight: 12,
@@ -900,12 +1060,12 @@ const styles = StyleSheet.create({
     borderWidth: 2,
   },
   transactionIconIncome: {
-    backgroundColor: '#E8F5E9',
-    borderColor: '#4CAF5020',
+    backgroundColor: '#1a3a1a',
+    borderColor: '#4CAF5040',
   },
   transactionIconExpense: {
-    backgroundColor: '#FFEBEE',
-    borderColor: '#F4433620',
+    backgroundColor: '#3a1a1a',
+    borderColor: '#F4433640',
   },
   transactionContent: {
     flex: 1,
@@ -921,7 +1081,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     fontWeight: '600',
-    color: '#1a1a1a',
+    color: '#fff',
     letterSpacing: 0.1,
     marginRight: 8,
     lineHeight: 18,
@@ -945,7 +1105,7 @@ const styles = StyleSheet.create({
   },
   transactionDate: {
     fontSize: 11,
-    color: '#888',
+    color: '#999',
     fontWeight: '700',
   },
   transactionActions: {
@@ -957,10 +1117,10 @@ const styles = StyleSheet.create({
   actionButton: {
     padding: 10,
     borderRadius: 10,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#2a2a2a',
     marginLeft: 6,
     borderWidth: 1,
-    borderColor: '#e8e8e8',
+    borderColor: '#333',
   },
   transactionValueIncome: {
     fontSize: 17,

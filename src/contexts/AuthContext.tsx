@@ -1,5 +1,6 @@
 import React, { createContext, useState, useEffect, ReactNode } from 'react';
 import { authServices } from '../services/authServices';
+import { userService } from '../services/userServices';
 import { User, LoginCredentials, RegisterCredentials } from '../types/auth';
 
 /**
@@ -11,6 +12,7 @@ interface AuthContextData {
   signIn: (credentials: LoginCredentials) => Promise<void>;
   signUp: (credentials: RegisterCredentials) => Promise<void>;
   signOut: () => Promise<void>;
+  refreshUser: () => Promise<void>;
   isAuthenticated: boolean;
 }
 
@@ -35,8 +37,46 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   useEffect(() => {
     // Observar mudanças no estado de autenticação
-    const unsubscribe = authServices.onAuthStateChange((user) => {
-      setUser(user);
+    const unsubscribe = authServices.onAuthStateChange(async (firebaseUser) => {
+      if (firebaseUser) {
+        // Buscar dados completos do Firestore
+        try {
+          const fullUserData = await userService.getUserById(firebaseUser.id);
+          if (fullUserData) {
+            // Mesclar dados do Firebase Auth com dados do Firestore
+            setUser({
+              ...firebaseUser,
+              ...fullUserData,
+            });
+          } else {
+            // Se não existir no Firestore, criar como usuário normal
+            try {
+              await userService.createUserDocument(firebaseUser.id, {
+                name: firebaseUser.name || '',
+                email: firebaseUser.email || '',
+              });
+              // Buscar novamente após criar
+              const newUserData = await userService.getUserById(firebaseUser.id);
+              if (newUserData) {
+                setUser({
+                  ...firebaseUser,
+                  ...newUserData,
+                });
+              } else {
+                setUser(firebaseUser);
+              }
+            } catch (error) {
+              console.error('Erro ao criar documento do usuário:', error);
+              setUser(firebaseUser);
+            }
+          }
+        } catch (error) {
+          console.error('Erro ao buscar dados do usuário:', error);
+          setUser(firebaseUser);
+        }
+      } else {
+        setUser(null);
+      }
       setLoading(false);
     });
 
@@ -55,7 +95,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       console.log('🟢 [AUTH CONTEXT] Chamando authServices.login...');
       const userData = await authServices.login(credentials);
       console.log('🟢 [AUTH CONTEXT] Login bem-sucedido, user:', userData);
-      setUser(userData);
+      
+      // Buscar dados completos do Firestore
+      try {
+        const fullUserData = await userService.getUserById(userData.id);
+        if (fullUserData) {
+          setUser({
+            ...userData,
+            ...fullUserData,
+          });
+        } else {
+          setUser(userData);
+        }
+      } catch (error) {
+        console.error('Erro ao buscar dados do usuário:', error);
+        setUser(userData);
+      }
+      
       console.log('🟢 [AUTH CONTEXT] Estado do usuário atualizado');
     } catch (error: any) {
       console.error('❌ [AUTH CONTEXT] Erro ao fazer login:', error);
@@ -75,7 +131,33 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       setLoading(true);
       const userData = await authServices.register(credentials);
-      setUser(userData);
+      
+      // Criar documento no Firestore como usuário normal (não admin)
+      try {
+        await userService.createUserDocument(userData.id, {
+          name: credentials.name || userData.name || '',
+          email: userData.email || '',
+        });
+      } catch (error) {
+        console.error('Erro ao criar documento do usuário no Firestore:', error);
+        // Continuar mesmo se houver erro ao criar o documento
+      }
+      
+      // Buscar dados completos do Firestore após criar o documento
+      try {
+        const fullUserData = await userService.getUserById(userData.id);
+        if (fullUserData) {
+          setUser({
+            ...userData,
+            ...fullUserData,
+          });
+        } else {
+          setUser(userData);
+        }
+      } catch (error) {
+        console.error('Erro ao buscar dados do usuário após registro:', error);
+        setUser(userData);
+      }
     } catch (error: any) {
       console.error('Erro ao registrar:', error);
       throw error;
@@ -100,6 +182,26 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  /**
+   * Recarregar dados do usuário do Firestore
+   */
+  const refreshUser = async (): Promise<void> => {
+    const currentUser = authServices.getCurrentUser();
+    if (currentUser) {
+      try {
+        const fullUserData = await userService.getUserById(currentUser.id);
+        if (fullUserData) {
+          setUser({
+            ...currentUser,
+            ...fullUserData,
+          });
+        }
+      } catch (error) {
+        console.error('Erro ao recarregar dados do usuário:', error);
+      }
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -108,6 +210,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         signIn,
         signUp,
         signOut,
+        refreshUser,
         isAuthenticated: !!user,
       }}
     >

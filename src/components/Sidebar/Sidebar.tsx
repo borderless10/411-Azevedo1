@@ -2,7 +2,7 @@
  * Componente de Sidebar/Menu Lateral
  */
 
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,8 @@ import {
   StyleSheet,
   ScrollView,
   ViewStyle,
+  Image,
+  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../hooks/useAuth';
@@ -35,11 +37,46 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const { user, signOut } = useAuth();
   const { navigate, currentScreen } = useNavigation();
+  const slideAnim = useRef(new Animated.Value(-300)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (visible) {
+      Animated.parallel([
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      Animated.parallel([
+        Animated.timing(slideAnim, {
+          toValue: -300,
+          duration: 250,
+          useNativeDriver: true,
+        }),
+        Animated.timing(fadeAnim, {
+          toValue: 0,
+          duration: 250,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [visible]);
 
   const menuItems: MenuItem[] = [
     { id: 'Home', label: 'Início', icon: 'home', color: '#007AFF' },
-    { id: 'IncomeList', label: 'Minhas Rendas', icon: 'trending-up', color: '#4CAF50' },
-    { id: 'ExpenseList', label: 'Meus Gastos', icon: 'trending-down', color: '#F44336' },
+    { id: 'ConsumoModerado', label: 'Consumo Moderado', icon: 'leaf', color: '#4CAF50' },
+    { id: 'Feed', label: 'Feed', icon: 'newspaper', color: '#007AFF' },
+    { id: 'Chat', label: 'Chat', icon: 'chatbubbles', color: '#9C27B0' },
+    { id: 'Metas', label: 'Metas', icon: 'flag', color: '#F44336' },
+    { id: 'Recomendacao', label: 'Recomendação', icon: 'bulb', color: '#FF9800' },
     { id: 'Profile', label: 'Perfil', icon: 'person', color: '#9C27B0' },
     { id: 'Settings', label: 'Configurações', icon: 'settings', color: '#607D8B' },
   ];
@@ -60,12 +97,43 @@ export const Sidebar: React.FC<SidebarProps> = ({
   }
 
   return (
-    <TouchableOpacity
-      style={styles.overlay}
-      activeOpacity={1}
-      onPress={onClose}
+    <Animated.View
+      style={[
+        styles.overlay,
+        {
+          opacity: fadeAnim,
+        }
+      ]}
     >
-      <View style={[styles.container, style]} onStartShouldSetResponder={() => true}>
+      <TouchableOpacity
+        style={StyleSheet.absoluteFillObject}
+        activeOpacity={1}
+        onPress={onClose}
+      />
+      <Animated.View 
+        style={[
+          styles.container, 
+          style,
+          {
+            transform: [{ translateX: slideAnim }],
+          }
+        ]} 
+        onStartShouldSetResponder={() => true}
+      >
+        {/* Botão de Fechar no canto superior esquerdo */}
+        <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+          <Ionicons name="close" size={28} color="#fff" />
+        </TouchableOpacity>
+
+        {/* Logo */}
+        <View style={styles.logoContainer}>
+          <Image 
+            source={require('../../../assets/logo411.png')} 
+            style={styles.logo}
+            resizeMode="contain"
+          />
+        </View>
+
         {/* Header do Sidebar */}
         <View style={styles.header}>
           <View style={styles.userInfo}>
@@ -83,13 +151,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </Text>
             </View>
           </View>
-          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-            <Ionicons name="close" size={24} color="#666" />
-          </TouchableOpacity>
         </View>
 
         {/* Menu Items */}
-        <ScrollView style={styles.menu}>
+        <ScrollView style={styles.menu} contentContainerStyle={styles.menuContent}>
           {menuItems.map((item) => {
             const isActive = currentScreen === item.id;
             return (
@@ -105,7 +170,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <Ionicons
                     name={item.icon}
                     size={24}
-                    color={isActive ? item.color || '#007AFF' : '#666'}
+                    color={isActive ? item.color || '#007AFF' : '#999'}
                   />
                   <Text
                     style={[
@@ -135,19 +200,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <Text style={styles.logoutText}>Sair</Text>
           </TouchableOpacity>
         </View>
-      </View>
-    </TouchableOpacity>
+      </Animated.View>
+    </Animated.View>
   );
 };
 
 const styles = StyleSheet.create({
   overlay: {
     position: 'absolute',
-    top: 45,
+    top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
     zIndex: 1000,
   },
   container: {
@@ -156,35 +221,51 @@ const styles = StyleSheet.create({
     left: 0,
     bottom: 0,
     width: 280,
-    backgroundColor: '#fff',
+    backgroundColor: '#000',
     shadowColor: '#000',
     shadowOffset: { width: 2, height: 0 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
+    shadowOpacity: 0.5,
+    shadowRadius: 12,
     elevation: 8,
     zIndex: 1001,
-    paddingTop: 20,
+    paddingTop: 0,
+  },
+  logoContainer: {
+    alignItems: 'center',
+    paddingTop: 60,
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1a1a1a',
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: 'column',
+    alignItems: 'flex-start',
     padding: 20,
+    paddingTop: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-    backgroundColor: '#f8f9fa',
+    borderBottomColor: '#1a1a1a',
+    backgroundColor: '#000',
+  },
+  logo: {
+    width: 200,
+    height: 80,
+    alignSelf: 'center',
   },
   userInfo: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+    width: '100%',
   },
   avatar: {
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: '#007AFF',
+    backgroundColor: '#1a1a1a',
+    borderWidth: 2,
+    borderColor: '#333',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -199,19 +280,32 @@ const styles = StyleSheet.create({
   userName: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#fff',
   },
   userEmail: {
     fontSize: 12,
-    color: '#666',
+    color: '#999',
     marginTop: 2,
   },
   closeButton: {
-    padding: 4,
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    zIndex: 1002,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
   menu: {
     flex: 1,
-    paddingVertical: 8,
+  },
+  menuContent: {
+    paddingTop: 8,
   },
   menuItem: {
     flexDirection: 'row',
@@ -220,10 +314,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: '#1a1a1a',
   },
   menuItemActive: {
-    backgroundColor: '#E3F2FD',
+    backgroundColor: '#1a1a1a',
     borderLeftWidth: 4,
     borderLeftColor: '#007AFF',
   },
@@ -235,7 +329,7 @@ const styles = StyleSheet.create({
   },
   menuItemText: {
     fontSize: 16,
-    color: '#666',
+    color: '#ccc',
     fontWeight: '500',
   },
   menuItemTextActive: {
@@ -244,7 +338,7 @@ const styles = StyleSheet.create({
   },
   footer: {
     borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
+    borderTopColor: '#1a1a1a',
     padding: 16,
   },
   logoutButton: {
@@ -253,7 +347,9 @@ const styles = StyleSheet.create({
     gap: 12,
     padding: 12,
     borderRadius: 8,
-    backgroundColor: '#FFEBEE',
+    backgroundColor: '#1a1a1a',
+    borderWidth: 1,
+    borderColor: '#F44336',
   },
   logoutText: {
     fontSize: 16,

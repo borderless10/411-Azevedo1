@@ -5,6 +5,8 @@ export interface User {
   username?: string;
   bio?: string;
   phone?: string;
+  role?: 'admin' | 'user';
+  isAdmin?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }

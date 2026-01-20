@@ -12,7 +12,13 @@ export type ScreenName =
   | "ExpenseList"
   | "Dashboard" 
   | "Profile"
-  | "Settings";
+  | "Settings"
+  | "ConsumoModerado"
+  | "Feed"
+  | "Chat"
+  | "Metas"
+  | "Recomendacao"
+  | "CadastrarCliente";
 
 interface NavigationContextType {
   currentScreen: ScreenName;

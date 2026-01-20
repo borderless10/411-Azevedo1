@@ -366,7 +366,7 @@ export const RegisterScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#000',
   },
   scrollContent: {
     flexGrow: 1,
@@ -384,18 +384,18 @@ const styles = StyleSheet.create({
   iconContainer: {
     marginBottom: 16,
     padding: 20,
-    backgroundColor: '#E3F2FD',
+    backgroundColor: '#1a1a1a',
     borderRadius: 100,
   },
   title: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#fff',
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 16,
-    color: '#666',
+    color: '#999',
     textAlign: 'center',
   },
   form: {
@@ -407,7 +407,7 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#333',
+    color: '#fff',
     marginBottom: 8,
     flexDirection: 'row',
     alignItems: 'center',
@@ -415,10 +415,10 @@ const styles = StyleSheet.create({
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: '#1a1a1a',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: '#333',
     paddingLeft: 16,
     paddingRight: 16,
   },
@@ -433,19 +433,19 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   input: {
-    backgroundColor: '#fff',
+    backgroundColor: '#1a1a1a',
     borderRadius: 12,
     padding: 16,
     fontSize: 16,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
-    color: '#333',
+    borderColor: '#333',
+    color: '#fff',
   },
   inputWithIcon: {
     flex: 1,
     padding: 16,
     fontSize: 16,
-    color: '#333',
+    color: '#fff',
   },
   button: {
     backgroundColor: '#007AFF',
@@ -481,7 +481,7 @@ const styles = StyleSheet.create({
   },
   linkText: {
     fontSize: 14,
-    color: '#666',
+    color: '#999',
   },
   linkTextBold: {
     color: '#007AFF',
@@ -490,11 +490,13 @@ const styles = StyleSheet.create({
   errorContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFEBEE',
+    backgroundColor: '#3a1a1a',
     padding: 12,
     borderRadius: 8,
     marginBottom: 16,
     gap: 8,
+    borderWidth: 1,
+    borderColor: '#F4433640',
   },
   errorText: {
     flex: 1,

@@ -13,7 +13,7 @@ export default function App() {
     <AuthProvider>
       <NavigationProvider>
         <Router />
-        <StatusBar style="auto" />
+        <StatusBar style="light" />
       </NavigationProvider>
     </AuthProvider>
   );

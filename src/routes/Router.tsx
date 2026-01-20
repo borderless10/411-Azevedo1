@@ -8,6 +8,14 @@ import { IncomeListScreen } from "../screens/Income/IncomeListScreen";
 import { AddExpenseScreen } from "../screens/Expense/AddExpenseScreen";
 import { EditExpenseScreen } from "../screens/Expense/EditExpenseScreen";
 import { ExpenseListScreen } from "../screens/Expense/ExpenseListScreen";
+import { ProfileScreen } from "../screens/Profile/ProfileScreen";
+import { SettingsScreen } from "../screens/Settings/SettingsScreen";
+import { ConsumoModeradoScreen } from "../screens/ConsumoModerado/ConsumoModeradoScreen";
+import { FeedScreen } from "../screens/Feed/FeedScreen";
+import { ChatScreen } from "../screens/Chat/ChatScreen";
+import { MetasScreen } from "../screens/Metas/MetasScreen";
+import { RecomendacaoScreen } from "../screens/Recomendacao/RecomendacaoScreen";
+import { CadastrarClienteScreen } from "../screens/Admin/CadastrarClienteScreen";
 import { useNavigation } from "./NavigationContext";
 import { useAuth } from "../hooks/useAuth";
 
@@ -64,10 +72,22 @@ export const Router = () => {
         return <ExpenseListScreen />;
       case "Dashboard":
         return <HomeScreen />; // Temporário até criar DashboardScreen
+      case "ConsumoModerado":
+        return <ConsumoModeradoScreen />;
+      case "Feed":
+        return <FeedScreen />;
+      case "Chat":
+        return <ChatScreen />;
+      case "Metas":
+        return <MetasScreen />;
+      case "Recomendacao":
+        return <RecomendacaoScreen />;
       case "Profile":
-        return <HomeScreen />; // Temporário até criar ProfileScreen
+        return <ProfileScreen />;
       case "Settings":
-        return <HomeScreen />; // Temporário até criar SettingsScreen
+        return <SettingsScreen />;
+      case "CadastrarCliente":
+        return <CadastrarClienteScreen />;
       default:
         return <HomeScreen />;
     }

@@ -9,6 +9,7 @@ import {
   Platform,
   Alert,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../hooks/useAuth';
@@ -113,9 +114,6 @@ export const LoginScreen = () => {
     }
   };
 
-  const handleGoToRegister = () => {
-    navigate('Register');
-  };
 
   return (
     <KeyboardAvoidingView
@@ -125,8 +123,12 @@ export const LoginScreen = () => {
       <View style={styles.content}>
         {/* Header */}
         <View style={styles.header}>
-          <View style={styles.iconContainer}>
-            <Ionicons name="wallet" size={64} color="#007AFF" />
+          <View style={styles.logoContainer}>
+            <Image 
+              source={require('../../../assets/logo411.png')} 
+              style={styles.logo}
+              resizeMode="contain"
+            />
           </View>
           <Text style={styles.title}>Controle Financeiro</Text>
           <Text style={styles.subtitle}>Faça login para continuar</Text>
@@ -225,16 +227,6 @@ export const LoginScreen = () => {
               </View>
             )}
           </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.linkButton}
-            onPress={handleGoToRegister}
-            disabled={loading}
-          >
-            <Text style={styles.linkText}>
-              Não tem uma conta? <Text style={styles.linkTextBold}>Cadastre-se</Text>
-            </Text>
-          </TouchableOpacity>
         </View>
       </View>
     </KeyboardAvoidingView>
@@ -244,7 +236,7 @@ export const LoginScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#000',
   },
   content: {
     flex: 1,
@@ -255,21 +247,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 48,
   },
-  iconContainer: {
+  logoContainer: {
     marginBottom: 16,
-    padding: 20,
-    backgroundColor: '#E3F2FD',
-    borderRadius: 100,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logo: {
+    width: 200,
+    height: 80,
   },
   title: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#fff',
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 16,
-    color: '#666',
+    color: '#999',
   },
   form: {
     width: '100%',
@@ -280,7 +275,7 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#333',
+    color: '#fff',
     marginBottom: 8,
     flexDirection: 'row',
     alignItems: 'center',
@@ -288,10 +283,10 @@ const styles = StyleSheet.create({
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: '#1a1a1a',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: '#333',
     paddingLeft: 16,
     paddingRight: 16,
   },
@@ -306,19 +301,19 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   input: {
-    backgroundColor: '#fff',
+    backgroundColor: '#1a1a1a',
     borderRadius: 12,
     padding: 16,
     fontSize: 16,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
-    color: '#333',
+    borderColor: '#333',
+    color: '#fff',
   },
   inputWithIcon: {
     flex: 1,
     padding: 16,
     fontSize: 16,
-    color: '#333',
+    color: '#fff',
   },
   button: {
     backgroundColor: '#007AFF',
@@ -348,26 +343,16 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginLeft: 8,
   },
-  linkButton: {
-    marginTop: 24,
-    alignItems: 'center',
-  },
-  linkText: {
-    fontSize: 14,
-    color: '#666',
-  },
-  linkTextBold: {
-    color: '#007AFF',
-    fontWeight: 'bold',
-  },
   errorContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFEBEE',
+    backgroundColor: '#3a1a1a',
     padding: 12,
     borderRadius: 8,
     marginBottom: 16,
     gap: 8,
+    borderWidth: 1,
+    borderColor: '#F4433640',
   },
   errorText: {
     flex: 1,

@@ -2,7 +2,7 @@
  * Componente Layout - Combina Header + Sidebar + Conteúdo
  */
 
-import React, { useState, ReactNode } from 'react';
+import React, { useState, ReactNode, useRef, useEffect } from 'react';
 import {
   View,
   StyleSheet,
@@ -10,6 +10,7 @@ import {
   SafeAreaView,
   Platform,
   TouchableOpacity,
+  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Header } from '../Header/Header';
@@ -37,37 +38,48 @@ export const Layout: React.FC<LayoutProps> = ({
   contentStyle,
 }) => {
   const [sidebarVisible, setSidebarVisible] = useState(false);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  }, []);
 
   return (
     <SafeAreaView style={[styles.container, style]}>
-      {showHeader && (
-        <View style={styles.headerWrapper}>
-          {showSidebar && (
-            <TouchableOpacity
-              onPress={() => setSidebarVisible(true)}
-              style={styles.menuButton}
-            >
-              <Ionicons name="menu" size={24} color="#333" />
-            </TouchableOpacity>
-          )}
-          <Header
-            title={title}
-            showBackButton={showBackButton}
-            showProfile={!showSidebar}
-            rightAction={rightAction}
-            style={styles.header}
+      <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
+        {showHeader && (
+          <View style={styles.headerWrapper}>
+            {showSidebar && (
+              <TouchableOpacity
+                onPress={() => setSidebarVisible(true)}
+                style={styles.menuButton}
+              >
+                <Ionicons name="menu" size={24} color="#fff" />
+              </TouchableOpacity>
+            )}
+            <Header
+              title={title}
+              showBackButton={showBackButton}
+              showProfile={!showSidebar}
+              rightAction={rightAction}
+              style={styles.header}
+            />
+          </View>
+        )}
+
+        <View style={[styles.content, contentStyle]}>{children}</View>
+
+        {showSidebar && (
+          <Sidebar
+            visible={sidebarVisible}
+            onClose={() => setSidebarVisible(false)}
           />
-        </View>
-      )}
-
-      <View style={[styles.content, contentStyle]}>{children}</View>
-
-      {showSidebar && (
-        <Sidebar
-          visible={sidebarVisible}
-          onClose={() => setSidebarVisible(false)}
-        />
-      )}
+        )}
+      </Animated.View>
     </SafeAreaView>
   );
 };
@@ -75,12 +87,12 @@ export const Layout: React.FC<LayoutProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#000',
   },
   headerWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: '#000',
   },
   menuButton: {
     padding: 12,
@@ -91,6 +103,7 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+    backgroundColor: '#000',
   },
 });
 

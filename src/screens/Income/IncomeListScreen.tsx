@@ -204,23 +204,23 @@ export const IncomeListScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#000',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#000',
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#666',
+    color: '#ccc',
   },
   header: {
-    backgroundColor: '#fff',
+    backgroundColor: '#1a1a1a',
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: '#333',
     padding: 20,
   },
   headerContent: {
@@ -233,7 +233,7 @@ const styles = StyleSheet.create({
   },
   totalLabel: {
     fontSize: 14,
-    color: '#666',
+    color: '#999',
     marginBottom: 4,
   },
   totalValue: {
@@ -243,7 +243,7 @@ const styles = StyleSheet.create({
   },
   totalSubtext: {
     fontSize: 12,
-    color: '#999',
+    color: '#666',
     marginTop: 4,
   },
   addButton: {
@@ -268,7 +268,7 @@ const styles = StyleSheet.create({
   dateText: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#fff',
   },
   dateTotal: {
     fontSize: 16,
@@ -276,12 +276,12 @@ const styles = StyleSheet.create({
     color: '#4CAF50',
   },
   incomeList: {
-    backgroundColor: '#fff',
+    backgroundColor: '#1a1a1a',
     borderRadius: 12,
     overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.3,
     shadowRadius: 4,
     elevation: 2,
   },
@@ -291,7 +291,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: '#333',
   },
   incomeItemLeft: {
     flex: 1,
@@ -302,7 +302,9 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#E8F5E9',
+    backgroundColor: '#1a3a1a',
+    borderWidth: 1,
+    borderColor: '#4CAF5040',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
@@ -313,7 +315,7 @@ const styles = StyleSheet.create({
   incomeDescription: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: '#fff',
     marginBottom: 4,
   },
   incomeMeta: {
@@ -346,7 +348,7 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#666',
+    color: '#ccc',
     marginTop: 24,
     marginBottom: 8,
   },

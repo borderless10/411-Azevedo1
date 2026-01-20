@@ -2,13 +2,15 @@
  * Componente de Header/Cabeçalho
  */
 
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
   ViewStyle,
+  Image,
+  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../hooks/useAuth';
@@ -31,6 +33,23 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const { user } = useAuth();
   const { navigate, currentScreen } = useNavigation();
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(-20)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
 
   const handleBack = () => {
     if (currentScreen === 'AddIncome' || currentScreen === 'AddExpense') {
@@ -45,12 +64,28 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   return (
-    <View style={[styles.container, style]}>
+    <Animated.View 
+      style={[
+        styles.container, 
+        style,
+        {
+          opacity: fadeAnim,
+          transform: [{ translateY: slideAnim }],
+        }
+      ]}
+    >
       <View style={styles.left}>
         {showBackButton && (
           <TouchableOpacity onPress={handleBack} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color="#333" />
+            <Ionicons name="arrow-back" size={24} color="#fff" />
           </TouchableOpacity>
+        )}
+        {!title && (
+          <Image 
+            source={require('../../../assets/logo411.png')} 
+            style={styles.logo}
+            resizeMode="contain"
+          />
         )}
         {title ? (
           <Text style={styles.title}>{title}</Text>
@@ -81,7 +116,7 @@ export const Header: React.FC<HeaderProps> = ({
           </>
         )}
       </View>
-    </View>
+    </Animated.View>
   );
 };
 
@@ -91,15 +126,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 16,
-    backgroundColor: '#fff',
+    paddingVertical: 10,
+    backgroundColor: '#000',
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: '#1a1a1a',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.3,
     shadowRadius: 4,
     elevation: 2,
+  },
+  logo: {
+    width: 180,
+    height: 72,
+    marginRight: 12,
   },
   left: {
     flex: 1,
@@ -113,19 +153,19 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#fff',
   },
   headerContent: {
     flex: 1,
   },
   greeting: {
     fontSize: 14,
-    color: '#666',
+    color: '#999',
   },
   userName: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#fff',
     maxWidth: 200,
   },
   right: {
@@ -140,7 +180,9 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#007AFF',
+    backgroundColor: '#1a1a1a',
+    borderWidth: 2,
+    borderColor: '#333',
     alignItems: 'center',
     justifyContent: 'center',
   },
