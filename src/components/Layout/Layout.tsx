@@ -96,6 +96,7 @@ const styles = StyleSheet.create({
   },
   menuButton: {
     padding: 12,
+    paddingRight: 4,
     zIndex: 10,
   },
   header: {

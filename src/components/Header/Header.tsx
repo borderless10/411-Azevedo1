@@ -125,7 +125,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
+    paddingHorizontal: 8,
     paddingVertical: 10,
     backgroundColor: '#000',
     borderBottomWidth: 1,
@@ -139,13 +139,13 @@ const styles = StyleSheet.create({
   logo: {
     width: 180,
     height: 72,
-    marginRight: 12,
+    marginRight: 0,
   },
   left: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 8,
   },
   backButton: {
     padding: 4,
