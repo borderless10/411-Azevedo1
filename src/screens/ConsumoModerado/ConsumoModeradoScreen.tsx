@@ -34,7 +34,7 @@ export const ConsumoModeradoScreen = () => {
   }, []);
 
   return (
-    <Layout title="Consumo Moderado" showBackButton={true} showSidebar={false}>
+    <Layout title="Consumo Moderado" showBackButton={false} showSidebar={true}>
       <ScrollView style={styles.container}>
         <Animated.View
           style={[

@@ -92,7 +92,7 @@ export const SettingsScreen = () => {
   );
 
   return (
-    <Layout title="Configurações" showBackButton={true} showSidebar={false}>
+    <Layout title="Configurações" showBackButton={false} showSidebar={true}>
       <ScrollView style={styles.container}>
         <Animated.View
           style={[

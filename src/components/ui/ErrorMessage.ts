@@ -8,6 +8,7 @@ export const ErrorMessages = {
   'auth/user-disabled': 'Usuário desabilitado',
   'auth/user-not-found': 'Usuário não encontrado',
   'auth/wrong-password': 'Senha incorreta',
+  'auth/invalid-credential': 'Email ou senha incorretos',
   'auth/email-already-in-use': 'Email já está em uso',
   'auth/weak-password': 'Senha muito fraca. Use pelo menos 6 caracteres',
   'auth/too-many-requests': 'Muitas tentativas. Tente novamente mais tarde',

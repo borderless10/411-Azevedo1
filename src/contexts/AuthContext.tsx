@@ -66,12 +66,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                 setUser(firebaseUser);
               }
             } catch (error) {
-              console.error('Erro ao criar documento do usuário:', error);
+              if (__DEV__) {
+                console.log('Erro ao criar documento do usuário:', error);
+              }
               setUser(firebaseUser);
             }
           }
         } catch (error) {
-          console.error('Erro ao buscar dados do usuário:', error);
+          if (__DEV__) {
+            console.log('Erro ao buscar dados do usuário:', error);
+          }
           setUser(firebaseUser);
         }
       } else {
@@ -108,15 +112,21 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           setUser(userData);
         }
       } catch (error) {
-        console.error('Erro ao buscar dados do usuário:', error);
+        if (__DEV__) {
+          console.log('Erro ao buscar dados do usuário:', error);
+        }
         setUser(userData);
       }
       
       console.log('🟢 [AUTH CONTEXT] Estado do usuário atualizado');
     } catch (error: any) {
-      console.error('❌ [AUTH CONTEXT] Erro ao fazer login:', error);
-      console.error('❌ [AUTH CONTEXT] Error code:', error.code);
-      console.error('❌ [AUTH CONTEXT] Error message:', error.message);
+      if (__DEV__) {
+        console.log('❌ [AUTH CONTEXT] Erro ao fazer login:', {
+          error,
+          code: error?.code,
+          message: error?.message,
+        });
+      }
       throw error;
     } finally {
       setLoading(false);
@@ -139,7 +149,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           email: userData.email || '',
         });
       } catch (error) {
-        console.error('Erro ao criar documento do usuário no Firestore:', error);
+        if (__DEV__) {
+          console.log('Erro ao criar documento do usuário no Firestore:', error);
+        }
         // Continuar mesmo se houver erro ao criar o documento
       }
       
@@ -155,11 +167,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           setUser(userData);
         }
       } catch (error) {
-        console.error('Erro ao buscar dados do usuário após registro:', error);
+        if (__DEV__) {
+          console.log('Erro ao buscar dados do usuário após registro:', error);
+        }
         setUser(userData);
       }
     } catch (error: any) {
-      console.error('Erro ao registrar:', error);
+      if (__DEV__) {
+        console.log('Erro ao registrar:', error);
+      }
       throw error;
     } finally {
       setLoading(false);
@@ -175,7 +191,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       await authServices.logout();
       setUser(null);
     } catch (error: any) {
-      console.error('Erro ao fazer logout:', error);
+      if (__DEV__) {
+        console.log('Erro ao fazer logout:', error);
+      }
       throw error;
     } finally {
       setLoading(false);
@@ -197,7 +215,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           });
         }
       } catch (error) {
-        console.error('Erro ao recarregar dados do usuário:', error);
+        if (__DEV__) {
+          console.log('Erro ao recarregar dados do usuário:', error);
+        }
       }
     }
   };

@@ -143,14 +143,20 @@ export const RegisterScreen = () => {
         confirmPassword: confirmPassword,
       });
     } catch (error: any) {
-      let errorMessage = getErrorMessage(error.code);
+      // Evita erro do próprio tratamento caso o formato do erro mude
+      const errorCode =
+        error && typeof error === 'object' && 'code' in error
+          ? (error as any).code
+          : 'default';
+
+      const errorMessage = getErrorMessage(errorCode);
       
       // Mapear erros específicos
-      if (error.code === 'auth/email-already-in-use') {
+      if (errorCode === 'auth/email-already-in-use') {
         setErrors(prev => ({ ...prev, email: 'Este email já está em uso' }));
-      } else if (error.code === 'auth/invalid-email') {
+      } else if (errorCode === 'auth/invalid-email') {
         setErrors(prev => ({ ...prev, email: errorMessage }));
-      } else if (error.code === 'auth/weak-password') {
+      } else if (errorCode === 'auth/weak-password') {
         setErrors(prev => ({ ...prev, password: errorMessage }));
       } else {
         setErrors(prev => ({ ...prev, general: errorMessage }));

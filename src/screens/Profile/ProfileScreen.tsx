@@ -72,7 +72,7 @@ export const ProfileScreen = () => {
   }, [params]);
 
   return (
-    <Layout title="Perfil" showBackButton={true} showSidebar={false}>
+    <Layout title="Perfil" showBackButton={false} showSidebar={true}>
       <ScrollView style={styles.container}>
         <Animated.View
           style={[

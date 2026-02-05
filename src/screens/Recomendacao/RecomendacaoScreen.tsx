@@ -34,7 +34,7 @@ export const RecomendacaoScreen = () => {
   }, []);
 
   return (
-    <Layout title="Recomendação" showBackButton={true} showSidebar={false}>
+    <Layout title="Recomendação" showBackButton={false} showSidebar={true}>
       <ScrollView style={styles.container}>
         <Animated.View
           style={[

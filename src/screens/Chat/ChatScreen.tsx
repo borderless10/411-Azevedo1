@@ -34,7 +34,7 @@ export const ChatScreen = () => {
   }, []);
 
   return (
-    <Layout title="Chat" showBackButton={true} showSidebar={false}>
+    <Layout title="Chat" showBackButton={false} showSidebar={true}>
       <ScrollView style={styles.container}>
         <Animated.View
           style={[

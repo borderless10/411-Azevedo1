@@ -43,7 +43,9 @@ export const authServices = {
       console.log('🟡 [AUTH SERVICE] Login bem-sucedido');
       return convertFirebaseUser(userCredential.user);
     } catch (error) {
-      console.error('❌ [AUTH SERVICE] Erro no login:', error);
+      if (__DEV__) {
+        console.log('❌ [AUTH SERVICE] Erro no login:', error);
+      }
       throw error;
     }
   },
@@ -70,7 +72,9 @@ export const authServices = {
       console.log('🟡 [AUTH SERVICE] Registro bem-sucedido');
       return convertFirebaseUser(userCredential.user);
     } catch (error) {
-      console.error('❌ [AUTH SERVICE] Erro no registro:', error);
+      if (__DEV__) {
+        console.log('❌ [AUTH SERVICE] Erro no registro:', error);
+      }
       throw error;
     }
   },
@@ -84,7 +88,9 @@ export const authServices = {
       await signOut(auth);
       console.log('🟡 [AUTH SERVICE] Logout bem-sucedido');
     } catch (error) {
-      console.error('❌ [AUTH SERVICE] Erro no logout:', error);
+      if (__DEV__) {
+        console.log('❌ [AUTH SERVICE] Erro no logout:', error);
+      }
       throw error;
     }
   },

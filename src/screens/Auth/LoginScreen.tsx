@@ -46,6 +46,10 @@ export const LoginScreen = () => {
     return '';
   };
 
+  const handleGoToRegister = () => {
+    navigate('Register');
+  };
+
   // Validar senha em tempo real
   const validatePassword = (text: string): string => {
     if (!text.trim()) {
@@ -99,12 +103,30 @@ export const LoginScreen = () => {
       console.log('✅ [LOGIN] Login bem-sucedido!');
     } catch (error: any) {
       console.log('❌ [LOGIN] Erro:', error);
-      let errorMessage = getErrorMessage(error.code);
+
+      // Garante que não estoura erro se vier algo inesperado do Firebase
+      const errorCode =
+        error && typeof error === 'object' && 'code' in error
+          ? (error as any).code
+          : 'default';
+
+      const errorMessage = getErrorMessage(errorCode);
       
-      // Mapear erros específicos para os campos
-      if (error.code === 'auth/invalid-email' || error.code === 'auth/user-not-found') {
+      // Além dos textos na tela, mostra um alerta amigável
+      if (errorCode === 'auth/wrong-password' || errorCode === 'auth/invalid-credential') {
+        Alert.alert('Erro no login', 'Senha incorreta. Verifique e tente novamente.');
+      } else if (errorCode === 'auth/user-not-found') {
+        Alert.alert('Erro no login', 'Usuário não encontrado. Confira o email ou crie uma conta.');
+      } else if (errorCode === 'auth/invalid-email') {
+        Alert.alert('Erro no login', 'Email inválido. Verifique o formato (ex: usuario@dominio.com).');
+      } else {
+        Alert.alert('Erro no login', errorMessage);
+      }
+
+      // Mapear erros específicos para os campos (mantém feedback abaixo dos inputs)
+      if (errorCode === 'auth/invalid-email' || errorCode === 'auth/user-not-found') {
         setErrors(prev => ({ ...prev, email: errorMessage }));
-      } else if (error.code === 'auth/wrong-password') {
+      } else if (errorCode === 'auth/wrong-password' || errorCode === 'auth/invalid-credential') {
         setErrors(prev => ({ ...prev, password: 'Senha incorreta' }));
       } else {
         setErrors(prev => ({ ...prev, general: errorMessage }));
@@ -227,6 +249,16 @@ export const LoginScreen = () => {
               </View>
             )}
           </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.linkButton}
+            onPress={handleGoToRegister}
+            disabled={loading}
+          >
+            <Text style={styles.linkText}>
+              Não tem conta? <Text style={styles.linkTextBold}>Criar cadastro</Text>
+            </Text>
+          </TouchableOpacity>
         </View>
       </View>
     </KeyboardAvoidingView>
@@ -342,6 +374,18 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     marginLeft: 8,
+  },
+  linkButton: {
+    marginTop: 24,
+    alignItems: 'center',
+  },
+  linkText: {
+    fontSize: 14,
+    color: '#999',
+  },
+  linkTextBold: {
+    color: '#007AFF',
+    fontWeight: 'bold',
   },
   errorContainer: {
     flexDirection: 'row',
