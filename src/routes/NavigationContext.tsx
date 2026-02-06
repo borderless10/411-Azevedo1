@@ -18,6 +18,7 @@ export type ScreenName =
   | "Chat"
   | "Metas"
   | "Recomendacao"
+  | "Budget"
   | "CadastrarCliente";
 
 interface NavigationContextType {

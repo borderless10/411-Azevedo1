@@ -72,6 +72,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const menuItems: MenuItem[] = [
     { id: 'Home', label: 'Início', icon: 'home', color: '#007AFF' },
+    { id: 'Budget', label: 'Orçamento Mensal', icon: 'wallet', color: '#00BCD4' },
     { id: 'ConsumoModerado', label: 'Consumo Moderado', icon: 'leaf', color: '#4CAF50' },
     { id: 'Feed', label: 'Feed', icon: 'newspaper', color: '#007AFF' },
     { id: 'Chat', label: 'Chat', icon: 'chatbubbles', color: '#9C27B0' },
