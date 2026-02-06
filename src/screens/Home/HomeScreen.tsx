@@ -22,10 +22,12 @@ import { useAuth } from '../../hooks/useAuth';
 import incomeServices from '../../services/incomeServices';
 import expenseServices from '../../services/expenseServices';
 import { formatCurrency } from '../../utils/currencyUtils';
-import { formatDateForDisplay } from '../../utils/dateUtils';
-import { getFirstDayOfMonth, getEndOfDay } from '../../utils/dateUtils';
+import { formatDateForDisplay, formatDateToString, subtractDays, getStartOfDay, getEndOfDay } from '../../utils/dateUtils';
+import { getFirstDayOfMonth } from '../../utils/dateUtils';
 import { Income } from '../../types/income';
 import { Expense } from '../../types/expense';
+import { CategoryBarChart, CategoryData, LineChart, LineChartData } from '../../components/Charts';
+import { DEFAULT_EXPENSE_CATEGORIES } from '../../types/category';
 
 export const HomeScreen = () => {
   const { navigate, currentScreen } = useNavigation();
@@ -43,10 +45,23 @@ export const HomeScreen = () => {
   }>>([]);
   const [filterType, setFilterType] = useState<'all' | 'income' | 'expense'>('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [categoryChartData, setCategoryChartData] = useState<CategoryData[]>([]);
+  const [lineChartData, setLineChartData] = useState<LineChartData[]>([]);
   
   // Animações
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
+
+  // Função para obter cor de categoria
+  const getCategoryColor = (categoryName: string): string => {
+    const defaultCat = DEFAULT_EXPENSE_CATEGORIES.find(cat => cat.name === categoryName);
+    if (defaultCat) return defaultCat.color;
+    
+    // Cores padrão para categorias não mapeadas
+    const colors = ['#FF5722', '#3F51B5', '#795548', '#F44336', '#009688', '#E91E63', '#FF9800', '#607D8B', '#9C27B0', '#00BCD4'];
+    const hash = categoryName.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    return colors[hash % colors.length];
+  };
 
   // Carregar dados do mês atual
   const loadData = async () => {
@@ -69,11 +84,22 @@ export const HomeScreen = () => {
       const today = new Date();
       const startOfMonth = getFirstDayOfMonth(today);
       const endOfToday = getEndOfDay(today);
+      
+      // Período para gráfico de linha (últimos 7 dias)
+      const sevenDaysAgo = getStartOfDay(subtractDays(today, 6));
 
       console.log('🏠 [HOME] Buscando dados do período:', { startOfMonth, endOfToday });
 
-      // Carregar totais do mês e todas as transações em paralelo
-      const [incomeTotal, expenseTotal, allIncomes, allExpenses] = await Promise.all([
+      // Carregar totais do mês, todas as transações e dados dos gráficos em paralelo
+      const [
+        incomeTotal, 
+        expenseTotal, 
+        allIncomes, 
+        allExpenses,
+        expensesByCategory,
+        last7DaysIncomes,
+        last7DaysExpenses,
+      ] = await Promise.all([
         incomeServices.getIncomesTotal(user.id, startOfMonth, endOfToday).catch(err => {
           console.error('❌ [HOME] Erro ao buscar totais de renda:', err);
           return 0;
@@ -88,6 +114,18 @@ export const HomeScreen = () => {
         }),
         expenseServices.getExpenses(user.id).catch(err => {
           console.error('❌ [HOME] Erro ao buscar gastos:', err);
+          return [];
+        }),
+        expenseServices.getExpensesGroupedByCategory(user.id, startOfMonth, endOfToday).catch(err => {
+          console.error('❌ [HOME] Erro ao buscar gastos por categoria:', err);
+          return [];
+        }),
+        incomeServices.getIncomes(user.id, { startDate: sevenDaysAgo, endDate: endOfToday }).catch(err => {
+          console.error('❌ [HOME] Erro ao buscar rendas dos últimos 7 dias:', err);
+          return [];
+        }),
+        expenseServices.getExpenses(user.id, { startDate: sevenDaysAgo, endDate: endOfToday }).catch(err => {
+          console.error('❌ [HOME] Erro ao buscar gastos dos últimos 7 dias:', err);
           return [];
         }),
       ]);
@@ -110,6 +148,37 @@ export const HomeScreen = () => {
         .map(t => ({ item: t.item, type: t.type }));
 
       const calculatedBalance = incomeTotal - expenseTotal;
+
+      // Preparar dados do gráfico de categorias
+      const categoryData: CategoryData[] = (expensesByCategory || [])
+        .slice(0, 5) // Top 5 categorias
+        .map((item) => ({
+          category: item.category || 'Outros',
+          total: item.total || 0,
+          percentage: item.percentage || 0,
+          color: getCategoryColor(item.category || 'Outros'),
+        }));
+      setCategoryChartData(categoryData);
+
+      // Preparar dados do gráfico de linha (últimos 7 dias)
+      const daysData: LineChartData[] = [];
+      for (let i = 6; i >= 0; i--) {
+        const date = subtractDays(today, i);
+        const dateStr = formatDateToString(date);
+        
+        const dayIncomes = (last7DaysIncomes || []).filter(inc => inc && inc.date && formatDateToString(inc.date) === dateStr);
+        const dayExpenses = (last7DaysExpenses || []).filter(exp => exp && exp.date && formatDateToString(exp.date) === dateStr);
+        
+        const incomeTotal = dayIncomes.reduce((sum, inc) => sum + (inc.value || 0), 0);
+        const expenseTotal = dayExpenses.reduce((sum, exp) => sum + (exp.value || 0), 0);
+        
+        daysData.push({
+          date,
+          income: incomeTotal || 0,
+          expense: expenseTotal || 0,
+        });
+      }
+      setLineChartData(daysData);
 
       // Atualizar estados
       setTotalIncome(incomeTotal);
@@ -583,6 +652,47 @@ export const HomeScreen = () => {
               </Animated.View>
             </View>
           </Animated.View>
+
+          {/* Gráficos */}
+          {(categoryChartData.length > 0 || lineChartData.length > 0) && (
+            <Animated.View
+              style={[
+                styles.chartsContainer,
+                {
+                  opacity: fadeAnim,
+                  transform: [{ translateY: slideAnim }],
+                },
+              ]}
+            >
+              <Text style={styles.sectionTitle}>Visualizações</Text>
+
+              {/* Gráfico de Gastos por Categoria */}
+              {categoryChartData.length > 0 && (
+                <View style={styles.chartCard}>
+                  <View style={styles.chartHeader}>
+                    <Ionicons name="pie-chart-outline" size={20} color="#007AFF" />
+                    <Text style={styles.chartTitle}>Gastos por Categoria</Text>
+                  </View>
+                  <CategoryBarChart
+                    data={categoryChartData}
+                    showValues={true}
+                    showPercentages={true}
+                  />
+                </View>
+              )}
+
+              {/* Gráfico de Evolução Temporal */}
+              {lineChartData.length > 0 && (
+                <View style={styles.chartCard}>
+                  <View style={styles.chartHeader}>
+                    <Ionicons name="trending-up-outline" size={20} color="#4CAF50" />
+                    <Text style={styles.chartTitle}>Evolução (Últimos 7 dias)</Text>
+                  </View>
+                  <LineChart data={lineChartData} height={180} showLabels={true} />
+                </View>
+              )}
+            </Animated.View>
+          )}
 
           {/* Ações rápidas */}
           <View style={styles.actionsContainer}>
@@ -1133,6 +1243,33 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#F44336',
     letterSpacing: 0.2,
+  },
+  chartsContainer: {
+    marginBottom: 16,
+    gap: 16,
+  },
+  chartCard: {
+    backgroundColor: '#1a1a1a',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#333',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  chartHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 16,
+  },
+  chartTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
   },
 });
 
