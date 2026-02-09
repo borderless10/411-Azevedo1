@@ -19,3 +19,12 @@ export * from './transaction';
 
 // Balance types
 export * from './balance';
+
+// Budget types
+export * from './budget';
+
+// Goal types
+export * from './goal';
+
+// Activity types
+export * from './activity';

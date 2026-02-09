@@ -30,6 +30,8 @@ import {
   IncomeByDate,
 } from '../types/income';
 import { formatDateToString } from '../utils/dateUtils';
+import { formatCurrency } from '../utils/currencyUtils';
+import { activityServices } from './activityServices';
 
 /**
  * Validar dados de criação de renda
@@ -127,6 +129,17 @@ export const incomeServices = {
         createdAt: now,
         updatedAt: now,
       };
+
+      // Registrar atividade
+      await activityServices.logActivity(userId, {
+        type: 'income_created',
+        title: data.description.trim(),
+        description: `Renda de ${formatCurrency(data.value)}`,
+        metadata: {
+          amount: data.value,
+          category: data.category,
+        },
+      });
 
       return income;
     } catch (error) {
@@ -284,9 +297,25 @@ export const incomeServices = {
     console.log('💰 [INCOME SERVICE] Deletando renda:', id);
 
     try {
+      // Buscar renda antes de deletar para registrar atividade
+      const income = await this.getIncomeById(id);
+      
       const docRef = getIncomeDoc(id);
       await deleteDoc(docRef);
       console.log('✅ [INCOME SERVICE] Renda deletada');
+
+      // Registrar atividade
+      if (income) {
+        await activityServices.logActivity(income.userId, {
+          type: 'income_deleted',
+          title: `Renda removida: ${income.description}`,
+          description: formatCurrency(income.value),
+          metadata: {
+            amount: income.value,
+            category: income.category,
+          },
+        });
+      }
     } catch (error) {
       console.error('❌ [INCOME SERVICE] Erro ao deletar renda:', error);
       throw error;

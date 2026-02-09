@@ -12,17 +12,17 @@ import {
   TouchableOpacity,
   Animated,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Layout } from '../../components/Layout/Layout';
 import { formatCurrency } from '../../utils/currencyUtils';
-
-interface DailyExpense {
-  day: number;
-  amount: number;
-}
+import { useAuth } from '../../contexts/AuthContext';
+import { budgetServices, getCurrentMonthYear } from '../../services/budgetServices';
+import { DailyExpense } from '../../types/budget';
 
 export const BudgetScreen = () => {
+  const { user } = useAuth();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
 
@@ -31,10 +31,13 @@ export const BudgetScreen = () => {
   const [dailyExpenses, setDailyExpenses] = useState<DailyExpense[]>([]);
   const [editingDay, setEditingDay] = useState<number | null>(null);
   const [tempValue, setTempValue] = useState<string>('');
+  const [loading, setLoading] = useState<boolean>(true);
+  const [saving, setSaving] = useState<boolean>(false);
 
   // Calcular dias do mês atual
   const today = new Date();
   const currentDay = today.getDate();
+  const currentMonthYear = getCurrentMonthYear();
   const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
 
   // Calcular média diária ideal
@@ -49,23 +52,80 @@ export const BudgetScreen = () => {
   // Status da média (se está acima ou abaixo do ideal)
   const isOverBudget = actualDailyAverage > idealDailyAverage && budgetValue > 0;
 
+  // Carregar dados do Firebase ao montar componente
   useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 400,
-        useNativeDriver: true,
-      }),
-      Animated.spring(slideAnim, {
-        toValue: 0,
-        friction: 8,
-        tension: 40,
-        useNativeDriver: true,
-      }),
-    ]).start();
+    loadBudgetData();
   }, []);
 
-  const handleSaveExpense = (day: number) => {
+  // Animações de entrada
+  useEffect(() => {
+    if (!loading) {
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 400,
+          useNativeDriver: true,
+        }),
+        Animated.spring(slideAnim, {
+          toValue: 0,
+          friction: 8,
+          tension: 40,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [loading]);
+
+  const loadBudgetData = async () => {
+    if (!user) return;
+
+    try {
+      setLoading(true);
+      const budget = await budgetServices.getCurrentBudget(user.id);
+
+      if (budget) {
+        setMonthlyBudget(budget.monthlyBudget.toString());
+        setDailyExpenses(budget.dailyExpenses || []);
+        console.log('✅ Orçamento carregado do Firebase');
+      } else {
+        console.log('⚠️ Nenhum orçamento encontrado para este mês');
+      }
+    } catch (error) {
+      console.error('❌ Erro ao carregar orçamento:', error);
+      Alert.alert('Erro', 'Não foi possível carregar o orçamento');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const saveMonthlyBudget = async (value: string) => {
+    if (!user) return;
+
+    const numValue = parseFloat(value.replace(/[^0-9.,]/g, '').replace(',', '.')) || 0;
+
+    try {
+      setSaving(true);
+      await budgetServices.updateMonthlyBudget(user.id, currentMonthYear, numValue);
+      console.log('✅ Orçamento mensal salvo no Firebase');
+    } catch (error) {
+      console.error('❌ Erro ao salvar orçamento mensal:', error);
+      Alert.alert('Erro', 'Não foi possível salvar o orçamento');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleBudgetChange = (value: string) => {
+    setMonthlyBudget(value);
+  };
+
+  const handleBudgetBlur = () => {
+    saveMonthlyBudget(monthlyBudget);
+  };
+
+  const handleSaveExpense = async (day: number) => {
+    if (!user) return;
+
     const value = parseFloat(tempValue.replace(/[^0-9.,]/g, '').replace(',', '.')) || 0;
     
     if (value < 0) {
@@ -73,18 +133,34 @@ export const BudgetScreen = () => {
       return;
     }
 
-    const existingIndex = dailyExpenses.findIndex(item => item.day === day);
-    
-    if (existingIndex >= 0) {
-      const updated = [...dailyExpenses];
-      updated[existingIndex] = { day, amount: value };
-      setDailyExpenses(updated);
-    } else {
-      setDailyExpenses([...dailyExpenses, { day, amount: value }].sort((a, b) => a.day - b.day));
-    }
+    try {
+      setSaving(true);
 
-    setEditingDay(null);
-    setTempValue('');
+      // Atualizar localmente
+      const existingIndex = dailyExpenses.findIndex(item => item.day === day);
+      let updatedExpenses: DailyExpense[];
+      
+      if (existingIndex >= 0) {
+        updatedExpenses = [...dailyExpenses];
+        updatedExpenses[existingIndex] = { day, amount: value };
+      } else {
+        updatedExpenses = [...dailyExpenses, { day, amount: value }].sort((a, b) => a.day - b.day);
+      }
+
+      setDailyExpenses(updatedExpenses);
+
+      // Salvar no Firebase
+      await budgetServices.updateDailyExpense(user.id, currentMonthYear, day, value);
+      console.log('✅ Gasto diário salvo no Firebase');
+
+      setEditingDay(null);
+      setTempValue('');
+    } catch (error) {
+      console.error('❌ Erro ao salvar gasto diário:', error);
+      Alert.alert('Erro', 'Não foi possível salvar o gasto');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleEditDay = (day: number) => {
@@ -97,6 +173,17 @@ export const BudgetScreen = () => {
     const expense = dailyExpenses.find(item => item.day === day);
     return expense ? expense.amount : 0;
   };
+
+  if (loading) {
+    return (
+      <Layout title="Controle de Orçamento" showBackButton={false} showSidebar={true}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#007AFF" />
+          <Text style={styles.loadingText}>Carregando orçamento...</Text>
+        </View>
+      </Layout>
+    );
+  }
 
   return (
     <Layout title="Controle de Orçamento" showBackButton={false} showSidebar={true}>
@@ -117,6 +204,12 @@ export const BudgetScreen = () => {
             <Text style={styles.subtitle}>
               Controle quanto você pode gastar por dia
             </Text>
+            {saving && (
+              <View style={styles.savingIndicator}>
+                <ActivityIndicator size="small" color="#4CAF50" />
+                <Text style={styles.savingText}>Salvando...</Text>
+              </View>
+            )}
           </View>
 
           {/* Meta Mensal */}
@@ -130,7 +223,8 @@ export const BudgetScreen = () => {
                 placeholderTextColor="#666"
                 keyboardType="numeric"
                 value={monthlyBudget}
-                onChangeText={setMonthlyBudget}
+                onChangeText={handleBudgetChange}
+                onBlur={handleBudgetBlur}
               />
             </View>
             {budgetValue > 0 && (
@@ -261,6 +355,17 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000',
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#000',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#999',
+  },
   content: {
     padding: 16,
     gap: 16,
@@ -280,6 +385,16 @@ const styles = StyleSheet.create({
     color: '#999',
     textAlign: 'center',
     marginTop: 4,
+  },
+  savingIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    gap: 8,
+  },
+  savingText: {
+    fontSize: 12,
+    color: '#4CAF50',
   },
   card: {
     backgroundColor: '#1a1a1a',

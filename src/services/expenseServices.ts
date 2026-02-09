@@ -31,6 +31,8 @@ import {
   ExpenseByCategory,
 } from '../types/expense';
 import { formatDateToString } from '../utils/dateUtils';
+import { formatCurrency } from '../utils/currencyUtils';
+import { activityServices } from './activityServices';
 
 /**
  * Validar dados de criação de gasto
@@ -136,6 +138,17 @@ export const expenseServices = {
         createdAt: now,
         updatedAt: now,
       };
+
+      // Registrar atividade
+      await activityServices.logActivity(userId, {
+        type: 'expense_created',
+        title: data.description.trim(),
+        description: `Gasto de ${formatCurrency(data.value)}`,
+        metadata: {
+          amount: data.value,
+          category: data.category,
+        },
+      });
 
       return expense;
     } catch (error) {
@@ -299,9 +312,25 @@ export const expenseServices = {
     console.log('💸 [EXPENSE SERVICE] Deletando gasto:', id);
 
     try {
+      // Buscar gasto antes de deletar para registrar atividade
+      const expense = await this.getExpenseById(id);
+      
       const docRef = getExpenseDoc(id);
       await deleteDoc(docRef);
       console.log('✅ [EXPENSE SERVICE] Gasto deletado');
+
+      // Registrar atividade
+      if (expense) {
+        await activityServices.logActivity(expense.userId, {
+          type: 'expense_deleted',
+          title: `Gasto removido: ${expense.description}`,
+          description: formatCurrency(expense.value),
+          metadata: {
+            amount: expense.value,
+            category: expense.category,
+          },
+        });
+      }
     } catch (error) {
       console.error('❌ [EXPENSE SERVICE] Erro ao deletar gasto:', error);
       throw error;
