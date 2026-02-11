@@ -18,11 +18,18 @@ import { Ionicons } from '@expo/vector-icons';
 import { Layout } from '../../components/Layout/Layout';
 import { formatCurrency } from '../../utils/currencyUtils';
 import { useAuth } from '../../contexts/AuthContext';
+import { useNavigation } from '../../routes/NavigationContext';
 import { budgetServices, getCurrentMonthYear } from '../../services/budgetServices';
 import { DailyExpense } from '../../types/budget';
+import {
+  requestNotificationPermissions,
+  scheduleDailyExpenseReminder,
+  cancelDailyExpenseReminder,
+} from '../../services/notificationServices';
 
 export const BudgetScreen = () => {
   const { user } = useAuth();
+  const { currentScreen } = useNavigation();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
 
@@ -54,8 +61,11 @@ export const BudgetScreen = () => {
 
   // Carregar dados do Firebase ao montar componente
   useEffect(() => {
-    loadBudgetData();
-  }, []);
+    if (currentScreen === 'Budget' && user) {
+      loadBudgetData();
+      setupNotifications();
+    }
+  }, [currentScreen, user]);
 
   // Animações de entrada
   useEffect(() => {
@@ -98,6 +108,36 @@ export const BudgetScreen = () => {
     }
   };
 
+  const setupNotifications = async () => {
+    try {
+      const hasPermission = await requestNotificationPermissions();
+      if (hasPermission) {
+        console.log('✅ Permissão de notificações concedida');
+        
+        // Verificar se já tem gasto registrado hoje
+        const hasExpenseToday = dailyExpenses.some(
+          (expense) => expense.day === currentDay
+        );
+
+        if (!hasExpenseToday) {
+          // Agendar lembrete diário às 21h
+          const notificationId = await scheduleDailyExpenseReminder();
+          if (notificationId) {
+            console.log('✅ Lembrete diário configurado com sucesso');
+          }
+        } else {
+          console.log('✅ Já tem gasto registrado hoje, lembrete não necessário');
+          // Cancelar qualquer lembrete existente
+          await cancelDailyExpenseReminder();
+        }
+      } else {
+        console.log('⚠️ Permissão de notificações negada');
+      }
+    } catch (error) {
+      console.error('❌ Erro ao configurar notificações:', error);
+    }
+  };
+
   const saveMonthlyBudget = async (value: string) => {
     if (!user) return;
 
@@ -133,6 +173,9 @@ export const BudgetScreen = () => {
       return;
     }
 
+    // Verificar se é o primeiro gasto do dia atual
+    const isFirstExpenseToday = day === currentDay && !dailyExpenses.some(e => e.day === currentDay);
+
     try {
       setSaving(true);
 
@@ -152,6 +195,12 @@ export const BudgetScreen = () => {
       // Salvar no Firebase
       await budgetServices.updateDailyExpense(user.id, currentMonthYear, day, value);
       console.log('✅ Gasto diário salvo no Firebase');
+
+      // Se for o primeiro gasto de hoje, cancelar o lembrete das 21h
+      if (isFirstExpenseToday) {
+        await cancelDailyExpenseReminder();
+        console.log('🔕 Lembrete diário cancelado (gasto registrado)');
+      }
 
       setEditingDay(null);
       setTempValue('');
@@ -186,7 +235,7 @@ export const BudgetScreen = () => {
   }
 
   return (
-    <Layout title="Controle de Orçamento" showBackButton={false} showSidebar={true}>
+    <Layout title="Consumo Moderado" showBackButton={false} showSidebar={true}>
       <ScrollView style={styles.container}>
         <Animated.View
           style={[

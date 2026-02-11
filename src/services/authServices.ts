@@ -4,6 +4,9 @@ import {
   signOut,
   updateProfile,
   onAuthStateChanged,
+  updatePassword,
+  reauthenticateWithCredential,
+  EmailAuthProvider,
   User as FirebaseUser,
 } from 'firebase/auth';
 import { auth } from '../lib/firebase';
@@ -120,6 +123,43 @@ export const authServices = {
   getCurrentUser(): User | null {
     const firebaseUser = auth.currentUser;
     return firebaseUser ? convertFirebaseUser(firebaseUser) : null;
+  },
+
+  /**
+   * Alterar senha do usuário
+   */
+  async changePassword(currentPassword: string, newPassword: string): Promise<void> {
+    console.log('🟡 [AUTH SERVICE] changePassword chamado');
+    try {
+      const user = auth.currentUser;
+      if (!user || !user.email) {
+        throw new Error('Usuário não autenticado');
+      }
+
+      // Reautenticar usuário antes de mudar senha
+      const credential = EmailAuthProvider.credential(user.email, currentPassword);
+      await reauthenticateWithCredential(user, credential);
+      
+      // Atualizar senha
+      await updatePassword(user, newPassword);
+      
+      console.log('🟡 [AUTH SERVICE] Senha alterada com sucesso');
+    } catch (error: any) {
+      if (__DEV__) {
+        console.log('❌ [AUTH SERVICE] Erro ao alterar senha:', error);
+      }
+      
+      // Melhorar mensagens de erro
+      if (error.code === 'auth/wrong-password') {
+        throw new Error('Senha atual incorreta');
+      } else if (error.code === 'auth/weak-password') {
+        throw new Error('A nova senha deve ter pelo menos 6 caracteres');
+      } else if (error.code === 'auth/requires-recent-login') {
+        throw new Error('Por segurança, faça login novamente antes de alterar a senha');
+      }
+      
+      throw error;
+    }
   },
 };
 

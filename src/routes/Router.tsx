@@ -16,6 +16,7 @@ import { ChatScreen } from "../screens/Chat/ChatScreen";
 import { MetasScreen } from "../screens/Metas/MetasScreen";
 import { RecomendacaoScreen } from "../screens/Recomendacao/RecomendacaoScreen";
 import { BudgetScreen } from "../screens/Budget/BudgetScreen";
+import { BillsScreen } from "../screens/Bills/BillsScreen";
 import { CadastrarClienteScreen } from "../screens/Admin/CadastrarClienteScreen";
 import { useNavigation } from "./NavigationContext";
 import { useAuth } from "../hooks/useAuth";
@@ -85,6 +86,8 @@ export const Router = () => {
         return <RecomendacaoScreen />;
       case "Budget":
         return <BudgetScreen />;
+      case "Bills":
+        return <BillsScreen />;
       case "Profile":
         return <ProfileScreen />;
       case "Settings":

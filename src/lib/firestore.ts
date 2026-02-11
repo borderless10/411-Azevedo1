@@ -19,6 +19,8 @@ import {
   GoalFirestore,
   Activity,
   ActivityFirestore,
+  Bill,
+  BillFirestore,
 } from '../types';
 
 /**
@@ -32,6 +34,7 @@ export const COLLECTIONS = {
   BUDGETS: 'budgets',
   GOALS: 'goals',
   ACTIVITIES: 'activities',
+  BILLS: 'bills',
 } as const;
 
 /**
@@ -65,6 +68,10 @@ export const getActivitiesCollection = (): CollectionReference => {
   return collection(db, COLLECTIONS.ACTIVITIES);
 };
 
+export const getBillsCollection = (): CollectionReference => {
+  return collection(db, COLLECTIONS.BILLS);
+};
+
 /**
  * Referências para documentos
  */
@@ -94,6 +101,10 @@ export const getGoalDoc = (id: string): DocumentReference => {
 
 export const getActivityDoc = (id: string): DocumentReference => {
   return doc(db, COLLECTIONS.ACTIVITIES, id);
+};
+
+export const getBillDoc = (id: string): DocumentReference => {
+  return doc(db, COLLECTIONS.BILLS, id);
 };
 
 /**
@@ -310,6 +321,43 @@ export const convertActivityToFirestore = (
     result.createdAt = dateToTimestamp(createdAt);
   }
   
+  return result;
+};
+
+/**
+ * Converter Bill do Firestore para a aplicação
+ */
+export const convertBillFromFirestore = (data: BillFirestore): Bill => {
+  return {
+    ...data,
+    dueDate: timestampToDate(data.dueDate),
+    paidDate: data.paidDate ? timestampToDate(data.paidDate) : undefined,
+    createdAt: timestampToDate(data.createdAt),
+    updatedAt: timestampToDate(data.updatedAt),
+  };
+};
+
+/**
+ * Converter Bill para o Firestore
+ */
+export const convertBillToFirestore = (bill: Partial<Bill>): any => {
+  const { dueDate, paidDate, createdAt, updatedAt, ...rest } = bill;
+
+  const result: any = { ...rest };
+
+  if (dueDate) {
+    result.dueDate = dateToTimestamp(dueDate);
+  }
+  if (paidDate) {
+    result.paidDate = dateToTimestamp(paidDate);
+  }
+  if (createdAt) {
+    result.createdAt = dateToTimestamp(createdAt);
+  }
+  if (updatedAt) {
+    result.updatedAt = dateToTimestamp(updatedAt);
+  }
+
   return result;
 };
 

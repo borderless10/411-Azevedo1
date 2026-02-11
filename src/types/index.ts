@@ -28,3 +28,6 @@ export * from './goal';
 
 // Activity types
 export * from './activity';
+
+// Bill types
+export * from './bill';

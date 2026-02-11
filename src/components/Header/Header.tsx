@@ -15,6 +15,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../hooks/useAuth';
 import { useNavigation } from '../../routes/NavigationContext';
+import { useTheme } from '../../contexts/ThemeContext';
 
 interface HeaderProps {
   title?: string;
@@ -33,6 +34,7 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const { user } = useAuth();
   const { navigate, currentScreen } = useNavigation();
+  const { colors } = useTheme();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(-20)).current;
 
@@ -67,17 +69,19 @@ export const Header: React.FC<HeaderProps> = ({
     <Animated.View 
       style={[
         styles.container, 
-        style,
         {
+          backgroundColor: colors.background,
+          borderBottomColor: colors.border,
           opacity: fadeAnim,
           transform: [{ translateY: slideAnim }],
-        }
+        },
+        style,
       ]}
     >
       <View style={styles.left}>
         {showBackButton && (
           <TouchableOpacity onPress={handleBack} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color="#fff" />
+            <Ionicons name="arrow-back" size={24} color={colors.text} />
           </TouchableOpacity>
         )}
         {!title && (
@@ -88,12 +92,12 @@ export const Header: React.FC<HeaderProps> = ({
           />
         )}
         {title ? (
-          <Text style={styles.title}>{title}</Text>
+          <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
         ) : (
           <View style={styles.headerContent}>
             <View>
-              <Text style={styles.greeting}>Olá,</Text>
-              <Text style={styles.userName} numberOfLines={1}>
+              <Text style={[styles.greeting, { color: colors.textSecondary }]}>Olá,</Text>
+              <Text style={[styles.userName, { color: colors.text }]} numberOfLines={1}>
                 {user?.name || user?.email || 'Usuário'}
               </Text>
             </View>
@@ -106,8 +110,8 @@ export const Header: React.FC<HeaderProps> = ({
           <>
             {showProfile && (
               <TouchableOpacity onPress={handleProfile} style={styles.profileButton}>
-                <View style={styles.avatar}>
-                  <Text style={styles.avatarText}>
+                <View style={[styles.avatar, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <Text style={[styles.avatarText, { color: colors.text }]}>
                     {(user?.name?.[0] || user?.email?.[0] || 'U').toUpperCase()}
                   </Text>
                 </View>
@@ -127,9 +131,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 8,
     paddingVertical: 10,
-    backgroundColor: '#000',
     borderBottomWidth: 1,
-    borderBottomColor: '#1a1a1a',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
@@ -153,19 +155,16 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#fff',
   },
   headerContent: {
     flex: 1,
   },
   greeting: {
     fontSize: 14,
-    color: '#999',
   },
   userName: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#fff',
     maxWidth: 200,
   },
   right: {
@@ -180,14 +179,11 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#1a1a1a',
     borderWidth: 2,
-    borderColor: '#333',
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarText: {
-    color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
   },

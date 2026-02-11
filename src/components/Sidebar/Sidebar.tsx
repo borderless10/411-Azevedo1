@@ -16,6 +16,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../hooks/useAuth';
 import { useNavigation, ScreenName } from '../../routes/NavigationContext';
+import { useTheme } from '../../contexts/ThemeContext';
 
 interface SidebarProps {
   visible: boolean;
@@ -37,6 +38,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const { user, signOut } = useAuth();
   const { navigate, currentScreen } = useNavigation();
+  const { colors } = useTheme();
   const slideAnim = useRef(new Animated.Value(-300)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
@@ -72,8 +74,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const menuItems: MenuItem[] = [
     { id: 'Home', label: 'Início', icon: 'home', color: '#007AFF' },
-    { id: 'Budget', label: 'Orçamento Mensal', icon: 'wallet', color: '#00BCD4' },
-    { id: 'ConsumoModerado', label: 'Consumo Moderado', icon: 'leaf', color: '#4CAF50' },
+    { id: 'Budget', label: 'Consumo Moderado', icon: 'wallet', color: '#00BCD4' },
+    { id: 'Bills', label: 'Contas a Pagar', icon: 'receipt', color: '#E91E63' },
     { id: 'Feed', label: 'Feed', icon: 'newspaper', color: '#007AFF' },
     { id: 'Chat', label: 'Chat', icon: 'chatbubbles', color: '#9C27B0' },
     { id: 'Metas', label: 'Metas', icon: 'flag', color: '#F44336' },
@@ -114,20 +116,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <Animated.View 
         style={[
           styles.container, 
-          style,
           {
+            backgroundColor: colors.card,
             transform: [{ translateX: slideAnim }],
-          }
+          },
+          style,
         ]} 
         onStartShouldSetResponder={() => true}
       >
         {/* Botão de Fechar no canto superior esquerdo */}
         <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-          <Ionicons name="close" size={28} color="#fff" />
+          <Ionicons name="close" size={28} color={colors.text} />
         </TouchableOpacity>
 
         {/* Logo */}
-        <View style={styles.logoContainer}>
+        <View style={[styles.logoContainer, { borderBottomColor: colors.border }]}>
           <Image 
             source={require('../../../assets/logo411.png')} 
             style={styles.logo}
@@ -136,18 +139,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </View>
 
         {/* Header do Sidebar */}
-        <View style={styles.header}>
+        <View style={[styles.header, { borderBottomColor: colors.border, backgroundColor: colors.card }]}>
           <View style={styles.userInfo}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>
+            <View style={[styles.avatar, { backgroundColor: colors.background, borderColor: colors.border }]}>
+              <Text style={[styles.avatarText, { color: colors.text }]}>
                 {(user?.name?.[0] || user?.email?.[0] || 'U').toUpperCase()}
               </Text>
             </View>
             <View style={styles.userDetails}>
-              <Text style={styles.userName} numberOfLines={1}>
+              <Text style={[styles.userName, { color: colors.text }]} numberOfLines={1}>
                 {user?.name || 'Usuário'}
               </Text>
-              <Text style={styles.userEmail} numberOfLines={1}>
+              <Text style={[styles.userEmail, { color: colors.textSecondary }]} numberOfLines={1}>
                 {user?.email || ''}
               </Text>
             </View>
@@ -163,7 +166,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 key={item.id}
                 style={[
                   styles.menuItem,
-                  isActive && styles.menuItemActive,
+                  { borderBottomColor: colors.border },
+                  isActive && [styles.menuItemActive, { backgroundColor: colors.background }],
                 ]}
                 onPress={() => handleNavigate(item.id)}
               >
@@ -171,11 +175,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <Ionicons
                     name={item.icon}
                     size={24}
-                    color={isActive ? item.color || '#007AFF' : '#999'}
+                    color={isActive ? item.color || '#007AFF' : colors.textSecondary}
                   />
                   <Text
                     style={[
                       styles.menuItemText,
+                      { color: colors.textSecondary },
                       isActive && styles.menuItemTextActive,
                       item.color && isActive && { color: item.color },
                     ]}
@@ -192,9 +197,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </ScrollView>
 
         {/* Footer */}
-        <View style={styles.footer}>
+        <View style={[styles.footer, { borderTopColor: colors.border }]}>
           <TouchableOpacity
-            style={styles.logoutButton}
+            style={[styles.logoutButton, { backgroundColor: colors.background, borderColor: '#F44336' }]}
             onPress={handleLogout}
           >
             <Ionicons name="log-out-outline" size={24} color="#F44336" />
@@ -222,7 +227,6 @@ const styles = StyleSheet.create({
     left: 0,
     bottom: 0,
     width: 280,
-    backgroundColor: '#000',
     shadowColor: '#000',
     shadowOffset: { width: 2, height: 0 },
     shadowOpacity: 0.5,
@@ -237,7 +241,6 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
     paddingHorizontal: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#1a1a1a',
   },
   header: {
     flexDirection: 'column',
@@ -245,8 +248,6 @@ const styles = StyleSheet.create({
     padding: 20,
     paddingTop: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#1a1a1a',
-    backgroundColor: '#000',
   },
   logo: {
     width: 200,
@@ -264,14 +265,11 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: '#1a1a1a',
     borderWidth: 2,
-    borderColor: '#333',
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarText: {
-    color: '#fff',
     fontSize: 20,
     fontWeight: 'bold',
   },
@@ -281,11 +279,9 @@ const styles = StyleSheet.create({
   userName: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#fff',
   },
   userEmail: {
     fontSize: 12,
-    color: '#999',
     marginTop: 2,
   },
   closeButton: {
@@ -315,10 +311,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#1a1a1a',
   },
   menuItemActive: {
-    backgroundColor: '#1a1a1a',
     borderLeftWidth: 4,
     borderLeftColor: '#007AFF',
   },
@@ -330,16 +324,13 @@ const styles = StyleSheet.create({
   },
   menuItemText: {
     fontSize: 16,
-    color: '#ccc',
     fontWeight: '500',
   },
   menuItemTextActive: {
-    color: '#007AFF',
     fontWeight: '600',
   },
   footer: {
     borderTopWidth: 1,
-    borderTopColor: '#1a1a1a',
     padding: 16,
   },
   logoutButton: {
@@ -348,9 +339,7 @@ const styles = StyleSheet.create({
     gap: 12,
     padding: 12,
     borderRadius: 8,
-    backgroundColor: '#1a1a1a',
     borderWidth: 1,
-    borderColor: '#F44336',
   },
   logoutText: {
     fontSize: 16,

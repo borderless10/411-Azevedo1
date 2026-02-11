@@ -15,6 +15,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Header } from '../Header/Header';
 import { Sidebar } from '../Sidebar/Sidebar';
+import { useTheme } from '../../contexts/ThemeContext';
 
 interface LayoutProps {
   children: ReactNode;
@@ -39,6 +40,7 @@ export const Layout: React.FC<LayoutProps> = ({
 }) => {
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const { colors } = useTheme();
 
   useEffect(() => {
     Animated.timing(fadeAnim, {
@@ -49,16 +51,16 @@ export const Layout: React.FC<LayoutProps> = ({
   }, []);
 
   return (
-    <SafeAreaView style={[styles.container, style]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }, style]}>
       <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
         {showHeader && (
-          <View style={styles.headerWrapper}>
+          <View style={[styles.headerWrapper, { backgroundColor: colors.background }]}>
             {showSidebar && (
               <TouchableOpacity
                 onPress={() => setSidebarVisible(true)}
                 style={styles.menuButton}
               >
-                <Ionicons name="menu" size={24} color="#fff" />
+                <Ionicons name="menu" size={24} color={colors.text} />
               </TouchableOpacity>
             )}
             <Header
@@ -71,7 +73,7 @@ export const Layout: React.FC<LayoutProps> = ({
           </View>
         )}
 
-        <View style={[styles.content, contentStyle]}>{children}</View>
+        <View style={[styles.content, { backgroundColor: colors.background }, contentStyle]}>{children}</View>
 
         {showSidebar && (
           <Sidebar
@@ -87,12 +89,10 @@ export const Layout: React.FC<LayoutProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
   },
   headerWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#000',
   },
   menuButton: {
     padding: 12,
@@ -104,7 +104,6 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    backgroundColor: '#000',
   },
 });
 

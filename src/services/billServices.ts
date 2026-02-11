@@ -1,0 +1,222 @@
+/**
+ * Serviço para gerenciar contas a pagar
+ */
+
+import {
+  addDoc,
+  query,
+  where,
+  getDocs,
+  updateDoc,
+  deleteDoc,
+  orderBy,
+  Timestamp,
+} from 'firebase/firestore';
+import {
+  getBillsCollection,
+  getBillDoc,
+  convertBillFromFirestore,
+  convertBillToFirestore,
+} from '../lib/firestore';
+import { Bill, CreateBillData, UpdateBillData, BillStatus } from '../types/bill';
+
+/**
+ * Criar nova conta
+ */
+export const createBill = async (
+  userId: string,
+  data: CreateBillData
+): Promise<Bill> => {
+  try {
+    const now = new Date();
+    const billData = {
+      userId,
+      ...data,
+      status: 'pending' as BillStatus,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    const firestoreData = convertBillToFirestore(billData);
+    const docRef = await addDoc(getBillsCollection(), firestoreData);
+
+    return {
+      id: docRef.id,
+      ...billData,
+    };
+  } catch (error) {
+    console.error('Erro ao criar conta:', error);
+    throw error;
+  }
+};
+
+/**
+ * Buscar contas do usuário
+ */
+export const getBills = async (
+  userId: string,
+  status?: BillStatus
+): Promise<Bill[]> => {
+  try {
+    // Tentar com orderBy primeiro (requer índice)
+    try {
+      let q = query(
+        getBillsCollection(),
+        where('userId', '==', userId),
+        orderBy('dueDate', 'asc')
+      );
+
+      if (status) {
+        q = query(
+          getBillsCollection(),
+          where('userId', '==', userId),
+          where('status', '==', status),
+          orderBy('dueDate', 'asc')
+        );
+      }
+
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...convertBillFromFirestore(doc.data() as any),
+      }));
+    } catch (indexError: any) {
+      // Se falhar por falta de índice, fazer query simples e ordenar no cliente
+      if (indexError.code === 'failed-precondition') {
+        console.log('⚠️ Índice não encontrado, usando fallback (ordenação no cliente)');
+        console.log('📋 Crie este índice no Firestore para melhor performance:');
+        console.log('   Coleção: bills');
+        console.log('   Campos: userId (Asc), status (Asc), dueDate (Asc)');
+
+        let q = query(
+          getBillsCollection(),
+          where('userId', '==', userId)
+        );
+
+        if (status) {
+          q = query(
+            getBillsCollection(),
+            where('userId', '==', userId),
+            where('status', '==', status)
+          );
+        }
+
+        const snapshot = await getDocs(q);
+        const bills = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...convertBillFromFirestore(doc.data() as any),
+        }));
+
+        // Ordenar no cliente por data de vencimento
+        return bills.sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime());
+      }
+      throw indexError;
+    }
+  } catch (error) {
+    console.error('Erro ao buscar contas:', error);
+    throw error;
+  }
+};
+
+/**
+ * Buscar contas que vencem hoje
+ */
+export const getBillsDueToday = async (userId: string): Promise<Bill[]> => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const q = query(
+      getBillsCollection(),
+      where('userId', '==', userId),
+      where('status', '==', 'pending'),
+      where('dueDate', '>=', Timestamp.fromDate(today)),
+      where('dueDate', '<', Timestamp.fromDate(tomorrow))
+    );
+
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...convertBillFromFirestore(doc.data() as any),
+    }));
+  } catch (error) {
+    console.error('Erro ao buscar contas do dia:', error);
+    return [];
+  }
+};
+
+/**
+ * Atualizar conta
+ */
+export const updateBill = async (
+  billId: string,
+  data: UpdateBillData
+): Promise<void> => {
+  try {
+    const updateData = {
+      ...data,
+      updatedAt: new Date(),
+    };
+
+    const firestoreData = convertBillToFirestore(updateData);
+    await updateDoc(getBillDoc(billId), firestoreData);
+  } catch (error) {
+    console.error('Erro ao atualizar conta:', error);
+    throw error;
+  }
+};
+
+/**
+ * Marcar conta como paga
+ */
+export const markBillAsPaid = async (billId: string): Promise<void> => {
+  try {
+    await updateBill(billId, {
+      status: 'paid',
+      paidDate: new Date(),
+    });
+  } catch (error) {
+    console.error('Erro ao marcar conta como paga:', error);
+    throw error;
+  }
+};
+
+/**
+ * Deletar conta
+ */
+export const deleteBill = async (billId: string): Promise<void> => {
+  try {
+    await deleteDoc(getBillDoc(billId));
+  } catch (error) {
+    console.error('Erro ao deletar conta:', error);
+    throw error;
+  }
+};
+
+/**
+ * Verificar contas vencidas e atualizar status
+ */
+export const updateOverdueBills = async (userId: string): Promise<void> => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const q = query(
+      getBillsCollection(),
+      where('userId', '==', userId),
+      where('status', '==', 'pending'),
+      where('dueDate', '<', Timestamp.fromDate(today))
+    );
+
+    const snapshot = await getDocs(q);
+    const updates = snapshot.docs.map((doc) =>
+      updateDoc(getBillDoc(doc.id), { status: 'overdue', updatedAt: new Date() })
+    );
+
+    await Promise.all(updates);
+  } catch (error) {
+    console.error('Erro ao atualizar contas vencidas:', error);
+  }
+};
