@@ -1,16 +1,16 @@
 import React, { createContext, useContext, useState, ReactNode } from "react";
 
-export type ScreenName = 
-  | "Login" 
-  | "Register" 
-  | "Home" 
+export type ScreenName =
+  | "Login"
+  | "Register"
+  | "Home"
   | "AddIncome"
   | "EditIncome"
   | "IncomeList"
   | "AddExpense"
   | "EditExpense"
   | "ExpenseList"
-  | "Dashboard" 
+  | "Dashboard"
   | "Profile"
   | "Settings"
   | "ConsumoModerado"
@@ -18,6 +18,11 @@ export type ScreenName =
   | "Chat"
   | "Metas"
   | "Recomendacao"
+  | "ClientPlanning"
+  | "ClientDetail"
+  | "ClientList"
+  | "ConsultorHome"
+  | "PlanningView"
   | "Budget"
   | "Bills"
   | "CadastrarCliente";
@@ -29,7 +34,7 @@ interface NavigationContextType {
 }
 
 const NavigationContext = createContext<NavigationContextType | undefined>(
-  undefined
+  undefined,
 );
 
 export const NavigationProvider = ({ children }: { children: ReactNode }) => {
@@ -37,7 +42,11 @@ export const NavigationProvider = ({ children }: { children: ReactNode }) => {
   const [params, setParams] = useState<any>(null);
 
   const navigate = (screen: ScreenName, navigationParams?: any) => {
-    console.log('🗺️ [NAVIGATION] Navegando para:', screen, navigationParams ? 'com params' : '');
+    console.log(
+      "🗺️ [NAVIGATION] Navegando para:",
+      screen,
+      navigationParams ? "com params" : "",
+    );
     setParams(navigationParams || null);
     setCurrentScreen(screen);
   };

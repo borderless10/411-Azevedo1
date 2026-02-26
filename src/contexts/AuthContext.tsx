@@ -1,7 +1,13 @@
-import React, { createContext, useState, useEffect, useContext, ReactNode } from 'react';
-import { authServices } from '../services/authServices';
-import { userService } from '../services/userServices';
-import { User, LoginCredentials, RegisterCredentials } from '../types/auth';
+import React, {
+  createContext,
+  useState,
+  useEffect,
+  useContext,
+  ReactNode,
+} from "react";
+import { authServices } from "../services/authServices";
+import { userService } from "../services/userServices";
+import { User, LoginCredentials, RegisterCredentials } from "../types/auth";
 
 /**
  * Interface do contexto de autenticação
@@ -19,7 +25,9 @@ interface AuthContextData {
 /**
  * Contexto de autenticação
  */
-export const AuthContext = createContext<AuthContextData>({} as AuthContextData);
+export const AuthContext = createContext<AuthContextData>(
+  {} as AuthContextData,
+);
 
 /**
  * Props do Provider de autenticação
@@ -52,11 +60,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             // Se não existir no Firestore, criar como usuário normal
             try {
               await userService.createUserDocument(firebaseUser.id, {
-                name: firebaseUser.name || '',
-                email: firebaseUser.email || '',
+                name: firebaseUser.name || "",
+                email: firebaseUser.email || "",
               });
               // Buscar novamente após criar
-              const newUserData = await userService.getUserById(firebaseUser.id);
+              const newUserData = await userService.getUserById(
+                firebaseUser.id,
+              );
               if (newUserData) {
                 setUser({
                   ...firebaseUser,
@@ -67,14 +77,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
               }
             } catch (error) {
               if (__DEV__) {
-                console.log('Erro ao criar documento do usuário:', error);
+                console.log("Erro ao criar documento do usuário:", error);
               }
               setUser(firebaseUser);
             }
           }
         } catch (error) {
           if (__DEV__) {
-            console.log('Erro ao buscar dados do usuário:', error);
+            console.log("Erro ao buscar dados do usuário:", error);
           }
           setUser(firebaseUser);
         }
@@ -92,14 +102,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
    * Função de login
    */
   const signIn = async (credentials: LoginCredentials): Promise<void> => {
-    console.log('🟢 [AUTH CONTEXT] signIn chamado');
-    console.log('🟢 [AUTH CONTEXT] Credentials:', { email: credentials.email, passwordLength: credentials.password.length });
+    console.log("🟢 [AUTH CONTEXT] signIn chamado");
+    console.log("🟢 [AUTH CONTEXT] Credentials:", {
+      email: credentials.email,
+      passwordLength: credentials.password.length,
+    });
     try {
-      setLoading(true);
-      console.log('🟢 [AUTH CONTEXT] Chamando authServices.login...');
+      // NOTA: não definir `loading` global aqui para evitar que o `Router`
+      // volte a `null` enquanto a UI local está controlando o estado de carregamento.
+      console.log("🟢 [AUTH CONTEXT] Chamando authServices.login...");
       const userData = await authServices.login(credentials);
-      console.log('🟢 [AUTH CONTEXT] Login bem-sucedido, user:', userData);
-      
+      console.log("🟢 [AUTH CONTEXT] Login bem-sucedido, user:", userData);
+
       // Buscar dados completos do Firestore
       try {
         const fullUserData = await userService.getUserById(userData.id);
@@ -113,24 +127,21 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         }
       } catch (error) {
         if (__DEV__) {
-          console.log('Erro ao buscar dados do usuário:', error);
+          console.log("Erro ao buscar dados do usuário:", error);
         }
         setUser(userData);
       }
-      
-      console.log('🟢 [AUTH CONTEXT] Estado do usuário atualizado');
+
+      console.log("🟢 [AUTH CONTEXT] Estado do usuário atualizado");
     } catch (error: any) {
       if (__DEV__) {
-        console.log('❌ [AUTH CONTEXT] Erro ao fazer login:', {
+        console.log("❌ [AUTH CONTEXT] Erro ao fazer login:", {
           error,
           code: error?.code,
           message: error?.message,
         });
       }
       throw error;
-    } finally {
-      setLoading(false);
-      console.log('🟢 [AUTH CONTEXT] Loading finalizado');
     }
   };
 
@@ -141,20 +152,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       setLoading(true);
       const userData = await authServices.register(credentials);
-      
+
       // Criar documento no Firestore como usuário normal (não admin)
       try {
         await userService.createUserDocument(userData.id, {
-          name: credentials.name || userData.name || '',
-          email: userData.email || '',
+          name: credentials.name || userData.name || "",
+          email: userData.email || "",
         });
       } catch (error) {
         if (__DEV__) {
-          console.log('Erro ao criar documento do usuário no Firestore:', error);
+          console.log(
+            "Erro ao criar documento do usuário no Firestore:",
+            error,
+          );
         }
         // Continuar mesmo se houver erro ao criar o documento
       }
-      
+
       // Buscar dados completos do Firestore após criar o documento
       try {
         const fullUserData = await userService.getUserById(userData.id);
@@ -168,13 +182,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         }
       } catch (error) {
         if (__DEV__) {
-          console.log('Erro ao buscar dados do usuário após registro:', error);
+          console.log("Erro ao buscar dados do usuário após registro:", error);
         }
         setUser(userData);
       }
     } catch (error: any) {
       if (__DEV__) {
-        console.log('Erro ao registrar:', error);
+        console.log("Erro ao registrar:", error);
       }
       throw error;
     } finally {
@@ -192,7 +206,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setUser(null);
     } catch (error: any) {
       if (__DEV__) {
-        console.log('Erro ao fazer logout:', error);
+        console.log("Erro ao fazer logout:", error);
       }
       throw error;
     } finally {
@@ -216,7 +230,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         }
       } catch (error) {
         if (__DEV__) {
-          console.log('Erro ao recarregar dados do usuário:', error);
+          console.log("Erro ao recarregar dados do usuário:", error);
         }
       }
     }
@@ -244,11 +258,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
  */
 export const useAuth = (): AuthContextData => {
   const context = useContext(AuthContext);
-  
+
   if (!context) {
-    throw new Error('useAuth deve ser usado dentro de um AuthProvider');
+    throw new Error("useAuth deve ser usado dentro de um AuthProvider");
   }
-  
+
   return context;
 };
 

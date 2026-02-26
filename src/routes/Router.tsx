@@ -18,48 +18,64 @@ import { RecomendacaoScreen } from "../screens/Recomendacao/RecomendacaoScreen";
 import { BudgetScreen } from "../screens/Budget/BudgetScreen";
 import { BillsScreen } from "../screens/Bills/BillsScreen";
 import { CadastrarClienteScreen } from "../screens/Admin/CadastrarClienteScreen";
+import { ClientPlanningScreen } from "../screens/Consultor/ClientPlanningScreen";
+import { ClientDetail } from "../screens/Consultor/ClientDetail";
+import { ClientList } from "../screens/Consultor/ClientList";
+import { PlanningViewScreen } from "../screens/Client/PlanningViewScreen";
 import { useNavigation } from "./NavigationContext";
 import { useAuth } from "../hooks/useAuth";
+import { ConsultorHome } from "../screens/Consultor/ConsultorHome";
 
 export const Router = () => {
   const { currentScreen, navigate } = useNavigation();
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, loading, user } = useAuth();
 
   // Navegar para Home quando autenticado pela primeira vez
   useEffect(() => {
     if (isAuthenticated && !loading) {
       if (currentScreen === "Login" || currentScreen === "Register") {
-        console.log('🔄 [ROUTER] Usuário autenticado, navegando para Home...', {
+        console.log("🔄 [ROUTER] Usuário autenticado, navegando para Home...", {
           currentScreen,
           isAuthenticated,
-          loading
+          loading,
         });
-        navigate("Home");
+        // Redirect consultors to a dedicated home
+        if (user && user.role === "consultor") {
+          navigate("ConsultorHome");
+        } else {
+          navigate("Home");
+        }
       }
     }
   }, [isAuthenticated, loading, currentScreen, navigate]);
 
   // Mostrar loading enquanto verifica autenticação inicial
   if (loading && !isAuthenticated) {
-    console.log('⏳ [ROUTER] Aguardando verificação de autenticação...');
+    console.log("⏳ [ROUTER] Aguardando verificação de autenticação...");
     return null;
   }
 
   const renderScreen = () => {
     // Se não estiver autenticado, mostrar apenas Login/Register
     if (!isAuthenticated) {
-    switch (currentScreen) {
-      case "Register":
-        return <RegisterScreen />;
-      default:
-        return <LoginScreen />;
+      switch (currentScreen) {
+        case "Register":
+          return <RegisterScreen />;
+        default:
+          return <LoginScreen />;
       }
     }
 
     // Se autenticado, mostrar telas protegidas
     switch (currentScreen) {
       case "Home":
+        // If current user is a consultor, show the consultor home on 'Home' route
+        if (user && user.role === "consultor") {
+          return <ConsultorHome />;
+        }
         return <HomeScreen />;
+      case "ConsultorHome":
+        return <ConsultorHome />;
       case "AddIncome":
         return <AddIncomeScreen />;
       case "EditIncome":
@@ -86,6 +102,14 @@ export const Router = () => {
         return <RecomendacaoScreen />;
       case "Budget":
         return <BudgetScreen />;
+      case "ClientPlanning":
+        return <ClientPlanningScreen />;
+      case "ClientList":
+        return <ClientList />;
+      case "ClientDetail":
+        return <ClientDetail />;
+      case "PlanningView":
+        return <PlanningViewScreen />;
       case "Bills":
         return <BillsScreen />;
       case "Profile":

@@ -7,11 +7,11 @@ import {
   View,
   StyleSheet,
   ViewStyle,
-  SafeAreaView,
   Platform,
   TouchableOpacity,
   Animated,
 } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Header } from '../Header/Header';
 import { Sidebar } from '../Sidebar/Sidebar';
@@ -41,6 +41,7 @@ export const Layout: React.FC<LayoutProps> = ({
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     Animated.timing(fadeAnim, {
@@ -51,10 +52,22 @@ export const Layout: React.FC<LayoutProps> = ({
   }, []);
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }, style]}>
+    <SafeAreaView
+      edges={["top", "left", "right"]}
+      style={[
+        styles.container,
+        { backgroundColor: colors.background, paddingTop: insets.top },
+        style,
+      ]}
+    >
       <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
         {showHeader && (
-          <View style={[styles.headerWrapper, { backgroundColor: colors.background }]}>
+          <View
+            style={[
+              styles.headerWrapper,
+              { backgroundColor: colors.background, paddingTop: insets.top },
+            ]}
+          >
             {showSidebar && (
               <TouchableOpacity
                 onPress={() => setSidebarVisible(true)}

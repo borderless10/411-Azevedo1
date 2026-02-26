@@ -2,7 +2,7 @@
  * Tela de Contas a Pagar
  */
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from "react";
 import {
   View,
   Text,
@@ -16,13 +16,13 @@ import {
   Platform,
   Alert,
   ActivityIndicator,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { Layout } from '../../components/Layout/Layout';
-import { useAuth } from '../../contexts/AuthContext';
-import { useTheme } from '../../contexts/ThemeContext';
-import { useNavigation } from '../../routes/NavigationContext';
-import { formatCurrency } from '../../utils/currencyUtils';
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { Layout } from "../../components/Layout/Layout";
+import { useAuth } from "../../contexts/AuthContext";
+import { useTheme } from "../../contexts/ThemeContext";
+import { useNavigation } from "../../routes/NavigationContext";
+import { formatCurrency } from "../../utils/currencyUtils";
 import {
   createBill,
   getBills,
@@ -30,13 +30,14 @@ import {
   markBillAsPaid,
   deleteBill,
   updateOverdueBills,
-} from '../../services/billServices';
+} from "../../services/billServices";
 import {
   scheduleBillNotification,
   cancelBillNotification,
   requestNotificationPermissions,
-} from '../../services/notificationServices';
-import { Bill } from '../../types/bill';
+} from "../../services/notificationServices";
+import { Bill } from "../../types/bill";
+import ConfirmDeleteModal from "../../components/ui/ConfirmDeleteModal";
 
 export const BillsScreen = () => {
   const { user } = useAuth();
@@ -49,13 +50,17 @@ export const BillsScreen = () => {
   const [bills, setBills] = useState<Bill[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalVisible, setIsModalVisible] = useState(false);
-  const [filter, setFilter] = useState<'all' | 'pending' | 'paid' | 'overdue'>('all');
+  const [isDeleteModalVisible, setIsDeleteModalVisible] = useState(false);
+  const [billToDelete, setBillToDelete] = useState<Bill | null>(null);
+  const [filter, setFilter] = useState<"all" | "pending" | "paid" | "overdue">(
+    "all",
+  );
 
   // Form estados
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [amount, setAmount] = useState('');
-  const [dueDate, setDueDate] = useState('');
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [amount, setAmount] = useState("");
+  const [dueDate, setDueDate] = useState("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -75,7 +80,7 @@ export const BillsScreen = () => {
   }, []);
 
   useEffect(() => {
-    if (currentScreen === 'Bills' && user) {
+    if (currentScreen === "Bills" && user) {
       loadBills();
       requestNotificationPermissions();
     }
@@ -90,8 +95,8 @@ export const BillsScreen = () => {
       const data = await getBills(user.id);
       setBills(data);
     } catch (error) {
-      console.error('Erro ao carregar contas:', error);
-      Alert.alert('Erro', 'Não foi possível carregar as contas');
+      console.error("Erro ao carregar contas:", error);
+      Alert.alert("Erro", "Não foi possível carregar as contas");
     } finally {
       setLoading(false);
     }
@@ -99,7 +104,7 @@ export const BillsScreen = () => {
 
   const handleCreateBill = async () => {
     if (!user || !title || !amount || !dueDate) {
-      Alert.alert('Erro', 'Preencha todos os campos obrigatórios');
+      Alert.alert("Erro", "Preencha todos os campos obrigatórios");
       return;
     }
 
@@ -107,15 +112,21 @@ export const BillsScreen = () => {
       setSaving(true);
 
       // Converter data DD/MM/YYYY para Date
-      const [day, month, year] = dueDate.split('/');
-      const dueDateObj = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+      const [day, month, year] = dueDate.split("/");
+      const dueDateObj = new Date(
+        parseInt(year),
+        parseInt(month) - 1,
+        parseInt(day),
+      );
 
       if (isNaN(dueDateObj.getTime())) {
-        Alert.alert('Erro', 'Data inválida. Use o formato DD/MM/YYYY');
+        Alert.alert("Erro", "Data inválida. Use o formato DD/MM/YYYY");
         return;
       }
 
-      const amountValue = parseFloat(amount.replace(/[^0-9.,]/g, '').replace(',', '.'));
+      const amountValue = parseFloat(
+        amount.replace(/[^0-9.,]/g, "").replace(",", "."),
+      );
 
       const newBill = await createBill(user.id, {
         title,
@@ -129,123 +140,128 @@ export const BillsScreen = () => {
         newBill.id,
         title,
         amountValue,
-        dueDateObj
+        dueDateObj,
       );
 
       if (notificationId) {
         await updateBill(newBill.id, { notificationId });
       }
 
-      Alert.alert('Sucesso', 'Conta cadastrada com sucesso!');
+      Alert.alert("Sucesso", "Conta cadastrada com sucesso!");
       setIsModalVisible(false);
       resetForm();
       loadBills();
     } catch (error) {
-      console.error('Erro ao criar conta:', error);
-      Alert.alert('Erro', 'Não foi possível criar a conta');
+      console.error("Erro ao criar conta:", error);
+      Alert.alert("Erro", "Não foi possível criar a conta");
     } finally {
       setSaving(false);
     }
   };
 
   const handleMarkAsPaid = async (bill: Bill) => {
-    Alert.alert(
-      'Confirmar Pagamento',
-      `Marcar "${bill.title}" como paga?`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Confirmar',
-          onPress: async () => {
-            try {
-              await markBillAsPaid(bill.id);
-              if (bill.notificationId) {
-                await cancelBillNotification(bill.id);
-              }
-              loadBills();
-            } catch (error) {
-              Alert.alert('Erro', 'Não foi possível marcar como paga');
+    Alert.alert("Confirmar Pagamento", `Marcar "${bill.title}" como paga?`, [
+      { text: "Cancelar", style: "cancel" },
+      {
+        text: "Confirmar",
+        onPress: async () => {
+          try {
+            await markBillAsPaid(bill.id);
+            if (bill.notificationId) {
+              await cancelBillNotification(bill.id);
             }
-          },
+            loadBills();
+          } catch (error) {
+            Alert.alert("Erro", "Não foi possível marcar como paga");
+          }
         },
-      ]
-    );
+      },
+    ]);
   };
 
   const handleDeleteBill = async (bill: Bill) => {
-    Alert.alert(
-      'Confirmar Exclusão',
-      `Excluir "${bill.title}"?`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Excluir',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              if (bill.notificationId) {
-                await cancelBillNotification(bill.id);
-              }
-              await deleteBill(bill.id);
-              loadBills();
-            } catch (error) {
-              Alert.alert('Erro', 'Não foi possível excluir a conta');
-            }
-          },
-        },
-      ]
-    );
+    // Abrir modal de confirmação personalizado
+    setBillToDelete(bill);
+    setIsDeleteModalVisible(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!billToDelete) return;
+    try {
+      setSaving(true);
+      if (billToDelete.notificationId) {
+        await cancelBillNotification(billToDelete.id);
+      }
+      await deleteBill(billToDelete.id);
+      setIsDeleteModalVisible(false);
+      setBillToDelete(null);
+      loadBills();
+    } catch (error) {
+      Alert.alert("Erro", "Não foi possível excluir a conta");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const cancelDelete = () => {
+    setIsDeleteModalVisible(false);
+    setBillToDelete(null);
   };
 
   const resetForm = () => {
-    setTitle('');
-    setDescription('');
-    setAmount('');
-    setDueDate('');
+    setTitle("");
+    setDescription("");
+    setAmount("");
+    setDueDate("");
   };
 
   const handleDateChange = (text: string) => {
     // Remover todos os caracteres não numéricos
-    const numbers = text.replace(/[^0-9]/g, '');
-    
+    const numbers = text.replace(/[^0-9]/g, "");
+
     // Se está vazio, limpar o campo
     if (numbers.length === 0) {
-      setDueDate('');
+      setDueDate("");
       return;
     }
-    
+
     // Aplicar máscara DD/MM/YYYY
-    let formatted = '';
-    
+    let formatted = "";
+
     if (numbers.length <= 2) {
       formatted = numbers;
     } else if (numbers.length <= 4) {
-      formatted = numbers.substring(0, 2) + '/' + numbers.substring(2);
+      formatted = numbers.substring(0, 2) + "/" + numbers.substring(2);
     } else {
-      formatted = numbers.substring(0, 2) + '/' + numbers.substring(2, 4) + '/' + numbers.substring(4, 8);
+      formatted =
+        numbers.substring(0, 2) +
+        "/" +
+        numbers.substring(2, 4) +
+        "/" +
+        numbers.substring(4, 8);
     }
-    
+
     setDueDate(formatted);
   };
 
   const getFilteredBills = () => {
-    if (filter === 'all') return bills;
+    if (filter === "all") return bills;
     return bills.filter((bill) => bill.status === filter);
   };
 
   const formatDate = (date: Date): string => {
     const d = new Date(date);
-    const day = d.getDate().toString().padStart(2, '0');
-    const month = (d.getMonth() + 1).toString().padStart(2, '0');
+    const day = d.getDate().toString().padStart(2, "0");
+    const month = (d.getMonth() + 1).toString().padStart(2, "0");
     const year = d.getFullYear();
     return `${day}/${month}/${year}`;
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'paid':
+      case "paid":
         return colors.success;
-      case 'overdue':
+      case "overdue":
         return colors.danger;
       default:
         return colors.warning;
@@ -254,27 +270,32 @@ export const BillsScreen = () => {
 
   const getStatusLabel = (status: string) => {
     switch (status) {
-      case 'paid':
-        return 'Paga';
-      case 'overdue':
-        return 'Vencida';
+      case "paid":
+        return "Paga";
+      case "overdue":
+        return "Vencida";
       default:
-        return 'Pendente';
+        return "Pendente";
     }
   };
 
   const filteredBills = getFilteredBills();
   const totalPending = bills
-    .filter((b) => b.status === 'pending')
+    .filter((b) => b.status === "pending")
     .reduce((sum, b) => sum + b.amount, 0);
   const totalOverdue = bills
-    .filter((b) => b.status === 'overdue')
+    .filter((b) => b.status === "overdue")
     .reduce((sum, b) => sum + b.amount, 0);
 
   if (loading) {
     return (
       <Layout title="Contas" showBackButton={false} showSidebar={true}>
-        <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+        <View
+          style={[
+            styles.loadingContainer,
+            { backgroundColor: colors.background },
+          ]}
+        >
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={[styles.loadingText, { color: colors.text }]}>
             Carregando contas...
@@ -286,7 +307,9 @@ export const BillsScreen = () => {
 
   return (
     <Layout title="Contas" showBackButton={false} showSidebar={true}>
-      <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
+      <ScrollView
+        style={[styles.container, { backgroundColor: colors.background }]}
+      >
         <Animated.View
           style={[
             styles.content,
@@ -298,16 +321,38 @@ export const BillsScreen = () => {
         >
           {/* Resumo */}
           <View style={styles.summaryContainer}>
-            <View style={[styles.summaryCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View
+              style={[
+                styles.summaryCard,
+                { backgroundColor: colors.card, borderColor: colors.border },
+              ]}
+            >
               <Ionicons name="time-outline" size={24} color={colors.warning} />
-              <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>Pendentes</Text>
+              <Text
+                style={[styles.summaryLabel, { color: colors.textSecondary }]}
+              >
+                Pendentes
+              </Text>
               <Text style={[styles.summaryValue, { color: colors.warning }]}>
                 {formatCurrency(totalPending)}
               </Text>
             </View>
-            <View style={[styles.summaryCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <Ionicons name="alert-circle-outline" size={24} color={colors.danger} />
-              <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>Vencidas</Text>
+            <View
+              style={[
+                styles.summaryCard,
+                { backgroundColor: colors.card, borderColor: colors.border },
+              ]}
+            >
+              <Ionicons
+                name="alert-circle-outline"
+                size={24}
+                color={colors.danger}
+              />
+              <Text
+                style={[styles.summaryLabel, { color: colors.textSecondary }]}
+              >
+                Vencidas
+              </Text>
               <Text style={[styles.summaryValue, { color: colors.danger }]}>
                 {formatCurrency(totalOverdue)}
               </Text>
@@ -316,13 +361,16 @@ export const BillsScreen = () => {
 
           {/* Filtros */}
           <View style={styles.filterContainer}>
-            {['all', 'pending', 'overdue', 'paid'].map((f) => (
+            {["all", "pending", "overdue", "paid"].map((f) => (
               <TouchableOpacity
                 key={f}
                 style={[
                   styles.filterButton,
                   { backgroundColor: colors.card, borderColor: colors.border },
-                  filter === f && { backgroundColor: colors.primary, borderColor: colors.primary },
+                  filter === f && {
+                    backgroundColor: colors.primary,
+                    borderColor: colors.primary,
+                  },
                 ]}
                 onPress={() => setFilter(f as any)}
               >
@@ -330,10 +378,16 @@ export const BillsScreen = () => {
                   style={[
                     styles.filterButtonText,
                     { color: colors.text },
-                    filter === f && { color: '#fff' },
+                    filter === f && { color: "#fff" },
                   ]}
                 >
-                  {f === 'all' ? 'Todas' : f === 'pending' ? 'Pendentes' : f === 'overdue' ? 'Vencidas' : 'Pagas'}
+                  {f === "all"
+                    ? "Todas"
+                    : f === "pending"
+                      ? "Pendentes"
+                      : f === "overdue"
+                        ? "Vencidas"
+                        : "Pagas"}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -341,29 +395,61 @@ export const BillsScreen = () => {
 
           {/* Lista de Contas */}
           {filteredBills.length === 0 ? (
-            <View style={[styles.emptyContainer, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <Ionicons name="receipt-outline" size={64} color={colors.textSecondary} />
+            <View
+              style={[
+                styles.emptyContainer,
+                { backgroundColor: colors.card, borderColor: colors.border },
+              ]}
+            >
+              <Ionicons
+                name="receipt-outline"
+                size={64}
+                color={colors.textSecondary}
+              />
               <Text style={[styles.emptyText, { color: colors.text }]}>
-                Nenhuma conta {filter !== 'all' ? getStatusLabel(filter).toLowerCase() : 'cadastrada'}
+                Nenhuma conta{" "}
+                {filter !== "all"
+                  ? getStatusLabel(filter).toLowerCase()
+                  : "cadastrada"}
               </Text>
             </View>
           ) : (
             filteredBills.map((bill) => (
               <View
                 key={bill.id}
-                style={[styles.billCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+                style={[
+                  styles.billCard,
+                  { backgroundColor: colors.card, borderColor: colors.border },
+                ]}
               >
                 <View style={styles.billHeader}>
                   <View style={styles.billInfo}>
-                    <Text style={[styles.billTitle, { color: colors.text }]}>{bill.title}</Text>
+                    <Text style={[styles.billTitle, { color: colors.text }]}>
+                      {bill.title}
+                    </Text>
                     {bill.description && (
-                      <Text style={[styles.billDescription, { color: colors.textSecondary }]}>
+                      <Text
+                        style={[
+                          styles.billDescription,
+                          { color: colors.textSecondary },
+                        ]}
+                      >
                         {bill.description}
                       </Text>
                     )}
                   </View>
-                  <View style={[styles.statusBadge, { backgroundColor: `${getStatusColor(bill.status)}20` }]}>
-                    <Text style={[styles.statusText, { color: getStatusColor(bill.status) }]}>
+                  <View
+                    style={[
+                      styles.statusBadge,
+                      { backgroundColor: `${getStatusColor(bill.status)}20` },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.statusText,
+                        { color: getStatusColor(bill.status) },
+                      ]}
+                    >
                       {getStatusLabel(bill.status)}
                     </Text>
                   </View>
@@ -371,30 +457,46 @@ export const BillsScreen = () => {
 
                 <View style={styles.billDetails}>
                   <View style={styles.billDetailItem}>
-                    <Ionicons name="cash-outline" size={16} color={colors.textSecondary} />
+                    <Ionicons
+                      name="cash-outline"
+                      size={16}
+                      color={colors.textSecondary}
+                    />
                     <Text style={[styles.billAmount, { color: colors.text }]}>
                       {formatCurrency(bill.amount)}
                     </Text>
                   </View>
                   <View style={styles.billDetailItem}>
-                    <Ionicons name="calendar-outline" size={16} color={colors.textSecondary} />
-                    <Text style={[styles.billDate, { color: colors.textSecondary }]}>
+                    <Ionicons
+                      name="calendar-outline"
+                      size={16}
+                      color={colors.textSecondary}
+                    />
+                    <Text
+                      style={[styles.billDate, { color: colors.textSecondary }]}
+                    >
                       Vence: {formatDate(bill.dueDate)}
                     </Text>
                   </View>
                 </View>
 
-                {bill.status === 'pending' || bill.status === 'overdue' ? (
+                {bill.status === "pending" || bill.status === "overdue" ? (
                   <View style={styles.billActions}>
                     <TouchableOpacity
-                      style={[styles.actionButton, { backgroundColor: colors.success }]}
+                      style={[
+                        styles.actionButton,
+                        { backgroundColor: colors.success },
+                      ]}
                       onPress={() => handleMarkAsPaid(bill)}
                     >
                       <Ionicons name="checkmark" size={20} color="#fff" />
                       <Text style={styles.actionButtonText}>Pagar</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                      style={[styles.actionButton, { backgroundColor: colors.danger }]}
+                      style={[
+                        styles.actionButton,
+                        { backgroundColor: colors.danger },
+                      ]}
                       onPress={() => handleDeleteBill(bill)}
                     >
                       <Ionicons name="trash" size={20} color="#fff" />
@@ -404,7 +506,10 @@ export const BillsScreen = () => {
                 ) : (
                   <View style={styles.billActions}>
                     <TouchableOpacity
-                      style={[styles.actionButton, { backgroundColor: colors.danger, flex: 1 }]}
+                      style={[
+                        styles.actionButton,
+                        { backgroundColor: colors.danger, flex: 1 },
+                      ]}
                       onPress={() => handleDeleteBill(bill)}
                     >
                       <Ionicons name="trash" size={20} color="#fff" />
@@ -434,7 +539,7 @@ export const BillsScreen = () => {
         onRequestClose={() => setIsModalVisible(false)}
       >
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
           style={styles.modalOverlay}
         >
           <TouchableOpacity
@@ -442,20 +547,43 @@ export const BillsScreen = () => {
             activeOpacity={1}
             onPress={() => setIsModalVisible(false)}
           >
-            <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
-              <View style={[styles.modalContent, { backgroundColor: colors.card }]}>
+            <TouchableOpacity
+              activeOpacity={1}
+              onPress={(e) => e.stopPropagation()}
+            >
+              <View
+                style={[styles.modalContent, { backgroundColor: colors.card }]}
+              >
                 <View style={styles.modalHeader}>
-                  <Text style={[styles.modalTitle, { color: colors.text }]}>Nova Conta</Text>
+                  <Text style={[styles.modalTitle, { color: colors.text }]}>
+                    Nova Conta
+                  </Text>
                   <TouchableOpacity onPress={() => setIsModalVisible(false)}>
-                    <Ionicons name="close" size={24} color={colors.textSecondary} />
+                    <Ionicons
+                      name="close"
+                      size={24}
+                      color={colors.textSecondary}
+                    />
                   </TouchableOpacity>
                 </View>
 
-                <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+                <ScrollView
+                  showsVerticalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
+                >
                   <View style={styles.inputGroup}>
-                    <Text style={[styles.inputLabel, { color: colors.text }]}>Título *</Text>
+                    <Text style={[styles.inputLabel, { color: colors.text }]}>
+                      Título *
+                    </Text>
                     <TextInput
-                      style={[styles.input, { backgroundColor: colors.inputBackground, borderColor: colors.border, color: colors.text }]}
+                      style={[
+                        styles.input,
+                        {
+                          backgroundColor: colors.inputBackground,
+                          borderColor: colors.border,
+                          color: colors.text,
+                        },
+                      ]}
                       value={title}
                       onChangeText={setTitle}
                       placeholder="Ex: Conta de Luz"
@@ -464,9 +592,18 @@ export const BillsScreen = () => {
                   </View>
 
                   <View style={styles.inputGroup}>
-                    <Text style={[styles.inputLabel, { color: colors.text }]}>Descrição</Text>
+                    <Text style={[styles.inputLabel, { color: colors.text }]}>
+                      Descrição
+                    </Text>
                     <TextInput
-                      style={[styles.input, { backgroundColor: colors.inputBackground, borderColor: colors.border, color: colors.text }]}
+                      style={[
+                        styles.input,
+                        {
+                          backgroundColor: colors.inputBackground,
+                          borderColor: colors.border,
+                          color: colors.text,
+                        },
+                      ]}
                       value={description}
                       onChangeText={setDescription}
                       placeholder="Detalhes opcionais"
@@ -475,9 +612,18 @@ export const BillsScreen = () => {
                   </View>
 
                   <View style={styles.inputGroup}>
-                    <Text style={[styles.inputLabel, { color: colors.text }]}>Valor *</Text>
+                    <Text style={[styles.inputLabel, { color: colors.text }]}>
+                      Valor *
+                    </Text>
                     <TextInput
-                      style={[styles.input, { backgroundColor: colors.inputBackground, borderColor: colors.border, color: colors.text }]}
+                      style={[
+                        styles.input,
+                        {
+                          backgroundColor: colors.inputBackground,
+                          borderColor: colors.border,
+                          color: colors.text,
+                        },
+                      ]}
                       value={amount}
                       onChangeText={setAmount}
                       placeholder="Ex: 150.00"
@@ -487,9 +633,18 @@ export const BillsScreen = () => {
                   </View>
 
                   <View style={styles.inputGroup}>
-                    <Text style={[styles.inputLabel, { color: colors.text }]}>Data de Vencimento *</Text>
+                    <Text style={[styles.inputLabel, { color: colors.text }]}>
+                      Data de Vencimento *
+                    </Text>
                     <TextInput
-                      style={[styles.input, { backgroundColor: colors.inputBackground, borderColor: colors.border, color: colors.text }]}
+                      style={[
+                        styles.input,
+                        {
+                          backgroundColor: colors.inputBackground,
+                          borderColor: colors.border,
+                          color: colors.text,
+                        },
+                      ]}
                       value={dueDate}
                       onChangeText={handleDateChange}
                       placeholder="DD/MM/YYYY"
@@ -500,7 +655,10 @@ export const BillsScreen = () => {
                   </View>
 
                   <TouchableOpacity
-                    style={[styles.saveButton, { backgroundColor: colors.primary }]}
+                    style={[
+                      styles.saveButton,
+                      { backgroundColor: colors.primary },
+                    ]}
                     onPress={handleCreateBill}
                     disabled={saving}
                   >
@@ -516,6 +674,21 @@ export const BillsScreen = () => {
           </TouchableOpacity>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* Modal de Confirmação de Exclusão */}
+      <ConfirmDeleteModal
+        visible={isDeleteModalVisible}
+        title="Excluir Conta"
+        message={
+          billToDelete
+            ? `Excluir "${billToDelete.title}"? Esta ação não pode ser desfeita.`
+            : undefined
+        }
+        confirmLabel="Excluir"
+        cancelLabel="Cancelar"
+        onConfirm={confirmDelete}
+        onCancel={cancelDelete}
+      />
     </Layout>
   );
 };
@@ -526,8 +699,8 @@ const styles = StyleSheet.create({
   },
   loadingContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   loadingText: {
     marginTop: 16,
@@ -538,7 +711,7 @@ const styles = StyleSheet.create({
     paddingBottom: 100,
   },
   summaryContainer: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 12,
     marginBottom: 20,
   },
@@ -547,19 +720,19 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     borderWidth: 1,
-    alignItems: 'center',
+    alignItems: "center",
     gap: 8,
   },
   summaryLabel: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   summaryValue: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
   filterContainer: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 8,
     marginBottom: 20,
   },
@@ -569,22 +742,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 8,
     borderWidth: 1,
-    alignItems: 'center',
+    alignItems: "center",
   },
   filterButtonText: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   emptyContainer: {
     padding: 40,
     borderRadius: 16,
     borderWidth: 1,
-    alignItems: 'center',
+    alignItems: "center",
     gap: 16,
   },
   emptyText: {
     fontSize: 16,
-    textAlign: 'center',
+    textAlign: "center",
   },
   billCard: {
     padding: 16,
@@ -594,9 +767,9 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   billHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
   },
   billInfo: {
     flex: 1,
@@ -604,7 +777,7 @@ const styles = StyleSheet.create({
   },
   billTitle: {
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     marginBottom: 4,
   },
   billDescription: {
@@ -617,85 +790,86 @@ const styles = StyleSheet.create({
   },
   statusText: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   billDetails: {
     gap: 8,
   },
   billDetailItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
   },
   billAmount: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
   billDate: {
     fontSize: 14,
   },
   billActions: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 8,
   },
   actionButton: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     padding: 12,
     borderRadius: 8,
     gap: 6,
   },
   actionButtonText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   fab: {
-    position: 'absolute',
+    position: "absolute",
     right: 20,
     bottom: 20,
     width: 56,
     height: 56,
     borderRadius: 28,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     elevation: 8,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    justifyContent: "center",
+    alignItems: "center",
   },
   modalContent: {
-    width: '90%',
-    maxWidth: 400,
-    borderRadius: 20,
+    width: "96%",
+    maxWidth: 700,
+    borderRadius: 16,
     padding: 20,
-    maxHeight: '80%',
+    maxHeight: "92%",
+    minWidth: 320,
   },
   modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 20,
   },
   modalTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
   inputGroup: {
     marginBottom: 16,
   },
   inputLabel: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
     marginBottom: 8,
   },
   input: {
@@ -708,13 +882,13 @@ const styles = StyleSheet.create({
   saveButton: {
     paddingVertical: 16,
     borderRadius: 12,
-    alignItems: 'center',
+    alignItems: "center",
     marginTop: 8,
   },
   saveButtonText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
   },
 });
 

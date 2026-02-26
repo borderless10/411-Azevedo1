@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   ScrollView,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../hooks/useAuth';
 import { useNavigation } from '../../routes/NavigationContext';
@@ -171,15 +172,16 @@ export const RegisterScreen = () => {
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={styles.container}
-    >
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
+    <SafeAreaView style={styles.container}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.keyboard}
       >
-        <View style={styles.content}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={styles.content}>
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.iconContainer}>
@@ -364,8 +366,9 @@ export const RegisterScreen = () => {
             </TouchableOpacity>
           </View>
         </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 };
 
@@ -373,6 +376,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000',
+  },
+  keyboard: {
+    flex: 1,
   },
   scrollContent: {
     flexGrow: 1,

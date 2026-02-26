@@ -11,28 +11,33 @@ import {
   deleteDoc,
   orderBy,
   Timestamp,
-} from 'firebase/firestore';
+} from "firebase/firestore";
 import {
   getBillsCollection,
   getBillDoc,
   convertBillFromFirestore,
   convertBillToFirestore,
-} from '../lib/firestore';
-import { Bill, CreateBillData, UpdateBillData, BillStatus } from '../types/bill';
+} from "../lib/firestore";
+import {
+  Bill,
+  CreateBillData,
+  UpdateBillData,
+  BillStatus,
+} from "../types/bill";
 
 /**
  * Criar nova conta
  */
 export const createBill = async (
   userId: string,
-  data: CreateBillData
+  data: CreateBillData,
 ): Promise<Bill> => {
   try {
     const now = new Date();
     const billData = {
       userId,
       ...data,
-      status: 'pending' as BillStatus,
+      status: "pending" as BillStatus,
       createdAt: now,
       updatedAt: now,
     };
@@ -45,7 +50,7 @@ export const createBill = async (
       ...billData,
     };
   } catch (error) {
-    console.error('Erro ao criar conta:', error);
+    console.error("Erro ao criar conta:", error);
     throw error;
   }
 };
@@ -55,23 +60,23 @@ export const createBill = async (
  */
 export const getBills = async (
   userId: string,
-  status?: BillStatus
+  status?: BillStatus,
 ): Promise<Bill[]> => {
   try {
     // Tentar com orderBy primeiro (requer índice)
     try {
       let q = query(
         getBillsCollection(),
-        where('userId', '==', userId),
-        orderBy('dueDate', 'asc')
+        where("userId", "==", userId),
+        orderBy("dueDate", "asc"),
       );
 
       if (status) {
         q = query(
           getBillsCollection(),
-          where('userId', '==', userId),
-          where('status', '==', status),
-          orderBy('dueDate', 'asc')
+          where("userId", "==", userId),
+          where("status", "==", status),
+          orderBy("dueDate", "asc"),
         );
       }
 
@@ -82,22 +87,23 @@ export const getBills = async (
       }));
     } catch (indexError: any) {
       // Se falhar por falta de índice, fazer query simples e ordenar no cliente
-      if (indexError.code === 'failed-precondition') {
-        console.log('⚠️ Índice não encontrado, usando fallback (ordenação no cliente)');
-        console.log('📋 Crie este índice no Firestore para melhor performance:');
-        console.log('   Coleção: bills');
-        console.log('   Campos: userId (Asc), status (Asc), dueDate (Asc)');
-
-        let q = query(
-          getBillsCollection(),
-          where('userId', '==', userId)
+      if (indexError.code === "failed-precondition") {
+        console.log(
+          "⚠️ Índice não encontrado, usando fallback (ordenação no cliente)",
         );
+        console.log(
+          "📋 Crie este índice no Firestore para melhor performance:",
+        );
+        console.log("   Coleção: bills");
+        console.log("   Campos: userId (Asc), status (Asc), dueDate (Asc)");
+
+        let q = query(getBillsCollection(), where("userId", "==", userId));
 
         if (status) {
           q = query(
             getBillsCollection(),
-            where('userId', '==', userId),
-            where('status', '==', status)
+            where("userId", "==", userId),
+            where("status", "==", status),
           );
         }
 
@@ -113,7 +119,7 @@ export const getBills = async (
       throw indexError;
     }
   } catch (error) {
-    console.error('Erro ao buscar contas:', error);
+    console.error("Erro ao buscar contas:", error);
     throw error;
   }
 };
@@ -130,10 +136,10 @@ export const getBillsDueToday = async (userId: string): Promise<Bill[]> => {
 
     const q = query(
       getBillsCollection(),
-      where('userId', '==', userId),
-      where('status', '==', 'pending'),
-      where('dueDate', '>=', Timestamp.fromDate(today)),
-      where('dueDate', '<', Timestamp.fromDate(tomorrow))
+      where("userId", "==", userId),
+      where("status", "==", "pending"),
+      where("dueDate", ">=", Timestamp.fromDate(today)),
+      where("dueDate", "<", Timestamp.fromDate(tomorrow)),
     );
 
     const snapshot = await getDocs(q);
@@ -142,7 +148,7 @@ export const getBillsDueToday = async (userId: string): Promise<Bill[]> => {
       ...convertBillFromFirestore(doc.data() as any),
     }));
   } catch (error) {
-    console.error('Erro ao buscar contas do dia:', error);
+    console.error("Erro ao buscar contas do dia:", error);
     return [];
   }
 };
@@ -152,7 +158,7 @@ export const getBillsDueToday = async (userId: string): Promise<Bill[]> => {
  */
 export const updateBill = async (
   billId: string,
-  data: UpdateBillData
+  data: UpdateBillData,
 ): Promise<void> => {
   try {
     const updateData = {
@@ -163,7 +169,7 @@ export const updateBill = async (
     const firestoreData = convertBillToFirestore(updateData);
     await updateDoc(getBillDoc(billId), firestoreData);
   } catch (error) {
-    console.error('Erro ao atualizar conta:', error);
+    console.error("Erro ao atualizar conta:", error);
     throw error;
   }
 };
@@ -174,11 +180,11 @@ export const updateBill = async (
 export const markBillAsPaid = async (billId: string): Promise<void> => {
   try {
     await updateBill(billId, {
-      status: 'paid',
+      status: "paid",
       paidDate: new Date(),
     });
   } catch (error) {
-    console.error('Erro ao marcar conta como paga:', error);
+    console.error("Erro ao marcar conta como paga:", error);
     throw error;
   }
 };
@@ -190,7 +196,7 @@ export const deleteBill = async (billId: string): Promise<void> => {
   try {
     await deleteDoc(getBillDoc(billId));
   } catch (error) {
-    console.error('Erro ao deletar conta:', error);
+    console.error("Erro ao deletar conta:", error);
     throw error;
   }
 };
@@ -205,18 +211,64 @@ export const updateOverdueBills = async (userId: string): Promise<void> => {
 
     const q = query(
       getBillsCollection(),
-      where('userId', '==', userId),
-      where('status', '==', 'pending'),
-      where('dueDate', '<', Timestamp.fromDate(today))
+      where("userId", "==", userId),
+      where("status", "==", "pending"),
+      where("dueDate", "<", Timestamp.fromDate(today)),
     );
+    try {
+      const snapshot = await getDocs(q);
+      const updates = snapshot.docs.map((doc) =>
+        updateDoc(getBillDoc(doc.id), {
+          status: "overdue",
+          updatedAt: new Date(),
+        }),
+      );
 
-    const snapshot = await getDocs(q);
-    const updates = snapshot.docs.map((doc) =>
-      updateDoc(getBillDoc(doc.id), { status: 'overdue', updatedAt: new Date() })
-    );
+      await Promise.all(updates);
+    } catch (queryError: any) {
+      // Falha por falta de índice composto — aplicar fallback: buscar por userId+status e filtrar por dueDate no cliente
+      if (queryError && queryError.code === "failed-precondition") {
+        console.log(
+          "⚠️ Índice composto ausente para consulta de contas vencidas. Aplicando fallback (filtragem no cliente).",
+        );
+        console.log(
+          "🛠️ Para performance ideal, crie o índice sugerido no Firebase Console (o link aparece na mensagem de erro).",
+        );
 
-    await Promise.all(updates);
+        let q2 = query(
+          getBillsCollection(),
+          where("userId", "==", userId),
+          where("status", "==", "pending"),
+        );
+
+        const snapshot2 = await getDocs(q2);
+
+        const overdueDocs = snapshot2.docs.filter((doc) => {
+          const data: any = doc.data();
+          const due = data.dueDate;
+          // converter Timestamp/Date/other para Date
+          const dueDate =
+            due && typeof due.toDate === "function"
+              ? due.toDate()
+              : due instanceof Date
+                ? due
+                : new Date(due);
+          return dueDate < today;
+        });
+
+        const updates = overdueDocs.map((doc) =>
+          updateDoc(getBillDoc(doc.id), {
+            status: "overdue",
+            updatedAt: new Date(),
+          }),
+        );
+
+        await Promise.all(updates);
+      } else {
+        throw queryError;
+      }
+    }
   } catch (error) {
-    console.error('Erro ao atualizar contas vencidas:', error);
+    console.error("Erro ao atualizar contas vencidas:", error);
   }
 };

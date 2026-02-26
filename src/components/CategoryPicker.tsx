@@ -2,7 +2,7 @@
  * Componente de seleção de categoria
  */
 
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -11,13 +11,13 @@ import {
   Modal,
   FlatList,
   ViewStyle,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { getCategoriesByType } from '../types/category';
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { getCategoriesByType } from "../types/category";
 
 interface CategoryPickerProps {
   label: string;
-  type: 'income' | 'expense';
+  type: "income" | "expense";
   selectedCategory?: string;
   onSelectCategory: (category: string) => void;
   error?: string;
@@ -67,7 +67,7 @@ export const CategoryPicker: React.FC<CategoryPickerProps> = ({
             <Ionicons
               name={selectedCat.icon as any}
               size={20}
-              color={error ? '#F44336' : selectedCat.color}
+              color={error ? "#F44336" : selectedCat.color}
               style={styles.inputIcon}
             />
             <Text style={styles.categoryText}>{selectedCat.name}</Text>
@@ -77,19 +77,19 @@ export const CategoryPicker: React.FC<CategoryPickerProps> = ({
             <Ionicons
               name="pricetag-outline"
               size={20}
-              color={error ? '#F44336' : '#999'}
+              color={error ? "#F44336" : "#999"}
               style={styles.inputIcon}
             />
             <Text style={styles.placeholderText}>
-              Selecione uma categoria{required ? ' *' : ''}
+              Selecione uma categoria{required ? " *" : ""}
             </Text>
           </>
         )}
-        <Ionicons 
-          name={error ? "close-circle" : "chevron-down"} 
-          size={20} 
-          color={error ? "#F44336" : "#999"} 
-          style={styles.icon} 
+        <Ionicons
+          name={error ? "close-circle" : "chevron-down"}
+          size={20}
+          color={error ? "#F44336" : "#999"}
+          style={styles.icon}
         />
       </TouchableOpacity>
 
@@ -122,7 +122,8 @@ export const CategoryPicker: React.FC<CategoryPickerProps> = ({
                 <TouchableOpacity
                   style={[
                     styles.categoryItem,
-                    selectedCategory === item.name && styles.categoryItemSelected,
+                    selectedCategory === item.name &&
+                      styles.categoryItemSelected,
                   ]}
                   onPress={() => handleSelect(item.name)}
                 >
@@ -152,29 +153,29 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
+    fontWeight: "600",
+    color: "#fff",
     marginBottom: 8,
   },
   required: {
-    color: '#F44336',
+    color: "#F44336",
   },
   inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#1a1a1a",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: "#333",
     paddingHorizontal: 16,
     paddingVertical: 16,
   },
   inputWrapperError: {
-    borderColor: '#F44336',
+    borderColor: "#F44336",
     borderWidth: 2,
   },
   inputWrapperDisabled: {
-    backgroundColor: '#f5f5f5',
+    backgroundColor: "#111",
   },
   inputIcon: {
     marginRight: 12,
@@ -182,57 +183,57 @@ const styles = StyleSheet.create({
   categoryText: {
     flex: 1,
     fontSize: 16,
-    color: '#333',
-    fontWeight: '500',
+    color: "#fff",
+    fontWeight: "500",
   },
   placeholderText: {
     flex: 1,
     fontSize: 16,
-    color: '#999',
+    color: "#999",
   },
   icon: {
     marginLeft: 8,
   },
   errorText: {
-    color: '#F44336',
+    color: "#F44336",
     fontSize: 12,
     marginTop: 4,
     marginLeft: 4,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "flex-end",
   },
   modalContent: {
-    backgroundColor: '#fff',
+    backgroundColor: "#0f0f10",
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    maxHeight: '70%',
+    maxHeight: "70%",
     paddingBottom: 20,
   },
   modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     padding: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: "#222",
   },
   modalTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
+    fontWeight: "bold",
+    color: "#fff",
   },
   categoryItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: "#222",
   },
   categoryItemSelected: {
-    backgroundColor: '#E3F2FD',
+    backgroundColor: "#1a1a1a",
   },
   categoryIcon: {
     marginRight: 16,
@@ -240,7 +241,7 @@ const styles = StyleSheet.create({
   categoryItemText: {
     flex: 1,
     fontSize: 16,
-    color: '#333',
+    color: "#fff",
   },
 });
 

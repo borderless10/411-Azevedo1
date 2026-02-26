@@ -2,7 +2,7 @@
  * Tela de Edição de Renda
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -13,18 +13,18 @@ import {
   Platform,
   Alert,
   ActivityIndicator,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useAuth } from '../../hooks/useAuth';
-import { useNavigation } from '../../routes/NavigationContext';
-import { Layout } from '../../components/Layout/Layout';
-import { Button } from '../../components/ui/Button/Button';
-import { CurrencyInput } from '../../components/CurrencyInput';
-import { DatePicker } from '../../components/DatePicker';
-import { CategoryPicker } from '../../components/CategoryPicker';
-import incomeServices from '../../services/incomeServices';
-import { formatCurrency } from '../../utils/currencyUtils';
-import { Income } from '../../types/income';
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { useAuth } from "../../hooks/useAuth";
+import { useNavigation } from "../../routes/NavigationContext";
+import { Layout } from "../../components/Layout/Layout";
+import { Button } from "../../components/ui/Button/Button";
+import { CurrencyInput } from "../../components/CurrencyInput";
+import DatePicker from "../../components/DatePicker";
+import { CategoryPicker } from "../../components/CategoryPicker";
+import incomeServices from "../../services/incomeServices";
+import { formatCurrency } from "../../utils/currencyUtils";
+import { Income } from "../../types/income";
 
 export const EditIncomeScreen = () => {
   const { user } = useAuth();
@@ -32,16 +32,16 @@ export const EditIncomeScreen = () => {
   const incomeId = params?.id;
 
   const [value, setValue] = useState(0);
-  const [description, setDescription] = useState('');
+  const [description, setDescription] = useState("");
   const [date, setDate] = useState(new Date());
-  const [category, setCategory] = useState<string>('Outros');
+  const [category, setCategory] = useState<string>("Outros");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState({
-    value: '',
-    description: '',
-    date: '',
-    general: '',
+    value: "",
+    description: "",
+    date: "",
+    general: "",
   });
 
   // Carregar dados da renda
@@ -52,27 +52,27 @@ export const EditIncomeScreen = () => {
       try {
         setLoading(true);
         const income = await incomeServices.getIncomeById(incomeId);
-        
+
         if (!income) {
-          Alert.alert('Erro', 'Renda não encontrada');
-          navigate('Home');
+          Alert.alert("Erro", "Renda não encontrada");
+          navigate("Home");
           return;
         }
 
         if (income.userId !== user.id) {
-          Alert.alert('Erro', 'Você não tem permissão para editar esta renda');
-          navigate('Home');
+          Alert.alert("Erro", "Você não tem permissão para editar esta renda");
+          navigate("Home");
           return;
         }
 
         setValue(income.value);
         setDescription(income.description);
         setDate(income.date);
-        setCategory(income.category || 'Outros');
+        setCategory(income.category || "Outros");
       } catch (error: any) {
-        console.error('❌ Erro ao carregar renda:', error);
-        Alert.alert('Erro', 'Erro ao carregar renda. Tente novamente.');
-        navigate('Home');
+        console.error("❌ Erro ao carregar renda:", error);
+        Alert.alert("Erro", "Erro ao carregar renda. Tente novamente.");
+        navigate("Home");
       } finally {
         setLoading(false);
       }
@@ -84,32 +84,32 @@ export const EditIncomeScreen = () => {
   // Validações
   const validateValue = (val: number): string => {
     if (val <= 0) {
-      return 'Valor deve ser maior que zero';
+      return "Valor deve ser maior que zero";
     }
     if (val > 1000000) {
-      return 'Valor muito alto';
+      return "Valor muito alto";
     }
-    return '';
+    return "";
   };
 
   const validateDescription = (text: string): string => {
     if (!text.trim()) {
-      return 'Descrição é obrigatória';
+      return "Descrição é obrigatória";
     }
     if (text.trim().length < 3) {
-      return 'Descrição deve ter pelo menos 3 caracteres';
+      return "Descrição deve ter pelo menos 3 caracteres";
     }
     if (text.trim().length > 100) {
-      return 'Descrição muito longa (máximo 100 caracteres)';
+      return "Descrição muito longa (máximo 100 caracteres)";
     }
-    return '';
+    return "";
   };
 
   const validateDate = (selectedDate: Date): string => {
     if (selectedDate > new Date()) {
-      return 'Data não pode ser no futuro';
+      return "Data não pode ser no futuro";
     }
-    return '';
+    return "";
   };
 
   // Handlers
@@ -123,7 +123,10 @@ export const EditIncomeScreen = () => {
   const handleDescriptionChange = (text: string) => {
     setDescription(text);
     if (errors.description || text.trim()) {
-      setErrors((prev) => ({ ...prev, description: validateDescription(text) }));
+      setErrors((prev) => ({
+        ...prev,
+        description: validateDescription(text),
+      }));
     }
   };
 
@@ -133,10 +136,10 @@ export const EditIncomeScreen = () => {
   };
 
   const handleSave = async () => {
-    console.log('💰 Atualizando renda...');
+    console.log("💰 Atualizando renda...");
 
     // Limpar erros
-    setErrors({ value: '', description: '', date: '', general: '' });
+    setErrors({ value: "", description: "", date: "", general: "" });
 
     // Validar todos os campos
     const valueError = validateValue(value);
@@ -148,13 +151,13 @@ export const EditIncomeScreen = () => {
         value: valueError,
         description: descriptionError,
         date: dateError,
-        general: 'Por favor, corrija os erros antes de salvar',
+        general: "Por favor, corrija os erros antes de salvar",
       });
       return;
     }
 
     if (!user || !incomeId) {
-      Alert.alert('Erro', 'Dados inválidos');
+      Alert.alert("Erro", "Dados inválidos");
       return;
     }
 
@@ -171,29 +174,29 @@ export const EditIncomeScreen = () => {
       const savedValue = value;
 
       await incomeServices.updateIncome(incomeId, incomeData);
-      console.log('✅ Renda atualizada');
+      console.log("✅ Renda atualizada");
 
       // Mostrar mensagem de confirmação e navegar para Home
       Alert.alert(
-        'Sucesso! ✅',
+        "Sucesso! ✅",
         `Renda de ${formatCurrency(savedValue)} atualizada com sucesso!`,
         [
           {
-            text: 'OK',
+            text: "OK",
             onPress: () => {
-              console.log('🏠 Navegando para Home após atualizar renda...');
-              navigate('Home');
+              console.log("🏠 Navegando para Home após atualizar renda...");
+              navigate("Home");
             },
-            style: 'default',
+            style: "default",
           },
         ],
-        { cancelable: false }
+        { cancelable: false },
       );
     } catch (error: any) {
-      console.error('❌ Erro ao atualizar renda:', error);
+      console.error("❌ Erro ao atualizar renda:", error);
       setErrors((prev) => ({
         ...prev,
-        general: error.message || 'Erro ao atualizar renda. Tente novamente.',
+        general: error.message || "Erro ao atualizar renda. Tente novamente.",
       }));
     } finally {
       setSaving(false);
@@ -201,7 +204,7 @@ export const EditIncomeScreen = () => {
   };
 
   const handleCancel = () => {
-    navigate('Home');
+    navigate("Home");
   };
 
   if (loading) {
@@ -216,13 +219,9 @@ export const EditIncomeScreen = () => {
   }
 
   return (
-    <Layout 
-      title="Editar Renda"
-      showBackButton={true}
-      showSidebar={false}
-    >
+    <Layout title="Editar Renda" showBackButton={true} showSidebar={false}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.container}
       >
         <ScrollView
@@ -235,9 +234,7 @@ export const EditIncomeScreen = () => {
               <View style={styles.iconContainer}>
                 <Ionicons name="cash-outline" size={64} color="#4CAF50" />
               </View>
-              <Text style={styles.subtitle}>
-                Edite as informações da renda
-              </Text>
+              <Text style={styles.subtitle}>Edite as informações da renda</Text>
             </View>
 
             {/* Erro geral */}
@@ -263,7 +260,7 @@ export const EditIncomeScreen = () => {
               {/* Descrição */}
               <View style={styles.inputContainer}>
                 <Text style={styles.label}>
-                  <Ionicons name="document-text" size={16} color="#007AFF" />{' '}
+                  <Ionicons name="document-text" size={16} color="#007AFF" />{" "}
                   Descrição
                 </Text>
                 <View
@@ -275,7 +272,7 @@ export const EditIncomeScreen = () => {
                   <Ionicons
                     name="document-text-outline"
                     size={20}
-                    color={errors.description ? '#F44336' : '#999'}
+                    color={errors.description ? "#F44336" : "#999"}
                     style={styles.inputIcon}
                   />
                   <TextInput
@@ -306,7 +303,9 @@ export const EditIncomeScreen = () => {
                   ) : null}
                 </View>
                 {errors.description ? (
-                  <Text style={styles.errorTextSmall}>{errors.description}</Text>
+                  <Text style={styles.errorTextSmall}>
+                    {errors.description}
+                  </Text>
                 ) : null}
                 <Text style={styles.charCount}>
                   {description.length}/100 caracteres
@@ -381,35 +380,35 @@ const styles = StyleSheet.create({
   },
   loadingContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f5f5f5',
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#f5f5f5",
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#666',
+    color: "#666",
   },
   header: {
-    alignItems: 'center',
+    alignItems: "center",
     marginBottom: 32,
     marginTop: 20,
   },
   iconContainer: {
     marginBottom: 16,
     padding: 20,
-    backgroundColor: '#E8F5E9',
+    backgroundColor: "#E8F5E9",
     borderRadius: 100,
   },
   subtitle: {
     fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
+    color: "#666",
+    textAlign: "center",
   },
   errorContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFEBEE',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFEBEE",
     padding: 12,
     borderRadius: 8,
     marginBottom: 16,
@@ -417,35 +416,35 @@ const styles = StyleSheet.create({
   },
   errorText: {
     flex: 1,
-    color: '#F44336',
+    color: "#F44336",
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: "500",
   },
   form: {
-    width: '100%',
+    width: "100%",
   },
   inputContainer: {
     marginBottom: 16,
   },
   label: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
+    fontWeight: "600",
+    color: "#333",
     marginBottom: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#fff",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: "#e0e0e0",
     paddingHorizontal: 16,
   },
   inputWrapperError: {
-    borderColor: '#F44336',
+    borderColor: "#F44336",
     borderWidth: 2,
   },
   inputIcon: {
@@ -455,25 +454,25 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 16,
     fontSize: 16,
-    color: '#333',
+    color: "#333",
   },
   icon: {
     marginLeft: 8,
   },
   errorTextSmall: {
-    color: '#F44336',
+    color: "#F44336",
     fontSize: 12,
     marginTop: 4,
     marginLeft: 4,
   },
   charCount: {
     fontSize: 12,
-    color: '#999',
+    color: "#999",
     marginTop: 4,
-    textAlign: 'right',
+    textAlign: "right",
   },
   buttonContainer: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 12,
     marginTop: 24,
   },
