@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import consultantServices from "../../services/consultantServices";
 import planningServices from "../../services/planningServices";
+import { getCategoriesByType } from "../../types/category";
 import type { User } from "../../types/auth";
 import type { Planning, CreatePlanningData } from "../../types/planning";
 import { useAuth } from "../../hooks/useAuth";
@@ -22,6 +23,9 @@ export default function ClientPlanningEditor() {
   const [monthlyIncome, setMonthlyIncome] = useState("");
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
+  const [plannedByCategory, setPlannedByCategory] = useState<
+    Record<string, string>
+  >({});
   const { user } = useAuth() as any;
 
   useEffect(() => {
@@ -45,12 +49,21 @@ export default function ClientPlanningEditor() {
     setPlanning(null);
     setMonthlyIncome("");
     setNotes("");
+    setPlannedByCategory({});
     try {
       const p = await planningServices.getPlanning(client.id);
       if (p) {
         setPlanning(p);
         setMonthlyIncome((p.monthlyIncome ?? 0).toString());
         setNotes(p.notes ?? "");
+        // populate plannedByCategory as strings for inputs
+        if (p.plannedByCategory) {
+          const map: Record<string, string> = {};
+          Object.entries(p.plannedByCategory).forEach(([k, v]) => {
+            map[k] = (v ?? "").toString();
+          });
+          setPlannedByCategory(map);
+        }
       }
     } catch (e) {
       console.warn("Erro ao carregar planning", e);
@@ -64,7 +77,14 @@ export default function ClientPlanningEditor() {
       const data: CreatePlanningData = {
         monthlyIncome: Number(monthlyIncome) || 0,
         modules: planning?.modules || [],
-        plannedByCategory: planning?.plannedByCategory || {},
+        plannedByCategory: Object.keys(plannedByCategory).length
+          ? Object.fromEntries(
+              Object.entries(plannedByCategory).map(([k, v]) => [
+                k,
+                Number(v) || 0,
+              ]),
+            )
+          : planning?.plannedByCategory || {},
         notes,
       };
       // determine create vs update by presence
@@ -133,6 +153,27 @@ export default function ClientPlanningEditor() {
             onChangeText={setNotes}
             multiline
           />
+          <View style={{ marginTop: 12 }}>
+            <Text style={{ marginBottom: 8, fontWeight: "600" }}>
+              Valores por categoria (despesa)
+            </Text>
+            {getCategoriesByType("expense").map((cat) => (
+              <View key={cat.name} style={{ marginBottom: 6 }}>
+                <Text style={{ color: "#fff", marginBottom: 4 }}>
+                  {cat.name}
+                </Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Valor previsto"
+                  value={plannedByCategory[cat.name] ?? ""}
+                  onChangeText={(v) =>
+                    setPlannedByCategory((s) => ({ ...s, [cat.name]: v }))
+                  }
+                  keyboardType="numeric"
+                />
+              </View>
+            ))}
+          </View>
           <Button
             title={loading ? "Salvando..." : "Salvar Planejamento"}
             onPress={onSave}

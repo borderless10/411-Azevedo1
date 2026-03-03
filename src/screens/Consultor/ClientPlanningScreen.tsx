@@ -10,35 +10,52 @@ import {
   TextInput,
   TouchableOpacity,
   Alert,
-  FlatList,
   ActivityIndicator,
+  ScrollView,
 } from "react-native";
 import { Layout } from "../../components/Layout/Layout";
 import { useAuth } from "../../hooks/useAuth";
 import { useNavigation } from "../../routes/NavigationContext";
 import { planningServices } from "../../services/planningServices";
 import { userService } from "../../services/userServices";
+import consultantServices from "../../services/consultantServices";
+import { getCategoriesByType } from "../../types/category";
 
 export const ClientPlanningScreen = () => {
   const { user } = useAuth();
   const { params } = useNavigation();
-  const [clientId, setClientId] = useState<string>("");
+  const [clients, setClients] = useState<any[]>([]);
+  const [term, setTerm] = useState("");
+  const [selectedClient, setSelectedClient] = useState<any | null>(null);
   const [monthlyIncome, setMonthlyIncome] = useState<string>("");
   const [notes, setNotes] = useState<string>("");
   const [saving, setSaving] = useState(false);
+  const [plannedByCategory, setPlannedByCategory] = useState<
+    Record<string, string>
+  >({});
 
   useEffect(() => {
-    // If navigation provided a clientId param, prefill it
-    if (params && params.clientId) {
-      setClientId(params.clientId);
+    // If navigation provided a clientId param, prefill selected client
+    async function init() {
+      if (params && params.clientId) {
+        const u = await userService.getUserById(params.clientId);
+        if (u) setSelectedClient(u);
+      } else if (user) {
+        try {
+          const list = await consultantServices.getClientsByConsultant(user.id);
+          setClients(list);
+        } catch (e) {
+          console.warn("Erro ao buscar clientes", e);
+        }
+      }
     }
-    // nothing else - Client list moved to separate screen
-  }, [params]);
+    init();
+  }, [params, user]);
 
   const handleSave = async () => {
     if (!user) return;
-    if (!clientId) {
-      Alert.alert("Erro", "Informe o ID do cliente para salvar o planejamento");
+    if (!selectedClient) {
+      Alert.alert("Erro", "Selecione um cliente para salvar o planejamento");
       return;
     }
 
@@ -47,11 +64,22 @@ export const ClientPlanningScreen = () => {
 
     try {
       setSaving(true);
-      await planningServices.savePlanning(user.id, clientId, {
+      const payload: any = {
         consultantId: user.id,
         monthlyIncome: numIncome,
         notes,
-      });
+      };
+      if (Object.keys(plannedByCategory).length > 0) {
+        const mapped = Object.fromEntries(
+          Object.entries(plannedByCategory).map(([k, v]) => {
+            const n = parseFloat(v.replace(/[^0-9.,]/g, "").replace(",", "."));
+            return [k, Number.isNaN(n) ? 0 : n];
+          }),
+        );
+        payload.plannedByCategory = mapped;
+      }
+
+      await planningServices.savePlanning(user.id, selectedClient.id, payload);
       Alert.alert("Sucesso", "Planejamento salvo para o cliente");
     } catch (error) {
       console.error("Erro ao salvar planejamento:", error);
@@ -67,14 +95,52 @@ export const ClientPlanningScreen = () => {
       showBackButton={true}
       showSidebar={true}
     >
-      <View style={styles.container}>
-        <Text style={styles.label}>ID do Cliente</Text>
-        <TextInput
-          style={styles.input}
-          value={clientId}
-          onChangeText={setClientId}
-          placeholder="userId do cliente"
-        />
+      <ScrollView contentContainerStyle={styles.container}>
+        <Text style={styles.label}>Selecionar Cliente</Text>
+        {selectedClient ? (
+          <View style={{ marginBottom: 12 }}>
+            <Text style={{ color: "#fff", marginBottom: 6 }}>
+              {selectedClient.displayName ||
+                selectedClient.name ||
+                selectedClient.email}
+            </Text>
+            <TouchableOpacity
+              onPress={() => setSelectedClient(null)}
+              style={{ marginBottom: 8 }}
+            >
+              <Text style={{ color: "#ffcc00" }}>Trocar cliente</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <>
+            <TextInput
+              style={styles.input}
+              value={term}
+              onChangeText={setTerm}
+              placeholder="Buscar cliente (nome ou email)"
+            />
+            {clients
+              .filter((c) => {
+                if (!term) return true;
+                const t = term.toLowerCase();
+                return (
+                  (c.displayName || c.name || "").toLowerCase().includes(t) ||
+                  (c.email || "").toLowerCase().includes(t)
+                );
+              })
+              .map((item) => (
+                <TouchableOpacity
+                  key={item.id}
+                  style={styles.clientRow}
+                  onPress={() => setSelectedClient(item)}
+                >
+                  <Text style={styles.clientName}>
+                    {item.displayName || item.name || item.email}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+          </>
+        )}
 
         <Text style={styles.label}>Renda Mensal (opcional)</Text>
         <TextInput
@@ -94,8 +160,26 @@ export const ClientPlanningScreen = () => {
           multiline
         />
 
+        <View style={{ marginTop: 12 }}>
+          <Text style={styles.label}>Valores por categoria (despesa)</Text>
+          {getCategoriesByType("expense").map((cat) => (
+            <View key={cat.name} style={styles.categoryRow}>
+              <Text style={styles.categoryLabel}>{cat.name}</Text>
+              <TextInput
+                style={styles.categoryInput}
+                placeholder="0,00"
+                keyboardType="numeric"
+                value={plannedByCategory[cat.name] ?? ""}
+                onChangeText={(v) =>
+                  setPlannedByCategory((s) => ({ ...s, [cat.name]: v }))
+                }
+              />
+            </View>
+          ))}
+        </View>
+
         <TouchableOpacity
-          style={styles.saveButton}
+          style={[styles.saveButton, { marginTop: 16, marginBottom: 24 }]}
           onPress={handleSave}
           disabled={saving}
         >
@@ -103,7 +187,7 @@ export const ClientPlanningScreen = () => {
             {saving ? "Salvando..." : "Salvar Planejamento"}
           </Text>
         </TouchableOpacity>
-      </View>
+      </ScrollView>
     </Layout>
   );
 };
@@ -120,6 +204,22 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 8,
     marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#333",
+  },
+  categoryRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+  categoryLabel: { color: "#fff", flex: 1, marginRight: 8 },
+  categoryInput: {
+    width: 120,
+    backgroundColor: "#0a0a0a",
+    color: "#fff",
+    padding: 10,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: "#333",
   },

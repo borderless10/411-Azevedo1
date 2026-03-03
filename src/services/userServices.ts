@@ -247,6 +247,30 @@ export const userService = {
   },
 
   /**
+   * Atualizar preferências do usuário (currency, showInRanking, etc.)
+   */
+  async updateUserPreferences(
+    userId: string,
+    prefs: { currency?: string; showInRanking?: boolean },
+  ): Promise<void> {
+    try {
+      const userRef = doc(db, "users", userId);
+      const now = Timestamp.now();
+      const updatePayload: any = { updatedAt: now };
+
+      if (prefs.currency !== undefined) updatePayload.currency = prefs.currency;
+      if (prefs.showInRanking !== undefined)
+        updatePayload.showInRanking = prefs.showInRanking;
+
+      await updateDoc(userRef, updatePayload);
+      console.log("✅ Preferências do usuário atualizadas", userId, prefs);
+    } catch (error) {
+      console.error("❌ Erro ao atualizar preferências do usuário:", error);
+      throw error;
+    }
+  },
+
+  /**
    * Criar documento de usuário normal no Firestore
    */
   async createUserDocument(

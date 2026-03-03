@@ -1,0 +1,93 @@
+
+----
+
+19. Implementação das Regras de Negócio no Serviço de Orçamento
+* Implementamos as operações de negócio para confirmar e consultar dias marcados como zero.
+🔹 Criamos em `src/services/budgetServices.ts` os métodos `confirmZeroExpenseDay` e `isZeroExpenseDayConfirmed`.
+🔹 Introduzimos `getMonthYearFromDate` para resolver o mês/ano dinamicamente por data e padronizar gravação.
+🔹 Atualizamos `saveBudget` e `updateDailyExpense` para manter `zeroConfirmedDays` consistente (removendo dia confirmado quando passa a ter gasto > 0).
+✔️ Benefícios:
+- Regra de zero na planilha passou a ter ciclo completo de confirmação e consistência.
+- Maior integridade entre dado diário e estado consolidado do mês.
+- Facilidade de reaproveitamento por telas e notificações.
+
+----
+
+20. Implementação do Fluxo de Verificação Automática na Home
+* Criamos o gatilho funcional para detectar ausência de gasto no dia anterior e iniciar a confirmação do usuário.
+🔹 Adicionamos em `src/screens/Home/HomeScreen.tsx` a rotina `checkZeroPlanilhaForYesterday` com verificação de gastos de ontem.
+🔹 Incluímos proteção para evitar prompts duplicados no mesmo dia com `lastZeroCheckKeyRef`.
+🔹 Registramos atividade de parabenização no feed após confirmação, mantendo o componente motivacional da metodologia.
+✔️ Benefícios:
+- O usuário passa a ser guiado ativamente na prática do “zero na planilha”.
+- Menos esquecimento de registro e maior disciplina de acompanhamento diário.
+- Evento comportamental já disponível para métricas futuras.
+
+----
+
+21. Criação de Modal Personalizado para Confirmação de Zero
+* Criamos um modal dedicado para substituir confirmação nativa e padronizar UX com o design do app.
+🔹 Criamos o arquivo novo `src/components/ui/ZeroPlanilhaConfirmModal.tsx` com CTA de confirmar/cancelar, estilo visual consistente e estado de loading.
+🔹 Estruturamos mensagem contextual com data do dia analisado.
+🔹 Mantivemos acessibilidade visual com contraste e ícones de apoio.
+✔️ Benefícios:
+- Experiência mais profissional e alinhada à interface existente.
+- Melhora de clareza na decisão do usuário.
+- Reutilização facilitada do componente em futuras confirmações semelhantes.
+
+
+23. Ampliação dos Indicadores de Consumo Moderado
+* Evoluímos a tela de Consumo Moderado (`BudgetScreen`) para refletir melhor o desempenho da metodologia.
+🔹 Adicionamos indicador explícito de desempenho com três estados: `Acima da meta`, `Dentro da meta` e `Abaixo da meta`.
+🔹 Exibimos detalhe da diferença para a meta diária e mantivemos cálculo com tolerância para evitar ruído numérico.
+🔹 Incluímos contagem de `Zeros confirmados` no card de desempenho para reforçar acompanhamento comportamental.
+✔️ Benefícios:
+- Leitura mais clara da situação diária do cliente.
+- Feedback prático para tomada de decisão imediata.
+- Fortalecimento do objetivo de manter média abaixo da meta.
+
+
+24. Destaque Visual dos Dias Confirmados como Zero na Lista Diária
+* Implementamos indicação visual direta na lista de gastos diários para dias marcados como zero na planilha.
+🔹 Aplicamos estilo diferenciado na linha (`background/borda`) quando o dia está em `zeroConfirmedDays`.
+🔹 Adicionamos badge com ícone e texto `Zero confirmado` na linha do dia.
+🔹 Mantivemos o comportamento anterior para dias sem registro não confirmados (`Sem registro`) e dias com valor lançado.
+✔️ Benefícios:
+- Identificação rápida de dias válidos de zero na planilha.
+- Melhor leitura histórica dentro do próprio mês.
+- Maior transparência para cliente e consultor durante acompanhamento.
+
+ 
++ 3- Serviço de Ranking por Dias Zerados
++ 🔹 Criamos `rankingServices` que agrega `zeroConfirmedDays` a partir dos documentos de orçamento (`budgets`) e monta um ranking ordenado por usuário.
++ 🔹 Decisão: implementação cliente-side para MVP, com nota sobre necessidade de agregação server-side para escala.
++ ✔️ Benefícios:
++ ✔️ Oferece visão competitiva/engajamento entre usuários.
++ ✔️ Reaproveita dados já existentes sem necessidade de migração.
++ 
++ ----
++ 
++ 4- Tela de Ranking e Rota
++ 🔹 Implementamos a `RankingScreen` exibindo top N usuários, posição do usuário atual e estatísticas básicas.
++ 🔹 Processo: integração com `rankingServices` e tentativa de resolução de `displayName` via `userServices`.
++ ✔️ Benefícios:
++ ✔️ Promove engajamento e reforço de disciplina.
++ ✔️ Interface simples, pronta para melhorias visuais.
++ 
++ 
++ 9- Manutenção de Consistência ao Registrar Gastos
++ 🔹 Verificamos que `updateDailyExpense` remove dias marcados como zero quando um gasto é registrado naquele dia, preservando integridade histórica.
++ 🔹 Decisão: manter essa regra para garantir invariantes do modelo de orçamento.
++ ✔️ Benefícios:
++ ✔️ Garante dados corretos para cálculo de médias e ranking.
++ ✔️ Protege contra contagens errôneas de dias zerados.
++ 
++ ----
++ 
++ 10- Revisão do Sistema de Notificações Diárias
++ 🔹 Revisamos `notificationServices` e confirmamos uso de lembretes locais (por exemplo, às 21h) para lembrar usuário de registrar gastos.
++ 🔹 Processo: assegurar que agendamento e cancelamento são chamados por `BudgetScreen` e telas relacionadas.
++ ✔️ Benefícios:
++ ✔️ Aumenta a chance de registro diário, apoiando disciplina financeira.
++ ✔️ Integração simples com Expo Notifications reduz complexidade de infra.
++ 

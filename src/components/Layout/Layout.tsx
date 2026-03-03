@@ -2,20 +2,19 @@
  * Componente Layout - Combina Header + Sidebar + Conteúdo
  */
 
-import React, { useState, ReactNode, useRef, useEffect } from 'react';
+import React, { useState, ReactNode, useRef, useEffect } from "react";
 import {
   View,
   StyleSheet,
   ViewStyle,
-  Platform,
   TouchableOpacity,
   Animated,
-} from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { Header } from '../Header/Header';
-import { Sidebar } from '../Sidebar/Sidebar';
-import { useTheme } from '../../contexts/ThemeContext';
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
+import { Header } from "../Header/Header";
+import { Sidebar } from "../Sidebar/Sidebar";
+import { useTheme } from "../../contexts/ThemeContext";
 
 interface LayoutProps {
   children: ReactNode;
@@ -41,7 +40,6 @@ export const Layout: React.FC<LayoutProps> = ({
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const { colors } = useTheme();
-  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     Animated.timing(fadeAnim, {
@@ -53,19 +51,15 @@ export const Layout: React.FC<LayoutProps> = ({
 
   return (
     <SafeAreaView
-      edges={["top", "left", "right"]}
-      style={[
-        styles.container,
-        { backgroundColor: colors.background, paddingTop: insets.top },
-        style,
-      ]}
+      edges={["top", "left", "right", "bottom"]}
+      style={[styles.container, { backgroundColor: colors.background }, style]}
     >
       <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
         {showHeader && (
           <View
             style={[
               styles.headerWrapper,
-              { backgroundColor: colors.background, paddingTop: insets.top },
+              { backgroundColor: colors.background },
             ]}
           >
             {showSidebar && (
@@ -86,7 +80,15 @@ export const Layout: React.FC<LayoutProps> = ({
           </View>
         )}
 
-        <View style={[styles.content, { backgroundColor: colors.background }, contentStyle]}>{children}</View>
+        <View
+          style={[
+            styles.content,
+            { backgroundColor: colors.background },
+            contentStyle,
+          ]}
+        >
+          {children}
+        </View>
 
         {showSidebar && (
           <Sidebar
@@ -104,8 +106,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   headerWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   menuButton: {
     padding: 12,

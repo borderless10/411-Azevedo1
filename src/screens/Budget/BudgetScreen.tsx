@@ -50,6 +50,7 @@ export const BudgetScreen = () => {
   const [tempValue, setTempValue] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(true);
   const [saving, setSaving] = useState<boolean>(false);
+  const [zeroConfirmedDays, setZeroConfirmedDays] = useState<number[]>([]);
 
   // Calcular dias do mês atual
   const today = new Date();
@@ -74,6 +75,47 @@ export const BudgetScreen = () => {
   // Status da média (se está acima ou abaixo do ideal)
   const isOverBudget =
     actualDailyAverage > idealDailyAverage && budgetValue > 0;
+
+  const getPerformanceIndicator = () => {
+    if (budgetValue <= 0) {
+      return {
+        label: "Sem meta definida",
+        detail: "Defina seu orçamento mensal para gerar sua meta diária.",
+        color: "#999",
+        icon: "information-circle-outline" as const,
+      };
+    }
+
+    const difference = actualDailyAverage - idealDailyAverage;
+    const tolerance = 0.01;
+
+    if (difference > tolerance) {
+      return {
+        label: "Acima da meta",
+        detail: `${formatCurrency(Math.abs(difference))} acima da meta diária.`,
+        color: "#F44336",
+        icon: "trending-up" as const,
+      };
+    }
+
+    if (difference < -tolerance) {
+      return {
+        label: "Abaixo da meta",
+        detail: `${formatCurrency(Math.abs(difference))} abaixo da meta diária.`,
+        color: "#4CAF50",
+        icon: "trending-down" as const,
+      };
+    }
+
+    return {
+      label: "Dentro da meta",
+      detail: "Sua média diária está alinhada com a meta definida.",
+      color: "#FF9800",
+      icon: "checkmark-circle" as const,
+    };
+  };
+
+  const performanceIndicator = getPerformanceIndicator();
 
   // Carregar dados do Firebase ao montar componente
   useEffect(() => {
@@ -111,6 +153,7 @@ export const BudgetScreen = () => {
 
       if (budget) {
         setMonthlyBudget(budget.monthlyBudget.toString());
+        setZeroConfirmedDays(budget.zeroConfirmedDays || []);
 
         // Tentar preencher dailyExpenses a partir dos gastos reais do mês
         try {
@@ -174,6 +217,7 @@ export const BudgetScreen = () => {
         console.log("✅ Orçamento carregado do Firebase");
       } else {
         console.log("⚠️ Nenhum orçamento encontrado para este mês");
+        setZeroConfirmedDays([]);
       }
     } catch (error) {
       console.error("❌ Erro ao carregar orçamento:", error);
@@ -286,6 +330,11 @@ export const BudgetScreen = () => {
         value,
       );
       console.log("✅ Gasto diário salvo no Firebase");
+
+      // Se o dia tinha zero confirmado e agora recebeu valor > 0, remover da contagem local
+      if (value > 0) {
+        setZeroConfirmedDays((prev) => prev.filter((d) => d !== day));
+      }
 
       // Se for o primeiro gasto de hoje, cancelar o lembrete das 21h
       if (isFirstExpenseToday) {
@@ -424,6 +473,43 @@ export const BudgetScreen = () => {
             </View>
           )}
 
+          {budgetValue > 0 && (
+            <View style={styles.performanceCard}>
+              <View style={styles.performanceHeader}>
+                <Ionicons
+                  name={performanceIndicator.icon}
+                  size={22}
+                  color={performanceIndicator.color}
+                />
+                <Text
+                  style={[
+                    styles.performanceTitle,
+                    { color: performanceIndicator.color },
+                  ]}
+                >
+                  {performanceIndicator.label}
+                </Text>
+              </View>
+              <Text style={styles.performanceDetail}>
+                {performanceIndicator.detail}
+              </Text>
+              <View style={styles.performanceMetaRow}>
+                <Text style={styles.performanceMetaLabel}>Meta diária</Text>
+                <Text style={styles.performanceMetaValue}>
+                  {formatCurrency(idealDailyAverage)}
+                </Text>
+              </View>
+              <View style={styles.performanceMetaRow}>
+                <Text style={styles.performanceMetaLabel}>
+                  Zeros confirmados
+                </Text>
+                <Text style={styles.performanceMetaValue}>
+                  {zeroConfirmedDays.length}
+                </Text>
+              </View>
+            </View>
+          )}
+
           {/* Lista de Dias */}
           {budgetValue > 0 && (
             <View style={styles.daysCard}>
@@ -437,9 +523,16 @@ export const BudgetScreen = () => {
                   const day = i + 1;
                   const expense = getDayExpense(day);
                   const isEditing = editingDay === day;
+                  const isZeroConfirmed = zeroConfirmedDays.includes(day);
 
                   return (
-                    <View key={day} style={styles.dayRow}>
+                    <View
+                      key={day}
+                      style={[
+                        styles.dayRow,
+                        isZeroConfirmed && styles.dayRowZeroConfirmed,
+                      ]}
+                    >
                       <View style={styles.dayInfo}>
                         <Text style={styles.dayNumber}>Dia {day}</Text>
                         {!isEditing && expense > 0 && (
@@ -447,8 +540,20 @@ export const BudgetScreen = () => {
                             {formatCurrency(expense)}
                           </Text>
                         )}
-                        {!isEditing && expense === 0 && (
+                        {!isEditing && expense === 0 && !isZeroConfirmed && (
                           <Text style={styles.dayEmpty}>Sem registro</Text>
+                        )}
+                        {!isEditing && isZeroConfirmed && (
+                          <View style={styles.zeroConfirmedBadge}>
+                            <Ionicons
+                              name="checkmark-circle"
+                              size={14}
+                              color="#4CAF50"
+                            />
+                            <Text style={styles.zeroConfirmedText}>
+                              Zero confirmado
+                            </Text>
+                          </View>
                         )}
                       </View>
 
@@ -648,6 +753,43 @@ const styles = StyleSheet.create({
   statValueWarning: {
     color: "#F44336",
   },
+  performanceCard: {
+    backgroundColor: "#1a1a1a",
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#333",
+    gap: 8,
+  },
+  performanceHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  performanceTitle: {
+    fontSize: 17,
+    fontWeight: "700",
+  },
+  performanceDetail: {
+    color: "#ccc",
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  performanceMetaRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingTop: 4,
+  },
+  performanceMetaLabel: {
+    color: "#aaa",
+    fontSize: 13,
+  },
+  performanceMetaValue: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "700",
+  },
   daysCard: {
     backgroundColor: "#1a1a1a",
     borderRadius: 12,
@@ -668,6 +810,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#333",
   },
+  dayRowZeroConfirmed: {
+    backgroundColor: "rgba(76, 175, 80, 0.08)",
+    borderColor: "rgba(76, 175, 80, 0.45)",
+  },
   dayInfo: {
     flex: 1,
   },
@@ -685,6 +831,22 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#666",
     marginTop: 2,
+  },
+  zeroConfirmedBadge: {
+    marginTop: 4,
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "rgba(76, 175, 80, 0.18)",
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  zeroConfirmedText: {
+    fontSize: 11,
+    color: "#8CF397",
+    fontWeight: "700",
   },
   editContainer: {
     flexDirection: "row",

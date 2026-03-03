@@ -2,7 +2,7 @@
  * Tipos relacionados a Orçamento Mensal
  */
 
-import { Timestamp } from 'firebase/firestore';
+import { Timestamp } from "firebase/firestore";
 
 /**
  * Gasto diário
@@ -21,6 +21,7 @@ export interface Budget {
   monthYear: string; // Formato: "YYYY-MM"
   monthlyBudget: number;
   dailyExpenses: DailyExpense[];
+  zeroConfirmedDays: number[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -34,6 +35,7 @@ export interface BudgetFirestore {
   monthYear: string;
   monthlyBudget: number;
   dailyExpenses: DailyExpense[];
+  zeroConfirmedDays?: number[];
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
@@ -44,6 +46,7 @@ export interface BudgetFirestore {
 export interface CreateBudgetData {
   monthlyBudget: number;
   dailyExpenses?: DailyExpense[];
+  zeroConfirmedDays?: number[];
 }
 
 /**
@@ -52,4 +55,5 @@ export interface CreateBudgetData {
 export interface UpdateBudgetData {
   monthlyBudget?: number;
   dailyExpenses?: DailyExpense[];
+  zeroConfirmedDays?: number[];
 }

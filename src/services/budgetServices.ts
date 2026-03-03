@@ -9,20 +9,20 @@ import {
   where,
   getDocs,
   Timestamp,
-} from 'firebase/firestore';
+} from "firebase/firestore";
 import {
   getBudgetsCollection,
   getBudgetDoc,
   convertBudgetFromFirestore,
   convertBudgetToFirestore,
   getDocData,
-} from '../lib/firestore';
+} from "../lib/firestore";
 import {
   Budget,
   CreateBudgetData,
   UpdateBudgetData,
   DailyExpense,
-} from '../types/budget';
+} from "../types/budget";
 
 /**
  * Gerar ID único para o orçamento (userId_YYYY-MM)
@@ -31,14 +31,18 @@ const generateBudgetId = (userId: string, monthYear: string): string => {
   return `${userId}_${monthYear}`;
 };
 
+export const getMonthYearFromDate = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  return `${year}-${month}`;
+};
+
 /**
  * Obter mês/ano atual no formato YYYY-MM
  */
 export const getCurrentMonthYear = (): string => {
   const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  return `${year}-${month}`;
+  return getMonthYearFromDate(now);
 };
 
 /**
@@ -51,15 +55,15 @@ export const budgetServices = {
   async saveBudget(
     userId: string,
     monthYear: string,
-    data: CreateBudgetData | UpdateBudgetData
+    data: CreateBudgetData | UpdateBudgetData,
   ): Promise<Budget> {
-    console.log('💰 [BUDGET SERVICE] Salvando orçamento...');
-    console.log('💰 [BUDGET SERVICE] Dados:', data);
+    console.log("💰 [BUDGET SERVICE] Salvando orçamento...");
+    console.log("💰 [BUDGET SERVICE] Dados:", data);
 
     try {
       const budgetId = generateBudgetId(userId, monthYear);
       const docRef = getBudgetDoc(budgetId);
-      
+
       // Verificar se já existe
       const existingDoc = await getDoc(docRef);
       const now = new Date();
@@ -74,6 +78,8 @@ export const budgetServices = {
           monthYear,
           monthlyBudget: data.monthlyBudget ?? existing.monthlyBudget,
           dailyExpenses: data.dailyExpenses ?? existing.dailyExpenses,
+          zeroConfirmedDays:
+            data.zeroConfirmedDays ?? existing.zeroConfirmedDays ?? [],
           createdAt: Timestamp.fromDate(existing.createdAt),
           updatedAt: Timestamp.fromDate(now),
         };
@@ -84,13 +90,14 @@ export const budgetServices = {
           monthYear,
           monthlyBudget: (data as CreateBudgetData).monthlyBudget || 0,
           dailyExpenses: data.dailyExpenses || [],
+          zeroConfirmedDays: data.zeroConfirmedDays || [],
           createdAt: Timestamp.fromDate(now),
           updatedAt: Timestamp.fromDate(now),
         };
       }
 
       await setDoc(docRef, budgetData);
-      console.log('✅ [BUDGET SERVICE] Orçamento salvo com ID:', budgetId);
+      console.log("✅ [BUDGET SERVICE] Orçamento salvo com ID:", budgetId);
 
       const budget: Budget = {
         id: budgetId,
@@ -98,13 +105,14 @@ export const budgetServices = {
         monthYear,
         monthlyBudget: budgetData.monthlyBudget,
         dailyExpenses: budgetData.dailyExpenses,
+        zeroConfirmedDays: budgetData.zeroConfirmedDays || [],
         createdAt: budgetData.createdAt.toDate(),
         updatedAt: budgetData.updatedAt.toDate(),
       };
 
       return budget;
     } catch (error) {
-      console.error('❌ [BUDGET SERVICE] Erro ao salvar orçamento:', error);
+      console.error("❌ [BUDGET SERVICE] Erro ao salvar orçamento:", error);
       throw error;
     }
   },
@@ -113,7 +121,7 @@ export const budgetServices = {
    * Buscar orçamento de um mês específico
    */
   async getBudget(userId: string, monthYear: string): Promise<Budget | null> {
-    console.log('💰 [BUDGET SERVICE] Buscando orçamento:', monthYear);
+    console.log("💰 [BUDGET SERVICE] Buscando orçamento:", monthYear);
 
     try {
       const budgetId = generateBudgetId(userId, monthYear);
@@ -121,15 +129,15 @@ export const budgetServices = {
       const docSnap = await getDoc(docRef);
 
       if (!docSnap.exists()) {
-        console.log('⚠️ [BUDGET SERVICE] Orçamento não encontrado');
+        console.log("⚠️ [BUDGET SERVICE] Orçamento não encontrado");
         return null;
       }
 
       const budget = convertBudgetFromFirestore(getDocData(docSnap));
-      console.log('✅ [BUDGET SERVICE] Orçamento encontrado:', budget);
+      console.log("✅ [BUDGET SERVICE] Orçamento encontrado:", budget);
       return budget;
     } catch (error) {
-      console.error('❌ [BUDGET SERVICE] Erro ao buscar orçamento:', error);
+      console.error("❌ [BUDGET SERVICE] Erro ao buscar orçamento:", error);
       throw error;
     }
   },
@@ -148,9 +156,9 @@ export const budgetServices = {
   async updateMonthlyBudget(
     userId: string,
     monthYear: string,
-    monthlyBudget: number
+    monthlyBudget: number,
   ): Promise<Budget> {
-    console.log('💰 [BUDGET SERVICE] Atualizando orçamento mensal...');
+    console.log("💰 [BUDGET SERVICE] Atualizando orçamento mensal...");
 
     return this.saveBudget(userId, monthYear, { monthlyBudget });
   },
@@ -162,14 +170,14 @@ export const budgetServices = {
     userId: string,
     monthYear: string,
     day: number,
-    amount: number
+    amount: number,
   ): Promise<Budget> {
-    console.log('💰 [BUDGET SERVICE] Atualizando gasto do dia', day);
+    console.log("💰 [BUDGET SERVICE] Atualizando gasto do dia", day);
 
     try {
       // Buscar orçamento atual
       const budget = await this.getBudget(userId, monthYear);
-      
+
       if (!budget) {
         // Se não existe, criar novo com o gasto
         return this.saveBudget(userId, monthYear, {
@@ -180,7 +188,7 @@ export const budgetServices = {
 
       // Atualizar array de gastos diários
       const updatedExpenses = [...budget.dailyExpenses];
-      const existingIndex = updatedExpenses.findIndex(exp => exp.day === day);
+      const existingIndex = updatedExpenses.findIndex((exp) => exp.day === day);
 
       if (existingIndex >= 0) {
         updatedExpenses[existingIndex] = { day, amount };
@@ -188,43 +196,94 @@ export const budgetServices = {
         updatedExpenses.push({ day, amount });
       }
 
+      const updatedZeroConfirmedDays = (budget.zeroConfirmedDays || []).filter(
+        (d) => d !== day || amount <= 0,
+      );
+
       // Ordenar por dia
       updatedExpenses.sort((a, b) => a.day - b.day);
 
       return this.saveBudget(userId, monthYear, {
         monthlyBudget: budget.monthlyBudget,
         dailyExpenses: updatedExpenses,
+        zeroConfirmedDays: updatedZeroConfirmedDays,
       });
     } catch (error) {
-      console.error('❌ [BUDGET SERVICE] Erro ao atualizar gasto diário:', error);
+      console.error(
+        "❌ [BUDGET SERVICE] Erro ao atualizar gasto diário:",
+        error,
+      );
       throw error;
     }
+  },
+
+  async confirmZeroExpenseDay(userId: string, date: Date): Promise<Budget> {
+    const monthYear = getMonthYearFromDate(date);
+    const day = date.getDate();
+
+    const budget = await this.getBudget(userId, monthYear);
+
+    if (!budget) {
+      return this.saveBudget(userId, monthYear, {
+        monthlyBudget: 0,
+        dailyExpenses: [{ day, amount: 0 }],
+        zeroConfirmedDays: [day],
+      });
+    }
+
+    const dailyExpenses = [...(budget.dailyExpenses || [])];
+    const dayIndex = dailyExpenses.findIndex((item) => item.day === day);
+
+    if (dayIndex >= 0) {
+      dailyExpenses[dayIndex] = { day, amount: 0 };
+    } else {
+      dailyExpenses.push({ day, amount: 0 });
+    }
+
+    dailyExpenses.sort((a, b) => a.day - b.day);
+
+    const zeroConfirmedSet = new Set<number>(budget.zeroConfirmedDays || []);
+    zeroConfirmedSet.add(day);
+
+    return this.saveBudget(userId, monthYear, {
+      monthlyBudget: budget.monthlyBudget,
+      dailyExpenses,
+      zeroConfirmedDays: Array.from(zeroConfirmedSet).sort((a, b) => a - b),
+    });
+  },
+
+  async isZeroExpenseDayConfirmed(
+    userId: string,
+    date: Date,
+  ): Promise<boolean> {
+    const monthYear = getMonthYearFromDate(date);
+    const day = date.getDate();
+    const budget = await this.getBudget(userId, monthYear);
+    if (!budget) return false;
+    return (budget.zeroConfirmedDays || []).includes(day);
   },
 
   /**
    * Buscar todos os orçamentos do usuário
    */
   async getAllBudgets(userId: string): Promise<Budget[]> {
-    console.log('💰 [BUDGET SERVICE] Buscando todos os orçamentos...');
+    console.log("💰 [BUDGET SERVICE] Buscando todos os orçamentos...");
 
     try {
-      const q = query(
-        getBudgetsCollection(),
-        where('userId', '==', userId)
-      );
+      const q = query(getBudgetsCollection(), where("userId", "==", userId));
 
       const snapshot = await getDocs(q);
       const budgets = snapshot.docs.map((doc) =>
-        convertBudgetFromFirestore(getDocData(doc))
+        convertBudgetFromFirestore(getDocData(doc)),
       );
 
       // Ordenar por mês/ano (mais recente primeiro)
       budgets.sort((a, b) => b.monthYear.localeCompare(a.monthYear));
 
-      console.log('💰 [BUDGET SERVICE] Total de orçamentos:', budgets.length);
+      console.log("💰 [BUDGET SERVICE] Total de orçamentos:", budgets.length);
       return budgets;
     } catch (error) {
-      console.error('❌ [BUDGET SERVICE] Erro ao buscar orçamentos:', error);
+      console.error("❌ [BUDGET SERVICE] Erro ao buscar orçamentos:", error);
       throw error;
     }
   },
@@ -235,18 +294,19 @@ export const budgetServices = {
   calculateStats(budget: Budget, currentDay: number) {
     const totalSpent = budget.dailyExpenses.reduce(
       (sum, exp) => sum + exp.amount,
-      0
+      0,
     );
-    
+
     const daysInMonth = new Date(
-      parseInt(budget.monthYear.split('-')[0]),
-      parseInt(budget.monthYear.split('-')[1]),
-      0
+      parseInt(budget.monthYear.split("-")[0]),
+      parseInt(budget.monthYear.split("-")[1]),
+      0,
     ).getDate();
 
     const idealDailyAverage = budget.monthlyBudget / daysInMonth;
     const actualDailyAverage = currentDay > 0 ? totalSpent / currentDay : 0;
-    const isOverBudget = actualDailyAverage > idealDailyAverage && budget.monthlyBudget > 0;
+    const isOverBudget =
+      actualDailyAverage > idealDailyAverage && budget.monthlyBudget > 0;
 
     return {
       totalSpent,
@@ -255,9 +315,10 @@ export const budgetServices = {
       actualDailyAverage,
       isOverBudget,
       remainingBudget: budget.monthlyBudget - totalSpent,
-      percentageUsed: budget.monthlyBudget > 0 
-        ? (totalSpent / budget.monthlyBudget) * 100 
-        : 0,
+      percentageUsed:
+        budget.monthlyBudget > 0
+          ? (totalSpent / budget.monthlyBudget) * 100
+          : 0,
     };
   },
 };

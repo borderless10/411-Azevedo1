@@ -10,16 +10,13 @@ import {
   orderBy,
   limit,
   Timestamp,
-} from 'firebase/firestore';
+} from "firebase/firestore";
 import {
   getActivitiesCollection,
   convertActivityFromFirestore,
   getDocData,
-} from '../lib/firestore';
-import {
-  Activity,
-  CreateActivityData,
-} from '../types/activity';
+} from "../lib/firestore";
+import { Activity, CreateActivityData } from "../types/activity";
 
 /**
  * Serviço de Atividades
@@ -30,11 +27,11 @@ export const activityServices = {
    */
   async createActivity(
     userId: string,
-    data: CreateActivityData
+    data: CreateActivityData,
   ): Promise<Activity> {
-    console.log('📝 [ACTIVITY SERVICE] Criando atividade...');
-    console.log('📝 [ACTIVITY SERVICE] Type:', data.type);
-    console.log('📝 [ACTIVITY SERVICE] Title:', data.title);
+    console.log("📝 [ACTIVITY SERVICE] Criando atividade...");
+    console.log("📝 [ACTIVITY SERVICE] Type:", data.type);
+    console.log("📝 [ACTIVITY SERVICE] Title:", data.title);
 
     try {
       const now = new Date();
@@ -54,10 +51,10 @@ export const activityServices = {
         activityData.metadata = data.metadata;
       }
 
-      console.log('📝 [ACTIVITY SERVICE] Dados a serem salvos:', activityData);
-      
+      console.log("📝 [ACTIVITY SERVICE] Dados a serem salvos:", activityData);
+
       const docRef = await addDoc(getActivitiesCollection(), activityData);
-      console.log('✅ [ACTIVITY SERVICE] Atividade criada com ID:', docRef.id);
+      console.log("✅ [ACTIVITY SERVICE] Atividade criada com ID:", docRef.id);
 
       const activity: Activity = {
         id: docRef.id,
@@ -71,7 +68,7 @@ export const activityServices = {
 
       return activity;
     } catch (error) {
-      console.error('❌ [ACTIVITY SERVICE] Erro ao criar atividade:', error);
+      console.error("❌ [ACTIVITY SERVICE] Erro ao criar atividade:", error);
       // Não lançar erro - atividades são secundárias
       throw error;
     }
@@ -82,71 +79,95 @@ export const activityServices = {
    */
   async getActivities(
     userId: string,
-    limitCount: number = 50
+    limitCount: number = 50,
   ): Promise<Activity[]> {
-    console.log('📝 [ACTIVITY SERVICE] Buscando atividades para userId:', userId);
+    console.log(
+      "📝 [ACTIVITY SERVICE] Buscando atividades para userId:",
+      userId,
+    );
 
     try {
       // Tentar com índice primeiro (query otimizada)
       const q = query(
         getActivitiesCollection(),
-        where('userId', '==', userId),
-        orderBy('createdAt', 'desc'),
-        limit(limitCount)
+        where("userId", "==", userId),
+        orderBy("createdAt", "desc"),
+        limit(limitCount),
       );
 
-      console.log('📝 [ACTIVITY SERVICE] Executando query com índice...');
+      console.log("📝 [ACTIVITY SERVICE] Executando query com índice...");
       const snapshot = await getDocs(q);
-      
-      console.log('📝 [ACTIVITY SERVICE] Snapshot size:', snapshot.size);
-      
+
+      console.log("📝 [ACTIVITY SERVICE] Snapshot size:", snapshot.size);
+
       const activities = snapshot.docs.map((doc) =>
-        convertActivityFromFirestore(getDocData(doc))
+        convertActivityFromFirestore(getDocData(doc)),
       );
 
-      console.log('✅ [ACTIVITY SERVICE] Atividades encontradas:', activities.length);
-      
+      console.log(
+        "✅ [ACTIVITY SERVICE] Atividades encontradas:",
+        activities.length,
+      );
+
       if (activities.length > 0) {
-        console.log('📝 [ACTIVITY SERVICE] Primeira atividade:', activities[0]);
+        console.log("📝 [ACTIVITY SERVICE] Primeira atividade:", activities[0]);
       }
-      
+
       return activities;
     } catch (error: any) {
-      console.error('❌ [ACTIVITY SERVICE] Erro ao buscar atividades:', error);
-      console.error('❌ [ACTIVITY SERVICE] Error code:', error?.code);
-      
+      const isIndexError =
+        error?.code === "failed-precondition" ||
+        error?.message?.toLowerCase?.().includes("index");
+
       // Se for erro de índice, tentar buscar sem orderBy (mais lento, mas funciona)
-      if (error?.code === 'failed-precondition' || error?.message?.includes('index')) {
-        console.warn('⚠️ [ACTIVITY SERVICE] Índice não encontrado. Buscando sem ordenação...');
-        console.warn('⚠️ [ACTIVITY SERVICE] CRIE O ÍNDICE para melhor performance!');
-        console.warn('⚠️ [ACTIVITY SERVICE] Coleção: activities | Campos: userId (Asc), createdAt (Desc)');
-        
+      if (isIndexError) {
+        console.warn(
+          "⚠️ [ACTIVITY SERVICE] Índice não encontrado. Buscando sem ordenação...",
+        );
+        console.warn(
+          "⚠️ [ACTIVITY SERVICE] CRIE O ÍNDICE para melhor performance!",
+        );
+        console.warn(
+          "⚠️ [ACTIVITY SERVICE] Coleção: activities | Campos: userId (Asc), createdAt (Desc)",
+        );
+
         try {
           // Query simplificada sem orderBy (não precisa de índice)
           const simpleQuery = query(
             getActivitiesCollection(),
-            where('userId', '==', userId)
+            where("userId", "==", userId),
           );
-          
+
           const snapshot = await getDocs(simpleQuery);
           let activities = snapshot.docs.map((doc) =>
-            convertActivityFromFirestore(getDocData(doc))
+            convertActivityFromFirestore(getDocData(doc)),
           );
-          
+
           // Ordenar no cliente
-          activities.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-          
+          activities.sort(
+            (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+          );
+
           // Limitar no cliente
           activities = activities.slice(0, limitCount);
-          
-          console.log('✅ [ACTIVITY SERVICE] Atividades encontradas (sem índice):', activities.length);
+
+          console.log(
+            "✅ [ACTIVITY SERVICE] Atividades encontradas (sem índice):",
+            activities.length,
+          );
           return activities;
         } catch (fallbackError) {
-          console.error('❌ [ACTIVITY SERVICE] Erro na busca alternativa:', fallbackError);
+          console.error(
+            "❌ [ACTIVITY SERVICE] Erro na busca alternativa:",
+            fallbackError,
+          );
           return [];
         }
       }
-      
+
+      console.error("❌ [ACTIVITY SERVICE] Erro ao buscar atividades:", error);
+      console.error("❌ [ACTIVITY SERVICE] Error code:", error?.code);
+
       // Retornar array vazio para outros erros
       return [];
     }
@@ -162,15 +183,15 @@ export const activityServices = {
   /**
    * Criar atividade de forma segura (não lança erro)
    */
-  async logActivity(
-    userId: string,
-    data: CreateActivityData
-  ): Promise<void> {
+  async logActivity(userId: string, data: CreateActivityData): Promise<void> {
     try {
       await this.createActivity(userId, data);
     } catch (error) {
       // Silenciosamente falhar - atividades não devem quebrar o app
-      console.error('❌ [ACTIVITY SERVICE] Erro ao registrar atividade (ignorado):', error);
+      console.error(
+        "❌ [ACTIVITY SERVICE] Erro ao registrar atividade (ignorado):",
+        error,
+      );
     }
   },
 };

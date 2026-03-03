@@ -13,6 +13,7 @@ import { useNavigation } from "../../routes/NavigationContext";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { expenseServices } from "../../services/expenseServices";
 import { incomeServices } from "../../services/incomeServices";
+import { planningServices } from "../../services/planningServices";
 import { formatCurrency, getBalanceColor } from "../../utils/currencyUtils";
 import { useTheme } from "../../contexts/ThemeContext";
 
@@ -24,6 +25,11 @@ export const ClientDetail: React.FC = () => {
   const [incomes, setIncomes] = useState<any[]>([]);
   const [monthlyExpenses, setMonthlyExpenses] = useState<number>(0);
   const [monthlyIncomes, setMonthlyIncomes] = useState<number>(0);
+  const [plannedByCategory, setPlannedByCategory] = useState<Record<
+    string,
+    number
+  > | null>(null);
+  const [expensesByCategory, setExpensesByCategory] = useState<any[]>([]);
   const { colors } = useTheme();
   const [messageModalVisible, setMessageModalVisible] = useState(false);
   const [messageText, setMessageText] = useState("");
@@ -88,6 +94,25 @@ export const ClientDetail: React.FC = () => {
 
         setMonthlyExpenses(monthlyExpensesTotal);
         setMonthlyIncomes(monthlyIncomesTotal);
+        // fetch planning for this client (if any)
+        try {
+          const plan = await planningServices.getPlanning(clientId);
+          setPlannedByCategory(plan?.plannedByCategory ?? null);
+        } catch (e) {
+          console.warn("Erro ao buscar planejamento do cliente", e);
+        }
+
+        // fetch expenses grouped by category for the month
+        try {
+          const grouped = await expenseServices.getExpensesGroupedByCategory(
+            clientId,
+            startOfMonth,
+            endOfMonth,
+          );
+          setExpensesByCategory(grouped);
+        } catch (e) {
+          console.warn("Erro ao agrupar gastos por categoria", e);
+        }
       } catch (e) {
         console.warn("Erro ao carregar dados do cliente", e);
       } finally {
@@ -147,6 +172,85 @@ export const ClientDetail: React.FC = () => {
         <Text style={[styles.subheading, { color: colors.text }]}>
           Movimentações do mês
         </Text>
+        {/* Comparison with planning */}
+        <Text
+          style={[styles.subheading, { color: colors.text, marginTop: 12 }]}
+        >
+          Comparação por categoria
+        </Text>
+        <View style={{ marginBottom: 12 }}>
+          {(() => {
+            // build union of category keys from expenses and plan
+            const keys = new Set<string>();
+            expensesByCategory.forEach((e) => keys.add(e.category));
+            if (plannedByCategory)
+              Object.keys(plannedByCategory).forEach((k) => keys.add(k));
+
+            if (keys.size === 0)
+              return (
+                <Text style={{ color: colors.textSecondary }}>
+                  Sem dados para comparar
+                </Text>
+              );
+
+            return Array.from(keys).map((cat) => {
+              const expenseEntry = expensesByCategory.find(
+                (e) => e.category === cat,
+              );
+              const actual = expenseEntry ? expenseEntry.total : 0;
+              const planned = plannedByCategory
+                ? (plannedByCategory[cat] ?? 0)
+                : undefined;
+              const over = planned !== undefined ? actual - planned : 0;
+              const statusColor =
+                planned === undefined
+                  ? colors.textSecondary
+                  : over > 0
+                    ? "#F44336"
+                    : "#4CAF50";
+
+              return (
+                <View
+                  key={cat}
+                  style={[
+                    styles.item,
+                    {
+                      borderColor: colors.border,
+                      flexDirection: "row",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                    },
+                  ]}
+                >
+                  <View>
+                    <Text style={{ color: colors.text, fontWeight: "700" }}>
+                      {cat}
+                    </Text>
+                    <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                      {planned !== undefined
+                        ? `Planejado: ${formatCurrency(planned)}`
+                        : "Sem planejamento"}
+                    </Text>
+                  </View>
+                  <View style={{ alignItems: "flex-end" }}>
+                    <Text style={{ color: statusColor, fontWeight: "700" }}>
+                      {formatCurrency(actual)}
+                    </Text>
+                    {planned !== undefined ? (
+                      <Text
+                        style={{ color: colors.textSecondary, fontSize: 12 }}
+                      >
+                        {over > 0
+                          ? `+${formatCurrency(over)} acima`
+                          : `${formatCurrency(Math.abs(over))} abaixo`}
+                      </Text>
+                    ) : null}
+                  </View>
+                </View>
+              );
+            });
+          })()}
+        </View>
         {/* Render each day of the month that has any movement */}
         {(() => {
           const days: Date[] = [];
@@ -315,32 +419,6 @@ const styles = StyleSheet.create({
   label: { fontSize: 12 },
   value: { fontSize: 16, fontWeight: "700", marginTop: 6 },
   item: { padding: 10, borderWidth: 1, borderRadius: 8, marginBottom: 8 },
-  bottomContainer: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 16,
-    alignItems: "center",
-    paddingHorizontal: 16,
-  },
-  sendMessageButton: {
-    width: "100%",
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: "center",
-  },
-  sendMessageText: { color: "#fff", fontWeight: "700" },
-  modalOverlay: { flex: 1, justifyContent: "center", alignItems: "center" },
-  modalContent: { width: "92%", padding: 16, borderRadius: 10, borderWidth: 1 },
-  modalTitle: { fontSize: 16, fontWeight: "700", marginBottom: 8 },
-  modalInput: { minHeight: 100, padding: 8, borderRadius: 6, marginBottom: 12 },
-  modalActions: { flexDirection: "row", justifyContent: "flex-end", gap: 8 },
-  modalButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 8,
-    marginLeft: 8,
-  },
   bottomContainer: {
     position: "absolute",
     left: 16,

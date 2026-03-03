@@ -18,6 +18,7 @@ export type ScreenName =
   | "Chat"
   | "Metas"
   | "Recomendacao"
+  | "Ranking"
   | "ClientPlanning"
   | "ClientDetail"
   | "ClientList"

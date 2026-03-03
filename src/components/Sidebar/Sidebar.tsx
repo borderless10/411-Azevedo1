@@ -83,6 +83,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: "Feed", label: "Feed", icon: "newspaper", color: "#007AFF" },
     { id: "Chat", label: "Chat", icon: "chatbubbles", color: "#9C27B0" },
     { id: "Metas", label: "Metas", icon: "flag", color: "#F44336" },
+    { id: "Ranking", label: "Ranking", icon: "trophy", color: "#FFD700" },
     {
       id: "Recomendacao",
       label: "Recomendação",
@@ -182,44 +183,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
             style={styles.logo}
             resizeMode="contain"
           />
-        </View>
-
-        {/* Header do Sidebar */}
-        <View
-          style={[
-            styles.header,
-            { borderBottomColor: colors.border, backgroundColor: colors.card },
-          ]}
-        >
-          <View style={styles.userInfo}>
-            <View
-              style={[
-                styles.avatar,
-                {
-                  backgroundColor: colors.background,
-                  borderColor: colors.border,
-                },
-              ]}
-            >
-              <Text style={[styles.avatarText, { color: colors.text }]}>
-                {(user?.name?.[0] || user?.email?.[0] || "U").toUpperCase()}
-              </Text>
-            </View>
-            <View style={styles.userDetails}>
-              <Text
-                style={[styles.userName, { color: colors.text }]}
-                numberOfLines={1}
-              >
-                {user?.name || "Usuário"}
-              </Text>
-              <Text
-                style={[styles.userEmail, { color: colors.textSecondary }]}
-                numberOfLines={1}
-              >
-                {user?.email || ""}
-              </Text>
-            </View>
-          </View>
         </View>
 
         {/* Menu Items */}
@@ -322,47 +285,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     borderBottomWidth: 1,
   },
-  header: {
-    flexDirection: "column",
-    alignItems: "flex-start",
-    padding: 20,
-    paddingTop: 20,
-    borderBottomWidth: 1,
-  },
   logo: {
     width: 200,
     height: 80,
     alignSelf: "center",
-  },
-  userInfo: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    width: "100%",
-  },
-  avatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    borderWidth: 2,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  avatarText: {
-    fontSize: 20,
-    fontWeight: "bold",
-  },
-  userDetails: {
-    flex: 1,
-  },
-  userName: {
-    fontSize: 16,
-    fontWeight: "bold",
-  },
-  userEmail: {
-    fontSize: 12,
-    marginTop: 2,
   },
   closeButton: {
     position: "absolute",

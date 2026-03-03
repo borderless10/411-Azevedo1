@@ -380,7 +380,7 @@ export const EditExpenseScreen = () => {
                 />
 
                 <Button
-                  title="Salvar Alterações"
+                  title="Salvar"
                   onPress={handleSave}
                   variant="danger"
                   icon="checkmark"
@@ -459,18 +459,16 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#333",
+    color: "#fff",
     marginBottom: 8,
-    flexDirection: "row",
-    alignItems: "center",
   },
   inputWrapper: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#fff",
+    backgroundColor: "#2b2b2b",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#e0e0e0",
+    borderColor: "#444",
     paddingHorizontal: 16,
   },
   inputWrapperError: {
@@ -484,7 +482,7 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 16,
     fontSize: 16,
-    color: "#333",
+    color: "#fff",
   },
   icon: {
     marginLeft: 8,
@@ -497,7 +495,7 @@ const styles = StyleSheet.create({
   },
   charCount: {
     fontSize: 12,
-    color: "#999",
+    color: "#bbb",
     marginTop: 4,
     textAlign: "right",
   },

@@ -10,20 +10,27 @@ import {
   ScrollView,
   Animated,
   TouchableOpacity,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../hooks/useAuth';
+import { userService } from '../../services/userServices';
 import { useNavigation } from '../../routes/NavigationContext';
 import { Layout } from '../../components/Layout/Layout';
 
 export const ProfileScreen = () => {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const { navigate, params } = useNavigation();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
   const successFadeAnim = useRef(new Animated.Value(0)).current;
   const [showSuccess, setShowSuccess] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  const [currency, setCurrency] = useState<string>(user?.currency || 'BRL');
+  const [showInRanking, setShowInRanking] = useState<boolean>(
+    user?.showInRanking === true,
+  );
+  const [savingPrefs, setSavingPrefs] = useState<boolean>(false);
 
   // Verificar se o usuário é admin
   const isAdmin = user?.role === 'admin' || user?.isAdmin === true;
@@ -162,6 +169,81 @@ export const ProfileScreen = () => {
                 <Text style={styles.statusText}>Ativo</Text>
               </View>
             </View>
+          </View>
+
+          {/* Preferências do Usuário */}
+          <View style={styles.infoCard}>
+            <View style={styles.infoHeader}>
+              <Ionicons name="options" size={24} color="#4CAF50" />
+              <Text style={styles.infoTitle}>Preferências</Text>
+            </View>
+
+            <View style={styles.infoItem}>
+              <Text style={styles.infoLabel}>Moeda</Text>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                {['BRL', 'USD', 'EUR'].map((c) => (
+                  <TouchableOpacity
+                    key={c}
+                    style={[
+                      styles.currencyButton,
+                      currency === c && styles.currencyButtonActive,
+                    ]}
+                    onPress={() => setCurrency(c)}
+                  >
+                    <Text
+                      style={
+                        currency === c
+                          ? styles.currencyButtonTextActive
+                          : styles.currencyButtonText
+                      }
+                    >
+                      {c}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            <View style={styles.infoItem}>
+              <Text style={styles.infoLabel}>Participar do Ranking</Text>
+              <TouchableOpacity
+                onPress={() => setShowInRanking((s) => !s)}
+                style={styles.toggleButton}
+              >
+                <View
+                  style={[
+                    styles.toggleDot,
+                    showInRanking && styles.toggleDotActive,
+                  ]}
+                />
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.saveButton, savingPrefs && styles.saveButtonDisabled]}
+              onPress={async () => {
+                if (!user?.id) return;
+                try {
+                  setSavingPrefs(true);
+                  await userService.updateUserPreferences(user.id, {
+                    currency,
+                    showInRanking,
+                  });
+                  // refresh user data in context
+                  await refreshUser();
+                  setShowSuccess(true);
+                  setSuccessMessage('Preferências salvas com sucesso');
+                  setTimeout(() => setShowSuccess(false), 4000);
+                } catch (e) {
+                  console.error('Erro ao salvar preferências', e);
+                  Alert.alert('Erro', 'Não foi possível salvar as preferências');
+                } finally {
+                  setSavingPrefs(false);
+                }
+              }}
+            >
+              <Text style={styles.saveButtonText}>{savingPrefs ? 'Salvando...' : 'Salvar Preferências'}</Text>
+            </TouchableOpacity>
           </View>
 
           {/* Funcionalidades de Admin */}
@@ -503,6 +585,56 @@ const styles = StyleSheet.create({
     color: '#fff',
     textAlign: 'center',
     lineHeight: 24,
+  },
+  currencyButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#333',
+    backgroundColor: '#0a0a0a',
+  },
+  currencyButtonActive: {
+    backgroundColor: '#4CAF50',
+    borderColor: '#4CAF50',
+  },
+  currencyButtonText: {
+    color: '#ddd',
+    fontWeight: '700',
+  },
+  currencyButtonTextActive: {
+    color: '#000',
+    fontWeight: '800',
+  },
+  toggleButton: {
+    padding: 8,
+    borderRadius: 999,
+    backgroundColor: '#0a0a0a',
+    borderWidth: 1,
+    borderColor: '#333',
+  },
+  toggleDot: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#444',
+  },
+  toggleDotActive: {
+    backgroundColor: '#4CAF50',
+  },
+  saveButton: {
+    marginTop: 12,
+    backgroundColor: '#4CAF50',
+    padding: 12,
+    alignItems: 'center',
+    borderRadius: 10,
+  },
+  saveButtonDisabled: {
+    opacity: 0.6,
+  },
+  saveButtonText: {
+    color: '#fff',
+    fontWeight: '700',
   },
 });
 

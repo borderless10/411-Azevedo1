@@ -57,15 +57,37 @@ export const planningServices = {
 
       const now = Timestamp.now();
       const docRef = getUserPlanningDoc(userId);
-      const payload: PlanningFirestore = {
+      // Ensure we don't send `undefined` values to Firestore.
+      const payload: any = {
         consultantId: data.consultantId,
-        monthlyIncome: data.monthlyIncome,
-        plannedByCategory: data.plannedByCategory,
-        modules: data.modules,
-        notes: data.notes,
         createdAt: now,
         updatedAt: now,
-      } as PlanningFirestore;
+      };
+
+      if (data.monthlyIncome !== undefined && data.monthlyIncome !== null) {
+        payload.monthlyIncome = data.monthlyIncome;
+      }
+      if (data.modules !== undefined && data.modules !== null) {
+        payload.modules = data.modules;
+      }
+      if (data.notes !== undefined && data.notes !== null) {
+        payload.notes = data.notes;
+      }
+
+      if (
+        data.plannedByCategory !== undefined &&
+        data.plannedByCategory !== null
+      ) {
+        // keep only keys with numeric values and coerce to number
+        const sanitized: Record<string, number> = {};
+        Object.entries(data.plannedByCategory).forEach(([k, v]) => {
+          if (v !== undefined && v !== null && v !== "") {
+            const num = Number(v);
+            if (!Number.isNaN(num)) sanitized[k] = num;
+          }
+        });
+        payload.plannedByCategory = sanitized;
+      }
 
       await setDoc(docRef, payload);
 
@@ -88,7 +110,7 @@ export const planningServices = {
       return {
         consultantId: payload.consultantId,
         monthlyIncome: payload.monthlyIncome,
-        plannedByCategory: payload.plannedByCategory,
+        plannedByCategory: payload.plannedByCategory || {},
         modules: payload.modules,
         notes: payload.notes,
         createdAt: now.toDate(),
@@ -127,8 +149,19 @@ export const planningServices = {
 
       if (data.monthlyIncome !== undefined)
         updatePayload.monthlyIncome = data.monthlyIncome;
-      if (data.plannedByCategory !== undefined)
-        updatePayload.plannedByCategory = data.plannedByCategory;
+      if (
+        data.plannedByCategory !== undefined &&
+        data.plannedByCategory !== null
+      ) {
+        const sanitized: Record<string, number> = {};
+        Object.entries(data.plannedByCategory).forEach(([k, v]) => {
+          if (v !== undefined && v !== null && v !== "") {
+            const num = Number(v);
+            if (!Number.isNaN(num)) sanitized[k] = num;
+          }
+        });
+        updatePayload.plannedByCategory = sanitized;
+      }
       if (data.modules !== undefined) updatePayload.modules = data.modules;
       if (data.notes !== undefined) updatePayload.notes = data.notes;
 

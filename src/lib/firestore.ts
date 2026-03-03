@@ -4,8 +4,8 @@ import {
   CollectionReference,
   DocumentReference,
   Timestamp,
-} from 'firebase/firestore';
-import { db } from './firebase';
+} from "firebase/firestore";
+import { db } from "./firebase";
 import {
   Income,
   IncomeFirestore,
@@ -21,20 +21,20 @@ import {
   ActivityFirestore,
   Bill,
   BillFirestore,
-} from '../types';
+} from "../types";
 
 /**
  * Nomes das coleções do Firestore
  */
 export const COLLECTIONS = {
-  USERS: 'users',
-  INCOMES: 'incomes',
-  EXPENSES: 'expenses',
-  CATEGORIES: 'categories',
-  BUDGETS: 'budgets',
-  GOALS: 'goals',
-  ACTIVITIES: 'activities',
-  BILLS: 'bills',
+  USERS: "users",
+  INCOMES: "incomes",
+  EXPENSES: "expenses",
+  CATEGORIES: "categories",
+  BUDGETS: "budgets",
+  GOALS: "goals",
+  ACTIVITIES: "activities",
+  BILLS: "bills",
 } as const;
 
 /**
@@ -127,9 +127,7 @@ export const timestampToDate = (timestamp: any): Date => {
 /**
  * Converter Income do Firestore para o tipo da aplicação
  */
-export const convertIncomeFromFirestore = (
-  data: IncomeFirestore
-): Income => {
+export const convertIncomeFromFirestore = (data: IncomeFirestore): Income => {
   return {
     ...data,
     date: timestampToDate(data.date),
@@ -142,10 +140,10 @@ export const convertIncomeFromFirestore = (
  * Converter Income para o Firestore
  */
 export const convertIncomeToFirestore = (
-  income: Partial<Income>
+  income: Partial<Income>,
 ): Partial<IncomeFirestore> => {
   const { date, createdAt, updatedAt, ...rest } = income;
-  
+
   return {
     ...rest,
     ...(date && { date: dateToTimestamp(date) }),
@@ -158,7 +156,7 @@ export const convertIncomeToFirestore = (
  * Converter Expense do Firestore para o tipo da aplicação
  */
 export const convertExpenseFromFirestore = (
-  data: ExpenseFirestore
+  data: ExpenseFirestore,
 ): Expense => {
   return {
     ...data,
@@ -172,10 +170,10 @@ export const convertExpenseFromFirestore = (
  * Converter Expense para o Firestore
  */
 export const convertExpenseToFirestore = (
-  expense: Partial<Expense>
+  expense: Partial<Expense>,
 ): Partial<ExpenseFirestore> => {
   const { date, createdAt, updatedAt, ...rest } = expense;
-  
+
   return {
     ...rest,
     ...(date && { date: dateToTimestamp(date) }),
@@ -188,7 +186,7 @@ export const convertExpenseToFirestore = (
  * Converter Category do Firestore para o tipo da aplicação
  */
 export const convertCategoryFromFirestore = (
-  data: CategoryFirestore
+  data: CategoryFirestore,
 ): Category => {
   return {
     ...data,
@@ -200,10 +198,10 @@ export const convertCategoryFromFirestore = (
  * Converter Category para o Firestore
  */
 export const convertCategoryToFirestore = (
-  category: Partial<Category>
+  category: Partial<Category>,
 ): Partial<CategoryFirestore> => {
   const { createdAt, ...rest } = category;
-  
+
   return {
     ...rest,
     ...(createdAt && { createdAt: dateToTimestamp(createdAt) }),
@@ -213,11 +211,10 @@ export const convertCategoryToFirestore = (
 /**
  * Converter Budget do Firestore para o tipo da aplicação
  */
-export const convertBudgetFromFirestore = (
-  data: BudgetFirestore
-): Budget => {
+export const convertBudgetFromFirestore = (data: BudgetFirestore): Budget => {
   return {
     ...data,
+    zeroConfirmedDays: data.zeroConfirmedDays || [],
     createdAt: timestampToDate(data.createdAt),
     updatedAt: timestampToDate(data.updatedAt),
   };
@@ -227,10 +224,10 @@ export const convertBudgetFromFirestore = (
  * Converter Budget para o Firestore
  */
 export const convertBudgetToFirestore = (
-  budget: Partial<Budget>
+  budget: Partial<Budget>,
 ): Partial<BudgetFirestore> => {
   const { createdAt, updatedAt, ...rest } = budget;
-  
+
   return {
     ...rest,
     ...(createdAt && { createdAt: dateToTimestamp(createdAt) }),
@@ -241,57 +238,62 @@ export const convertBudgetToFirestore = (
 /**
  * Converter Goal do Firestore para o tipo da aplicação
  */
-export const convertGoalFromFirestore = (
-  data: GoalFirestore
-): Goal => {
+export const convertGoalFromFirestore = (data: GoalFirestore): Goal => {
   return {
     ...data,
     deadline: data.deadline ? timestampToDate(data.deadline) : undefined,
-    contributions: data.contributions.map(contrib => ({
+    contributions: data.contributions.map((contrib) => ({
       ...contrib,
       date: timestampToDate(contrib.date),
     })),
     createdAt: timestampToDate(data.createdAt),
     updatedAt: timestampToDate(data.updatedAt),
-    completedAt: data.completedAt ? timestampToDate(data.completedAt) : undefined,
+    completedAt: data.completedAt
+      ? timestampToDate(data.completedAt)
+      : undefined,
   };
 };
 
 /**
  * Converter Goal para o Firestore
  */
-export const convertGoalToFirestore = (
-  goal: Partial<Goal>
-): any => {
-  const { deadline, contributions, createdAt, updatedAt, completedAt, ...rest } = goal;
-  
+export const convertGoalToFirestore = (goal: Partial<Goal>): any => {
+  const {
+    deadline,
+    contributions,
+    createdAt,
+    updatedAt,
+    completedAt,
+    ...rest
+  } = goal;
+
   const result: any = { ...rest };
-  
+
   // Só adicionar campos que existem (Firestore não aceita undefined)
   if (deadline) {
     result.deadline = dateToTimestamp(deadline);
   }
-  
+
   if (contributions) {
-    result.contributions = contributions.map(contrib => ({
+    result.contributions = contributions.map((contrib) => ({
       amount: contrib.amount,
       date: dateToTimestamp(contrib.date),
       ...(contrib.note && { note: contrib.note }),
     }));
   }
-  
+
   if (createdAt) {
     result.createdAt = dateToTimestamp(createdAt);
   }
-  
+
   if (updatedAt) {
     result.updatedAt = dateToTimestamp(updatedAt);
   }
-  
+
   if (completedAt) {
     result.completedAt = dateToTimestamp(completedAt);
   }
-  
+
   return result;
 };
 
@@ -299,7 +301,7 @@ export const convertGoalToFirestore = (
  * Converter Activity do Firestore para o tipo da aplicação
  */
 export const convertActivityFromFirestore = (
-  data: ActivityFirestore
+  data: ActivityFirestore,
 ): Activity => {
   return {
     ...data,
@@ -311,16 +313,16 @@ export const convertActivityFromFirestore = (
  * Converter Activity para o Firestore
  */
 export const convertActivityToFirestore = (
-  activity: Partial<Activity>
+  activity: Partial<Activity>,
 ): any => {
   const { createdAt, ...rest } = activity;
-  
+
   const result: any = { ...rest };
-  
+
   if (createdAt) {
     result.createdAt = dateToTimestamp(createdAt);
   }
-  
+
   return result;
 };
 

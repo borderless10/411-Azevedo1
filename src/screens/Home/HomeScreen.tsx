@@ -21,6 +21,8 @@ import { Layout } from "../../components/Layout/Layout";
 import { useAuth } from "../../hooks/useAuth";
 import incomeServices from "../../services/incomeServices";
 import expenseServices from "../../services/expenseServices";
+import { budgetServices } from "../../services/budgetServices";
+import { activityServices } from "../../services/activityServices";
 import { formatCurrency } from "../../utils/currencyUtils";
 import {
   formatDateForDisplay,
@@ -39,6 +41,7 @@ import {
   LineChartData,
 } from "../../components/Charts";
 import { DEFAULT_EXPENSE_CATEGORIES } from "../../types/category";
+import ZeroPlanilhaConfirmModal from "../../components/ui/ZeroPlanilhaConfirmModal";
 
 export const HomeScreen = () => {
   const { navigate, currentScreen } = useNavigation();
@@ -68,6 +71,11 @@ export const HomeScreen = () => {
   // Animações
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
+  const lastZeroCheckKeyRef = useRef<string | null>(null);
+  const [zeroConfirmVisible, setZeroConfirmVisible] = useState(false);
+  const [zeroConfirmDayLabel, setZeroConfirmDayLabel] = useState("");
+  const [zeroConfirmDate, setZeroConfirmDate] = useState<Date | null>(null);
+  const [confirmingZero, setConfirmingZero] = useState(false);
 
   // Função para obter cor de categoria
   const getCategoryColor = (categoryName: string): string => {
@@ -308,6 +316,94 @@ export const HomeScreen = () => {
     }
   };
 
+  const checkZeroPlanilhaForYesterday = async () => {
+    if (!user?.id) return;
+
+    if (user.role === "consultor" || user.isAdmin) {
+      return;
+    }
+
+    const yesterday = getStartOfDay(subtractDays(new Date(), 1));
+    const checkKey = `${user.id}-${formatDateToString(yesterday)}`;
+
+    if (lastZeroCheckKeyRef.current === checkKey) {
+      return;
+    }
+
+    lastZeroCheckKeyRef.current = checkKey;
+
+    try {
+      const expensesYesterday = await expenseServices.getExpenses(user.id, {
+        startDate: getStartOfDay(yesterday),
+        endDate: getEndOfDay(yesterday),
+      });
+
+      const totalYesterday = expensesYesterday.reduce(
+        (sum, item) => sum + item.value,
+        0,
+      );
+
+      if (totalYesterday > 0) {
+        return;
+      }
+
+      const alreadyConfirmed = await budgetServices.isZeroExpenseDayConfirmed(
+        user.id,
+        yesterday,
+      );
+
+      if (alreadyConfirmed) {
+        return;
+      }
+
+      const yesterdayLabel = formatDateForDisplay(yesterday);
+      setZeroConfirmDayLabel(yesterdayLabel);
+      setZeroConfirmDate(yesterday);
+      setZeroConfirmVisible(true);
+    } catch (error) {
+      console.error("❌ [HOME] Erro ao verificar dia sem gasto:", error);
+    }
+  };
+
+  const handleConfirmZeroPlanilha = async () => {
+    if (!user?.id || !zeroConfirmDate) {
+      setZeroConfirmVisible(false);
+      return;
+    }
+
+    try {
+      setConfirmingZero(true);
+      await budgetServices.confirmZeroExpenseDay(user.id, zeroConfirmDate);
+
+      await activityServices.logActivity(user.id, {
+        type: "budget_updated",
+        title: "✅ Zero na planilha confirmado",
+        description: `Parabéns! O dia ${zeroConfirmDayLabel} foi registrado com ${formatCurrency(0)}.`,
+      });
+
+      setZeroConfirmVisible(false);
+      setZeroConfirmDate(null);
+      Alert.alert(
+        "Parabéns! 🎉",
+        "Seu dia com zero na planilha foi contabilizado.",
+      );
+    } catch (error) {
+      console.error("❌ [HOME] Erro ao confirmar zero na planilha:", error);
+      Alert.alert(
+        "Erro",
+        "Não foi possível confirmar o zero na planilha agora.",
+      );
+    } finally {
+      setConfirmingZero(false);
+    }
+  };
+
+  const handleCancelZeroPlanilha = () => {
+    if (confirmingZero) return;
+    setZeroConfirmVisible(false);
+    setZeroConfirmDate(null);
+  };
+
   // Carregar dados quando montar ou voltar ao foco
   useEffect(() => {
     // Só carregar se estiver na tela Home
@@ -341,6 +437,15 @@ export const HomeScreen = () => {
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentScreen, user?.id]); // Recarregar quando mudar de tela ou usuário
+
+  useEffect(() => {
+    if (currentScreen !== "Home" || !user?.id) {
+      return;
+    }
+
+    checkZeroPlanilhaForYesterday();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentScreen, user?.id]);
 
   // Pull to refresh
   const handleRefresh = () => {
@@ -1012,6 +1117,14 @@ export const HomeScreen = () => {
           </View>
         </View>
       </ScrollView>
+
+      <ZeroPlanilhaConfirmModal
+        visible={zeroConfirmVisible}
+        dayLabel={zeroConfirmDayLabel}
+        loading={confirmingZero}
+        onCancel={handleCancelZeroPlanilha}
+        onConfirm={handleConfirmZeroPlanilha}
+      />
     </Layout>
   );
 };

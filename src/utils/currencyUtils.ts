@@ -5,18 +5,25 @@
 /**
  * Formatar número para moeda brasileira
  */
-export const formatCurrency = (value: number): string => {
-  return new Intl.NumberFormat('pt-BR', {
+export const formatCurrency = (
+  value: number,
+  locale: string = 'pt-BR',
+  currency: string = 'BRL',
+): string => {
+  return new Intl.NumberFormat(locale, {
     style: 'currency',
-    currency: 'BRL',
+    currency,
   }).format(value);
 };
 
 /**
  * Formatar número para moeda sem o símbolo
  */
-export const formatCurrencyWithoutSymbol = (value: number): string => {
-  return new Intl.NumberFormat('pt-BR', {
+export const formatCurrencyWithoutSymbol = (
+  value: number,
+  locale: string = 'pt-BR',
+): string => {
+  return new Intl.NumberFormat(locale, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(value);
@@ -40,7 +47,7 @@ export const parseCurrency = (value: string): number => {
  * Aplicar máscara de moeda enquanto digita
  * Ex: 123456 -> "R$ 1.234,56"
  */
-export const applyCurrencyMask = (value: string): string => {
+export const applyCurrencyMask = (value: string, locale: string = 'pt-BR'): string => {
   // Remove tudo que não é número
   const numbers = value.replace(/\D/g, '');
   
@@ -49,7 +56,8 @@ export const applyCurrencyMask = (value: string): string => {
   // Converte para número e divide por 100 (centavos)
   const amount = parseFloat(numbers) / 100;
   
-  return formatCurrency(amount);
+  // Use default currency BRL for mask generation to preserve current UX
+  return formatCurrency(amount, locale === 'pt-BR' ? 'pt-BR' : locale, 'BRL');
 };
 
 /**
