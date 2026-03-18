@@ -7,6 +7,7 @@ import React, {
 } from "react";
 import { authServices } from "../services/authServices";
 import { userService } from "../services/userServices";
+import { updateOverdueBills } from "../services/billServices";
 import { User, LoginCredentials, RegisterCredentials } from "../types/auth";
 
 /**
@@ -47,38 +48,80 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     // Observar mudanças no estado de autenticação
     const unsubscribe = authServices.onAuthStateChange(async (firebaseUser) => {
       if (firebaseUser) {
-        // Buscar dados completos do Firestore
         try {
           const fullUserData = await userService.getUserById(firebaseUser.id);
+
           if (fullUserData) {
-            // Mesclar dados do Firebase Auth com dados do Firestore
-            setUser({
-              ...firebaseUser,
-              ...fullUserData,
-            });
-          } else {
-            // Se não existir no Firestore, criar como usuário normal
-            try {
-              await userService.createUserDocument(firebaseUser.id, {
-                name: firebaseUser.name || "",
-                email: firebaseUser.email || "",
-              });
-              // Buscar novamente após criar
-              const newUserData = await userService.getUserById(
-                firebaseUser.id,
+            if (fullUserData.isActive === false) {
+              console.log(
+                "⚠️ Conta desativada detectada no onAuthStateChange, efetuando logout.",
               );
-              if (newUserData) {
-                setUser({
-                  ...firebaseUser,
-                  ...newUserData,
-                });
+              try {
+                await authServices.logout();
+              } catch (e) {
+                if (__DEV__)
+                  console.log("Erro ao deslogar conta desativada:", e);
+              }
+              setUser(null);
+              setLoading(false);
+              return;
+            }
+
+            setUser({ ...firebaseUser, ...fullUserData });
+          } else {
+            // Fallback: procurar documento pelo email
+            try {
+              if (firebaseUser.email) {
+                const byEmail = await userService.getUserByEmail(
+                  firebaseUser.email,
+                );
+                if (byEmail) {
+                  if (byEmail.isActive === false) {
+                    console.log(
+                      "⚠️ Conta desativada encontrada por email no onAuthStateChange, efetuando logout.",
+                    );
+                    try {
+                      await authServices.logout();
+                    } catch (e) {
+                      if (__DEV__)
+                        console.log("Erro ao deslogar conta desativada:", e);
+                    }
+                    setUser(null);
+                    setLoading(false);
+                    return;
+                  }
+
+                  setUser({ ...firebaseUser, ...byEmail });
+                } else {
+                  // Criar documento padrão
+                  await userService.createUserDocument(firebaseUser.id, {
+                    name: firebaseUser.name || "",
+                    email: firebaseUser.email || "",
+                  });
+                  const newUserData = await userService.getUserById(
+                    firebaseUser.id,
+                  );
+                  if (newUserData) setUser({ ...firebaseUser, ...newUserData });
+                  else setUser(firebaseUser);
+                }
               } else {
-                setUser(firebaseUser);
+                // Sem email, criar documento padrão
+                await userService.createUserDocument(firebaseUser.id, {
+                  name: firebaseUser.name || "",
+                  email: firebaseUser.email || "",
+                });
+                const newUserData = await userService.getUserById(
+                  firebaseUser.id,
+                );
+                if (newUserData) setUser({ ...firebaseUser, ...newUserData });
+                else setUser(firebaseUser);
               }
-            } catch (error) {
-              if (__DEV__) {
-                console.log("Erro ao criar documento do usuário:", error);
-              }
+            } catch (emailErr) {
+              if (__DEV__)
+                console.log(
+                  "Erro ao buscar usuário por email no onAuthStateChange:",
+                  emailErr,
+                );
               setUser(firebaseUser);
             }
           }
@@ -91,6 +134,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       } else {
         setUser(null);
       }
+      // Disparar atualização de contas vencidas no cliente (não bloqueante)
+      try {
+        if (firebaseUser) {
+          void updateOverdueBills(firebaseUser.id).catch((e) => {
+            if (__DEV__) console.log("Erro ao atualizar contas vencidas:", e);
+          });
+        }
+      } catch (err) {
+        if (__DEV__) console.log("Erro ao disparar updateOverdueBills:", err);
+      }
+
       setLoading(false);
     });
 
@@ -118,12 +172,61 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       try {
         const fullUserData = await userService.getUserById(userData.id);
         if (fullUserData) {
+          // Bloquear login se conta estiver desativada
+          if (fullUserData.isActive === false) {
+            // Desloga localmente e propaga erro para a UI
+            try {
+              await authServices.logout();
+            } catch (e) {
+              if (__DEV__) console.log("Erro ao deslogar conta desativada:", e);
+            }
+            throw { code: "auth/user-disabled", message: "Conta desativada" };
+          }
+
           setUser({
             ...userData,
             ...fullUserData,
           });
         } else {
-          setUser(userData);
+          // Fallback: procurar pelo email caso o documento não exista sob o uid
+          try {
+            if (userData.email) {
+              const byEmail = await userService.getUserByEmail(userData.email);
+              if (byEmail) {
+                if (byEmail.isActive === false) {
+                  try {
+                    await authServices.logout();
+                  } catch (e) {
+                    if (__DEV__)
+                      console.log(
+                        "Erro ao deslogar conta desativada (fallback):",
+                        e,
+                      );
+                  }
+                  throw {
+                    code: "auth/user-disabled",
+                    message: "Conta desativada",
+                  };
+                }
+
+                setUser({
+                  ...userData,
+                  ...byEmail,
+                });
+              } else {
+                setUser(userData);
+              }
+            } else {
+              setUser(userData);
+            }
+          } catch (fallbackErr) {
+            if (__DEV__)
+              console.log(
+                "Erro ao executar fallback por email no signIn:",
+                fallbackErr,
+              );
+            setUser(userData);
+          }
         }
       } catch (error) {
         if (__DEV__) {
@@ -133,6 +236,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
 
       console.log("🟢 [AUTH CONTEXT] Estado do usuário atualizado");
+      // Disparar atualização de contas vencidas no cliente após login (não bloqueante)
+      try {
+        if (userData && userData.id) {
+          void updateOverdueBills(userData.id).catch((e) => {
+            if (__DEV__) console.log("Erro ao atualizar contas vencidas (signIn):", e);
+          });
+        }
+      } catch (err) {
+        if (__DEV__) console.log("Erro ao disparar updateOverdueBills (signIn):", err);
+      }
     } catch (error: any) {
       if (__DEV__) {
         console.log("❌ [AUTH CONTEXT] Erro ao fazer login:", {

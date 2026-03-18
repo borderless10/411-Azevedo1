@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Tela de Chat
  */
 
@@ -46,7 +46,7 @@ export const ChatScreen = () => {
           ]}
         >
           <View style={styles.header}>
-            <Ionicons name="chatbubbles-outline" size={64} color="#9C27B0" />
+            <Ionicons name="chatbubbles-outline" size={64} color="#8c52ff" />
             <Text style={styles.title}>Chat</Text>
             <Text style={styles.subtitle}>
               Converse com nossa equipe de suporte

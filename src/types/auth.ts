@@ -8,6 +8,7 @@ export interface User {
   role?: "admin" | "consultor" | "user";
   consultantId?: string; // id do consultor responsável (se houver)
   isAdmin?: boolean;
+  isActive?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }

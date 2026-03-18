@@ -23,7 +23,7 @@ const ExpenseCreatedModal: React.FC<Props> = ({
       <View style={styles.backdrop}>
         <View style={styles.container}>
           <View style={styles.iconWrap}>
-            <Ionicons name="checkmark-circle" size={64} color="#F44336" />
+            <Ionicons name="checkmark-circle" size={64} color="#ff4d6d" />
           </View>
 
           <Text style={styles.title}>Gasto cadastrado</Text>
@@ -97,7 +97,7 @@ const styles = StyleSheet.create({
   amount: {
     fontSize: 22,
     fontWeight: "800",
-    color: "#F44336",
+    color: "#ff4d6d",
     marginBottom: 8,
   },
   message: {
@@ -114,7 +114,7 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     flex: 1,
-    backgroundColor: "#F44336",
+    backgroundColor: "#ff4d6d",
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 10,
@@ -129,14 +129,14 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "transparent",
     borderWidth: 1,
-    borderColor: "#444",
+    borderColor: "#2a2040",
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 10,
     alignItems: "center",
   },
   secondaryLabel: {
-    color: "#ddd",
+    color: "#a89fc0",
     fontWeight: "700",
     fontSize: 16,
   },
@@ -144,7 +144,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   closeText: {
-    color: "#999",
+    color: "#6b6480",
     fontSize: 14,
   },
 });

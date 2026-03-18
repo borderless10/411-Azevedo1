@@ -2,7 +2,7 @@
  * Componente de Botão Reutilizável
  */
 
-import React, { useRef } from 'react';
+import React, { useRef } from "react";
 import {
   TouchableOpacity,
   Text,
@@ -12,11 +12,16 @@ import {
   ActivityIndicator,
   View,
   Animated,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 
-export type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'success' | 'outline';
-export type ButtonSize = 'small' | 'medium' | 'large';
+export type ButtonVariant =
+  | "primary"
+  | "secondary"
+  | "danger"
+  | "success"
+  | "outline";
+export type ButtonSize = "small" | "medium" | "large";
 
 interface ButtonProps {
   title: string;
@@ -24,7 +29,7 @@ interface ButtonProps {
   variant?: ButtonVariant;
   size?: ButtonSize;
   icon?: keyof typeof Ionicons.glyphMap;
-  iconPosition?: 'left' | 'right';
+  iconPosition?: "left" | "right";
   loading?: boolean;
   disabled?: boolean;
   fullWidth?: boolean;
@@ -35,10 +40,10 @@ interface ButtonProps {
 export const Button: React.FC<ButtonProps> = ({
   title,
   onPress,
-  variant = 'primary',
-  size = 'medium',
+  variant = "primary",
+  size = "medium",
   icon,
-  iconPosition = 'left',
+  iconPosition = "left",
   loading = false,
   disabled = false,
   fullWidth = false,
@@ -115,15 +120,25 @@ export const Button: React.FC<ButtonProps> = ({
     textStyle,
   ];
 
-  const iconSize = size === 'small' ? 16 : size === 'medium' ? 20 : 24;
-  const iconColor = variant === 'outline' || variant === 'secondary' ? '#007AFF' : '#fff';
+  const iconSize = size === "small" ? 16 : size === "medium" ? 20 : 24;
+  const iconColor =
+    variant === "outline" || variant === "secondary" ? "#8c52ff" : "#fff";
 
   const renderIcon = () => {
     if (loading) {
-      return <ActivityIndicator color={iconColor} size="small" style={styles.icon} />;
+      return (
+        <ActivityIndicator color={iconColor} size="small" style={styles.icon} />
+      );
     }
     if (icon) {
-      return <Ionicons name={icon} size={iconSize} color={iconColor} style={styles.icon} />;
+      return (
+        <Ionicons
+          name={icon}
+          size={iconSize}
+          color={iconColor}
+          style={styles.icon}
+        />
+      );
     }
     return null;
   };
@@ -139,9 +154,9 @@ export const Button: React.FC<ButtonProps> = ({
         activeOpacity={1}
       >
         <View style={styles.content}>
-          {iconPosition === 'left' && renderIcon()}
+          {iconPosition === "left" && renderIcon()}
           <Text style={textStyles}>{title}</Text>
-          {iconPosition === 'right' && renderIcon()}
+          {iconPosition === "right" && renderIcon()}
         </View>
       </TouchableOpacity>
     </Animated.View>
@@ -151,57 +166,57 @@ export const Button: React.FC<ButtonProps> = ({
 const styles = StyleSheet.create({
   button: {
     borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    shadowColor: '#000',
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 8,
     elevation: 4,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   content: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: 8,
   },
   icon: {
     marginHorizontal: 4,
   },
-  
+
   // Variantes
   buttonPrimary: {
-    backgroundColor: '#007AFF',
-    shadowColor: '#007AFF',
+    backgroundColor: "#8c52ff",
+    shadowColor: "#8c52ff",
     shadowOpacity: 0.3,
   },
   buttonSecondary: {
-    backgroundColor: '#ffffff',
+    backgroundColor: "#1a1528",
     borderWidth: 1.5,
-    borderColor: '#e8e8e8',
-    shadowColor: '#000',
+    borderColor: "#2a2040",
+    shadowColor: "#000",
     shadowOpacity: 0.08,
   },
   buttonDanger: {
-    backgroundColor: '#F44336',
-    shadowColor: '#F44336',
+    backgroundColor: "#ff4d6d",
+    shadowColor: "#ff4d6d",
     shadowOpacity: 0.3,
   },
   buttonSuccess: {
-    backgroundColor: '#4CAF50',
-    shadowColor: '#4CAF50',
+    backgroundColor: "#8c52ff",
+    shadowColor: "#8c52ff",
     shadowOpacity: 0.3,
   },
   buttonOutline: {
-    backgroundColor: 'transparent',
+    backgroundColor: "transparent",
     borderWidth: 2,
-    borderColor: '#007AFF',
+    borderColor: "#8c52ff",
     shadowOpacity: 0,
     elevation: 0,
   },
-  
+
   // Tamanhos
   buttonSmall: {
     paddingHorizontal: 16,
@@ -215,7 +230,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
     paddingVertical: 18,
   },
-  
+
   // Estados
   buttonDisabled: {
     opacity: 0.5,
@@ -223,29 +238,29 @@ const styles = StyleSheet.create({
     elevation: 0,
   },
   buttonFullWidth: {
-    width: '100%',
+    width: "100%",
   },
-  
+
   // Textos
   text: {
-    fontWeight: '600',
+    fontWeight: "600",
   },
   textPrimary: {
-    color: '#fff',
+    color: "#fff",
   },
   textSecondary: {
-    color: '#333',
+    color: "#a89fc0",
   },
   textDanger: {
-    color: '#fff',
+    color: "#fff",
   },
   textSuccess: {
-    color: '#fff',
+    color: "#fff",
   },
   textOutline: {
-    color: '#007AFF',
+    color: "#8c52ff",
   },
-  
+
   textSmall: {
     fontSize: 14,
   },

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+﻿import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -80,7 +80,7 @@ export const ConsultorHome: React.FC = () => {
                   <Text style={styles.buttonText}>Abrir Planejamento</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.button, { backgroundColor: "#4CAF50" }]}
+                  style={[styles.button, { backgroundColor: "#8c52ff" }]}
                   onPress={() =>
                     navigate("ClientDetail", { clientId: item.id })
                   }

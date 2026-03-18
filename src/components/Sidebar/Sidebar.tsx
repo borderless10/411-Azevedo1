@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Componente de Sidebar/Menu Lateral
  */
 
@@ -72,23 +72,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
   }, [visible]);
   const menuItems: MenuItem[] = [
-    { id: "Home", label: "Início", icon: "home", color: "#007AFF" },
+    { id: "Home", label: "Início", icon: "home", color: "#8c52ff" },
     {
       id: "Budget",
       label: "Consumo Moderado",
       icon: "wallet",
-      color: "#00BCD4",
+      color: "#a47aff",
     },
-    { id: "Bills", label: "Contas a Pagar", icon: "receipt", color: "#E91E63" },
-    { id: "Feed", label: "Feed", icon: "newspaper", color: "#007AFF" },
-    { id: "Chat", label: "Chat", icon: "chatbubbles", color: "#9C27B0" },
-    { id: "Metas", label: "Metas", icon: "flag", color: "#F44336" },
-    { id: "Ranking", label: "Ranking", icon: "trophy", color: "#FFD700" },
+    { id: "Bills", label: "Contas a Pagar", icon: "receipt", color: "#ff4d6d" },
+    { id: "Feed", label: "Feed", icon: "newspaper", color: "#8c52ff" },
+    { id: "Chat", label: "Chat", icon: "chatbubbles", color: "#a47aff" },
+    { id: "Metas", label: "Metas", icon: "flag", color: "#8c52ff" },
+    { id: "Ranking", label: "Ranking", icon: "trophy", color: "#c084fc" },
     {
       id: "Recomendacao",
       label: "Recomendação",
       icon: "bulb",
-      color: "#FF9800",
+      color: "#a47aff",
     },
   ];
 
@@ -97,7 +97,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     id: "PlanningView",
     label: "Planejamento",
     icon: "document-text",
-    color: "#00BCD4",
+    color: "#a47aff",
   });
 
   // Adicionar rota de gerenciamento para consultores/admins
@@ -106,7 +106,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
       id: "ClientList",
       label: "Planejamento (Clientes)",
       icon: "clipboard",
-      color: "#8BC34A",
+      color: "#a47aff",
+    });
+    // Gerenciamento de usuários (consultor/admin)
+    menuItems.push({
+      id: "AdminUsers",
+      label: "Gerenciar Usuários",
+      icon: "people",
+      color: "#8c52ff",
     });
   }
 
@@ -115,22 +122,30 @@ export const Sidebar: React.FC<SidebarProps> = ({
     id: "Profile",
     label: "Perfil",
     icon: "person",
-    color: "#9C27B0",
+    color: "#8c52ff",
   });
   menuItems.push({
     id: "Settings",
     label: "Configurações",
     icon: "settings",
-    color: "#607D8B",
+    color: "#a89fc0",
   });
 
   const handleNavigate = (screen: ScreenName) => {
-    // If user is a consultor and trying to go to Home, redirect to ConsultorHome
-    if (screen === "Home" && (user?.role === "consultor" || user?.isAdmin)) {
-      navigate("ConsultorHome");
-    } else {
-      navigate(screen);
+    // If user is a consultor or admin and trying to go to Home, redirect to respective home
+    if (screen === "Home") {
+      if (user?.role === "consultor") {
+        navigate("ConsultorHome");
+        onClose();
+        return;
+      }
+      if (user?.isAdmin === true || user?.role === "admin") {
+        navigate("AdminUsers");
+        onClose();
+        return;
+      }
     }
+    navigate(screen);
     onClose();
   };
 
@@ -210,7 +225,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     name={item.icon}
                     size={24}
                     color={
-                      isActive ? item.color || "#007AFF" : colors.textSecondary
+                      isActive ? item.color || "#8c52ff" : colors.textSecondary
                     }
                   />
                   <Text
@@ -228,7 +243,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <Ionicons
                     name="chevron-forward"
                     size={20}
-                    color={item.color || "#007AFF"}
+                    color={item.color || "#8c52ff"}
                   />
                 )}
               </TouchableOpacity>
@@ -241,11 +256,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <TouchableOpacity
             style={[
               styles.logoutButton,
-              { backgroundColor: colors.background, borderColor: "#F44336" },
+              { backgroundColor: colors.background, borderColor: "#ff4d6d" },
             ]}
             onPress={handleLogout}
           >
-            <Ionicons name="log-out-outline" size={24} color="#F44336" />
+            <Ionicons name="log-out-outline" size={24} color="#ff4d6d" />
             <Text style={styles.logoutText}>Sair</Text>
           </TouchableOpacity>
         </View>
@@ -320,7 +335,7 @@ const styles = StyleSheet.create({
   },
   menuItemActive: {
     borderLeftWidth: 4,
-    borderLeftColor: "#007AFF",
+    borderLeftColor: "#8c52ff",
   },
   menuItemLeft: {
     flexDirection: "row",
@@ -350,7 +365,7 @@ const styles = StyleSheet.create({
   logoutText: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#F44336",
+    color: "#ff4d6d",
   },
 });
 

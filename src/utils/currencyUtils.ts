@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Utilitários para trabalhar com moeda (Real Brasileiro)
  */
 
@@ -7,11 +7,11 @@
  */
 export const formatCurrency = (
   value: number,
-  locale: string = 'pt-BR',
-  currency: string = 'BRL',
+  locale: string = "pt-BR",
+  currency: string = "BRL",
 ): string => {
   return new Intl.NumberFormat(locale, {
-    style: 'currency',
+    style: "currency",
     currency,
   }).format(value);
 };
@@ -21,7 +21,7 @@ export const formatCurrency = (
  */
 export const formatCurrencyWithoutSymbol = (
   value: number,
-  locale: string = 'pt-BR',
+  locale: string = "pt-BR",
 ): string => {
   return new Intl.NumberFormat(locale, {
     minimumFractionDigits: 2,
@@ -35,10 +35,10 @@ export const formatCurrencyWithoutSymbol = (
  */
 export const parseCurrency = (value: string): number => {
   const cleaned = value
-    .replace(/[R$\s]/g, '')
-    .replace(/\./g, '')
-    .replace(',', '.');
-  
+    .replace(/[R$\s]/g, "")
+    .replace(/\./g, "")
+    .replace(",", ".");
+
   const parsed = parseFloat(cleaned);
   return isNaN(parsed) ? 0 : parsed;
 };
@@ -47,17 +47,20 @@ export const parseCurrency = (value: string): number => {
  * Aplicar máscara de moeda enquanto digita
  * Ex: 123456 -> "R$ 1.234,56"
  */
-export const applyCurrencyMask = (value: string, locale: string = 'pt-BR'): string => {
+export const applyCurrencyMask = (
+  value: string,
+  locale: string = "pt-BR",
+): string => {
   // Remove tudo que não é número
-  const numbers = value.replace(/\D/g, '');
-  
-  if (!numbers) return 'R$ 0,00';
-  
+  const numbers = value.replace(/\D/g, "");
+
+  if (!numbers) return "R$ 0,00";
+
   // Converte para número e divide por 100 (centavos)
   const amount = parseFloat(numbers) / 100;
-  
+
   // Use default currency BRL for mask generation to preserve current UX
-  return formatCurrency(amount, locale === 'pt-BR' ? 'pt-BR' : locale, 'BRL');
+  return formatCurrency(amount, locale === "pt-BR" ? "pt-BR" : locale, "BRL");
 };
 
 /**
@@ -65,7 +68,7 @@ export const applyCurrencyMask = (value: string, locale: string = 'pt-BR'): stri
  * Ex: "R$ 1.234,56" -> "123456"
  */
 export const removeCurrencyMask = (value: string): string => {
-  return value.replace(/\D/g, '');
+  return value.replace(/\D/g, "");
 };
 
 /**
@@ -81,10 +84,10 @@ export const isValidCurrency = (value: string): boolean => {
  */
 export const formatCurrencyWithSign = (
   value: number,
-  type: 'income' | 'expense'
+  type: "income" | "expense",
 ): string => {
   const formatted = formatCurrency(Math.abs(value));
-  return type === 'income' ? `+ ${formatted}` : `- ${formatted}`;
+  return type === "income" ? `+ ${formatted}` : `- ${formatted}`;
 };
 
 /**
@@ -92,10 +95,10 @@ export const formatCurrencyWithSign = (
  */
 export const formatCurrencyCompact = (value: number): string => {
   if (value >= 1000000) {
-    return `R$ ${(value / 1000000).toFixed(1).replace('.', ',')}M`;
+    return `R$ ${(value / 1000000).toFixed(1).replace(".", ",")}M`;
   }
   if (value >= 1000) {
-    return `R$ ${(value / 1000).toFixed(1).replace('.', ',')}K`;
+    return `R$ ${(value / 1000).toFixed(1).replace(".", ",")}K`;
   }
   return formatCurrency(value);
 };
@@ -103,10 +106,7 @@ export const formatCurrencyCompact = (value: number): string => {
 /**
  * Calcular porcentagem
  */
-export const calculatePercentage = (
-  value: number,
-  total: number
-): number => {
+export const calculatePercentage = (value: number, total: number): number => {
   if (total === 0) return 0;
   return (value / total) * 100;
 };
@@ -115,16 +115,13 @@ export const calculatePercentage = (
  * Formatar porcentagem
  */
 export const formatPercentage = (percentage: number): string => {
-  return `${percentage.toFixed(1).replace('.', ',')}%`;
+  return `${percentage.toFixed(1).replace(".", ",")}%`;
 };
 
 /**
  * Calcular e formatar porcentagem
  */
-export const formatPercentageOf = (
-  value: number,
-  total: number
-): string => {
+export const formatPercentageOf = (value: number, total: number): string => {
   const percentage = calculatePercentage(value, total);
   return formatPercentage(percentage);
 };
@@ -134,7 +131,7 @@ export const formatPercentageOf = (
  */
 export const calculatePercentageChange = (
   oldValue: number,
-  newValue: number
+  newValue: number,
 ): number => {
   if (oldValue === 0) return newValue > 0 ? 100 : 0;
   return ((newValue - oldValue) / oldValue) * 100;
@@ -144,7 +141,7 @@ export const calculatePercentageChange = (
  * Formatar diferença com sinal
  */
 export const formatDifference = (difference: number): string => {
-  const sign = difference >= 0 ? '+' : '';
+  const sign = difference >= 0 ? "+" : "";
   return `${sign}${formatCurrency(difference)}`;
 };
 
@@ -152,7 +149,7 @@ export const formatDifference = (difference: number): string => {
  * Formatar diferença percentual com sinal
  */
 export const formatPercentageDifference = (difference: number): string => {
-  const sign = difference >= 0 ? '+' : '';
+  const sign = difference >= 0 ? "+" : "";
   return `${sign}${formatPercentage(difference)}`;
 };
 
@@ -174,17 +171,17 @@ export const sumCurrency = (...values: number[]): number => {
 /**
  * Obter cor baseada no tipo de transação
  */
-export const getTransactionColor = (type: 'income' | 'expense'): string => {
-  return type === 'income' ? '#4CAF50' : '#F44336';
+export const getTransactionColor = (type: "income" | "expense"): string => {
+  return type === "income" ? "#8c52ff" : "#ff4d6d";
 };
 
 /**
  * Obter cor baseada no saldo (positivo/negativo)
  */
 export const getBalanceColor = (balance: number): string => {
-  if (balance > 0) return '#4CAF50'; // Verde
-  if (balance < 0) return '#F44336'; // Vermelho
-  return '#666'; // Cinza
+  if (balance > 0) return "#8c52ff"; // Verde
+  if (balance < 0) return "#ff4d6d"; // Vermelho
+  return "#6b6480"; // Cinza
 };
 
 export default {

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Tela de Consumo Moderado
  */
 
@@ -121,7 +121,7 @@ export const ConsumoModeradoScreen = () => {
           ]}
         >
           <View style={styles.header}>
-            <Ionicons name="leaf-outline" size={64} color="#4CAF50" />
+            <Ionicons name="leaf-outline" size={64} color="#8c52ff" />
             <Text style={styles.title}>Consumo Moderado</Text>
             <Text style={styles.subtitle}>
               Acompanhe e gerencie seu consumo de forma consciente
@@ -131,7 +131,7 @@ export const ConsumoModeradoScreen = () => {
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Consumo dos últimos 7 dias</Text>
             {loading ? (
-              <ActivityIndicator color="#4CAF50" style={{ marginTop: 12 }} />
+              <ActivityIndicator color="#8c52ff" style={{ marginTop: 12 }} />
             ) : (
               <View style={{ marginTop: 12 }}>
                 {days.map((d) => (

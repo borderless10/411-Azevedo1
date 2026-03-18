@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+﻿import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -206,8 +206,8 @@ export const ClientDetail: React.FC = () => {
                 planned === undefined
                   ? colors.textSecondary
                   : over > 0
-                    ? "#F44336"
-                    : "#4CAF50";
+                    ? "#ff4d6d"
+                    : "#8c52ff";
 
               return (
                 <View
@@ -365,7 +365,7 @@ export const ClientDetail: React.FC = () => {
                 <Text>Cancelar</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.modalButton, { backgroundColor: "#4CAF50" }]}
+                style={[styles.modalButton, { backgroundColor: "#8c52ff" }]}
                 onPress={() => {
                   console.log("Enviar mensagem para", clientId, messageText);
                   setMessageModalVisible(false);

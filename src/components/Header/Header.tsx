@@ -2,7 +2,7 @@
  * Componente de Header/Cabeçalho
  */
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -11,11 +11,11 @@ import {
   ViewStyle,
   Image,
   Animated,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useAuth } from '../../hooks/useAuth';
-import { useNavigation } from '../../routes/NavigationContext';
-import { useTheme } from '../../contexts/ThemeContext';
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { useAuth } from "../../hooks/useAuth";
+import { useNavigation } from "../../routes/NavigationContext";
+import { useTheme } from "../../contexts/ThemeContext";
 
 interface HeaderProps {
   title?: string;
@@ -54,21 +54,21 @@ export const Header: React.FC<HeaderProps> = ({
   }, []);
 
   const handleBack = () => {
-    if (currentScreen === 'AddIncome' || currentScreen === 'AddExpense') {
-      navigate('Home');
+    if (currentScreen === "AddIncome" || currentScreen === "AddExpense") {
+      navigate("Home");
     } else {
-      navigate('Home');
+      navigate("Home");
     }
   };
 
   const handleProfile = () => {
-    navigate('Profile');
+    navigate("Profile");
   };
 
   return (
-    <Animated.View 
+    <Animated.View
       style={[
-        styles.container, 
+        styles.container,
         {
           backgroundColor: colors.background,
           borderBottomColor: colors.border,
@@ -85,8 +85,8 @@ export const Header: React.FC<HeaderProps> = ({
           </TouchableOpacity>
         )}
         {!title && (
-          <Image 
-            source={require('../../../assets/logo411.png')} 
+          <Image
+            source={require("../../../assets/logo411.png")}
             style={styles.logo}
             resizeMode="contain"
           />
@@ -96,9 +96,14 @@ export const Header: React.FC<HeaderProps> = ({
         ) : (
           <View style={styles.headerContent}>
             <View>
-              <Text style={[styles.greeting, { color: colors.textSecondary }]}>Olá,</Text>
-              <Text style={[styles.userName, { color: colors.text }]} numberOfLines={1}>
-                {user?.name || user?.email || 'Usuário'}
+              <Text style={[styles.greeting, { color: colors.textSecondary }]}>
+                Olá,
+              </Text>
+              <Text
+                style={[styles.userName, { color: colors.text }]}
+                numberOfLines={1}
+              >
+                {user?.name || user?.email || "Usuário"}
               </Text>
             </View>
           </View>
@@ -109,10 +114,21 @@ export const Header: React.FC<HeaderProps> = ({
         {rightAction || (
           <>
             {showProfile && (
-              <TouchableOpacity onPress={handleProfile} style={styles.profileButton}>
-                <View style={[styles.avatar, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <TouchableOpacity
+                onPress={handleProfile}
+                style={styles.profileButton}
+              >
+                <View
+                  style={[
+                    styles.avatar,
+                    {
+                      backgroundColor: colors.card,
+                      borderColor: colors.border,
+                    },
+                  ]}
+                >
                   <Text style={[styles.avatarText, { color: colors.text }]}>
-                    {(user?.name?.[0] || user?.email?.[0] || 'U').toUpperCase()}
+                    {(user?.name?.[0] || user?.email?.[0] || "U").toUpperCase()}
                   </Text>
                 </View>
               </TouchableOpacity>
@@ -126,13 +142,13 @@ export const Header: React.FC<HeaderProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: 8,
     paddingVertical: 6,
     borderBottomWidth: 1,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 4,
@@ -145,8 +161,8 @@ const styles = StyleSheet.create({
   },
   left: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
   },
   backButton: {
@@ -154,7 +170,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 20,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
   headerContent: {
     flex: 1,
@@ -164,12 +180,12 @@ const styles = StyleSheet.create({
   },
   userName: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     maxWidth: 200,
   },
   right: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 12,
   },
   profileButton: {
@@ -180,12 +196,12 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: 20,
     borderWidth: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   avatarText: {
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
 });
 

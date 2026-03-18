@@ -182,7 +182,7 @@ const styles = StyleSheet.create({
   percentageText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#999',
+    color: '#a89fc0',
   },
   valueText: {
     fontSize: 14,
@@ -193,11 +193,11 @@ const styles = StyleSheet.create({
   },
   barWrapper: {
     height: 8,
-    backgroundColor: '#1a1a1a',
+    backgroundColor: '#0e0c14',
     borderRadius: 4,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: '#2a2040',
   },
   bar: {
     height: '100%',
@@ -209,7 +209,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 14,
-    color: '#999',
+    color: '#a89fc0',
   },
 });
 

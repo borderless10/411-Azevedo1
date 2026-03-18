@@ -138,9 +138,9 @@ const styles = StyleSheet.create({
     top: '50%',
     left: '50%',
     transform: [{ translateX: -1 * (DEFAULT_SIZE * 0.7) / 2 }, { translateY: -1 * (DEFAULT_SIZE * 0.7) / 2 }],
-    backgroundColor: '#1a1a1a',
+    backgroundColor: '#0e0c14',
     borderWidth: 2,
-    borderColor: '#333',
+    borderColor: '#2a2040',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -162,7 +162,7 @@ const styles = StyleSheet.create({
   },
   centerLabelSubtext: {
     fontSize: 12,
-    color: '#999',
+    color: '#a89fc0',
     textAlign: 'center',
   },
   legend: {
@@ -191,19 +191,19 @@ const styles = StyleSheet.create({
   },
   legendValue: {
     fontSize: 12,
-    color: '#999',
+    color: '#a89fc0',
   },
   emptyContainer: {
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#1a1a1a',
+    backgroundColor: '#0e0c14',
     borderRadius: DEFAULT_SIZE / 2,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: '#2a2040',
   },
   emptyText: {
     fontSize: 14,
-    color: '#999',
+    color: '#a89fc0',
   },
 });
 

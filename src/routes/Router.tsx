@@ -19,6 +19,7 @@ import { BudgetScreen } from "../screens/Budget/BudgetScreen";
 import { RankingScreen } from "../screens/Ranking/RankingScreen";
 import { BillsScreen } from "../screens/Bills/BillsScreen";
 import { CadastrarClienteScreen } from "../screens/Admin/CadastrarClienteScreen";
+import { AdminUsersScreen } from "../screens/Admin/AdminUsersScreen";
 import { ClientPlanningScreen } from "../screens/Consultor/ClientPlanningScreen";
 import { ClientDetail } from "../screens/Consultor/ClientDetail";
 import { ClientList } from "../screens/Consultor/ClientList";
@@ -26,6 +27,7 @@ import { PlanningViewScreen } from "../screens/Client/PlanningViewScreen";
 import { useNavigation } from "./NavigationContext";
 import { useAuth } from "../hooks/useAuth";
 import { ConsultorHome } from "../screens/Consultor/ConsultorHome";
+import { EditUserScreen } from "../screens/Admin/EditUserScreen";
 
 export const Router = () => {
   const { currentScreen, navigate } = useNavigation();
@@ -40,9 +42,11 @@ export const Router = () => {
           isAuthenticated,
           loading,
         });
-        // Redirect consultors to a dedicated home
+        // Redirect based on role: consultor -> ConsultorHome, admin -> AdminUsers, others -> Home
         if (user && user.role === "consultor") {
           navigate("ConsultorHome");
+        } else if (user && (user.isAdmin === true || user.role === "admin")) {
+          navigate("AdminUsers");
         } else {
           navigate("Home");
         }
@@ -70,9 +74,12 @@ export const Router = () => {
     // Se autenticado, mostrar telas protegidas
     switch (currentScreen) {
       case "Home":
-        // If current user is a consultor, show the consultor home on 'Home' route
+        // If current user is a consultor or admin, show their dedicated home
         if (user && user.role === "consultor") {
           return <ConsultorHome />;
+        }
+        if (user && (user.isAdmin === true || user.role === "admin")) {
+          return <AdminUsersScreen />;
         }
         return <HomeScreen />;
       case "ConsultorHome":
@@ -121,6 +128,10 @@ export const Router = () => {
         return <SettingsScreen />;
       case "CadastrarCliente":
         return <CadastrarClienteScreen />;
+      case "AdminUsers":
+        return <AdminUsersScreen />;
+      case "EditUser":
+        return <EditUserScreen />;
       default:
         return <HomeScreen />;
     }

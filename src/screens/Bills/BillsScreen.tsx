@@ -31,6 +31,7 @@ import {
   deleteBill,
   updateOverdueBills,
 } from "../../services/billServices";
+import { planningServices } from "../../services/planningServices";
 import {
   scheduleBillNotification,
   cancelBillNotification,
@@ -55,6 +56,7 @@ export const BillsScreen = () => {
   const [filter, setFilter] = useState<"all" | "pending" | "paid" | "overdue">(
     "all",
   );
+  const [isPlanningSource, setIsPlanningSource] = useState(false);
 
   // Form estados
   const [title, setTitle] = useState("");
@@ -86,14 +88,192 @@ export const BillsScreen = () => {
     }
   }, [currentScreen, user]);
 
+  const getPlanningBillStatus = (bill: any): Bill["status"] => {
+    const normalized = String(bill?.status || "")
+      .trim()
+      .toLowerCase();
+
+    if (normalized === "paid" || bill?.paidDate) {
+      if (__DEV__) {
+        console.log("[BILLS][planning] status=paid", {
+          id: bill?.id,
+          rawStatus: bill?.status,
+          paidDate: bill?.paidDate,
+        });
+      }
+      return "paid";
+    }
+    if (normalized === "overdue" || normalized === "atrasada") {
+      if (__DEV__) {
+        console.log("[BILLS][planning] status=overdue(raw)", {
+          id: bill?.id,
+          rawStatus: bill?.status,
+        });
+      }
+      return "overdue";
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Prioridade: dueDay (modelo do planning)
+    if (bill?.dueDay !== undefined && bill?.dueDay !== null) {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = now.getMonth();
+      const lastDay = new Date(year, month + 1, 0).getDate();
+      const safeDay = Math.min(Math.max(1, Number(bill.dueDay) || 1), lastDay);
+      const dueDate = new Date(year, month, safeDay);
+      dueDate.setHours(0, 0, 0, 0);
+      if (__DEV__) {
+        console.log("[BILLS][planning] dueDay-check", {
+          id: bill?.id,
+          dueDay: bill?.dueDay,
+          dueDateISO: dueDate.toISOString(),
+          todayISO: today.toISOString(),
+          result: dueDate < today ? "overdue" : "pending",
+        });
+      }
+      return dueDate < today ? "overdue" : "pending";
+    }
+
+    // Fallback para dados antigos com dueDate
+    const rawDueDate = bill?.dueDate;
+    if (rawDueDate) {
+      const dueDate =
+        typeof rawDueDate?.toDate === "function"
+          ? rawDueDate.toDate()
+          : rawDueDate instanceof Date
+            ? rawDueDate
+            : new Date(rawDueDate);
+
+      if (!isNaN(dueDate.getTime())) {
+        dueDate.setHours(0, 0, 0, 0);
+        if (__DEV__) {
+          console.log("[BILLS][planning] dueDate-check", {
+            id: bill?.id,
+            rawDueDate,
+            parsedDueDateISO: dueDate.toISOString(),
+            todayISO: today.toISOString(),
+            result: dueDate < today ? "overdue" : "pending",
+          });
+        }
+        return dueDate < today ? "overdue" : "pending";
+      }
+    }
+
+    // Fallback legado final: usar createdAt como vencimento quando não houver dueDay/dueDate
+    const rawCreatedAt = bill?.createdAt;
+    if (rawCreatedAt) {
+      const createdDate =
+        typeof rawCreatedAt?.toDate === "function"
+          ? rawCreatedAt.toDate()
+          : rawCreatedAt instanceof Date
+            ? rawCreatedAt
+            : new Date(rawCreatedAt);
+
+      if (!isNaN(createdDate.getTime())) {
+        createdDate.setHours(0, 0, 0, 0);
+        if (__DEV__) {
+          console.log("[BILLS][planning] createdAt-fallback-check", {
+            id: bill?.id,
+            createdAtISO: createdDate.toISOString(),
+            todayISO: today.toISOString(),
+            result: createdDate < today ? "overdue" : "pending",
+          });
+        }
+        return createdDate < today ? "overdue" : "pending";
+      }
+    }
+
+    if (__DEV__) {
+      console.log("[BILLS][planning] fallback=pending(no dueDay/dueDate)", {
+        id: bill?.id,
+        rawStatus: bill?.status,
+        dueDay: bill?.dueDay,
+        dueDate: bill?.dueDate,
+      });
+    }
+
+    return "pending";
+  };
+
   const loadBills = async () => {
     if (!user) return;
 
     try {
       setLoading(true);
-      await updateOverdueBills(user.id);
-      const data = await getBills(user.id);
-      setBills(data);
+      // If regular user (client), load planning bills (consultant-managed)
+      if (user.role === "user") {
+        // mark source so actions use planningServices
+        setIsPlanningSource(true);
+
+        // Sincroniza status overdue no documento de planning (inclui fallback legado)
+        await planningServices.syncOverduePlanningBills(user.id);
+
+        const planning = await planningServices.getPlanning(user.id);
+        if (__DEV__) {
+          console.log("[BILLS] loadBills planning-source", {
+            userId: user.id,
+            billsCount: planning?.bills?.length || 0,
+          });
+        }
+        const mapped = (planning?.bills || []).map((b) => {
+          // create a reasonable dueDate from dueDay if available
+          let dueDate: Date = b.dueDate || b.createdAt || new Date();
+          if (b.dueDay !== undefined && b.dueDay !== null) {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = now.getMonth();
+            const lastDay = new Date(year, month + 1, 0).getDate();
+            const day = Math.min(Math.max(1, b.dueDay), lastDay);
+            dueDate = new Date(year, month, day);
+          }
+          const status = getPlanningBillStatus(b);
+          if (__DEV__) {
+            console.log("[BILLS] mapped planning bill", {
+              id: b.id,
+              title: b.name,
+              rawStatus: b.status,
+              dueDay: b.dueDay,
+              dueDate: b.dueDate,
+              mappedDueDateISO: dueDate?.toISOString?.(),
+              mappedStatus: status,
+            });
+          }
+          return {
+            id: b.id!,
+            userId: user.id,
+            title: b.name,
+            description: b.notes,
+            amount: b.amount,
+            dueDate,
+            status,
+            paidDate: b.paidDate,
+            notificationId: undefined,
+            createdAt: b.createdAt || new Date(),
+            updatedAt: b.updatedAt || new Date(),
+          } as Bill;
+        });
+        setBills(mapped);
+      } else {
+        setIsPlanningSource(false);
+        if (__DEV__) {
+          console.log("[BILLS] loadBills direct bills source", {
+            userId: user.id,
+            role: user.role,
+          });
+        }
+        await updateOverdueBills(user.id);
+        const data = await getBills(user.id);
+        if (__DEV__) {
+          console.log("[BILLS] direct bills loaded", {
+            count: data.length,
+            statuses: data.map((b) => ({ id: b.id, status: b.status, dueDate: b.dueDate })),
+          });
+        }
+        setBills(data);
+      }
     } catch (error) {
       console.error("Erro ao carregar contas:", error);
       Alert.alert("Erro", "Não foi possível carregar as contas");
@@ -166,9 +346,14 @@ export const BillsScreen = () => {
         text: "Confirmar",
         onPress: async () => {
           try {
-            await markBillAsPaid(bill.id);
-            if (bill.notificationId) {
-              await cancelBillNotification(bill.id);
+            if (isPlanningSource) {
+              // mark planning bill as paid
+              await planningServices.markBillAsPaidByClient(user!.id, bill.id);
+            } else {
+              await markBillAsPaid(bill.id);
+              if (bill.notificationId) {
+                await cancelBillNotification(bill.id);
+              }
             }
             loadBills();
           } catch (error) {
@@ -180,7 +365,12 @@ export const BillsScreen = () => {
   };
 
   const handleDeleteBill = async (bill: Bill) => {
-    // Abrir modal de confirmação personalizado
+    // Only allow delete when not viewing planning bills (consultant handles planning deletion)
+    if (isPlanningSource)
+      return Alert.alert(
+        "Ação não permitida",
+        "Você não pode excluir contas do planejamento.",
+      );
     setBillToDelete(bill);
     setIsDeleteModalVisible(true);
   };
@@ -189,10 +379,14 @@ export const BillsScreen = () => {
     if (!billToDelete) return;
     try {
       setSaving(true);
-      if (billToDelete.notificationId) {
-        await cancelBillNotification(billToDelete.id);
+      if (isPlanningSource) {
+        // shouldn't happen because delete button is disabled for planning source
+      } else {
+        if (billToDelete.notificationId) {
+          await cancelBillNotification(billToDelete.id);
+        }
+        await deleteBill(billToDelete.id);
       }
-      await deleteBill(billToDelete.id);
       setIsDeleteModalVisible(false);
       setBillToDelete(null);
       loadBills();
@@ -375,20 +569,22 @@ export const BillsScreen = () => {
                 onPress={() => setFilter(f as any)}
               >
                 <Text
-                  style={[
-                    styles.filterButtonText,
-                    { color: colors.text },
-                    filter === f && { color: "#fff" },
-                  ]}
-                >
-                  {f === "all"
-                    ? "Todas"
-                    : f === "pending"
-                      ? "Pendentes"
-                      : f === "overdue"
-                        ? "Vencidas"
-                        : "Pagas"}
-                </Text>
+                    numberOfLines={2}
+                    ellipsizeMode="tail"
+                    style={[
+                      styles.filterButtonText,
+                      { color: colors.text },
+                      filter === f && { color: "#fff" },
+                    ]}
+                  >
+                    {f === "all"
+                      ? "Todas"
+                      : f === "pending"
+                        ? "Pendentes"
+                        : f === "overdue"
+                          ? "Vencidas"
+                          : "Pagas"}
+                  </Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -523,13 +719,15 @@ export const BillsScreen = () => {
         </Animated.View>
       </ScrollView>
 
-      {/* Botão Adicionar */}
-      <TouchableOpacity
-        style={[styles.fab, { backgroundColor: colors.primary }]}
-        onPress={() => setIsModalVisible(true)}
-      >
-        <Ionicons name="add" size={28} color="#fff" />
-      </TouchableOpacity>
+      {/* Botão Adicionar (somente para consultores/admin) */}
+      {!isPlanningSource && (
+        <TouchableOpacity
+          style={[styles.fab, { backgroundColor: colors.primary }]}
+          onPress={() => setIsModalVisible(true)}
+        >
+          <Ionicons name="add" size={28} color="#fff" />
+        </TouchableOpacity>
+      )}
 
       {/* Modal Adicionar Conta */}
       <Modal
@@ -733,20 +931,24 @@ const styles = StyleSheet.create({
   },
   filterContainer: {
     flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
     gap: 8,
     marginBottom: 20,
   },
   filterButton: {
-    flex: 1,
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 8,
     borderWidth: 1,
     alignItems: "center",
+    width: "48%",
+    marginBottom: 8,
   },
   filterButtonText: {
     fontSize: 12,
     fontWeight: "600",
+    textAlign: "center",
   },
   emptyContainer: {
     padding: 40,

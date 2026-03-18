@@ -5,7 +5,7 @@
 /**
  * Tipo de transação
  */
-export type TransactionType = 'income' | 'expense';
+export type TransactionType = "income" | "expense";
 
 /**
  * Interface principal de Categoria
@@ -57,42 +57,75 @@ export interface CategoryFirestore {
 /**
  * Categorias padrão do sistema
  */
-export const DEFAULT_INCOME_CATEGORIES: Omit<Category, 'id' | 'userId' | 'createdAt' | 'isDefault'>[] = [
-  { name: 'Salário', icon: 'cash', color: '#4CAF50', type: 'income' },
-  { name: 'Freelance', icon: 'briefcase', color: '#2196F3', type: 'income' },
-  { name: 'Investimentos', icon: 'trending-up', color: '#9C27B0', type: 'income' },
-  { name: 'Presente', icon: 'gift', color: '#FF9800', type: 'income' },
-  { name: 'Venda', icon: 'cart', color: '#00BCD4', type: 'income' },
-  { name: 'Outros', icon: 'ellipsis-horizontal', color: '#607D8B', type: 'income' },
+export const DEFAULT_INCOME_CATEGORIES: Omit<
+  Category,
+  "id" | "userId" | "createdAt" | "isDefault"
+>[] = [
+  { name: "Salário", icon: "cash", color: "#8c52ff", type: "income" },
+  { name: "Freelance", icon: "briefcase", color: "#a47aff", type: "income" },
+  {
+    name: "Investimentos",
+    icon: "trending-up",
+    color: "#8c52ff",
+    type: "income",
+  },
+  { name: "Presente", icon: "gift", color: "#c084fc", type: "income" },
+  { name: "Venda", icon: "cart", color: "#a47aff", type: "income" },
+  {
+    name: "Outros",
+    icon: "ellipsis-horizontal",
+    color: "#6b6480",
+    type: "income",
+  },
 ];
 
-export const DEFAULT_EXPENSE_CATEGORIES: Omit<Category, 'id' | 'userId' | 'createdAt' | 'isDefault'>[] = [
-  { name: 'Alimentação', icon: 'restaurant', color: '#FF5722', type: 'expense' },
-  { name: 'Transporte', icon: 'car', color: '#3F51B5', type: 'expense' },
-  { name: 'Moradia', icon: 'home', color: '#795548', type: 'expense' },
-  { name: 'Saúde', icon: 'medical', color: '#F44336', type: 'expense' },
-  { name: 'Educação', icon: 'school', color: '#009688', type: 'expense' },
-  { name: 'Lazer', icon: 'game-controller', color: '#E91E63', type: 'expense' },
-  { name: 'Compras', icon: 'basket', color: '#FF9800', type: 'expense' },
-  { name: 'Serviços', icon: 'construct', color: '#607D8B', type: 'expense' },
-  { name: 'Outros', icon: 'ellipsis-horizontal', color: '#9E9E9E', type: 'expense' },
+export const DEFAULT_EXPENSE_CATEGORIES: Omit<
+  Category,
+  "id" | "userId" | "createdAt" | "isDefault"
+>[] = [
+  {
+    name: "Alimentação",
+    icon: "restaurant",
+    color: "#ff4d6d",
+    type: "expense",
+  },
+  { name: "Transporte", icon: "car", color: "#6b6480", type: "expense" },
+  { name: "Moradia", icon: "home", color: "#a89fc0", type: "expense" },
+  { name: "Saúde", icon: "medical", color: "#ff4d6d", type: "expense" },
+  { name: "Educação", icon: "school", color: "#a47aff", type: "expense" },
+  { name: "Lazer", icon: "game-controller", color: "#c084fc", type: "expense" },
+  { name: "Compras", icon: "basket", color: "#ff4d6d", type: "expense" },
+  { name: "Serviços", icon: "construct", color: "#6b6480", type: "expense" },
+  {
+    name: "Outros",
+    icon: "ellipsis-horizontal",
+    color: "#a89fc0",
+    type: "expense",
+  },
 ];
 
 /**
  * Obter todas as categorias padrão
  */
-export const getAllDefaultCategories = (): Omit<Category, 'id' | 'userId' | 'createdAt'>[] => {
+export const getAllDefaultCategories = (): Omit<
+  Category,
+  "id" | "userId" | "createdAt"
+>[] => {
   return [
-    ...DEFAULT_INCOME_CATEGORIES.map(cat => ({ ...cat, isDefault: true })),
-    ...DEFAULT_EXPENSE_CATEGORIES.map(cat => ({ ...cat, isDefault: true })),
+    ...DEFAULT_INCOME_CATEGORIES.map((cat) => ({ ...cat, isDefault: true })),
+    ...DEFAULT_EXPENSE_CATEGORIES.map((cat) => ({ ...cat, isDefault: true })),
   ];
 };
 
 /**
  * Obter categorias por tipo
  */
-export const getCategoriesByType = (type: TransactionType): Omit<Category, 'id' | 'userId' | 'createdAt' | 'isDefault'>[] => {
-  return type === 'income' ? DEFAULT_INCOME_CATEGORIES : DEFAULT_EXPENSE_CATEGORIES;
+export const getCategoriesByType = (
+  type: TransactionType,
+): Omit<Category, "id" | "userId" | "createdAt" | "isDefault">[] => {
+  return type === "income"
+    ? DEFAULT_INCOME_CATEGORIES
+    : DEFAULT_EXPENSE_CATEGORIES;
 };
 
 export default Category;

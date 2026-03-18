@@ -53,11 +53,11 @@ export const LineChart: React.FC<LineChartProps> = ({
       {showLabels && (
         <View style={styles.legend}>
           <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: '#4CAF50' }]} />
+            <View style={[styles.legendDot, { backgroundColor: '#8c52ff' }]} />
             <Text style={styles.legendText}>Rendas</Text>
           </View>
           <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: '#F44336' }]} />
+            <View style={[styles.legendDot, { backgroundColor: '#ff4d6d' }]} />
             <Text style={styles.legendText}>Gastos</Text>
           </View>
         </View>
@@ -135,7 +135,7 @@ const styles = StyleSheet.create({
   },
   legendText: {
     fontSize: 12,
-    color: '#999',
+    color: '#a89fc0',
     fontWeight: '500',
   },
   chartContainer: {
@@ -148,7 +148,7 @@ const styles = StyleSheet.create({
   },
   dateText: {
     fontSize: 11,
-    color: '#999',
+    color: '#a89fc0',
     width: 40,
     fontWeight: '600',
   },
@@ -171,28 +171,28 @@ const styles = StyleSheet.create({
     minWidth: 2,
   },
   incomeBar: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#8c52ff',
   },
   expenseBar: {
-    backgroundColor: '#F44336',
+    backgroundColor: '#ff4d6d',
   },
   valueText: {
     fontSize: 10,
-    color: '#ccc',
+    color: '#a89fc0',
     fontWeight: '600',
     minWidth: 60,
   },
   emptyContainer: {
     padding: 40,
     alignItems: 'center',
-    backgroundColor: '#1a1a1a',
+    backgroundColor: '#0e0c14',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: '#2a2040',
   },
   emptyText: {
     fontSize: 14,
-    color: '#999',
+    color: '#a89fc0',
   },
 });
 

@@ -28,8 +28,15 @@
     },
     "extra": {
       "eas": {
-        "projectId": "2d71dea9-b9ff-470f-afef-5752acdeec6c"
+        "projectId": "7243f186-1899-49e6-b77c-b45235fa67ff"
       }
+    },
+    "owner": "samuelbit",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/7243f186-1899-49e6-b77c-b45235fa67ff"
     }
   }
 }

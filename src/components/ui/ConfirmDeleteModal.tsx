@@ -26,7 +26,7 @@ const ConfirmDeleteModal: React.FC<Props> = ({
       <View style={styles.backdrop}>
         <View style={styles.container}>
           <View style={styles.iconWrap}>
-            <Ionicons name="trash" size={48} color="#F44336" />
+            <Ionicons name="trash" size={48} color="#ff4d6d" />
           </View>
           <Text style={styles.title}>{title}</Text>
           <Text style={styles.message}>{message}</Text>
@@ -90,7 +90,7 @@ const styles = StyleSheet.create({
   },
   confirmButton: {
     flex: 1,
-    backgroundColor: "#F44336",
+    backgroundColor: "#ff4d6d",
     paddingVertical: 12,
     borderRadius: 10,
     alignItems: "center",
@@ -103,13 +103,13 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "transparent",
     borderWidth: 1,
-    borderColor: "#444",
+    borderColor: "#2a2040",
     paddingVertical: 12,
     borderRadius: 10,
     alignItems: "center",
   },
   cancelLabel: {
-    color: "#ddd",
+    color: "#a89fc0",
     fontWeight: "700",
   },
 });

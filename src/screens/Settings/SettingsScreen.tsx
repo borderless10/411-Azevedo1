@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Tela de Configurações
  */
 
@@ -165,14 +165,14 @@ export const SettingsScreen = () => {
             <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <SettingItem
                 icon="notifications"
-                iconColor="#007AFF"
+                iconColor="#8c52ff"
                 title="Notificações"
                 subtitle="Receber alertas e lembretes"
                 rightComponent={
                   <Switch
                     value={notificationsEnabled}
                     onValueChange={setNotificationsEnabled}
-                    trackColor={{ false: colors.border, true: '#007AFF' }}
+                    trackColor={{ false: colors.border, true: '#8c52ff' }}
                     thumbColor="#fff"
                   />
                 }
@@ -180,14 +180,14 @@ export const SettingsScreen = () => {
               <View style={[styles.divider, { backgroundColor: colors.border }]} />
               <SettingItem
                 icon={isDark ? 'moon' : 'sunny'}
-                iconColor={isDark ? '#9C27B0' : '#FF9800'}
+                iconColor={isDark ? '#8c52ff' : '#c084fc'}
                 title={isDark ? 'Tema Escuro' : 'Tema Claro'}
                 subtitle={isDark ? 'Ativar modo claro' : 'Ativar modo escuro'}
                 rightComponent={
                   <Switch
                     value={isDark}
                     onValueChange={handleThemeChange}
-                    trackColor={{ false: colors.border, true: '#9C27B0' }}
+                    trackColor={{ false: colors.border, true: '#8c52ff' }}
                     thumbColor="#fff"
                   />
                 }
@@ -201,7 +201,7 @@ export const SettingsScreen = () => {
             <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <SettingItem
                 icon="person"
-                iconColor="#4CAF50"
+                iconColor="#8c52ff"
                 title="Meu Perfil"
                 subtitle="Ver informações da conta"
                 onPress={() => navigate('Profile')}
@@ -209,7 +209,7 @@ export const SettingsScreen = () => {
               <View style={[styles.divider, { backgroundColor: colors.border }]} />
               <SettingItem
                 icon="lock-closed"
-                iconColor="#FF9800"
+                iconColor="#c084fc"
                 title="Alterar Senha"
                 subtitle="Modificar senha de acesso"
                 onPress={() => setIsPasswordModalVisible(true)}
@@ -223,7 +223,7 @@ export const SettingsScreen = () => {
             <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <SettingItem
                 icon="help-circle"
-                iconColor="#607D8B"
+                iconColor="#6b6480"
                 title="Ajuda e Suporte"
                 subtitle="Central de ajuda e FAQ"
                 onPress={() => Alert.alert('Em breve', 'Funcionalidade em desenvolvimento')}
@@ -231,7 +231,7 @@ export const SettingsScreen = () => {
               <View style={[styles.divider, { backgroundColor: colors.border }]} />
               <SettingItem
                 icon="document-text"
-                iconColor="#2196F3"
+                iconColor="#8c52ff"
                 title="Termos e Privacidade"
                 subtitle="Política de privacidade"
                 onPress={() => Alert.alert('Em breve', 'Funcionalidade em desenvolvimento')}
@@ -239,7 +239,7 @@ export const SettingsScreen = () => {
               <View style={[styles.divider, { backgroundColor: colors.border }]} />
               <SettingItem
                 icon="information-circle"
-                iconColor="#9E9E9E"
+                iconColor="#a89fc0"
                 title="Sobre"
                 subtitle={`Versão 1.0.0`}
                 onPress={() => Alert.alert('Sobre', 'Controle Financeiro Pessoal\nVersão 1.0.0\n\nDesenvolvido para gerenciar suas finanças pessoais.')}
@@ -255,7 +255,7 @@ export const SettingsScreen = () => {
                 onPress={handleLogout}
                 activeOpacity={0.7}
               >
-                <Ionicons name="log-out-outline" size={24} color="#F44336" />
+                <Ionicons name="log-out-outline" size={24} color="#ff4d6d" />
                 <Text style={styles.logoutText}>Sair da Conta</Text>
               </TouchableOpacity>
             </View>
@@ -474,7 +474,7 @@ const styles = StyleSheet.create({
   logoutText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#F44336',
+    color: '#ff4d6d',
   },
   modalOverlay: {
     flex: 1,
@@ -556,7 +556,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   confirmButton: {
-    backgroundColor: '#007AFF',
+    backgroundColor: '#8c52ff',
   },
   confirmButtonText: {
     fontSize: 16,

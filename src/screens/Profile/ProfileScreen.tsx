@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Tela de Perfil do Usuário
  */
 
@@ -101,7 +101,7 @@ export const ProfileScreen = () => {
               ]}
             >
               <View style={styles.successIconContainer}>
-                <Ionicons name="checkmark-circle" size={48} color="#4CAF50" />
+                <Ionicons name="checkmark-circle" size={48} color="#8c52ff" />
               </View>
               <Text style={styles.successTitle}>Cliente Cadastrado!</Text>
               <Text style={styles.successMessage}>{successMessage}</Text>
@@ -119,7 +119,7 @@ export const ProfileScreen = () => {
               {isAdmin && (
                 <View style={styles.badgeContainer}>
                   <View style={styles.adminBadge}>
-                    <Ionicons name="shield-checkmark" size={16} color="#007AFF" />
+                    <Ionicons name="shield-checkmark" size={16} color="#8c52ff" />
                     <Text style={styles.badgeText}>Admin</Text>
                   </View>
                 </View>
@@ -137,7 +137,7 @@ export const ProfileScreen = () => {
           {/* Card de Função */}
           <View style={styles.roleCard}>
             <View style={styles.roleHeader}>
-              <Ionicons name="business" size={24} color="#007AFF" />
+              <Ionicons name="business" size={24} color="#8c52ff" />
               <Text style={styles.roleTitle}>Função</Text>
             </View>
             <View style={styles.roleContent}>
@@ -155,7 +155,7 @@ export const ProfileScreen = () => {
           {/* Informações do Sistema */}
           <View style={styles.infoCard}>
             <View style={styles.infoHeader}>
-              <Ionicons name="information-circle" size={24} color="#4CAF50" />
+              <Ionicons name="information-circle" size={24} color="#8c52ff" />
               <Text style={styles.infoTitle}>Informações da Conta</Text>
             </View>
             <View style={styles.infoItem}>
@@ -174,7 +174,7 @@ export const ProfileScreen = () => {
           {/* Preferências do Usuário */}
           <View style={styles.infoCard}>
             <View style={styles.infoHeader}>
-              <Ionicons name="options" size={24} color="#4CAF50" />
+              <Ionicons name="options" size={24} color="#8c52ff" />
               <Text style={styles.infoTitle}>Preferências</Text>
             </View>
 
@@ -250,7 +250,7 @@ export const ProfileScreen = () => {
           {isAdmin && (
             <View style={styles.adminCard}>
               <View style={styles.adminCardHeader}>
-                <Ionicons name="shield-checkmark" size={24} color="#007AFF" />
+                <Ionicons name="shield-checkmark" size={24} color="#8c52ff" />
                 <Text style={styles.adminCardTitle}>Área Administrativa</Text>
               </View>
               <Text style={styles.adminCardDescription}>
@@ -263,7 +263,7 @@ export const ProfileScreen = () => {
                 activeOpacity={0.7}
               >
                 <View style={styles.adminButtonIconContainer}>
-                  <Ionicons name="person-add" size={24} color="#007AFF" />
+                  <Ionicons name="person-add" size={24} color="#8c52ff" />
                 </View>
                 <View style={styles.adminButtonContent}>
                   <Text style={styles.adminButtonTitle}>Cadastrar Novo Cliente</Text>
@@ -279,7 +279,7 @@ export const ProfileScreen = () => {
           {/* Estatísticas Rápidas */}
           <View style={styles.statsCard}>
             <View style={styles.statsHeader}>
-              <Ionicons name="stats-chart" size={24} color="#F44336" />
+              <Ionicons name="stats-chart" size={24} color="#ff4d6d" />
               <Text style={styles.statsTitle}>
                 {isAdmin ? 'Acesso de Administrador' : 'Informações da Conta'}
               </Text>
@@ -330,7 +330,7 @@ const styles = StyleSheet.create({
     borderRadius: 50,
     backgroundColor: '#1a1a1a',
     borderWidth: 3,
-    borderColor: '#007AFF',
+    borderColor: '#8c52ff',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -347,7 +347,7 @@ const styles = StyleSheet.create({
   adminBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#007AFF',
+    backgroundColor: '#8c52ff',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
@@ -394,7 +394,7 @@ const styles = StyleSheet.create({
   roleName: {
     fontSize: 22,
     fontWeight: 'bold',
-    color: '#007AFF',
+    color: '#8c52ff',
   },
   roleDescription: {
     fontSize: 14,
@@ -446,11 +446,11 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#8c52ff',
   },
   statusText: {
     fontSize: 14,
-    color: '#4CAF50',
+    color: '#8c52ff',
     fontWeight: '600',
   },
   statsCard: {
@@ -491,7 +491,7 @@ const styles = StyleSheet.create({
   },
   statValue: {
     fontSize: 14,
-    color: '#4CAF50',
+    color: '#8c52ff',
     fontWeight: 'bold',
     textAlign: 'center',
   },
@@ -501,8 +501,8 @@ const styles = StyleSheet.create({
     padding: 20,
     marginBottom: 16,
     borderWidth: 2,
-    borderColor: '#007AFF',
-    shadowColor: '#007AFF',
+    borderColor: '#8c52ff',
+    shadowColor: '#8c52ff',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
@@ -539,7 +539,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#007AFF20',
+    backgroundColor: '#8c52ff20',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -562,9 +562,9 @@ const styles = StyleSheet.create({
     padding: 24,
     marginBottom: 24,
     borderWidth: 2,
-    borderColor: '#4CAF50',
+    borderColor: '#8c52ff',
     alignItems: 'center',
-    shadowColor: '#4CAF50',
+    shadowColor: '#8c52ff',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -576,7 +576,7 @@ const styles = StyleSheet.create({
   successTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#4CAF50',
+    color: '#8c52ff',
     marginBottom: 12,
     textAlign: 'center',
   },
@@ -595,8 +595,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#0a0a0a',
   },
   currencyButtonActive: {
-    backgroundColor: '#4CAF50',
-    borderColor: '#4CAF50',
+    backgroundColor: '#8c52ff',
+    borderColor: '#8c52ff',
   },
   currencyButtonText: {
     color: '#ddd',
@@ -620,11 +620,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#444',
   },
   toggleDotActive: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#8c52ff',
   },
   saveButton: {
     marginTop: 12,
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#8c52ff',
     padding: 12,
     alignItems: 'center',
     borderRadius: 10,

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+﻿import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from "react-native";
 import { Layout } from "../../components/Layout/Layout";
 import { rankingServices, RankingEntry } from "../../services/rankingServices";
@@ -52,7 +52,7 @@ export const RankingScreen = () => {
         <Text style={styles.header}>Ranking — Zeros na planilha</Text>
         {loading ? (
           <View style={styles.loadingRow}>
-            <ActivityIndicator size="large" color="#4CAF50" />
+            <ActivityIndicator size="large" color="#8c52ff" />
           </View>
         ) : (
           rows.map((r) => (

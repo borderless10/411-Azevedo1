@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Tela de Metas Financeiras
  */
 
@@ -217,7 +217,7 @@ export const MetasScreen = () => {
     return (
       <Layout title="Metas Financeiras" showBackButton={false} showSidebar={true}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#F44336" />
+          <ActivityIndicator size="large" color="#ff4d6d" />
           <Text style={styles.loadingText}>Carregando metas...</Text>
         </View>
       </Layout>
@@ -238,7 +238,7 @@ export const MetasScreen = () => {
         >
           {/* Header */}
           <View style={styles.header}>
-            <Ionicons name="flag" size={64} color="#F44336" />
+            <Ionicons name="flag" size={64} color="#ff4d6d" />
             <Text style={styles.title}>Metas Financeiras</Text>
             <Text style={styles.subtitle}>
               Defina e acompanhe suas metas
@@ -248,19 +248,19 @@ export const MetasScreen = () => {
           {/* Estatísticas */}
           <View style={styles.statsContainer}>
             <View style={styles.statCard}>
-              <Ionicons name="flag-outline" size={24} color="#F44336" />
+              <Ionicons name="flag-outline" size={24} color="#ff4d6d" />
               <Text style={styles.statLabel}>Total</Text>
               <Text style={styles.statValue}>{goals.length}</Text>
             </View>
 
             <View style={styles.statCard}>
-              <Ionicons name="play-circle" size={24} color="#4CAF50" />
+              <Ionicons name="play-circle" size={24} color="#8c52ff" />
               <Text style={styles.statLabel}>Ativas</Text>
               <Text style={styles.statValue}>{activeGoals.length}</Text>
             </View>
 
             <View style={styles.statCard}>
-              <Ionicons name="checkmark-circle" size={24} color="#2196F3" />
+              <Ionicons name="checkmark-circle" size={24} color="#8c52ff" />
               <Text style={styles.statLabel}>Concluídas</Text>
               <Text style={styles.statValue}>{completedGoals.length}</Text>
             </View>
@@ -364,7 +364,7 @@ export const MetasScreen = () => {
                       </View>
                       {isCompleted && (
                         <View style={styles.completedBadge}>
-                          <Ionicons name="checkmark-circle" size={24} color="#4CAF50" />
+                          <Ionicons name="checkmark-circle" size={24} color="#8c52ff" />
                         </View>
                       )}
                     </View>
@@ -388,7 +388,7 @@ export const MetasScreen = () => {
                           styles.progressBarFill,
                           { 
                             width: `${Math.min(progress, 100)}%`,
-                            backgroundColor: isCompleted ? '#4CAF50' : categoryInfo.color,
+                            backgroundColor: isCompleted ? '#8c52ff' : categoryInfo.color,
                           },
                         ]}
                       />
@@ -685,11 +685,11 @@ const styles = StyleSheet.create({
   totalProgressValue: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: '#4CAF50',
+    color: '#8c52ff',
     marginBottom: 8,
   },
   createButton: {
-    backgroundColor: '#F44336',
+    backgroundColor: '#ff4d6d',
     borderRadius: 12,
     padding: 16,
     flexDirection: 'row',
@@ -719,8 +719,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   filterButtonActive: {
-    backgroundColor: '#F44336',
-    borderColor: '#F44336',
+    backgroundColor: '#ff4d6d',
+    borderColor: '#ff4d6d',
   },
   filterText: {
     fontSize: 14,
@@ -789,7 +789,7 @@ const styles = StyleSheet.create({
   currentAmount: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#4CAF50',
+    color: '#8c52ff',
   },
   targetAmount: {
     fontSize: 14,
@@ -804,7 +804,7 @@ const styles = StyleSheet.create({
   },
   progressBarFill: {
     height: '100%',
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#8c52ff',
     borderRadius: 4,
   },
   progressText: {
@@ -826,10 +826,10 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   addButton: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#8c52ff',
   },
   deleteButton: {
-    backgroundColor: '#F44336',
+    backgroundColor: '#ff4d6d',
   },
   actionButtonText: {
     fontSize: 14,
@@ -960,7 +960,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   saveButton: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#8c52ff',
     margin: 20,
     padding: 16,
     borderRadius: 12,

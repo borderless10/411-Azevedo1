@@ -1,4 +1,4 @@
-/**
+﻿/**
  * DatePicker (JS fallback) — works on web (input[type=date]) and mobile (modal selector)
  */
 
@@ -94,7 +94,7 @@ const DatePicker: React.FC<DatePickerProps> = ({
   return (
     <View style={[styles.container, style]}>
       <Text style={styles.label}>
-        <Ionicons name="calendar" size={16} color="#007AFF" /> {label}
+        <Ionicons name="calendar" size={16} color="#8c52ff" /> {label}
       </Text>
 
       <TouchableOpacity
@@ -109,7 +109,7 @@ const DatePicker: React.FC<DatePickerProps> = ({
         <Ionicons
           name="calendar-outline"
           size={20}
-          color={error ? "#F44336" : "#999"}
+          color={error ? "#ff4d6d" : "#a89fc0"}
           style={styles.inputIcon}
         />
         <Text style={styles.dateText}>{formatDateForDisplay(date)}</Text>
@@ -117,14 +117,14 @@ const DatePicker: React.FC<DatePickerProps> = ({
           <Ionicons
             name="close-circle"
             size={20}
-            color="#F44336"
+            color="#ff4d6d"
             style={styles.icon}
           />
         ) : (
           <Ionicons
             name="chevron-down"
             size={20}
-            color="#999"
+            color="#a89fc0"
             style={styles.icon}
           />
         )}
@@ -217,25 +217,25 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#ddd",
+    color: "#a89fc0",
     marginBottom: 8,
   },
   inputWrapper: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#2b2b2b",
+    backgroundColor: "#1a1528",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#444",
+    borderColor: "#2a2040",
     paddingHorizontal: 16,
     paddingVertical: 16,
   },
   inputWrapperError: {
-    borderColor: "#F44336",
+    borderColor: "#ff4d6d",
     borderWidth: 2,
   },
   inputWrapperDisabled: {
-    backgroundColor: "#111",
+    backgroundColor: "#1a1528",
   },
   inputIcon: {
     marginRight: 12,
@@ -250,7 +250,7 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   errorText: {
-    color: "#F44336",
+    color: "#ff4d6d",
     fontSize: 12,
     marginTop: 4,
     marginLeft: 4,
@@ -265,7 +265,7 @@ const styles = StyleSheet.create({
   modalContainer: {
     width: "100%",
     maxWidth: 420,
-    backgroundColor: "#0f0f10",
+    backgroundColor: "#0e0c14",
     borderRadius: 14,
     padding: 20,
     alignItems: "center",
@@ -284,7 +284,7 @@ const styles = StyleSheet.create({
     marginVertical: 8,
   },
   smallButton: {
-    backgroundColor: "#007AFF",
+    backgroundColor: "#8c52ff",
     padding: 8,
     borderRadius: 8,
   },
@@ -300,13 +300,13 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   modalButtonPrimary: {
-    backgroundColor: "#007AFF",
+    backgroundColor: "#8c52ff",
     paddingVertical: 10,
     paddingHorizontal: 18,
     borderRadius: 10,
   },
   modalButtonSecondary: {
-    backgroundColor: "#444",
+    backgroundColor: "#2a2040",
     paddingVertical: 10,
     paddingHorizontal: 18,
     borderRadius: 10,

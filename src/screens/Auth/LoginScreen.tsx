@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+﻿import React, { useState } from "react";
 import {
   View,
   Text,
@@ -11,7 +11,7 @@ import {
   ActivityIndicator,
   Image,
 } from "react-native";
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../hooks/useAuth";
 import { useNavigation } from "../../routes/NavigationContext";
@@ -164,168 +164,168 @@ export const LoginScreen = () => {
         style={styles.keyboard}
       >
         <View style={styles.content}>
-        {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.logoContainer}>
-            <Image
-              source={require("../../../assets/logo411.png")}
-              style={styles.logo}
-              resizeMode="contain"
-            />
+          {/* Header */}
+          <View style={styles.header}>
+            <View style={styles.logoContainer}>
+              <Image
+                source={require("../../../assets/logo411.png")}
+                style={styles.logo}
+                resizeMode="contain"
+              />
+            </View>
+            <Text style={styles.title}>Controle Financeiro</Text>
+            <Text style={styles.subtitle}>Faça login para continuar</Text>
           </View>
-          <Text style={styles.title}>Controle Financeiro</Text>
-          <Text style={styles.subtitle}>Faça login para continuar</Text>
-        </View>
 
-        {/* Form */}
-        <View style={styles.form}>
-          {/* Mensagem de erro geral */}
-          {errors.general ? (
-            <View style={styles.errorContainer}>
-              <Ionicons name="alert-circle" size={20} color="#F44336" />
-              <Text style={styles.errorText}>{errors.general}</Text>
-            </View>
-          ) : null}
-
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>
-              <Ionicons name="mail" size={16} color="#007AFF" /> Email
-            </Text>
-            <View
-              style={[
-                styles.inputWrapper,
-                errors.email ? styles.inputWrapperError : null,
-              ]}
-            >
-              <Ionicons
-                name="mail-outline"
-                size={20}
-                color={errors.email ? "#F44336" : "#999"}
-                style={styles.inputIcon}
-              />
-              <TextInput
-                style={styles.inputWithIcon}
-                placeholder="seu@email.com"
-                placeholderTextColor="#999"
-                value={email}
-                onChangeText={handleEmailChange}
-                autoCapitalize="none"
-                keyboardType="email-address"
-                editable={!loading}
-              />
-              {errors.email ? (
-                <Ionicons
-                  name="close-circle"
-                  size={20}
-                  color="#F44336"
-                  style={styles.errorIcon}
-                />
-              ) : email.trim() && !errors.email ? (
-                <Ionicons
-                  name="checkmark-circle"
-                  size={20}
-                  color="#4CAF50"
-                  style={styles.errorIcon}
-                />
-              ) : null}
-            </View>
-            {errors.email ? (
-              <Text style={styles.errorTextSmall}>{errors.email}</Text>
+          {/* Form */}
+          <View style={styles.form}>
+            {/* Mensagem de erro geral */}
+            {errors.general ? (
+              <View style={styles.errorContainer}>
+                <Ionicons name="alert-circle" size={20} color="#ff4d6d" />
+                <Text style={styles.errorText}>{errors.general}</Text>
+              </View>
             ) : null}
-          </View>
 
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>
-              <Ionicons name="lock-closed" size={16} color="#007AFF" /> Senha
-            </Text>
-            <View
-              style={[
-                styles.inputWrapper,
-                errors.password ? styles.inputWrapperError : null,
-              ]}
-            >
-              <Ionicons
-                name="lock-closed-outline"
-                size={20}
-                color={errors.password ? "#F44336" : "#999"}
-                style={styles.inputIcon}
-              />
-              <TextInput
-                style={styles.inputWithIcon}
-                placeholder="••••••••"
-                placeholderTextColor="#999"
-                value={password}
-                onChangeText={handlePasswordChange}
-                secureTextEntry={!showPassword}
-                editable={!loading}
-              />
-              <TouchableOpacity
-                onPress={() => setShowPassword((prev) => !prev)}
-                disabled={loading}
-                style={styles.toggleButton}
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>
+                <Ionicons name="mail" size={16} color="#8c52ff" /> Email
+              </Text>
+              <View
+                style={[
+                  styles.inputWrapper,
+                  errors.email ? styles.inputWrapperError : null,
+                ]}
               >
                 <Ionicons
-                  name={showPassword ? "eye" : "eye-off"}
+                  name="mail-outline"
                   size={20}
-                  color="#999"
-                  style={styles.toggleIcon}
+                  color={errors.email ? "#ff4d6d" : "#999"}
+                  style={styles.inputIcon}
                 />
-              </TouchableOpacity>
-              {errors.password ? (
-                <Ionicons
-                  name="close-circle"
-                  size={20}
-                  color="#F44336"
-                  style={styles.errorIcon}
+                <TextInput
+                  style={styles.inputWithIcon}
+                  placeholder="seu@email.com"
+                  placeholderTextColor="#999"
+                  value={email}
+                  onChangeText={handleEmailChange}
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                  editable={!loading}
                 />
-              ) : password.trim() && !errors.password ? (
-                <Ionicons
-                  name="checkmark-circle"
-                  size={20}
-                  color="#4CAF50"
-                  style={styles.errorIcon}
-                />
+                {errors.email ? (
+                  <Ionicons
+                    name="close-circle"
+                    size={20}
+                    color="#ff4d6d"
+                    style={styles.errorIcon}
+                  />
+                ) : email.trim() && !errors.email ? (
+                  <Ionicons
+                    name="checkmark-circle"
+                    size={20}
+                    color="#8c52ff"
+                    style={styles.errorIcon}
+                  />
+                ) : null}
+              </View>
+              {errors.email ? (
+                <Text style={styles.errorTextSmall}>{errors.email}</Text>
               ) : null}
             </View>
-            {errors.password ? (
-              <Text style={styles.errorTextSmall}>{errors.password}</Text>
-            ) : null}
-          </View>
 
-          <TouchableOpacity
-            style={[styles.button, loading && styles.buttonDisabled]}
-            onPress={handleLogin}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <View style={styles.buttonContent}>
-                <Ionicons name="log-in" size={20} color="#fff" />
-                <Text style={styles.buttonText}>Entrar</Text>
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>
+                <Ionicons name="lock-closed" size={16} color="#8c52ff" /> Senha
+              </Text>
+              <View
+                style={[
+                  styles.inputWrapper,
+                  errors.password ? styles.inputWrapperError : null,
+                ]}
+              >
+                <Ionicons
+                  name="lock-closed-outline"
+                  size={20}
+                  color={errors.password ? "#ff4d6d" : "#999"}
+                  style={styles.inputIcon}
+                />
+                <TextInput
+                  style={styles.inputWithIcon}
+                  placeholder="••••••••"
+                  placeholderTextColor="#999"
+                  value={password}
+                  onChangeText={handlePasswordChange}
+                  secureTextEntry={!showPassword}
+                  editable={!loading}
+                />
+                <TouchableOpacity
+                  onPress={() => setShowPassword((prev) => !prev)}
+                  disabled={loading}
+                  style={styles.toggleButton}
+                >
+                  <Ionicons
+                    name={showPassword ? "eye" : "eye-off"}
+                    size={20}
+                    color="#999"
+                    style={styles.toggleIcon}
+                  />
+                </TouchableOpacity>
+                {errors.password ? (
+                  <Ionicons
+                    name="close-circle"
+                    size={20}
+                    color="#ff4d6d"
+                    style={styles.errorIcon}
+                  />
+                ) : password.trim() && !errors.password ? (
+                  <Ionicons
+                    name="checkmark-circle"
+                    size={20}
+                    color="#8c52ff"
+                    style={styles.errorIcon}
+                  />
+                ) : null}
               </View>
-            )}
-          </TouchableOpacity>
+              {errors.password ? (
+                <Text style={styles.errorTextSmall}>{errors.password}</Text>
+              ) : null}
+            </View>
 
-          <TouchableOpacity
-            style={styles.linkButton}
-            onPress={handleGoToRegister}
-            disabled={loading}
-          >
-            <Text style={styles.linkText}>
-              Não tem conta?{" "}
-              <Text style={styles.linkTextBold}>Criar cadastro</Text>
-            </Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.button, loading && styles.buttonDisabled]}
+              onPress={handleLogin}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <View style={styles.buttonContent}>
+                  <Ionicons name="log-in" size={20} color="#fff" />
+                  <Text style={styles.buttonText}>Entrar</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.linkButton}
+              onPress={handleGoToRegister}
+              disabled={loading}
+            >
+              <Text style={styles.linkText}>
+                Não tem conta?{" "}
+                <Text style={styles.linkTextBold}>Criar cadastro</Text>
+              </Text>
+            </TouchableOpacity>
+          </View>
+          <CustomModal
+            visible={modalVisible}
+            title="Erro no login"
+            message={modalMessage}
+            primaryLabel="Fechar"
+            onClose={() => setModalVisible(false)}
+          />
         </View>
-        <CustomModal
-          visible={modalVisible}
-          title="Erro no login"
-          message={modalMessage}
-          primaryLabel="Fechar"
-          onClose={() => setModalVisible(false)}
-        />
-      </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -392,7 +392,7 @@ const styles = StyleSheet.create({
     paddingRight: 16,
   },
   inputWrapperError: {
-    borderColor: "#F44336",
+    borderColor: "#ff4d6d",
     borderWidth: 2,
   },
   inputIcon: {
@@ -424,12 +424,12 @@ const styles = StyleSheet.create({
     color: "#fff",
   },
   button: {
-    backgroundColor: "#007AFF",
+    backgroundColor: "#8c52ff",
     borderRadius: 12,
     padding: 16,
     alignItems: "center",
     marginTop: 8,
-    shadowColor: "#007AFF",
+    shadowColor: "#8c52ff",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -460,7 +460,7 @@ const styles = StyleSheet.create({
     color: "#999",
   },
   linkTextBold: {
-    color: "#007AFF",
+    color: "#8c52ff",
     fontWeight: "bold",
   },
   errorContainer: {
@@ -472,16 +472,16 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     gap: 8,
     borderWidth: 1,
-    borderColor: "#F4433640",
+    borderColor: "#ff4d6d40",
   },
   errorText: {
     flex: 1,
-    color: "#F44336",
+    color: "#ff4d6d",
     fontSize: 14,
     fontWeight: "500",
   },
   errorTextSmall: {
-    color: "#F44336",
+    color: "#ff4d6d",
     fontSize: 12,
     marginTop: 4,
     marginLeft: 4,

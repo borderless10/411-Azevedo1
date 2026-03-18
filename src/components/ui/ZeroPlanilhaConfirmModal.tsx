@@ -29,7 +29,7 @@ const ZeroPlanilhaConfirmModal: React.FC<Props> = ({
       <View style={styles.backdrop}>
         <View style={styles.container}>
           <View style={styles.iconWrap}>
-            <Ionicons name="leaf" size={56} color="#4CAF50" />
+            <Ionicons name="leaf" size={56} color="#8c52ff" />
           </View>
 
           <Text style={styles.title}>Dia sem gasto?</Text>
@@ -76,12 +76,12 @@ const styles = StyleSheet.create({
   container: {
     width: "100%",
     maxWidth: 460,
-    backgroundColor: "#0f0f10",
+    backgroundColor: "#0e0c14",
     borderRadius: 14,
     padding: 22,
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#2d2d2d",
+    borderColor: "#2a2040",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.5,
@@ -98,7 +98,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   message: {
-    color: "#ddd",
+    color: "#a89fc0",
     fontSize: 14,
     textAlign: "center",
     lineHeight: 20,
@@ -113,20 +113,20 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "transparent",
     borderWidth: 1,
-    borderColor: "#444",
+    borderColor: "#2a2040",
     borderRadius: 10,
     minHeight: 46,
     alignItems: "center",
     justifyContent: "center",
   },
   cancelLabel: {
-    color: "#ddd",
+    color: "#a89fc0",
     fontSize: 15,
     fontWeight: "700",
   },
   confirmButton: {
     flex: 1,
-    backgroundColor: "#4CAF50",
+    backgroundColor: "#8c52ff",
     borderRadius: 10,
     minHeight: 46,
     alignItems: "center",

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Tela de Feed
  * Mostra dicas rápidas e uma linha do tempo de atividades do usuário.
  */
@@ -36,7 +36,7 @@ const tips: Tip[] = [
     description:
       "Liste seus gastos fixos (aluguel, contas, mercado) antes de qualquer compra por impulso.",
     icon: "checkbox-outline",
-    color: "#4CAF50",
+    color: "#8c52ff",
     tag: "Organização",
   },
   {
@@ -45,7 +45,7 @@ const tips: Tip[] = [
     description:
       "Café, delivery e corridas de app somam mais do que parece. Registrar ajuda a enxergar vazamentos.",
     icon: "cafe-outline",
-    color: "#FF9800",
+    color: "#c084fc",
     tag: "Consumo",
   },
   {
@@ -228,7 +228,7 @@ export const FeedScreen = () => {
     return (
       <Layout title="Feed" showBackButton={false} showSidebar={true}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#007AFF" />
+          <ActivityIndicator size="large" color="#8c52ff" />
           <Text style={styles.loadingText}>Carregando feed...</Text>
         </View>
       </Layout>
@@ -243,8 +243,8 @@ export const FeedScreen = () => {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor="#007AFF"
-            colors={["#007AFF"]}
+            tintColor="#8c52ff"
+            colors={["#8c52ff"]}
           />
         }
       >
@@ -259,7 +259,7 @@ export const FeedScreen = () => {
         >
           {/* Cabeçalho */}
           <View style={styles.header}>
-            <Ionicons name="newspaper-outline" size={64} color="#007AFF" />
+            <Ionicons name="newspaper-outline" size={64} color="#8c52ff" />
             <Text style={styles.title}>Feed</Text>
             <Text style={styles.subtitle}>
               Dicas rápidas e suas atividades recentes
@@ -470,7 +470,7 @@ const styles = StyleSheet.create({
   },
   timelineCategory: {
     fontSize: 11,
-    color: "#007AFF",
+    color: "#8c52ff",
     marginBottom: 2,
   },
   timelineTime: {

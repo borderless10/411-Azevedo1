@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Tela Home - Dashboard Inicial
  */
 
@@ -86,16 +86,16 @@ export const HomeScreen = () => {
 
     // Cores padrão para categorias não mapeadas
     const colors = [
-      "#FF5722",
-      "#3F51B5",
-      "#795548",
-      "#F44336",
-      "#009688",
-      "#E91E63",
-      "#FF9800",
-      "#607D8B",
-      "#9C27B0",
-      "#00BCD4",
+      "#ff4d6d",
+      "#8c52ff",
+      "#6b6480",
+      "#ff4d6d",
+      "#a47aff",
+      "#ff4d6d",
+      "#c084fc",
+      "#6b6480",
+      "#8c52ff",
+      "#a47aff",
     ];
     const hash = categoryName
       .split("")
@@ -632,7 +632,7 @@ export const HomeScreen = () => {
                 styles.transactionIconExpense,
               ]}
             >
-              <Ionicons name="remove-circle" size={22} color="#F44336" />
+              <Ionicons name="remove-circle" size={22} color="#ff4d6d" />
             </View>
           </View>
           <View style={styles.transactionContent}>
@@ -646,7 +646,7 @@ export const HomeScreen = () => {
                   onPress={() => handleEditTransaction(expense.id, "expense")}
                   activeOpacity={0.7}
                 >
-                  <Ionicons name="create-outline" size={18} color="#007AFF" />
+                  <Ionicons name="create-outline" size={18} color="#8c52ff" />
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.actionButton}
@@ -660,7 +660,7 @@ export const HomeScreen = () => {
                   }
                   activeOpacity={0.7}
                 >
-                  <Ionicons name="trash-outline" size={18} color="#F44336" />
+                  <Ionicons name="trash-outline" size={18} color="#ff4d6d" />
                 </TouchableOpacity>
               </View>
             </View>
@@ -699,7 +699,7 @@ export const HomeScreen = () => {
                 styles.transactionIconIncome,
               ]}
             >
-              <Ionicons name="cash" size={22} color="#4CAF50" />
+              <Ionicons name="cash" size={22} color="#8c52ff" />
             </View>
           </View>
           <View style={styles.transactionContent}>
@@ -713,7 +713,7 @@ export const HomeScreen = () => {
                   onPress={() => handleEditTransaction(income.id, "income")}
                   activeOpacity={0.7}
                 >
-                  <Ionicons name="create-outline" size={18} color="#007AFF" />
+                  <Ionicons name="create-outline" size={18} color="#8c52ff" />
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.actionButton}
@@ -727,7 +727,7 @@ export const HomeScreen = () => {
                   }
                   activeOpacity={0.7}
                 >
-                  <Ionicons name="trash-outline" size={18} color="#F44336" />
+                  <Ionicons name="trash-outline" size={18} color="#ff4d6d" />
                 </TouchableOpacity>
               </View>
             </View>
@@ -783,7 +783,7 @@ export const HomeScreen = () => {
     return (
       <Layout showHeader={true} showSidebar={true}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#007AFF" />
+          <ActivityIndicator size="large" color="#8c52ff" />
           <Text style={styles.loadingText}>Carregando dados...</Text>
         </View>
       </Layout>
@@ -798,7 +798,7 @@ export const HomeScreen = () => {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            colors={["#007AFF"]}
+            colors={["#8c52ff"]}
           />
         }
       >
@@ -842,7 +842,7 @@ export const HomeScreen = () => {
                   <Ionicons
                     name="wallet"
                     size={28}
-                    color={balance < 0 ? "#F44336" : "#007AFF"}
+                    color={balance < 0 ? "#ff4d6d" : "#8c52ff"}
                   />
                 </View>
               </View>
@@ -868,7 +868,7 @@ export const HomeScreen = () => {
                 ]}
               >
                 <View style={styles.cardIconContainer}>
-                  <Ionicons name="trending-up" size={18} color="#4CAF50" />
+                  <Ionicons name="trending-up" size={18} color="#8c52ff" />
                 </View>
                 <Text style={styles.summaryLabelIncome}>Total Recebido</Text>
                 <Text style={styles.summaryValueSquare}>
@@ -895,7 +895,7 @@ export const HomeScreen = () => {
                 ]}
               >
                 <View style={styles.cardIconContainer}>
-                  <Ionicons name="trending-down" size={18} color="#F44336" />
+                  <Ionicons name="trending-down" size={18} color="#ff4d6d" />
                 </View>
                 <Text style={styles.summaryLabelExpense}>Total Gasto</Text>
                 <Text style={styles.summaryValueSquare}>
@@ -926,7 +926,7 @@ export const HomeScreen = () => {
                     <Ionicons
                       name="pie-chart-outline"
                       size={20}
-                      color="#007AFF"
+                      color="#8c52ff"
                     />
                     <Text style={styles.chartTitle}>Gastos por Categoria</Text>
                   </View>
@@ -945,7 +945,7 @@ export const HomeScreen = () => {
                     <Ionicons
                       name="trending-up-outline"
                       size={20}
-                      color="#4CAF50"
+                      color="#8c52ff"
                     />
                     <Text style={styles.chartTitle}>
                       Evolução (Últimos 7 dias)
@@ -969,14 +969,14 @@ export const HomeScreen = () => {
               <ActionCard
                 icon="add-circle"
                 label="Adicionar Renda"
-                color="#4CAF50"
+                color="#8c52ff"
                 onPress={() => navigate("AddIncome")}
                 delay={0}
               />
               <ActionCard
                 icon="remove-circle"
                 label="Adicionar Gasto"
-                color="#F44336"
+                color="#ff4d6d"
                 onPress={() => navigate("AddExpense")}
                 delay={100}
               />
@@ -1048,13 +1048,13 @@ export const HomeScreen = () => {
                 <Ionicons
                   name="trending-up"
                   size={18}
-                  color={filterType === "income" ? "#4CAF50" : "#999"}
+                  color={filterType === "income" ? "#8c52ff" : "#999"}
                 />
                 <Text
                   style={[
                     styles.filterButtonText,
                     filterType === "income" && styles.filterButtonTextActive,
-                    filterType === "income" && { color: "#4CAF50" },
+                    filterType === "income" && { color: "#8c52ff" },
                   ]}
                 >
                   Rendas
@@ -1071,13 +1071,13 @@ export const HomeScreen = () => {
                 <Ionicons
                   name="trending-down"
                   size={18}
-                  color={filterType === "expense" ? "#F44336" : "#999"}
+                  color={filterType === "expense" ? "#ff4d6d" : "#999"}
                 />
                 <Text
                   style={[
                     styles.filterButtonText,
                     filterType === "expense" && styles.filterButtonTextActive,
-                    filterType === "expense" && { color: "#F44336" },
+                    filterType === "expense" && { color: "#ff4d6d" },
                   ]}
                 >
                   Gastos
@@ -1205,15 +1205,15 @@ const styles = StyleSheet.create({
   },
   cardGreen: {
     borderLeftWidth: 4,
-    borderLeftColor: "#4CAF50",
+    borderLeftColor: "#8c52ff",
   },
   cardRed: {
     borderLeftWidth: 4,
-    borderLeftColor: "#F44336",
+    borderLeftColor: "#ff4d6d",
   },
   cardBlue: {
     borderLeftWidth: 4,
-    borderLeftColor: "#007AFF",
+    borderLeftColor: "#8c52ff",
   },
   summaryLabel: {
     fontSize: 12,
@@ -1224,21 +1224,21 @@ const styles = StyleSheet.create({
   },
   summaryLabelBalance: {
     fontSize: 13,
-    color: "#007AFF",
+    color: "#8c52ff",
     marginTop: 0,
     fontWeight: "700",
     letterSpacing: 0.2,
   },
   summaryLabelIncome: {
     fontSize: 13,
-    color: "#4CAF50",
+    color: "#8c52ff",
     marginTop: 0,
     fontWeight: "700",
     letterSpacing: 0.2,
   },
   summaryLabelExpense: {
     fontSize: 13,
-    color: "#F44336",
+    color: "#ff4d6d",
     marginTop: 0,
     fontWeight: "700",
     letterSpacing: 0.2,
@@ -1308,19 +1308,19 @@ const styles = StyleSheet.create({
   },
   actionGreen: {
     borderTopWidth: 3,
-    borderTopColor: "#4CAF50",
+    borderTopColor: "#8c52ff",
   },
   actionRed: {
     borderTopWidth: 3,
-    borderTopColor: "#F44336",
+    borderTopColor: "#ff4d6d",
   },
   actionBlue: {
     borderTopWidth: 3,
-    borderTopColor: "#007AFF",
+    borderTopColor: "#8c52ff",
   },
   actionOrange: {
     borderTopWidth: 3,
-    borderTopColor: "#FF9800",
+    borderTopColor: "#c084fc",
   },
   actionLabel: {
     fontSize: 13,
@@ -1375,7 +1375,7 @@ const styles = StyleSheet.create({
   },
   filterButtonActive: {
     backgroundColor: "#2a2a2a",
-    borderColor: "#007AFF",
+    borderColor: "#8c52ff",
   },
   filterButtonText: {
     fontSize: 14,
@@ -1419,10 +1419,10 @@ const styles = StyleSheet.create({
     color: "#ccc",
   },
   cardNegative: {
-    borderLeftColor: "#F44336",
+    borderLeftColor: "#ff4d6d",
   },
   summaryValueNegative: {
-    color: "#F44336",
+    color: "#ff4d6d",
   },
   transactionsList: {
     backgroundColor: "#1a1a1a",
@@ -1455,11 +1455,11 @@ const styles = StyleSheet.create({
   },
   transactionIconIncome: {
     backgroundColor: "#1a3a1a",
-    borderColor: "#4CAF5040",
+    borderColor: "#8c52ff40",
   },
   transactionIconExpense: {
     backgroundColor: "#3a1a1a",
-    borderColor: "#F4433640",
+    borderColor: "#ff4d6d40",
   },
   transactionContent: {
     flex: 1,
@@ -1519,13 +1519,13 @@ const styles = StyleSheet.create({
   transactionValueIncome: {
     fontSize: 17,
     fontWeight: "700",
-    color: "#4CAF50",
+    color: "#8c52ff",
     letterSpacing: 0.2,
   },
   transactionValueExpense: {
     fontSize: 17,
     fontWeight: "700",
-    color: "#F44336",
+    color: "#ff4d6d",
     letterSpacing: 0.2,
   },
   chartsContainer: {

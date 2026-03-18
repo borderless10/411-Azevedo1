@@ -45,4 +45,5 @@ export interface UpdateBillData {
   dueDate?: Date;
   status?: BillStatus;
   paidDate?: Date;
+  notificationId?: string;
 }

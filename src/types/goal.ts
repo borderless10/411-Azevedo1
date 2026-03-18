@@ -2,25 +2,25 @@
  * Tipos relacionados a Metas Financeiras
  */
 
-import { Timestamp } from 'firebase/firestore';
+import { Timestamp } from "firebase/firestore";
 
 /**
  * Status da Meta
  */
-export type GoalStatus = 'active' | 'completed' | 'cancelled';
+export type GoalStatus = "active" | "completed" | "cancelled";
 
 /**
  * Categoria da Meta
  */
-export type GoalCategory = 
-  | 'savings' // Economia/Poupança
-  | 'purchase' // Compra
-  | 'debt' // Pagamento de dívida
-  | 'investment' // Investimento
-  | 'emergency' // Fundo de emergência
-  | 'travel' // Viagem
-  | 'education' // Educação
-  | 'other'; // Outro
+export type GoalCategory =
+  | "savings" // Economia/Poupança
+  | "purchase" // Compra
+  | "debt" // Pagamento de dívida
+  | "investment" // Investimento
+  | "emergency" // Fundo de emergência
+  | "travel" // Viagem
+  | "education" // Educação
+  | "other"; // Outro
 
 /**
  * Contribuição para uma meta
@@ -127,19 +127,37 @@ export interface GoalCategoryInfo {
  * Categorias de metas disponíveis
  */
 export const GOAL_CATEGORIES: GoalCategoryInfo[] = [
-  { value: 'savings', label: 'Poupança', icon: 'wallet', color: '#4CAF50' },
-  { value: 'purchase', label: 'Compra', icon: 'cart', color: '#2196F3' },
-  { value: 'debt', label: 'Dívida', icon: 'card', color: '#F44336' },
-  { value: 'investment', label: 'Investimento', icon: 'trending-up', color: '#9C27B0' },
-  { value: 'emergency', label: 'Emergência', icon: 'alert-circle', color: '#FF9800' },
-  { value: 'travel', label: 'Viagem', icon: 'airplane', color: '#00BCD4' },
-  { value: 'education', label: 'Educação', icon: 'school', color: '#673AB7' },
-  { value: 'other', label: 'Outro', icon: 'ellipsis-horizontal', color: '#607D8B' },
+  { value: "savings", label: "Poupança", icon: "wallet", color: "#8c52ff" },
+  { value: "purchase", label: "Compra", icon: "cart", color: "#a47aff" },
+  { value: "debt", label: "Dívida", icon: "card", color: "#ff4d6d" },
+  {
+    value: "investment",
+    label: "Investimento",
+    icon: "trending-up",
+    color: "#8c52ff",
+  },
+  {
+    value: "emergency",
+    label: "Emergência",
+    icon: "alert-circle",
+    color: "#c084fc",
+  },
+  { value: "travel", label: "Viagem", icon: "airplane", color: "#a47aff" },
+  { value: "education", label: "Educação", icon: "school", color: "#8c52ff" },
+  {
+    value: "other",
+    label: "Outro",
+    icon: "ellipsis-horizontal",
+    color: "#6b6480",
+  },
 ];
 
 /**
  * Obter informações de uma categoria
  */
 export const getCategoryInfo = (category: GoalCategory): GoalCategoryInfo => {
-  return GOAL_CATEGORIES.find(cat => cat.value === category) || GOAL_CATEGORIES[GOAL_CATEGORIES.length - 1];
+  return (
+    GOAL_CATEGORIES.find((cat) => cat.value === category) ||
+    GOAL_CATEGORIES[GOAL_CATEGORIES.length - 1]
+  );
 };

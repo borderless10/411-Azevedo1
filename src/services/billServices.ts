@@ -209,6 +209,13 @@ export const updateOverdueBills = async (userId: string): Promise<void> => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
+    if (__DEV__) {
+      console.log("[BILLS] updateOverdueBills:start", {
+        userId,
+        today: today.toISOString(),
+      });
+    }
+
     const q = query(
       getBillsCollection(),
       where("userId", "==", userId),
@@ -223,6 +230,12 @@ export const updateOverdueBills = async (userId: string): Promise<void> => {
           updatedAt: new Date(),
         }),
       );
+
+      if (__DEV__) {
+        console.log("[BILLS] updateOverdueBills:index-query", {
+          matched: snapshot.docs.length,
+        });
+      }
 
       await Promise.all(updates);
     } catch (queryError: any) {
@@ -245,6 +258,18 @@ export const updateOverdueBills = async (userId: string): Promise<void> => {
 
         const overdueDocs = snapshot2.docs.filter((doc) => {
           const data: any = doc.data();
+          // Compatibilidade com dados antigos: aceitar variações de status
+          const normalizedStatus = String(data.status || "")
+            .trim()
+            .toLowerCase();
+          if (
+            normalizedStatus &&
+            normalizedStatus !== "pending" &&
+            normalizedStatus !== "pendente"
+          ) {
+            return false;
+          }
+
           const due = data.dueDate;
           // converter Timestamp/Date/other para Date
           const dueDate =
@@ -253,6 +278,12 @@ export const updateOverdueBills = async (userId: string): Promise<void> => {
               : due instanceof Date
                 ? due
                 : new Date(due);
+
+          if (!(dueDate instanceof Date) || isNaN(dueDate.getTime())) {
+            return false;
+          }
+
+          dueDate.setHours(0, 0, 0, 0);
           return dueDate < today;
         });
 
@@ -263,10 +294,60 @@ export const updateOverdueBills = async (userId: string): Promise<void> => {
           }),
         );
 
+        if (__DEV__) {
+          console.log("[BILLS] updateOverdueBills:fallback-query", {
+            scanned: snapshot2.docs.length,
+            overdue: overdueDocs.length,
+          });
+        }
+
         await Promise.all(updates);
       } else {
         throw queryError;
       }
+    }
+
+    // Segunda passagem para dados legados: evita depender de índice/tipo de dueDate
+    const legacyQuery = query(
+      getBillsCollection(),
+      where("userId", "==", userId),
+      where("status", "==", "pending"),
+    );
+    const legacySnapshot = await getDocs(legacyQuery);
+    const legacyOverdue = legacySnapshot.docs.filter((doc) => {
+      const data: any = doc.data();
+      const due = data?.dueDate;
+      const dueDate =
+        due && typeof due.toDate === "function"
+          ? due.toDate()
+          : due instanceof Date
+            ? due
+            : new Date(due);
+
+      if (!(dueDate instanceof Date) || isNaN(dueDate.getTime())) {
+        return false;
+      }
+
+      dueDate.setHours(0, 0, 0, 0);
+      return dueDate < today;
+    });
+
+    if (legacyOverdue.length > 0) {
+      await Promise.all(
+        legacyOverdue.map((doc) =>
+          updateDoc(getBillDoc(doc.id), {
+            status: "overdue",
+            updatedAt: new Date(),
+          }),
+        ),
+      );
+    }
+
+    if (__DEV__) {
+      console.log("[BILLS] updateOverdueBills:done", {
+        legacyScanned: legacySnapshot.docs.length,
+        legacyOverdue: legacyOverdue.length,
+      });
     }
   } catch (error) {
     console.error("Erro ao atualizar contas vencidas:", error);

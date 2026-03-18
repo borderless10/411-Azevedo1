@@ -86,6 +86,8 @@ export const userService = {
         phone: userData.phone || "",
         role: userData.role || "user",
         isAdmin: userData.isAdmin === true || userData.role === "admin",
+        isActive:
+          userData.isActive === undefined ? true : userData.isActive === true,
         createdAt,
         updatedAt,
       };
@@ -109,6 +111,7 @@ export const userService = {
         await updateDoc(userRef, {
           role: "consultor",
           isAdmin: false,
+          isActive: true,
           updatedAt: now,
         });
         console.log("✅ Usuário atualizado para consultor");
@@ -120,6 +123,7 @@ export const userService = {
           email: authUser?.email || "",
           role: "consultor",
           isAdmin: false,
+          isActive: true,
           createdAt: now,
           updatedAt: now,
         });
@@ -175,6 +179,7 @@ export const userService = {
         await updateDoc(userRef, {
           role: "admin",
           isAdmin: true,
+          isActive: true,
           updatedAt: now,
         });
         console.log("✅ Usuário atualizado para admin");
@@ -186,6 +191,7 @@ export const userService = {
           email: authUser?.email || "",
           role: "admin",
           isAdmin: true,
+          isActive: true,
           createdAt: now,
           updatedAt: now,
         });
@@ -290,6 +296,7 @@ export const userService = {
           phone: userData.phone || "",
           role: "user", // Garantir que é usuário normal
           isAdmin: false, // Garantir que não é admin
+          isActive: true, // Conta ativa por padrão
           createdAt: now,
           updatedAt: now,
         });
@@ -308,6 +315,60 @@ export const userService = {
       }
     } catch (error) {
       console.error("❌ Erro ao criar documento de usuário:", error);
+      throw error;
+    }
+  },
+  /**
+   * Toggle ativo/inativo de um usuário
+   */
+  async setUserActive(userId: string, active: boolean): Promise<void> {
+    try {
+      const userRef = doc(db, "users", userId);
+      const now = Timestamp.now();
+      await updateDoc(userRef, {
+        isActive: active,
+        updatedAt: now,
+      });
+      console.log(`✅ Usuário ${userId} atualizado isActive=${active}`);
+    } catch (error) {
+      console.error("❌ Erro ao atualizar isActive do usuário:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Buscar todos os usuários
+   */
+  async getAllUsers(): Promise<User[]> {
+    try {
+      const usersRef = collection(db, "users");
+      const snapshot = await getDocs(usersRef);
+      const results: User[] = [];
+      snapshot.forEach((docSnap) => {
+        const data: any = docSnap.data();
+        results.push({
+          id: docSnap.id,
+          name: data.name || "",
+          email: data.email || "",
+          username: data.username || "",
+          bio: data.bio || "",
+          phone: data.phone || "",
+          role: data.role || "user",
+          isAdmin: data.isAdmin === true || data.role === "admin",
+          isActive: data.isActive === undefined ? true : data.isActive === true,
+          createdAt:
+            data.createdAt && data.createdAt.toDate
+              ? data.createdAt.toDate()
+              : new Date(),
+          updatedAt:
+            data.updatedAt && data.updatedAt.toDate
+              ? data.updatedAt.toDate()
+              : new Date(),
+        });
+      });
+      return results;
+    } catch (error) {
+      console.error("❌ Erro ao buscar todos os usuários:", error);
       throw error;
     }
   },
@@ -331,6 +392,7 @@ export const userService = {
           phone: data.phone || "",
           role: data.role || "user",
           isAdmin: data.isAdmin === true || data.role === "admin",
+          isActive: data.isActive === undefined ? true : data.isActive === true,
           createdAt:
             data.createdAt && data.createdAt.toDate
               ? data.createdAt.toDate()
@@ -344,6 +406,69 @@ export const userService = {
       return results;
     } catch (error) {
       console.error("❌ Erro ao buscar usuários por role:", error);
+      throw error;
+    }
+  },
+  /**
+   * Buscar usuário pelo email (retorna o primeiro que encontrar)
+   */
+  async getUserByEmail(email: string): Promise<User | null> {
+    try {
+      const usersRef = collection(db, "users");
+      const q = query(usersRef, where("email", "==", email));
+      const snapshot = await getDocs(q);
+      if (snapshot.empty) return null;
+      const docSnap = snapshot.docs[0];
+      const data: any = docSnap.data();
+      return {
+        id: docSnap.id,
+        name: data.name || "",
+        email: data.email || "",
+        username: data.username || "",
+        bio: data.bio || "",
+        phone: data.phone || "",
+        role: data.role || "user",
+        isAdmin: data.isAdmin === true || data.role === "admin",
+        isActive: data.isActive === undefined ? true : data.isActive === true,
+        createdAt:
+          data.createdAt && data.createdAt.toDate
+            ? data.createdAt.toDate()
+            : new Date(),
+        updatedAt:
+          data.updatedAt && data.updatedAt.toDate
+            ? data.updatedAt.toDate()
+            : new Date(),
+      };
+    } catch (error) {
+      console.error("❌ Erro ao buscar usuário por email:", error);
+      throw error;
+    }
+  },
+  /**
+   * Atualizar campos básicos do usuário (name, phone, role, isAdmin)
+   */
+  async updateUser(
+    userId: string,
+    payload: {
+      name?: string;
+      phone?: string;
+      role?: string;
+      isAdmin?: boolean;
+    },
+  ): Promise<void> {
+    try {
+      const userRef = doc(db, "users", userId);
+      const now = Timestamp.now();
+      const updatePayload: any = { updatedAt: now };
+      if (payload.name !== undefined) updatePayload.name = payload.name;
+      if (payload.phone !== undefined) updatePayload.phone = payload.phone;
+      if (payload.role !== undefined) updatePayload.role = payload.role;
+      if (payload.isAdmin !== undefined)
+        updatePayload.isAdmin = payload.isAdmin;
+      await updateDoc(userRef, updatePayload);
+      console.log(`✅ Usuário ${userId} atualizado`, updatePayload);
+    } catch (error) {
+      console.error("❌ Erro ao atualizar usuário:", error);
       throw error;
     }
   },

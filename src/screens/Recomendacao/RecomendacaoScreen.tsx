@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Tela de Recomendação
  */
 
@@ -46,7 +46,7 @@ export const RecomendacaoScreen = () => {
           ]}
         >
           <View style={styles.header}>
-            <Ionicons name="bulb-outline" size={64} color="#FF9800" />
+            <Ionicons name="bulb-outline" size={64} color="#c084fc" />
             <Text style={styles.title}>Recomendação</Text>
             <Text style={styles.subtitle}>
               Receba recomendações personalizadas para melhorar suas finanças

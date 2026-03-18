@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Tela de Listagem de Rendas
  */
 
@@ -89,7 +89,7 @@ export const IncomeListScreen = () => {
     >
       <View style={styles.incomeItemLeft}>
         <View style={styles.incomeIconContainer}>
-          <Ionicons name="cash" size={24} color="#4CAF50" />
+          <Ionicons name="cash" size={24} color="#8c52ff" />
         </View>
         <View style={styles.incomeInfo}>
           <Text style={styles.incomeDescription} numberOfLines={1}>
@@ -131,7 +131,7 @@ export const IncomeListScreen = () => {
     return (
       <Layout title="Minhas Rendas" showBackButton={true} showSidebar={false}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#007AFF" />
+          <ActivityIndicator size="large" color="#8c52ff" />
           <Text style={styles.loadingText}>Carregando rendas...</Text>
         </View>
       </Layout>
@@ -157,7 +157,7 @@ export const IncomeListScreen = () => {
               style={styles.addButton}
               onPress={() => navigate('AddIncome')}
             >
-              <Ionicons name="add-circle" size={32} color="#4CAF50" />
+              <Ionicons name="add-circle" size={32} color="#8c52ff" />
             </TouchableOpacity>
           </View>
         </View>
@@ -185,7 +185,7 @@ export const IncomeListScreen = () => {
               <RefreshControl
                 refreshing={refreshing}
                 onRefresh={handleRefresh}
-                colors={['#007AFF']}
+                colors={['#8c52ff']}
               />
             }
           >
@@ -239,7 +239,7 @@ const styles = StyleSheet.create({
   totalValue: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: '#4CAF50',
+    color: '#8c52ff',
   },
   totalSubtext: {
     fontSize: 12,
@@ -273,7 +273,7 @@ const styles = StyleSheet.create({
   dateTotal: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#4CAF50',
+    color: '#8c52ff',
   },
   incomeList: {
     backgroundColor: '#1a1a1a',
@@ -304,7 +304,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     backgroundColor: '#1a3a1a',
     borderWidth: 1,
-    borderColor: '#4CAF5040',
+    borderColor: '#8c52ff40',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
@@ -337,7 +337,7 @@ const styles = StyleSheet.create({
   incomeValue: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#4CAF50',
+    color: '#8c52ff',
   },
   emptyContainer: {
     flex: 1,

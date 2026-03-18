@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Tela de Controle de Orçamento Mensal
  */
 
@@ -24,6 +24,7 @@ import {
   getCurrentMonthYear,
 } from "../../services/budgetServices";
 import expenseServices from "../../services/expenseServices";
+import { planningServices } from "../../services/planningServices";
 import {
   getFirstDayOfMonth,
   getStartOfDay,
@@ -44,13 +45,15 @@ export const BudgetScreen = () => {
   const slideAnim = useRef(new Animated.Value(30)).current;
 
   // Estados
-  const [monthlyBudget, setMonthlyBudget] = useState<string>("");
+  const [plannedMonthlySpending, setPlannedMonthlySpending] =
+    useState<number>(0);
   const [dailyExpenses, setDailyExpenses] = useState<DailyExpense[]>([]);
   const [editingDay, setEditingDay] = useState<number | null>(null);
   const [tempValue, setTempValue] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(true);
   const [saving, setSaving] = useState<boolean>(false);
   const [zeroConfirmedDays, setZeroConfirmedDays] = useState<number[]>([]);
+  const [planningLoaded, setPlanningLoaded] = useState<boolean>(false);
 
   // Calcular dias do mês atual
   const today = new Date();
@@ -63,8 +66,7 @@ export const BudgetScreen = () => {
   ).getDate();
 
   // Calcular média diária ideal
-  const budgetValue =
-    parseFloat(monthlyBudget.replace(/[^0-9.,]/g, "").replace(",", ".")) || 0;
+  const budgetValue = plannedMonthlySpending || 0;
   const idealDailyAverage = budgetValue / daysInMonth;
 
   // Calcular total gasto e média real
@@ -79,8 +81,9 @@ export const BudgetScreen = () => {
   const getPerformanceIndicator = () => {
     if (budgetValue <= 0) {
       return {
-        label: "Sem meta definida",
-        detail: "Defina seu orçamento mensal para gerar sua meta diária.",
+        label: "Sem planejamento definido",
+        detail:
+          "Peça ao consultor para preencher o planejamento com gastos esperados.",
         color: "#999",
         icon: "information-circle-outline" as const,
       };
@@ -93,7 +96,7 @@ export const BudgetScreen = () => {
       return {
         label: "Acima da meta",
         detail: `${formatCurrency(Math.abs(difference))} acima da meta diária.`,
-        color: "#F44336",
+        color: "#ff4d6d",
         icon: "trending-up" as const,
       };
     }
@@ -102,7 +105,7 @@ export const BudgetScreen = () => {
       return {
         label: "Abaixo da meta",
         detail: `${formatCurrency(Math.abs(difference))} abaixo da meta diária.`,
-        color: "#4CAF50",
+        color: "#8c52ff",
         icon: "trending-down" as const,
       };
     }
@@ -110,7 +113,7 @@ export const BudgetScreen = () => {
     return {
       label: "Dentro da meta",
       detail: "Sua média diária está alinhada com a meta definida.",
-      color: "#FF9800",
+      color: "#c084fc",
       icon: "checkmark-circle" as const,
     };
   };
@@ -149,10 +152,43 @@ export const BudgetScreen = () => {
 
     try {
       setLoading(true);
+
+      // 1) Buscar valor mensal esperado do planejamento do consultor
+      const planning = await planningServices.getPlanning(user.id);
+      const totalPlannedByCategory = planning?.plannedByCategory
+        ? Object.values(planning.plannedByCategory).reduce(
+            (sum, value) => sum + (Number(value) || 0),
+            0,
+          )
+        : 0;
+      const totalBills = (planning?.bills || []).reduce(
+        (sum, bill) => sum + (Number(bill.amount) || 0),
+        0,
+      );
+      const totalExpectedExpenses = (planning?.expectedExpenses || []).reduce(
+        (sum, item) => sum + (Number(item.amount) || 0),
+        0,
+      );
+
+      const totalPlannedSpending =
+        totalPlannedByCategory + totalBills + totalExpectedExpenses;
+      setPlannedMonthlySpending(totalPlannedSpending);
+      setPlanningLoaded(!!planning);
+
+      if (__DEV__) {
+        console.log("[BUDGET] planejamento carregado para consumo moderado", {
+          userId: user.id,
+          hasPlanning: !!planning,
+          totalPlannedByCategory,
+          totalBills,
+          totalExpectedExpenses,
+          totalPlannedSpending,
+        });
+      }
+
       const budget = await budgetServices.getCurrentBudget(user.id);
 
       if (budget) {
-        setMonthlyBudget(budget.monthlyBudget.toString());
         setZeroConfirmedDays(budget.zeroConfirmedDays || []);
 
         // Tentar preencher dailyExpenses a partir dos gastos reais do mês
@@ -259,36 +295,6 @@ export const BudgetScreen = () => {
     }
   };
 
-  const saveMonthlyBudget = async (value: string) => {
-    if (!user) return;
-
-    const numValue =
-      parseFloat(value.replace(/[^0-9.,]/g, "").replace(",", ".")) || 0;
-
-    try {
-      setSaving(true);
-      await budgetServices.updateMonthlyBudget(
-        user.id,
-        currentMonthYear,
-        numValue,
-      );
-      console.log("✅ Orçamento mensal salvo no Firebase");
-    } catch (error) {
-      console.error("❌ Erro ao salvar orçamento mensal:", error);
-      Alert.alert("Erro", "Não foi possível salvar o orçamento");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleBudgetChange = (value: string) => {
-    setMonthlyBudget(value);
-  };
-
-  const handleBudgetBlur = () => {
-    saveMonthlyBudget(monthlyBudget);
-  };
-
   const handleSaveExpense = async (day: number) => {
     if (!user) return;
 
@@ -371,7 +377,7 @@ export const BudgetScreen = () => {
         showSidebar={true}
       >
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#007AFF" />
+          <ActivityIndicator size="large" color="#8c52ff" />
           <Text style={styles.loadingText}>Carregando orçamento...</Text>
         </View>
       </Layout>
@@ -392,14 +398,14 @@ export const BudgetScreen = () => {
         >
           {/* Header */}
           <View style={styles.header}>
-            <Ionicons name="wallet-outline" size={64} color="#007AFF" />
+            <Ionicons name="wallet-outline" size={64} color="#8c52ff" />
             <Text style={styles.title}>Orçamento Mensal</Text>
             <Text style={styles.subtitle}>
               Controle quanto você pode gastar por dia
             </Text>
             {saving && (
               <View style={styles.savingIndicator}>
-                <ActivityIndicator size="small" color="#4CAF50" />
+                <ActivityIndicator size="small" color="#8c52ff" />
                 <Text style={styles.savingText}>Salvando...</Text>
               </View>
             )}
@@ -407,24 +413,30 @@ export const BudgetScreen = () => {
 
           {/* Meta Mensal */}
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>
-              💰 Quanto você pode gastar este mês?
+            <Text style={styles.cardTitle}>💰 Gasto esperado do planejamento</Text>
+            <View style={styles.inputContainerReadOnly}>
+              <Text style={styles.readOnlyBudgetValue}>
+                {formatCurrency(budgetValue)}
+              </Text>
+            </View>
+            <Text style={styles.helperText}>
+              {planningLoaded
+                ? "Valor definido automaticamente com base no planejamento do consultor."
+                : "Planejamento não encontrado. O valor ficará em R$ 0,00 até o consultor preencher o planejamento."}
             </Text>
-            <View style={styles.inputContainer}>
-              <Text style={styles.currencySymbol}>R$</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="0,00"
-                placeholderTextColor="#666"
-                keyboardType="numeric"
-                value={monthlyBudget}
-                onChangeText={handleBudgetChange}
-                onBlur={handleBudgetBlur}
+            <View style={styles.infoContainer}>
+              <Ionicons
+                name="information-circle-outline"
+                size={16}
+                color="#999"
               />
+              <Text style={styles.infoText}>
+                Esse campo não é editável pelo cliente.
+              </Text>
             </View>
             {budgetValue > 0 && (
               <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>Média ideal por dia:</Text>
+                <Text style={styles.infoLabel}>Média diária ideal:</Text>
                 <Text style={styles.infoValue}>
                   {formatCurrency(idealDailyAverage)}
                 </Text>
@@ -436,13 +448,13 @@ export const BudgetScreen = () => {
           {budgetValue > 0 && (
             <View style={styles.statsContainer}>
               <View style={styles.statCard}>
-                <Ionicons name="calendar-outline" size={24} color="#007AFF" />
+                <Ionicons name="calendar-outline" size={24} color="#8c52ff" />
                 <Text style={styles.statLabel}>Dias no mês</Text>
                 <Text style={styles.statValue}>{daysInMonth}</Text>
               </View>
 
               <View style={styles.statCard}>
-                <Ionicons name="cash-outline" size={24} color="#4CAF50" />
+                <Ionicons name="cash-outline" size={24} color="#8c52ff" />
                 <Text style={styles.statLabel}>Total gasto</Text>
                 <Text style={styles.statValue}>
                   {formatCurrency(totalSpent)}
@@ -458,7 +470,7 @@ export const BudgetScreen = () => {
                 <Ionicons
                   name={isOverBudget ? "trending-up" : "trending-down"}
                   size={24}
-                  color={isOverBudget ? "#F44336" : "#4CAF50"}
+                  color={isOverBudget ? "#ff4d6d" : "#8c52ff"}
                 />
                 <Text style={styles.statLabel}>Média real/dia</Text>
                 <Text
@@ -548,7 +560,7 @@ export const BudgetScreen = () => {
                             <Ionicons
                               name="checkmark-circle"
                               size={14}
-                              color="#4CAF50"
+                              color="#8c52ff"
                             />
                             <Text style={styles.zeroConfirmedText}>
                               Zero confirmado
@@ -590,7 +602,7 @@ export const BudgetScreen = () => {
                           style={styles.editIconButton}
                           onPress={() => handleEditDay(day)}
                         >
-                          <Ionicons name="pencil" size={18} color="#007AFF" />
+                          <Ionicons name="pencil" size={18} color="#8c52ff" />
                         </TouchableOpacity>
                       )}
                     </View>
@@ -608,7 +620,7 @@ export const BudgetScreen = () => {
                 color="#666"
               />
               <Text style={styles.emptyText}>
-                Defina seu orçamento mensal para começar
+                Aguarde o planejamento do consultor para iniciar o consumo moderado
               </Text>
             </View>
           )}
@@ -662,7 +674,7 @@ const styles = StyleSheet.create({
   },
   savingText: {
     fontSize: 12,
-    color: "#4CAF50",
+    color: "#8c52ff",
   },
   card: {
     backgroundColor: "#1a1a1a",
@@ -690,6 +702,38 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#333",
     paddingHorizontal: 12,
+  },
+  inputContainerReadOnly: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#0a0a0a",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#333",
+    paddingHorizontal: 12,
+    paddingVertical: 14,
+  },
+  readOnlyBudgetValue: {
+    fontSize: 26,
+    fontWeight: "800",
+    color: "#fff",
+  },
+  helperText: {
+    fontSize: 12,
+    color: "#999",
+    marginTop: 10,
+    lineHeight: 18,
+  },
+  infoContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 10,
+  },
+  infoText: {
+    fontSize: 12,
+    color: "#999",
   },
   currencySymbol: {
     fontSize: 18,
@@ -719,7 +763,7 @@ const styles = StyleSheet.create({
   infoValue: {
     fontSize: 16,
     fontWeight: "bold",
-    color: "#4CAF50",
+    color: "#8c52ff",
   },
   statsContainer: {
     flexDirection: "row",
@@ -735,7 +779,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   statCardWarning: {
-    borderColor: "#F44336",
+    borderColor: "#ff4d6d",
     backgroundColor: "#2a1a1a",
   },
   statLabel: {
@@ -751,7 +795,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   statValueWarning: {
-    color: "#F44336",
+    color: "#ff4d6d",
   },
   performanceCard: {
     backgroundColor: "#1a1a1a",
@@ -824,7 +868,7 @@ const styles = StyleSheet.create({
   },
   dayExpense: {
     fontSize: 12,
-    color: "#4CAF50",
+    color: "#8c52ff",
     marginTop: 2,
   },
   dayEmpty: {
@@ -859,7 +903,7 @@ const styles = StyleSheet.create({
     color: "#fff",
     backgroundColor: "#000",
     borderWidth: 1,
-    borderColor: "#007AFF",
+    borderColor: "#8c52ff",
     borderRadius: 6,
     paddingHorizontal: 8,
     paddingVertical: 6,
@@ -868,7 +912,7 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   saveButton: {
-    backgroundColor: "#4CAF50",
+    backgroundColor: "#8c52ff",
     width: 32,
     height: 32,
     borderRadius: 16,
@@ -876,7 +920,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   cancelButton: {
-    backgroundColor: "#F44336",
+    backgroundColor: "#ff4d6d",
     width: 32,
     height: 32,
     borderRadius: 16,

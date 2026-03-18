@@ -1,8 +1,8 @@
-/**
+﻿/**
  * Tela de Cadastro de Cliente (Admin)
  */
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from "react";
 import {
   View,
   Text,
@@ -14,42 +14,48 @@ import {
   Animated,
   KeyboardAvoidingView,
   Platform,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { Layout } from '../../components/Layout/Layout';
-import { useNavigation } from '../../routes/NavigationContext';
-import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
-import { doc, setDoc, Timestamp } from 'firebase/firestore';
-import { auth, db } from '../../lib/firebase';
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { Layout } from "../../components/Layout/Layout";
+import { useNavigation } from "../../routes/NavigationContext";
+import { initializeApp, deleteApp } from "firebase/app";
+import {
+  getAuth,
+  createUserWithEmailAndPassword,
+  updateProfile,
+} from "firebase/auth";
+import { doc, setDoc, Timestamp } from "firebase/firestore";
+import { auth, db, firebaseConfig } from "../../lib/firebase";
 
 export const CadastrarClienteScreen = () => {
   const { navigate } = useNavigation();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
 
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [phone, setPhone] = useState('');
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [phone, setPhone] = useState("");
   const [loading, setLoading] = useState(false);
+  const [role, setRole] = useState<"user" | "consultor">("user");
 
   // Função para aplicar máscara de telefone brasileiro
   const formatPhone = (text: string): string => {
     // Remove tudo que não é número
-    const numbers = text.replace(/\D/g, '');
-    
+    const numbers = text.replace(/\D/g, "");
+
     // Aplica máscara conforme o tamanho
     if (numbers.length <= 10) {
       // Telefone fixo: (XX) XXXX-XXXX
       return numbers
-        .replace(/(\d{2})(\d)/, '($1) $2')
-        .replace(/(\d{4})(\d)/, '$1-$2');
+        .replace(/(\d{2})(\d)/, "($1) $2")
+        .replace(/(\d{4})(\d)/, "$1-$2");
     } else {
       // Celular: (XX) XXXXX-XXXX
       return numbers
-        .replace(/(\d{2})(\d)/, '($1) $2')
-        .replace(/(\d{5})(\d)/, '$1-$2');
+        .replace(/(\d{2})(\d)/, "($1) $2")
+        .replace(/(\d{5})(\d)/, "$1-$2");
     }
   };
 
@@ -76,67 +82,91 @@ export const CadastrarClienteScreen = () => {
 
   const handleCadastrar = async () => {
     if (!name.trim() || !email.trim() || !password.trim()) {
-      Alert.alert('Erro', 'Por favor, preencha todos os campos obrigatórios.');
+      Alert.alert("Erro", "Por favor, preencha todos os campos obrigatórios.");
       return;
     }
 
     if (password.length < 6) {
-      Alert.alert('Erro', 'A senha deve ter pelo menos 6 caracteres.');
+      Alert.alert("Erro", "A senha deve ter pelo menos 6 caracteres.");
       return;
     }
 
     if (password !== confirmPassword) {
-      Alert.alert('Erro', 'As senhas não coincidem.');
+      Alert.alert("Erro", "As senhas não coincidem.");
       return;
     }
 
     setLoading(true);
 
     try {
-      // Criar usuário no Firebase Auth
-      const userCredential = await createUserWithEmailAndPassword(
-        auth,
-        email,
-        password
+      // Criar usuário no Firebase Auth usando um app secundário para
+      // evitar que o admin atual seja deslogado (createUserWithEmailAndPassword
+      // faz sign-in no auth padrão). O usuário criado ficará no Auth do projeto,
+      // mas o login ocorrerá apenas na instância secundária.
+      const secondaryApp = initializeApp(
+        firebaseConfig,
+        `secondary-${Date.now()}`,
       );
+      try {
+        const secondaryAuth = getAuth(secondaryApp);
+        const userCredential = await createUserWithEmailAndPassword(
+          secondaryAuth,
+          email,
+          password,
+        );
 
-      // Atualizar o perfil com o nome
-      await updateProfile(userCredential.user, {
-        displayName: name,
-      });
+        // Atualizar o perfil com o nome (no usuário recém-criado)
+        await updateProfile(userCredential.user, {
+          displayName: name,
+        });
 
-      // Criar documento no Firestore como usuário normal (não admin)
-      const now = Timestamp.now();
-      // Remover máscara do telefone antes de salvar (apenas números)
-      const phoneNumbers = phone.replace(/\D/g, '');
-      await setDoc(doc(db, 'users', userCredential.user.uid), {
-        name,
-        email,
-        phone: phoneNumbers || '',
-        role: 'user', // Garantir que é usuário normal
-        isAdmin: false, // Garantir que não é admin
-        createdAt: now,
-        updatedAt: now,
-      });
+        // Criar documento no Firestore como usuário normal (não admin)
+        const now = Timestamp.now();
+        // Remover máscara do telefone antes de salvar (apenas números)
+        const phoneNumbers = phone.replace(/\D/g, "");
+        await setDoc(doc(db, "users", userCredential.user.uid), {
+          name,
+          email,
+          phone: phoneNumbers || "",
+          role: role === "consultor" ? "consultor" : "user",
+          isAdmin: false,
+          isActive: true,
+          createdAt: now,
+          updatedAt: now,
+        });
 
-      // Navegar para a tela de perfil com mensagem de sucesso
-      navigate('Profile', { 
-        showSuccess: true, 
-        successMessage: `Cliente "${name}" cadastrado com sucesso!\n\nEmail: ${email}\n\nO cliente já pode fazer login no sistema.` 
-      });
+        // Não reautenticar o admin — o uso do app secundário isolou o novo login.
+        // Limpar a instância secundária.
+        await deleteApp(secondaryApp);
+
+        // Navegar para a tela de perfil com mensagem de sucesso
+        navigate("Profile", {
+          showSuccess: true,
+          successMessage: `Cliente "${name}" cadastrado com sucesso!\n\nEmail: ${email}\n\nO cliente já pode fazer login no sistema.`,
+        });
+        return;
+      } catch (err) {
+        // Se der erro na criação com app secundário, tentar remover app e continuar com erro geral
+        try {
+          await deleteApp(secondaryApp);
+        } catch (e) {
+          /* ignore */
+        }
+        throw err;
+      }
     } catch (error: any) {
-      console.error('Erro ao cadastrar cliente:', error);
-      let errorMessage = 'Erro ao cadastrar cliente. Tente novamente.';
-      
-      if (error.code === 'auth/email-already-in-use') {
-        errorMessage = 'Este email já está em uso.';
-      } else if (error.code === 'auth/invalid-email') {
-        errorMessage = 'Email inválido.';
-      } else if (error.code === 'auth/weak-password') {
-        errorMessage = 'Senha muito fraca.';
+      console.error("Erro ao cadastrar cliente:", error);
+      let errorMessage = "Erro ao cadastrar cliente. Tente novamente.";
+
+      if (error.code === "auth/email-already-in-use") {
+        errorMessage = "Este email já está em uso.";
+      } else if (error.code === "auth/invalid-email") {
+        errorMessage = "Email inválido.";
+      } else if (error.code === "auth/weak-password") {
+        errorMessage = "Senha muito fraca.";
       }
 
-      Alert.alert('Erro', errorMessage);
+      Alert.alert("Erro", errorMessage);
     } finally {
       setLoading(false);
     }
@@ -146,7 +176,7 @@ export const CadastrarClienteScreen = () => {
     <Layout title="Cadastrar Cliente" showBackButton={true} showSidebar={false}>
       <KeyboardAvoidingView
         style={styles.container}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
         <ScrollView style={styles.scrollView}>
           <Animated.View
@@ -159,19 +189,58 @@ export const CadastrarClienteScreen = () => {
             ]}
           >
             <View style={styles.header}>
-              <Ionicons name="person-add-outline" size={64} color="#007AFF" />
+              <Ionicons name="person-add-outline" size={64} color="#8c52ff" />
               <Text style={styles.title}>Cadastrar Novo Cliente</Text>
               <Text style={styles.subtitle}>
                 Preencha os dados do novo cliente
               </Text>
             </View>
 
+            <View style={styles.roleRow}>
+              <TouchableOpacity
+                style={[
+                  styles.roleButton,
+                  role === "user" && styles.roleActive,
+                ]}
+                onPress={() => setRole("user")}
+              >
+                <Text
+                  style={[
+                    styles.roleText,
+                    role === "user" && styles.roleTextActive,
+                  ]}
+                >
+                  Cliente
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.roleButton,
+                  role === "consultor" && styles.roleActive,
+                ]}
+                onPress={() => setRole("consultor")}
+              >
+                <Text
+                  style={[
+                    styles.roleText,
+                    role === "consultor" && styles.roleTextActive,
+                  ]}
+                >
+                  Consultor
+                </Text>
+              </TouchableOpacity>
+            </View>
 
             <View style={styles.form}>
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Nome Completo *</Text>
                 <View style={styles.inputContainer}>
-                  <Ionicons name="person-outline" size={20} color="#999" style={styles.inputIcon} />
+                  <Ionicons
+                    name="person-outline"
+                    size={20}
+                    color="#999"
+                    style={styles.inputIcon}
+                  />
                   <TextInput
                     style={styles.input}
                     placeholder="Digite o nome completo"
@@ -186,7 +255,12 @@ export const CadastrarClienteScreen = () => {
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Email *</Text>
                 <View style={styles.inputContainer}>
-                  <Ionicons name="mail-outline" size={20} color="#999" style={styles.inputIcon} />
+                  <Ionicons
+                    name="mail-outline"
+                    size={20}
+                    color="#999"
+                    style={styles.inputIcon}
+                  />
                   <TextInput
                     style={styles.input}
                     placeholder="Digite o email"
@@ -203,7 +277,12 @@ export const CadastrarClienteScreen = () => {
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Telefone</Text>
                 <View style={styles.inputContainer}>
-                  <Ionicons name="call-outline" size={20} color="#999" style={styles.inputIcon} />
+                  <Ionicons
+                    name="call-outline"
+                    size={20}
+                    color="#999"
+                    style={styles.inputIcon}
+                  />
                   <TextInput
                     style={styles.input}
                     placeholder="(00) 00000-0000"
@@ -219,7 +298,12 @@ export const CadastrarClienteScreen = () => {
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Senha *</Text>
                 <View style={styles.inputContainer}>
-                  <Ionicons name="lock-closed-outline" size={20} color="#999" style={styles.inputIcon} />
+                  <Ionicons
+                    name="lock-closed-outline"
+                    size={20}
+                    color="#999"
+                    style={styles.inputIcon}
+                  />
                   <TextInput
                     style={styles.input}
                     placeholder="Digite a senha"
@@ -234,7 +318,12 @@ export const CadastrarClienteScreen = () => {
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Confirmar Senha *</Text>
                 <View style={styles.inputContainer}>
-                  <Ionicons name="lock-closed-outline" size={20} color="#999" style={styles.inputIcon} />
+                  <Ionicons
+                    name="lock-closed-outline"
+                    size={20}
+                    color="#999"
+                    style={styles.inputIcon}
+                  />
                   <TextInput
                     style={styles.input}
                     placeholder="Confirme a senha"
@@ -251,9 +340,17 @@ export const CadastrarClienteScreen = () => {
                 onPress={handleCadastrar}
                 disabled={loading}
               >
-                <Ionicons name="checkmark-circle-outline" size={24} color="#fff" />
+                <Ionicons
+                  name="checkmark-circle-outline"
+                  size={24}
+                  color="#fff"
+                />
                 <Text style={styles.buttonText}>
-                  {loading ? 'Cadastrando...' : 'Cadastrar Cliente'}
+                  {loading
+                    ? "Cadastrando..."
+                    : role === "consultor"
+                      ? "Cadastrar Consultor"
+                      : "Cadastrar Cliente"}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -267,7 +364,7 @@ export const CadastrarClienteScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: "#000",
   },
   scrollView: {
     flex: 1,
@@ -276,21 +373,21 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   header: {
-    alignItems: 'center',
+    alignItems: "center",
     marginBottom: 32,
     paddingVertical: 20,
   },
   title: {
     fontSize: 28,
-    fontWeight: 'bold',
-    color: '#fff',
+    fontWeight: "bold",
+    color: "#fff",
     marginTop: 16,
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 16,
-    color: '#999',
-    textAlign: 'center',
+    color: "#999",
+    textAlign: "center",
   },
   form: {
     gap: 20,
@@ -300,17 +397,17 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#fff',
+    fontWeight: "600",
+    color: "#fff",
     marginBottom: 4,
   },
   inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#1a1a1a',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#1a1a1a",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: "#333",
     paddingHorizontal: 16,
   },
   inputIcon: {
@@ -319,14 +416,14 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     height: 50,
-    color: '#fff',
+    color: "#fff",
     fontSize: 16,
   },
   button: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#007AFF',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#8c52ff",
     borderRadius: 12,
     padding: 16,
     marginTop: 8,
@@ -336,19 +433,19 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   buttonText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
   successContainer: {
-    backgroundColor: '#1a3a1a',
+    backgroundColor: "#1a3a1a",
     borderRadius: 16,
     padding: 24,
     marginBottom: 24,
     borderWidth: 2,
-    borderColor: '#4CAF50',
-    alignItems: 'center',
-    shadowColor: '#4CAF50',
+    borderColor: "#8c52ff",
+    alignItems: "center",
+    shadowColor: "#8c52ff",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -359,28 +456,53 @@ const styles = StyleSheet.create({
   },
   successTitle: {
     fontSize: 24,
-    fontWeight: 'bold',
-    color: '#4CAF50',
+    fontWeight: "bold",
+    color: "#8c52ff",
     marginBottom: 12,
-    textAlign: 'center',
+    textAlign: "center",
   },
   successMessage: {
     fontSize: 16,
-    color: '#fff',
-    textAlign: 'center',
+    color: "#fff",
+    textAlign: "center",
     lineHeight: 24,
     marginBottom: 12,
   },
   successInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
     marginTop: 8,
   },
   successInfoText: {
     fontSize: 12,
-    color: '#4CAF50',
-    fontStyle: 'italic',
+    color: "#8c52ff",
+    fontStyle: "italic",
+  },
+  roleRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 12,
+    marginBottom: 16,
+  },
+  roleButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: "#1a1a1a",
+    borderWidth: 1,
+    borderColor: "#333",
+  },
+  roleActive: {
+    backgroundColor: "#8c52ff",
+    borderColor: "#8c52ff",
+  },
+  roleText: {
+    color: "#fff",
+    fontWeight: "600",
+  },
+  roleTextActive: {
+    color: "#fff",
   },
 });
 

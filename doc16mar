@@ -1,0 +1,97 @@
+1- Refatoração da tela ClientPlanningScreen
+🔹 Refatoramos a tela `ClientPlanningScreen` removendo o seletor local de cliente e reorganizando a interface para que as abas "Gastos" e "Rendas" fiquem no topo.
+🔹 Objetivos, decisões e processos: remover redundância de seleção de cliente; garantir que a tela sempre receba `clientId` via navegação; centralizar carregamento do planejamento a partir do `planningServices`.
+✔️ Benefícios:
+
+- UI mais simples e com fluxo claro para consultores.
+- Menos estados locais duplicados e menor risco de inconsistência de dados.
+- Facilita testes e futuras integrações.
+
+2- Redirecionamento quando `clientId` ausente
+🔹 Implementamos lógica que redireciona para a lista de clientes (`ClientList`) caso a tela seja aberta sem o parâmetro `clientId`.
+🔹 Objetivos, decisões e processos: evitar erro em telas que dependem do cliente; decisão tomada em alinhamento com comportamento esperado pelo product owner.
+✔️ Benefícios:
+
+- Prevê casos de navegação indevida e melhora a experiência do usuário.
+- Evita crashes e chamadas desnecessárias ao Firestore.
+
+3- Abas superiores (Gastos / Rendas)
+🔹 Movemos as abas para a parte superior da tela e destacamos a aba ativa visualmente com um card de resumo contextual.
+🔹 Objetivos, decisões e processos: melhorar a hierarquia da informação e tornar a alternância entre Gastos e Rendas mais imediata.
+✔️ Benefícios:
+
+- Navegação de conteúdo mais rápida.
+- Melhora a descoberta das seções pelo consultor.
+
+4- Card de destaque por aba
+🔹 Adicionamos um card de destaque que mostra o total relevante (Gastos esperados ou Rendas esperadas) conforme a aba ativa.
+🔹 Objetivos, decisões e processos: apresentar um resumo de alto nível sem necessidade de scroll.
+✔️ Benefícios:
+
+- Feedback visual instantâneo sobre impacto financeiro.
+- Auxilia decisões rápidas durante a edição do planejamento.
+
+5- Resumo fixo inferior
+🔹 Implementamos um resumo fixo na base da tela com três blocos: Rendas esperadas, Gastos esperados e Poupança esperada.
+🔹 Objetivos, decisões e processos: garantir que o resumo nunca sobreponha o conteúdo (adicionamos `bottomSpacer` no ScrollView).
+✔️ Benefícios:
+
+- Informação-chave sempre visível.
+- Evita que o teclado ou elementos roláveis ocultem o resumo.
+
+6- Modal de cadastro de Conta (reuso do padrão de Contas)
+🔹 Adicionamos modal de cadastro de conta na aba Gastos, reutilizando o padrão visual e campos da tela `BillsScreen`.
+🔹 Objetivos, decisões e processos: manter consistência com fluxo de Contas existente e reduzir trabalho de implementação.
+✔️ Benefícios:
+
+- UX consistente entre fluxos Cliente e Consultor.
+- Reaproveitamento de padrão reduz custo de manutenção.
+
+7- Renderização de cards para Contas
+🔹 Substituímos a listagem minimalista por cards que exibem título, descrição e valor, com ações rápidas (ex.: remover).
+🔹 Objetivos, decisões e processos: alinhar apresentação com a tela de Contas existente e facilitar ações diretas.
+✔️ Benefícios:
+
+- Visual mais claro e acionável.
+- Facilita leitura e revisão por parte do consultor.
+
+8- Modal de cadastro de Renda e cards de Renda
+🔹 Implementamos modal de cadastro para rendas na aba Rendas e renderização por card, análogo às contas.
+🔹 Objetivos, decisões e processos: tornar o cadastro de fontes de renda direto e consistente.
+✔️ Benefícios:
+
+- Fluxo simples para incluir múltiplas rendas esperadas.
+- Interface consistente entre rendas e contas.
+
+9- Movimentação do bloco "Valores por categoria" para Gastos
+🔹 Movemos o input de valores por categoria (despesa) para dentro da aba Gastos, evitando exibição na aba Rendas.
+🔹 Objetivos, decisões e processos: separar responsabilidades UI por contexto (despesas vs. rendas).
+✔️ Benefícios:
+
+- Claridade semântica na interface.
+- Evita confusão ao preencher valores por categoria.
+
+10- Remoção do campo "Renda Mensal"
+🔹 Removemos o campo de Renda Mensal da UI conforme solicitado e ajustamos o payload de salvamento para não enviar esse campo.
+🔹 Objetivos, decisões e processos: alinhar o produto com a forma desejada de captura de rendas (cada renda registrada separadamente).
+✔️ Benefícios:
+
+- Evita ambiguidade entre renda total e rendas esperadas individuais.
+- Simplifica payloads enviados ao backend.
+
+11- Tipos e extensões de `Planning` (types/planning.ts)
+🔹 Adicionamos tipos `Bill`, `ExpectedItem` e variantes Firestore, e estendemos `Planning` com arrays `bills`, `expectedIncomes` e `expectedExpenses`.
+🔹 Objetivos, decisões e processos: formalizar novo contrato de dados para suportar contas e rendas gerenciadas pelo consultor.
+✔️ Benefícios:
+
+- Tipagem ajuda a evitar regressões.
+- Facilita integrações e manutenção futura.
+
+13- Proteção contra campos `undefined` ao gravar no Firestore
+🔹 Corrigimos a construção dos objetos enviados ao Firestore para omitir atributos opcionais não definidos (evita `Unsupported field value: undefined`).
+🔹 Objetivos, decisões e processos: prevenir erros de escrita no Firestore e garantir compatibilidade com documentos existentes.
+✔️ Benefícios:
+
+- Evita runtime errors ao criar/atualizar itens.
+- Garante escrita robusta independentemente de campos opcionais.
+

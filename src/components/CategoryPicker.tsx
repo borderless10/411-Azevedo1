@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Componente de seleção de categoria
  */
 
@@ -49,7 +49,7 @@ export const CategoryPicker: React.FC<CategoryPickerProps> = ({
   return (
     <View style={[styles.container, style]}>
       <Text style={styles.label}>
-        <Ionicons name="pricetag" size={16} color="#007AFF" /> {label}
+        <Ionicons name="pricetag" size={16} color="#8c52ff" /> {label}
         {required && <Text style={styles.required}> *</Text>}
       </Text>
 
@@ -67,7 +67,7 @@ export const CategoryPicker: React.FC<CategoryPickerProps> = ({
             <Ionicons
               name={selectedCat.icon as any}
               size={20}
-              color={error ? "#F44336" : selectedCat.color}
+              color={error ? "#ff4d6d" : selectedCat.color}
               style={styles.inputIcon}
             />
             <Text style={styles.categoryText}>{selectedCat.name}</Text>
@@ -77,7 +77,7 @@ export const CategoryPicker: React.FC<CategoryPickerProps> = ({
             <Ionicons
               name="pricetag-outline"
               size={20}
-              color={error ? "#F44336" : "#999"}
+              color={error ? "#ff4d6d" : "#a89fc0"}
               style={styles.inputIcon}
             />
             <Text style={styles.placeholderText}>
@@ -88,7 +88,7 @@ export const CategoryPicker: React.FC<CategoryPickerProps> = ({
         <Ionicons
           name={error ? "close-circle" : "chevron-down"}
           size={20}
-          color={error ? "#F44336" : "#999"}
+          color={error ? "#ff4d6d" : "#a89fc0"}
           style={styles.icon}
         />
       </TouchableOpacity>
@@ -111,7 +111,7 @@ export const CategoryPicker: React.FC<CategoryPickerProps> = ({
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Selecione uma Categoria</Text>
               <TouchableOpacity onPress={() => setModalVisible(false)}>
-                <Ionicons name="close" size={24} color="#333" />
+                <Ionicons name="close" size={24} color="#a89fc0" />
               </TouchableOpacity>
             </View>
 
@@ -135,7 +135,7 @@ export const CategoryPicker: React.FC<CategoryPickerProps> = ({
                   />
                   <Text style={styles.categoryItemText}>{item.name}</Text>
                   {selectedCategory === item.name && (
-                    <Ionicons name="checkmark" size={24} color="#007AFF" />
+                    <Ionicons name="checkmark" size={24} color="#8c52ff" />
                   )}
                 </TouchableOpacity>
               )}
@@ -158,24 +158,24 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   required: {
-    color: "#F44336",
+    color: "#ff4d6d",
   },
   inputWrapper: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#1a1a1a",
+    backgroundColor: "#0e0c14",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#333",
+    borderColor: "#2a2040",
     paddingHorizontal: 16,
     paddingVertical: 16,
   },
   inputWrapperError: {
-    borderColor: "#F44336",
+    borderColor: "#ff4d6d",
     borderWidth: 2,
   },
   inputWrapperDisabled: {
-    backgroundColor: "#111",
+    backgroundColor: "#1a1528",
   },
   inputIcon: {
     marginRight: 12,
@@ -189,13 +189,13 @@ const styles = StyleSheet.create({
   placeholderText: {
     flex: 1,
     fontSize: 16,
-    color: "#999",
+    color: "#a89fc0",
   },
   icon: {
     marginLeft: 8,
   },
   errorText: {
-    color: "#F44336",
+    color: "#ff4d6d",
     fontSize: 12,
     marginTop: 4,
     marginLeft: 4,
@@ -206,7 +206,7 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   modalContent: {
-    backgroundColor: "#0f0f10",
+    backgroundColor: "#0e0c14",
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     maxHeight: "70%",
@@ -233,7 +233,7 @@ const styles = StyleSheet.create({
     borderBottomColor: "#222",
   },
   categoryItemSelected: {
-    backgroundColor: "#1a1a1a",
+    backgroundColor: "#0e0c14",
   },
   categoryIcon: {
     marginRight: 16,

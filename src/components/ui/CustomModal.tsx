@@ -29,7 +29,7 @@ const CustomModal: React.FC<Props> = ({
       <View style={styles.backdrop}>
         <View style={styles.container}>
           <View style={styles.iconWrap}>
-            <Ionicons name="alert-circle" size={44} color="#F44336" />
+            <Ionicons name="alert-circle" size={44} color="#c084fc" />
           </View>
           <Text style={styles.title}>{title}</Text>
           <Text style={styles.message}>{message}</Text>
@@ -90,7 +90,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   primaryButton: {
-    backgroundColor: "#007AFF",
+    backgroundColor: "#8c52ff",
     paddingVertical: 12,
     paddingHorizontal: 20,
     borderRadius: 10,

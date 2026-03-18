@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Tela de Listagem de Gastos
  */
 
@@ -89,7 +89,7 @@ export const ExpenseListScreen = () => {
     >
       <View style={styles.expenseItemLeft}>
         <View style={styles.expenseIconContainer}>
-          <Ionicons name="remove-circle" size={24} color="#F44336" />
+          <Ionicons name="remove-circle" size={24} color="#ff4d6d" />
         </View>
         <View style={styles.expenseInfo}>
           <Text style={styles.expenseDescription} numberOfLines={1}>
@@ -131,7 +131,7 @@ export const ExpenseListScreen = () => {
     return (
       <Layout title="Meus Gastos" showBackButton={true} showSidebar={false}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#007AFF" />
+          <ActivityIndicator size="large" color="#8c52ff" />
           <Text style={styles.loadingText}>Carregando gastos...</Text>
         </View>
       </Layout>
@@ -157,7 +157,7 @@ export const ExpenseListScreen = () => {
               style={styles.addButton}
               onPress={() => navigate('AddExpense')}
             >
-              <Ionicons name="add-circle" size={32} color="#F44336" />
+              <Ionicons name="add-circle" size={32} color="#ff4d6d" />
             </TouchableOpacity>
           </View>
         </View>
@@ -185,7 +185,7 @@ export const ExpenseListScreen = () => {
               <RefreshControl
                 refreshing={refreshing}
                 onRefresh={handleRefresh}
-                colors={['#007AFF']}
+                colors={['#8c52ff']}
               />
             }
           >
@@ -239,7 +239,7 @@ const styles = StyleSheet.create({
   totalValue: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: '#F44336',
+    color: '#ff4d6d',
   },
   totalSubtext: {
     fontSize: 12,
@@ -273,7 +273,7 @@ const styles = StyleSheet.create({
   dateTotal: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#F44336',
+    color: '#ff4d6d',
   },
   expenseList: {
     backgroundColor: '#1a1a1a',
@@ -304,7 +304,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     backgroundColor: '#3a1a1a',
     borderWidth: 1,
-    borderColor: '#F4433640',
+    borderColor: '#ff4d6d40',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
@@ -337,7 +337,7 @@ const styles = StyleSheet.create({
   expenseValue: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#F44336',
+    color: '#ff4d6d',
   },
   emptyContainer: {
     flex: 1,
