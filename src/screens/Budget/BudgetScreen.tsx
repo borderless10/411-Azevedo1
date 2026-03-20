@@ -413,7 +413,9 @@ export const BudgetScreen = () => {
 
           {/* Meta Mensal */}
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>💰 Gasto esperado do planejamento</Text>
+            <Text style={styles.cardTitle}>
+              💰 Gasto esperado do planejamento
+            </Text>
             <View style={styles.inputContainerReadOnly}>
               <Text style={styles.readOnlyBudgetValue}>
                 {formatCurrency(budgetValue)}
@@ -620,7 +622,8 @@ export const BudgetScreen = () => {
                 color="#666"
               />
               <Text style={styles.emptyText}>
-                Aguarde o planejamento do consultor para iniciar o consumo moderado
+                Aguarde o planejamento do consultor para iniciar o consumo
+                moderado
               </Text>
             </View>
           )}

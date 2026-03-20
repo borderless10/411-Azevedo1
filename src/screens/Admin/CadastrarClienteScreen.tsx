@@ -33,6 +33,7 @@ export const CadastrarClienteScreen = () => {
   const slideAnim = useRef(new Animated.Value(30)).current;
 
   const [name, setName] = useState("");
+  const [nickname, setNickname] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -126,6 +127,7 @@ export const CadastrarClienteScreen = () => {
         const phoneNumbers = phone.replace(/\D/g, "");
         await setDoc(doc(db, "users", userCredential.user.uid), {
           name,
+          nickname: nickname || "",
           email,
           phone: phoneNumbers || "",
           role: role === "consultor" ? "consultor" : "user",
@@ -247,6 +249,26 @@ export const CadastrarClienteScreen = () => {
                     placeholderTextColor="#666"
                     value={name}
                     onChangeText={setName}
+                    autoCapitalize="words"
+                  />
+                </View>
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Apelido</Text>
+                <View style={styles.inputContainer}>
+                  <Ionicons
+                    name="pricetag-outline"
+                    size={20}
+                    color="#999"
+                    style={styles.inputIcon}
+                  />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Digite um apelido (opcional)"
+                    placeholderTextColor="#666"
+                    value={nickname}
+                    onChangeText={setNickname}
                     autoCapitalize="words"
                   />
                 </View>

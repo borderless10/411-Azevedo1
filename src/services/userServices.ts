@@ -80,6 +80,8 @@ export const userService = {
       return {
         id: userDoc.id,
         name: userData.name || "",
+        nickname: userData.nickname || "",
+        photoBase64: userData.photoBase64 || "",
         email: userData.email || "",
         username: userData.username || "",
         bio: userData.bio || "",
@@ -281,7 +283,13 @@ export const userService = {
    */
   async createUserDocument(
     userId: string,
-    userData: { name: string; email: string; phone?: string },
+    userData: {
+      name: string;
+      email: string;
+      phone?: string;
+      nickname?: string;
+      photoBase64?: string;
+    },
   ): Promise<void> {
     try {
       const userRef = doc(db, "users", userId);
@@ -292,6 +300,8 @@ export const userService = {
         // Criar documento como usuário normal (não admin)
         await setDoc(userRef, {
           name: userData.name,
+          nickname: userData.nickname || "",
+          photoBase64: userData.photoBase64 || "",
           email: userData.email,
           phone: userData.phone || "",
           role: "user", // Garantir que é usuário normal
@@ -349,6 +359,8 @@ export const userService = {
         results.push({
           id: docSnap.id,
           name: data.name || "",
+          nickname: data.nickname || "",
+          photoBase64: data.photoBase64 || "",
           email: data.email || "",
           username: data.username || "",
           bio: data.bio || "",
@@ -386,6 +398,8 @@ export const userService = {
         results.push({
           id: docSnap.id,
           name: data.name || "",
+          nickname: data.nickname || "",
+          photoBase64: data.photoBase64 || "",
           email: data.email || "",
           username: data.username || "",
           bio: data.bio || "",
@@ -423,6 +437,8 @@ export const userService = {
       return {
         id: docSnap.id,
         name: data.name || "",
+        nickname: data.nickname || "",
+        photoBase64: data.photoBase64 || "",
         email: data.email || "",
         username: data.username || "",
         bio: data.bio || "",
@@ -451,7 +467,9 @@ export const userService = {
     userId: string,
     payload: {
       name?: string;
+      nickname?: string;
       phone?: string;
+      photoBase64?: string;
       role?: string;
       isAdmin?: boolean;
     },
@@ -461,6 +479,10 @@ export const userService = {
       const now = Timestamp.now();
       const updatePayload: any = { updatedAt: now };
       if (payload.name !== undefined) updatePayload.name = payload.name;
+      if (payload.nickname !== undefined)
+        updatePayload.nickname = payload.nickname;
+      if (payload.photoBase64 !== undefined)
+        updatePayload.photoBase64 = payload.photoBase64;
       if (payload.phone !== undefined) updatePayload.phone = payload.phone;
       if (payload.role !== undefined) updatePayload.role = payload.role;
       if (payload.isAdmin !== undefined)

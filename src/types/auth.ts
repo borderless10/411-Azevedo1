@@ -1,6 +1,7 @@
 export interface User {
   id: string;
   name: string;
+  nickname?: string;
   email: string;
   username?: string;
   bio?: string;
@@ -9,6 +10,9 @@ export interface User {
   consultantId?: string; // id do consultor responsável (se houver)
   isAdmin?: boolean;
   isActive?: boolean;
+  currency?: string;
+  showInRanking?: boolean;
+  photoBase64?: string;
   createdAt: Date;
   updatedAt: Date;
 }

@@ -240,11 +240,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       try {
         if (userData && userData.id) {
           void updateOverdueBills(userData.id).catch((e) => {
-            if (__DEV__) console.log("Erro ao atualizar contas vencidas (signIn):", e);
+            if (__DEV__)
+              console.log("Erro ao atualizar contas vencidas (signIn):", e);
           });
         }
       } catch (err) {
-        if (__DEV__) console.log("Erro ao disparar updateOverdueBills (signIn):", err);
+        if (__DEV__)
+          console.log("Erro ao disparar updateOverdueBills (signIn):", err);
       }
     } catch (error: any) {
       if (__DEV__) {

@@ -1,5 +1,11 @@
 ﻿import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  ActivityIndicator,
+} from "react-native";
 import { Layout } from "../../components/Layout/Layout";
 import { rankingServices, RankingEntry } from "../../services/rankingServices";
 import { userService } from "../../services/userServices";
@@ -32,7 +38,12 @@ export const RankingScreen = () => {
           } catch (e) {
             // ignore
           }
-          out.push({ position: i + 1, userId: r.userId, displayName: display, zeroDays: r.zeroDays });
+          out.push({
+            position: i + 1,
+            userId: r.userId,
+            displayName: display,
+            zeroDays: r.zeroDays,
+          });
         }
 
         if (mounted) setRows(out);
@@ -43,12 +54,17 @@ export const RankingScreen = () => {
       }
     };
     load();
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   return (
     <Layout title="Ranking" showBackButton={false} showSidebar={true}>
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.content}
+      >
         <Text style={styles.header}>Ranking — Zeros na planilha</Text>
         {loading ? (
           <View style={styles.loadingRow}>
@@ -71,15 +87,21 @@ export const RankingScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#000' },
+  container: { flex: 1, backgroundColor: "#000" },
   content: { padding: 16 },
-  header: { color: '#fff', fontSize: 20, fontWeight: '700', marginBottom: 12 },
-  loadingRow: { padding: 40, alignItems: 'center' },
-  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#222' },
-  pos: { width: 48, color: '#fff', fontSize: 16, fontWeight: '700' },
+  header: { color: "#fff", fontSize: 20, fontWeight: "700", marginBottom: 12 },
+  loadingRow: { padding: 40, alignItems: "center" },
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#222",
+  },
+  pos: { width: 48, color: "#fff", fontSize: 16, fontWeight: "700" },
   info: { flex: 1 },
-  name: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  detail: { color: '#999', fontSize: 13 },
+  name: { color: "#fff", fontSize: 16, fontWeight: "600" },
+  detail: { color: "#999", fontSize: 13 },
 });
 
 export default RankingScreen;

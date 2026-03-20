@@ -269,7 +269,11 @@ export const BillsScreen = () => {
         if (__DEV__) {
           console.log("[BILLS] direct bills loaded", {
             count: data.length,
-            statuses: data.map((b) => ({ id: b.id, status: b.status, dueDate: b.dueDate })),
+            statuses: data.map((b) => ({
+              id: b.id,
+              status: b.status,
+              dueDate: b.dueDate,
+            })),
           });
         }
         setBills(data);
@@ -569,22 +573,22 @@ export const BillsScreen = () => {
                 onPress={() => setFilter(f as any)}
               >
                 <Text
-                    numberOfLines={2}
-                    ellipsizeMode="tail"
-                    style={[
-                      styles.filterButtonText,
-                      { color: colors.text },
-                      filter === f && { color: "#fff" },
-                    ]}
-                  >
-                    {f === "all"
-                      ? "Todas"
-                      : f === "pending"
-                        ? "Pendentes"
-                        : f === "overdue"
-                          ? "Vencidas"
-                          : "Pagas"}
-                  </Text>
+                  numberOfLines={2}
+                  ellipsizeMode="tail"
+                  style={[
+                    styles.filterButtonText,
+                    { color: colors.text },
+                    filter === f && { color: "#fff" },
+                  ]}
+                >
+                  {f === "all"
+                    ? "Todas"
+                    : f === "pending"
+                      ? "Pendentes"
+                      : f === "overdue"
+                        ? "Vencidas"
+                        : "Pagas"}
+                </Text>
               </TouchableOpacity>
             ))}
           </View>

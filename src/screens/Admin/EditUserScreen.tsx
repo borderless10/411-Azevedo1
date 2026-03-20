@@ -21,6 +21,7 @@ export const EditUserScreen: React.FC = ({}: any) => {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [name, setName] = useState("");
+  const [nickname, setNickname] = useState("");
   const [phone, setPhone] = useState("");
   const [role, setRole] = useState<"user" | "consultor" | "admin">("user");
 
@@ -41,6 +42,7 @@ export const EditUserScreen: React.FC = ({}: any) => {
       const u = await userService.getUserById(userId!);
       if (u) {
         setName(u.name || "");
+        setNickname((u as any).nickname || "");
         setPhone(u.phone || "");
         setRole((u.role as any) || "user");
       }
@@ -58,6 +60,7 @@ export const EditUserScreen: React.FC = ({}: any) => {
     try {
       await userService.updateUser(userId, {
         name: name.trim(),
+        nickname: nickname.trim(),
         phone: phone.trim(),
         role,
         isAdmin: role === "admin",
@@ -84,6 +87,13 @@ export const EditUserScreen: React.FC = ({}: any) => {
               style={styles.input}
               value={name}
               onChangeText={setName}
+            />
+
+            <Text style={styles.label}>Apelido</Text>
+            <TextInput
+              style={styles.input}
+              value={nickname}
+              onChangeText={setNickname}
             />
 
             <Text style={styles.label}>Telefone</Text>

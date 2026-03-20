@@ -2,7 +2,7 @@
  * Tipos para contas a pagar
  */
 
-export type BillStatus = 'pending' | 'paid' | 'overdue';
+export type BillStatus = "pending" | "paid" | "overdue";
 
 export interface Bill {
   id: string;

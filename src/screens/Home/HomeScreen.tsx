@@ -14,6 +14,9 @@ import {
   Alert,
   Animated,
   TextInput,
+  LayoutAnimation,
+  Platform,
+  UIManager,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "../../routes/NavigationContext";
@@ -22,6 +25,7 @@ import { useAuth } from "../../hooks/useAuth";
 import incomeServices from "../../services/incomeServices";
 import expenseServices from "../../services/expenseServices";
 import { budgetServices } from "../../services/budgetServices";
+import { planningServices } from "../../services/planningServices";
 import { activityServices } from "../../services/activityServices";
 import { formatCurrency } from "../../utils/currencyUtils";
 import {
@@ -42,6 +46,7 @@ import {
 } from "../../components/Charts";
 import { DEFAULT_EXPENSE_CATEGORIES } from "../../types/category";
 import ZeroPlanilhaConfirmModal from "../../components/ui/ZeroPlanilhaConfirmModal";
+import ExpectedDetails from "../../components/ui/ExpectedDetails";
 
 export const HomeScreen = () => {
   const { navigate, currentScreen } = useNavigation();
@@ -50,9 +55,13 @@ export const HomeScreen = () => {
   const [totalIncome, setTotalIncome] = useState(0);
   const [totalExpense, setTotalExpense] = useState(0);
   const [balance, setBalance] = useState(0);
+  const [expectedExpenses, setExpectedExpenses] = useState<number | null>(null);
+  const [expectedIncomes, setExpectedIncomes] = useState<number | null>(null);
+  const [expectedSavings, setExpectedSavings] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [hasLoaded, setHasLoaded] = useState(false);
+  const [planningData, setPlanningData] = useState<any | null>(null);
   const [allTransactions, setAllTransactions] = useState<
     Array<{
       item: Income | Expense;
@@ -76,6 +85,20 @@ export const HomeScreen = () => {
   const [zeroConfirmDayLabel, setZeroConfirmDayLabel] = useState("");
   const [zeroConfirmDate, setZeroConfirmDate] = useState<Date | null>(null);
   const [confirmingZero, setConfirmingZero] = useState(false);
+  const [expanded, setExpanded] = useState<"income" | "expense" | null>(null);
+
+  useEffect(() => {
+    if (
+      Platform.OS === "android" &&
+      (UIManager as any).setLayoutAnimationEnabledExperimental
+    ) {
+      try {
+        (UIManager as any).setLayoutAnimationEnabledExperimental(true);
+      } catch (e) {
+        // ignore
+      }
+    }
+  }, []);
 
   // Função para obter cor de categoria
   const getCategoryColor = (categoryName: string): string => {
@@ -197,6 +220,63 @@ export const HomeScreen = () => {
           }),
       ]);
 
+      // Load planning for normal users (consultant provides expected incomes/expenses)
+      let planning: any = null;
+      try {
+        if (user.role !== "consultor" && !user.isAdmin) {
+          planning = await planningServices.getPlanning(user.id);
+        }
+      } catch (err) {
+        console.error("❌ [HOME] Erro ao buscar planning:", err);
+      }
+
+      setPlanningData(planning || null);
+
+      // compute expected values if planning exists
+      let calcExpectedExpenses: number | null = null;
+      let calcExpectedIncomes: number | null = null;
+      let calcExpectedSavings: number | null = null;
+      if (planning) {
+        console.log("🏠 [HOME] planning data:", planning);
+        console.log(
+          "🏠 [HOME] planning.expectedExpenses:",
+          planning.expectedExpenses,
+        );
+        const sumExpected = (arr: any[] | undefined) =>
+          (arr || []).reduce((s, it) => {
+            const n = Number(it?.amount);
+            return s + (Number.isFinite(n) ? n : 0);
+          }, 0);
+        const sumExpExpenses = sumExpected(planning.expectedExpenses);
+        const sumExpIncomes = sumExpected(planning.expectedIncomes);
+        const monthly = Number(planning.monthlyIncome) || 0;
+
+        // sum of bills
+        const sumBills = (planning.bills || []).reduce((s: number, b: any) => {
+          const n = Number(b?.amount);
+          return s + (Number.isFinite(n) ? n : 0);
+        }, 0);
+
+        // sum of plannedByCategory values
+        const sumByCategory = planning.plannedByCategory
+          ? Object.values(planning.plannedByCategory).reduce(
+              (s: number, v: any) =>
+                s + (Number.isFinite(Number(v)) ? Number(v) : 0),
+              0,
+            )
+          : 0;
+
+        // gasto esperado no mês = bills + plannedByCategory + expectedExpenses
+        calcExpectedExpenses = sumBills + sumByCategory + sumExpExpenses;
+        calcExpectedIncomes = monthly + sumExpIncomes;
+        // expected savings: monthlyIncome + expectedIncomes - expectedExpenses
+        calcExpectedSavings = calcExpectedIncomes - calcExpectedExpenses;
+      }
+
+      setExpectedExpenses(calcExpectedExpenses);
+      setExpectedIncomes(calcExpectedIncomes);
+      setExpectedSavings(calcExpectedSavings);
+
       console.log("🏠 [HOME] Dados recebidos:", {
         incomeTotal,
         expenseTotal,
@@ -314,6 +394,62 @@ export const HomeScreen = () => {
       setLoading(false);
       setRefreshing(false);
     }
+  };
+
+  const toggleExpand = (key: "income" | "expense") => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setExpanded((prev) => (prev === key ? null : key));
+  };
+
+  const buildExpenseSummary = (planning: any) => {
+    if (!planning) return [] as any[];
+    const map: Record<string, number> = {};
+    // plannedByCategory is an object { categoryName: value }
+    if (planning.plannedByCategory) {
+      Object.entries(planning.plannedByCategory).forEach(([k, v]) => {
+        const n = Number(v) || 0;
+        map[k] = (map[k] || 0) + n;
+      });
+    }
+    // expectedExpenses array
+    (planning.expectedExpenses || []).forEach((it: any) => {
+      const key = it.categoryId || it.source || "Outros";
+      const n = Number(it.amount) || 0;
+      map[key] = (map[key] || 0) + n;
+    });
+    // bills
+    (planning.bills || []).forEach((b: any) => {
+      const key = b.name || "Contas";
+      const n = Number(b.amount) || 0;
+      map[key] = (map[key] || 0) + n;
+    });
+
+    const items = Object.entries(map)
+      .map(([label, value]) => ({ label, value }))
+      .sort((a, b) => b.value - a.value);
+    const total = items.reduce((s, it) => s + it.value, 0) || 1;
+    return items
+      .slice(0, 3)
+      .map((it) => ({ ...it, percent: (it.value / total) * 100 }));
+  };
+
+  const buildIncomeSummary = (planning: any) => {
+    if (!planning) return [] as any[];
+    const map: Record<string, number> = {};
+    const monthly = Number(planning.monthlyIncome) || 0;
+    if (monthly > 0) map["Salário"] = monthly;
+    (planning.expectedIncomes || []).forEach((it: any) => {
+      const key = it.source || it.categoryId || "Outros";
+      const n = Number(it.amount) || 0;
+      map[key] = (map[key] || 0) + n;
+    });
+    const items = Object.entries(map)
+      .map(([label, value]) => ({ label, value }))
+      .sort((a, b) => b.value - a.value);
+    const total = items.reduce((s, it) => s + it.value, 0) || 1;
+    return items
+      .slice(0, 3)
+      .map((it) => ({ ...it, percent: (it.value / total) * 100 }));
   };
 
   const checkZeroPlanilhaForYesterday = async () => {
@@ -813,97 +949,280 @@ export const HomeScreen = () => {
               },
             ]}
           >
-            {/* Saldo Atual - Retângulo Horizontal */}
-            <Animated.View
-              style={[
-                styles.summaryCardHorizontal,
-                styles.cardBlue,
-                balance < 0 && styles.cardNegative,
-                {
-                  opacity: fadeAnim,
-                  transform: [{ translateY: slideAnim }],
-                },
-              ]}
-            >
-              <View style={styles.balanceContent}>
-                <View style={styles.balanceTextContainer}>
-                  <Text style={styles.summaryLabelBalance}>Saldo Atual</Text>
-                  <Text
+            {user?.role !== "consultor" && !user?.isAdmin ? (
+              // Normal user: show planning-based expected cards
+              <>
+                <Animated.View
+                  style={[
+                    styles.summaryCardHorizontal,
+                    styles.cardBlue,
+                    {
+                      opacity: fadeAnim,
+                      transform: [{ translateY: slideAnim }],
+                    },
+                  ]}
+                >
+                  <View style={styles.balanceContent}>
+                    <View style={styles.balanceTextContainer}>
+                      <Text style={styles.summaryLabelBalance}>
+                        Poupança Esperada
+                      </Text>
+                      <Text style={styles.summaryValue}>
+                        {expectedSavings === null
+                          ? "-"
+                          : formatCurrency(expectedSavings)}
+                      </Text>
+                      <Text style={styles.summarySubtext}>
+                        Este mês (estimado)
+                      </Text>
+                    </View>
+                    <View style={styles.balanceIconContainer}>
+                      <Ionicons
+                        name="ios-piggy-bank"
+                        size={28}
+                        color="#8c52ff"
+                      />
+                    </View>
+                  </View>
+                </Animated.View>
+
+                <View style={styles.summaryRow}>
+                  <View style={styles.expectedSummaryColumn}>
+                    <TouchableOpacity
+                      activeOpacity={0.9}
+                      onPress={() => toggleExpand("expense")}
+                      style={styles.expectedCardPressable}
+                    >
+                      <Animated.View
+                        style={[
+                          expanded === "expense"
+                            ? styles.expectedCardSquareExpanded
+                            : styles.expectedCardSquare,
+                          styles.cardRed,
+                          {
+                            opacity: fadeAnim,
+                            transform: [
+                              {
+                                translateY: Animated.add(
+                                  slideAnim,
+                                  new Animated.Value(10),
+                                ),
+                              },
+                            ],
+                          },
+                        ]}
+                      >
+                        <View style={styles.cardIconContainer}>
+                          <Ionicons name="calendar" size={18} color="#ff4d6d" />
+                        </View>
+                        <Text style={styles.summaryLabelExpense}>
+                          Gasto Esperado
+                        </Text>
+                        <Text style={styles.summaryValueSquare}>
+                          {expectedExpenses === null
+                            ? "-"
+                            : formatCurrency(expectedExpenses)}
+                        </Text>
+                        <Text style={styles.summarySubtext}>Este mês</Text>
+                        <View style={styles.chevronContainer}>
+                          <Ionicons
+                            name={
+                              expanded === "expense"
+                                ? "chevron-up"
+                                : "chevron-down"
+                            }
+                            size={18}
+                            color="#999"
+                            style={{
+                              transform: [
+                                {
+                                  rotate:
+                                    expanded === "expense" ? "180deg" : "0deg",
+                                },
+                              ],
+                            }}
+                          />
+                        </View>
+                      </Animated.View>
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={styles.expectedSummaryColumn}>
+                    <TouchableOpacity
+                      activeOpacity={0.9}
+                      onPress={() => toggleExpand("income")}
+                      style={styles.expectedCardPressable}
+                    >
+                      <Animated.View
+                        style={[
+                          expanded === "income"
+                            ? styles.expectedCardSquareExpanded
+                            : styles.expectedCardSquare,
+                          styles.cardGreen,
+                          {
+                            opacity: fadeAnim,
+                            transform: [
+                              {
+                                translateY: Animated.add(
+                                  slideAnim,
+                                  new Animated.Value(10),
+                                ),
+                              },
+                            ],
+                          },
+                        ]}
+                      >
+                        <View style={styles.cardIconContainer}>
+                          <Ionicons name="cash" size={18} color="#8c52ff" />
+                        </View>
+                        <Text style={styles.summaryLabelIncome}>
+                          Renda Esperada
+                        </Text>
+                        <Text style={styles.summaryValueSquare}>
+                          {expectedIncomes === null
+                            ? "-"
+                            : formatCurrency(expectedIncomes)}
+                        </Text>
+                        <Text style={styles.summarySubtext}>Este mês</Text>
+                        <View style={styles.chevronContainer}>
+                          <Ionicons
+                            name={
+                              expanded === "income"
+                                ? "chevron-up"
+                                : "chevron-down"
+                            }
+                            size={18}
+                            color="#999"
+                            style={{
+                              transform: [
+                                {
+                                  rotate:
+                                    expanded === "income" ? "180deg" : "0deg",
+                                },
+                              ],
+                            }}
+                          />
+                        </View>
+                      </Animated.View>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {expanded !== null && (
+                  <ExpectedDetails
+                    items={
+                      expanded === "expense"
+                        ? buildExpenseSummary(planningData)
+                        : buildIncomeSummary(planningData)
+                    }
+                    onSeeMore={() => navigate("PlanningView")}
+                  />
+                )}
+              </>
+            ) : (
+              // Consultor/admin: manter cards antigos
+              <>
+                {/* Saldo Atual - Retângulo Horizontal */}
+                <Animated.View
+                  style={[
+                    styles.summaryCardHorizontal,
+                    styles.cardBlue,
+                    balance < 0 && styles.cardNegative,
+                    {
+                      opacity: fadeAnim,
+                      transform: [{ translateY: slideAnim }],
+                    },
+                  ]}
+                >
+                  <View style={styles.balanceContent}>
+                    <View style={styles.balanceTextContainer}>
+                      <Text style={styles.summaryLabelBalance}>
+                        Saldo Atual
+                      </Text>
+                      <Text
+                        style={[
+                          styles.summaryValue,
+                          balance < 0 && styles.summaryValueNegative,
+                        ]}
+                      >
+                        {formatCurrency(balance)}
+                      </Text>
+                      <Text style={styles.summarySubtext}>Disponível</Text>
+                    </View>
+                    <View style={styles.balanceIconContainer}>
+                      <Ionicons
+                        name="wallet"
+                        size={28}
+                        color={balance < 0 ? "#ff4d6d" : "#8c52ff"}
+                      />
+                    </View>
+                  </View>
+                </Animated.View>
+
+                {/* Total Gasto e Total Recebido - Quadrados */}
+                <View style={styles.summaryRow}>
+                  <Animated.View
                     style={[
-                      styles.summaryValue,
-                      balance < 0 && styles.summaryValueNegative,
+                      styles.summaryCardSquare,
+                      styles.cardGreen,
+                      {
+                        opacity: fadeAnim,
+                        transform: [
+                          {
+                            translateY: Animated.add(
+                              slideAnim,
+                              new Animated.Value(10),
+                            ),
+                          },
+                        ],
+                      },
                     ]}
                   >
-                    {formatCurrency(balance)}
-                  </Text>
-                  <Text style={styles.summarySubtext}>Disponível</Text>
-                </View>
-                <View style={styles.balanceIconContainer}>
-                  <Ionicons
-                    name="wallet"
-                    size={28}
-                    color={balance < 0 ? "#ff4d6d" : "#8c52ff"}
-                  />
-                </View>
-              </View>
-            </Animated.View>
+                    <View style={styles.cardIconContainer}>
+                      <Ionicons name="trending-up" size={18} color="#8c52ff" />
+                    </View>
+                    <Text style={styles.summaryLabelIncome}>
+                      Total Recebido
+                    </Text>
+                    <Text style={styles.summaryValueSquare}>
+                      {formatCurrency(totalIncome)}
+                    </Text>
+                    <Text style={styles.summarySubtext}>Este mês</Text>
+                  </Animated.View>
 
-            {/* Total Gasto e Total Recebido - Quadrados */}
-            <View style={styles.summaryRow}>
-              <Animated.View
-                style={[
-                  styles.summaryCardSquare,
-                  styles.cardGreen,
-                  {
-                    opacity: fadeAnim,
-                    transform: [
+                  <Animated.View
+                    style={[
+                      styles.summaryCardSquare,
+                      styles.cardRed,
                       {
-                        translateY: Animated.add(
-                          slideAnim,
-                          new Animated.Value(10),
-                        ),
+                        opacity: fadeAnim,
+                        transform: [
+                          {
+                            translateY: Animated.add(
+                              slideAnim,
+                              new Animated.Value(10),
+                            ),
+                          },
+                        ],
                       },
-                    ],
-                  },
-                ]}
-              >
-                <View style={styles.cardIconContainer}>
-                  <Ionicons name="trending-up" size={18} color="#8c52ff" />
+                    ]}
+                  >
+                    <View style={styles.cardIconContainer}>
+                      <Ionicons
+                        name="trending-down"
+                        size={18}
+                        color="#ff4d6d"
+                      />
+                    </View>
+                    <Text style={styles.summaryLabelExpense}>Total Gasto</Text>
+                    <Text style={styles.summaryValueSquare}>
+                      {formatCurrency(totalExpense)}
+                    </Text>
+                    <Text style={styles.summarySubtext}>Este mês</Text>
+                  </Animated.View>
                 </View>
-                <Text style={styles.summaryLabelIncome}>Total Recebido</Text>
-                <Text style={styles.summaryValueSquare}>
-                  {formatCurrency(totalIncome)}
-                </Text>
-                <Text style={styles.summarySubtext}>Este mês</Text>
-              </Animated.View>
-
-              <Animated.View
-                style={[
-                  styles.summaryCardSquare,
-                  styles.cardRed,
-                  {
-                    opacity: fadeAnim,
-                    transform: [
-                      {
-                        translateY: Animated.add(
-                          slideAnim,
-                          new Animated.Value(10),
-                        ),
-                      },
-                    ],
-                  },
-                ]}
-              >
-                <View style={styles.cardIconContainer}>
-                  <Ionicons name="trending-down" size={18} color="#ff4d6d" />
-                </View>
-                <Text style={styles.summaryLabelExpense}>Total Gasto</Text>
-                <Text style={styles.summaryValueSquare}>
-                  {formatCurrency(totalExpense)}
-                </Text>
-                <Text style={styles.summarySubtext}>Este mês</Text>
-              </Animated.View>
-            </View>
+              </>
+            )}
           </Animated.View>
 
           {/* Gráficos */}
@@ -1176,6 +1495,47 @@ const styles = StyleSheet.create({
   summaryRow: {
     flexDirection: "row",
     gap: 8,
+    alignItems: "flex-start",
+  },
+  expectedSummaryColumn: {
+    flex: 1,
+  },
+  expectedCardPressable: {
+    width: "100%",
+  },
+  expectedCardSquare: {
+    backgroundColor: "#1a1a1a",
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: "#333",
+    minHeight: 110,
+    alignItems: "center",
+    justifyContent: "center",
+    width: "100%",
+  },
+  expectedCardSquareExpanded: {
+    backgroundColor: "#161616",
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 5,
+    borderWidth: 1,
+    borderColor: "#2a2040",
+    minHeight: 140,
+    alignItems: "center",
+    justifyContent: "center",
+    width: "100%",
   },
   summaryCardSquare: {
     flex: 1,
@@ -1194,6 +1554,23 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  summaryCardSquareExpanded: {
+    flex: 1,
+    backgroundColor: "#161616",
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 5,
+    borderWidth: 1,
+    borderColor: "#2a2040",
+    minHeight: 140,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   cardIconContainer: {
     width: 36,
     height: 36,
@@ -1202,6 +1579,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 4,
+  },
+  chevronContainer: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    width: 28,
+    height: 28,
+    alignItems: "center",
+    justifyContent: "center",
   },
   cardGreen: {
     borderLeftWidth: 4,

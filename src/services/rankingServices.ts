@@ -37,7 +37,9 @@ export const rankingServices = {
         counts[uid] = (counts[uid] || 0) + zeros;
       });
 
-      const arr: RankingEntry[] = Object.entries(counts).map(([userId, zeroDays]) => ({ userId, zeroDays }));
+      const arr: RankingEntry[] = Object.entries(counts).map(
+        ([userId, zeroDays]) => ({ userId, zeroDays }),
+      );
 
       arr.sort((a, b) => b.zeroDays - a.zeroDays);
 
@@ -48,14 +50,19 @@ export const rankingServices = {
     }
   },
 
-  async getUserPosition(userId: string): Promise<{ position: number; zeroDays: number } | null> {
+  async getUserPosition(
+    userId: string,
+  ): Promise<{ position: number; zeroDays: number } | null> {
     try {
       const ranking = await this.getRanking(1000);
       const idx = ranking.findIndex((r) => r.userId === userId);
       if (idx === -1) return null;
       return { position: idx + 1, zeroDays: ranking[idx].zeroDays };
     } catch (error) {
-      console.error("❌ [RANKING SERVICE] Erro ao buscar posição do usuário:", error);
+      console.error(
+        "❌ [RANKING SERVICE] Erro ao buscar posição do usuário:",
+        error,
+      );
       return null;
     }
   },

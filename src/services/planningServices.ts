@@ -152,10 +152,7 @@ export const planningServices = {
           const year = now.getFullYear();
           const month = now.getMonth();
           const lastDay = new Date(year, month + 1, 0).getDate();
-          const safeDay = Math.min(
-            Math.max(1, Number(b.dueDay) || 1),
-            lastDay,
-          );
+          const safeDay = Math.min(Math.max(1, Number(b.dueDay) || 1), lastDay);
           dueDate = new Date(year, month, safeDay);
         } else if ((b as any).createdAt) {
           // Fallback legado: contas antigas sem dueDate/dueDay
