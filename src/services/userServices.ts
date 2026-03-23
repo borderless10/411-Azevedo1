@@ -10,7 +10,29 @@ import {
   getDocs,
 } from "firebase/firestore";
 import { db, auth } from "../lib/firebase";
-import { User } from "../types/auth";
+import { RankingPreference, User } from "../types/auth";
+
+const resolveRankingPreference = (data: any): RankingPreference => {
+  const pref = data?.rankingPreference;
+  if (
+    pref === "participate" ||
+    pref === "view_only" ||
+    pref === "hidden" ||
+    pref === "unset"
+  ) {
+    return pref;
+  }
+
+  if (data?.showInRanking === true) {
+    return "participate";
+  }
+
+  if (data?.showInRanking === false) {
+    return "view_only";
+  }
+
+  return "unset";
+};
 
 export const userService = {
   // Buscar dados de um usuário por ID
@@ -90,6 +112,12 @@ export const userService = {
         isAdmin: userData.isAdmin === true || userData.role === "admin",
         isActive:
           userData.isActive === undefined ? true : userData.isActive === true,
+        currency: userData.currency || "BRL",
+        showInRanking:
+          userData.showInRanking === undefined
+            ? undefined
+            : userData.showInRanking === true,
+        rankingPreference: resolveRankingPreference(userData),
         createdAt,
         updatedAt,
       };
@@ -259,7 +287,11 @@ export const userService = {
    */
   async updateUserPreferences(
     userId: string,
-    prefs: { currency?: string; showInRanking?: boolean },
+    prefs: {
+      currency?: string;
+      showInRanking?: boolean;
+      rankingPreference?: RankingPreference;
+    },
   ): Promise<void> {
     try {
       const userRef = doc(db, "users", userId);
@@ -269,6 +301,10 @@ export const userService = {
       if (prefs.currency !== undefined) updatePayload.currency = prefs.currency;
       if (prefs.showInRanking !== undefined)
         updatePayload.showInRanking = prefs.showInRanking;
+      if (prefs.rankingPreference !== undefined) {
+        updatePayload.rankingPreference = prefs.rankingPreference;
+        updatePayload.showInRanking = prefs.rankingPreference === "participate";
+      }
 
       await updateDoc(userRef, updatePayload);
       console.log("✅ Preferências do usuário atualizadas", userId, prefs);
@@ -368,6 +404,12 @@ export const userService = {
           role: data.role || "user",
           isAdmin: data.isAdmin === true || data.role === "admin",
           isActive: data.isActive === undefined ? true : data.isActive === true,
+          currency: data.currency || "BRL",
+          showInRanking:
+            data.showInRanking === undefined
+              ? undefined
+              : data.showInRanking === true,
+          rankingPreference: resolveRankingPreference(data),
           createdAt:
             data.createdAt && data.createdAt.toDate
               ? data.createdAt.toDate()
@@ -407,6 +449,12 @@ export const userService = {
           role: data.role || "user",
           isAdmin: data.isAdmin === true || data.role === "admin",
           isActive: data.isActive === undefined ? true : data.isActive === true,
+          currency: data.currency || "BRL",
+          showInRanking:
+            data.showInRanking === undefined
+              ? undefined
+              : data.showInRanking === true,
+          rankingPreference: resolveRankingPreference(data),
           createdAt:
             data.createdAt && data.createdAt.toDate
               ? data.createdAt.toDate()
@@ -446,6 +494,12 @@ export const userService = {
         role: data.role || "user",
         isAdmin: data.isAdmin === true || data.role === "admin",
         isActive: data.isActive === undefined ? true : data.isActive === true,
+        currency: data.currency || "BRL",
+        showInRanking:
+          data.showInRanking === undefined
+            ? undefined
+            : data.showInRanking === true,
+        rankingPreference: resolveRankingPreference(data),
         createdAt:
           data.createdAt && data.createdAt.toDate
             ? data.createdAt.toDate()
@@ -469,7 +523,7 @@ export const userService = {
       name?: string;
       nickname?: string;
       phone?: string;
-      photoBase64?: string;
+      photoBase64?: string | null;
       role?: string;
       isAdmin?: boolean;
     },

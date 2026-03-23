@@ -2,7 +2,7 @@
  * Tela de Configurações
  */
 
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -17,16 +17,18 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useAuth } from '../../hooks/useAuth';
-import { useNavigation } from '../../routes/NavigationContext';
-import { useTheme } from '../../contexts/ThemeContext';
-import { Layout } from '../../components/Layout/Layout';
-import { authServices } from '../../services/authServices';
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { useAuth } from "../../hooks/useAuth";
+import { useNavigation } from "../../routes/NavigationContext";
+import { useTheme } from "../../contexts/ThemeContext";
+import { Layout } from "../../components/Layout/Layout";
+import { authServices } from "../../services/authServices";
+import { userService } from "../../services/userServices";
+import { RankingPreference } from "../../types/auth";
 
 export const SettingsScreen = () => {
-  const { user, signOut } = useAuth();
+  const { user, signOut, refreshUser } = useAuth();
   const { navigate } = useNavigation();
   const { theme, colors, isDark, setThemeMode } = useTheme();
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -34,13 +36,40 @@ export const SettingsScreen = () => {
 
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [isPasswordModalVisible, setIsPasswordModalVisible] = useState(false);
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [isRankingModalVisible, setIsRankingModalVisible] = useState(false);
+  const [selectedRankingPref, setSelectedRankingPref] =
+    useState<RankingPreference | null>(null);
+  const [isSavingRankingPref, setIsSavingRankingPref] = useState(false);
+
+  const isCommonUser = !user?.isAdmin && user?.role !== "consultor";
+  const isRankingHidden = user?.rankingPreference === "hidden";
+
+  const getEffectiveRankingPreference = (): RankingPreference => {
+    if (!user) return "unset";
+    if (
+      user.rankingPreference === "participate" ||
+      user.rankingPreference === "view_only" ||
+      user.rankingPreference === "hidden" ||
+      user.rankingPreference === "unset"
+    ) {
+      return user.rankingPreference;
+    }
+    if (user.showInRanking === true) return "participate";
+    if (user.showInRanking === false) return "view_only";
+    return "unset";
+  };
+
+  useEffect(() => {
+    const pref = getEffectiveRankingPreference();
+    setSelectedRankingPref(pref === "unset" ? null : pref);
+  }, [user]);
 
   useEffect(() => {
     Animated.parallel([
@@ -59,65 +88,64 @@ export const SettingsScreen = () => {
   }, []);
 
   const handleLogout = () => {
-    Alert.alert(
-      'Confirmar Logout',
-      'Tem certeza que deseja sair?',
-      [
-        {
-          text: 'Cancelar',
-          style: 'cancel',
+    Alert.alert("Confirmar Logout", "Tem certeza que deseja sair?", [
+      {
+        text: "Cancelar",
+        style: "cancel",
+      },
+      {
+        text: "Sair",
+        style: "destructive",
+        onPress: () => {
+          signOut();
+          navigate("Login");
         },
-        {
-          text: 'Sair',
-          style: 'destructive',
-          onPress: () => {
-            signOut();
-            navigate('Login');
-          },
-        },
-      ]
-    );
+      },
+    ]);
   };
 
   const handleChangePassword = async () => {
     if (!currentPassword || !newPassword || !confirmPassword) {
-      Alert.alert('Erro', 'Preencha todos os campos');
+      Alert.alert("Erro", "Preencha todos os campos");
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      Alert.alert('Erro', 'A nova senha e a confirmação não coincidem');
+      Alert.alert("Erro", "A nova senha e a confirmação não coincidem");
       return;
     }
 
     if (newPassword.length < 6) {
-      Alert.alert('Erro', 'A nova senha deve ter pelo menos 6 caracteres');
+      Alert.alert("Erro", "A nova senha deve ter pelo menos 6 caracteres");
       return;
     }
 
     if (newPassword === currentPassword) {
-      Alert.alert('Erro', 'A nova senha deve ser diferente da atual');
+      Alert.alert("Erro", "A nova senha deve ser diferente da atual");
       return;
     }
 
     setIsChangingPassword(true);
     try {
       await authServices.changePassword(currentPassword, newPassword);
-      Alert.alert('Sucesso', 'Senha alterada com sucesso!');
+      Alert.alert("Sucesso", "Senha alterada com sucesso!");
       setIsPasswordModalVisible(false);
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
     } catch (error: any) {
-      console.log('Erro ao alterar senha:', error);
-      Alert.alert('Erro', error.message || 'Erro ao alterar senha. Tente novamente.');
+      console.log("Erro ao alterar senha:", error);
+      Alert.alert(
+        "Erro",
+        error.message || "Erro ao alterar senha. Tente novamente.",
+      );
     } finally {
       setIsChangingPassword(false);
     }
   };
 
   const handleThemeChange = (value: boolean) => {
-    setThemeMode(value ? 'dark' : 'light');
+    setThemeMode(value ? "dark" : "light");
   };
 
   const SettingItem: React.FC<{
@@ -138,18 +166,32 @@ export const SettingsScreen = () => {
         <Ionicons name={icon} size={24} color={iconColor} />
       </View>
       <View style={styles.settingContent}>
-        <Text style={[styles.settingTitle, { color: colors.text }]}>{title}</Text>
-        {subtitle && <Text style={[styles.settingSubtitle, { color: colors.textSecondary }]}>{subtitle}</Text>}
+        <Text style={[styles.settingTitle, { color: colors.text }]}>
+          {title}
+        </Text>
+        {subtitle && (
+          <Text
+            style={[styles.settingSubtitle, { color: colors.textSecondary }]}
+          >
+            {subtitle}
+          </Text>
+        )}
       </View>
       {rightComponent || (
-        <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+        <Ionicons
+          name="chevron-forward"
+          size={20}
+          color={colors.textSecondary}
+        />
       )}
     </TouchableOpacity>
   );
 
   return (
     <Layout title="Configurações" showBackButton={false} showSidebar={true}>
-      <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
+      <ScrollView
+        style={[styles.container, { backgroundColor: colors.background }]}
+      >
         <Animated.View
           style={[
             styles.content,
@@ -161,8 +203,17 @@ export const SettingsScreen = () => {
         >
           {/* Preferências */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Preferências</Text>
-            <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text
+              style={[styles.sectionTitle, { color: colors.textSecondary }]}
+            >
+              Preferências
+            </Text>
+            <View
+              style={[
+                styles.sectionCard,
+                { backgroundColor: colors.card, borderColor: colors.border },
+              ]}
+            >
               <SettingItem
                 icon="notifications"
                 iconColor="#8c52ff"
@@ -172,41 +223,68 @@ export const SettingsScreen = () => {
                   <Switch
                     value={notificationsEnabled}
                     onValueChange={setNotificationsEnabled}
-                    trackColor={{ false: colors.border, true: '#8c52ff' }}
+                    trackColor={{ false: colors.border, true: "#8c52ff" }}
                     thumbColor="#fff"
                   />
                 }
               />
-              <View style={[styles.divider, { backgroundColor: colors.border }]} />
+              <View
+                style={[styles.divider, { backgroundColor: colors.border }]}
+              />
               <SettingItem
-                icon={isDark ? 'moon' : 'sunny'}
-                iconColor={isDark ? '#8c52ff' : '#c084fc'}
-                title={isDark ? 'Tema Escuro' : 'Tema Claro'}
-                subtitle={isDark ? 'Ativar modo claro' : 'Ativar modo escuro'}
+                icon={isDark ? "moon" : "sunny"}
+                iconColor={isDark ? "#8c52ff" : "#c084fc"}
+                title={isDark ? "Tema Escuro" : "Tema Claro"}
+                subtitle={isDark ? "Ativar modo claro" : "Ativar modo escuro"}
                 rightComponent={
                   <Switch
                     value={isDark}
                     onValueChange={handleThemeChange}
-                    trackColor={{ false: colors.border, true: '#8c52ff' }}
+                    trackColor={{ false: colors.border, true: "#8c52ff" }}
                     thumbColor="#fff"
                   />
                 }
               />
+              {isCommonUser && (
+                <>
+                  <View
+                    style={[styles.divider, { backgroundColor: colors.border }]}
+                  />
+                  <SettingItem
+                    icon="list"
+                    iconColor="#8c52ff"
+                    title="Preferências do Ranking"
+                    subtitle="Escolher como utilizar o ranking"
+                    onPress={() => setIsRankingModalVisible(true)}
+                  />
+                </>
+              )}
             </View>
           </View>
 
           {/* Conta */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Conta</Text>
-            <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text
+              style={[styles.sectionTitle, { color: colors.textSecondary }]}
+            >
+              Conta
+            </Text>
+            <View
+              style={[
+                styles.sectionCard,
+                { backgroundColor: colors.card, borderColor: colors.border },
+              ]}
+            >
               <SettingItem
                 icon="person"
                 iconColor="#8c52ff"
                 title="Meu Perfil"
                 subtitle="Ver informações da conta"
-                onPress={() => navigate('Profile')}
+                onPress={() => navigate("Profile")}
               />
-              <View style={[styles.divider, { backgroundColor: colors.border }]} />
+              <View
+                style={[styles.divider, { backgroundColor: colors.border }]}
+              />
               <SettingItem
                 icon="lock-closed"
                 iconColor="#c084fc"
@@ -219,37 +297,64 @@ export const SettingsScreen = () => {
 
           {/* Sistema */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Sistema</Text>
-            <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text
+              style={[styles.sectionTitle, { color: colors.textSecondary }]}
+            >
+              Sistema
+            </Text>
+            <View
+              style={[
+                styles.sectionCard,
+                { backgroundColor: colors.card, borderColor: colors.border },
+              ]}
+            >
               <SettingItem
                 icon="help-circle"
                 iconColor="#6b6480"
                 title="Ajuda e Suporte"
                 subtitle="Central de ajuda e FAQ"
-                onPress={() => Alert.alert('Em breve', 'Funcionalidade em desenvolvimento')}
+                onPress={() =>
+                  Alert.alert("Em breve", "Funcionalidade em desenvolvimento")
+                }
               />
-              <View style={[styles.divider, { backgroundColor: colors.border }]} />
+              <View
+                style={[styles.divider, { backgroundColor: colors.border }]}
+              />
               <SettingItem
                 icon="document-text"
                 iconColor="#8c52ff"
                 title="Termos e Privacidade"
                 subtitle="Política de privacidade"
-                onPress={() => Alert.alert('Em breve', 'Funcionalidade em desenvolvimento')}
+                onPress={() =>
+                  Alert.alert("Em breve", "Funcionalidade em desenvolvimento")
+                }
               />
-              <View style={[styles.divider, { backgroundColor: colors.border }]} />
+              <View
+                style={[styles.divider, { backgroundColor: colors.border }]}
+              />
               <SettingItem
                 icon="information-circle"
                 iconColor="#a89fc0"
                 title="Sobre"
                 subtitle={`Versão 1.0.0`}
-                onPress={() => Alert.alert('Sobre', 'Controle Financeiro Pessoal\nVersão 1.0.0\n\nDesenvolvido para gerenciar suas finanças pessoais.')}
+                onPress={() =>
+                  Alert.alert(
+                    "Sobre",
+                    "Controle Financeiro Pessoal\nVersão 1.0.0\n\nDesenvolvido para gerenciar suas finanças pessoais.",
+                  )
+                }
               />
             </View>
           </View>
 
           {/* Ações */}
           <View style={styles.section}>
-            <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View
+              style={[
+                styles.sectionCard,
+                { backgroundColor: colors.card, borderColor: colors.border },
+              ]}
+            >
               <TouchableOpacity
                 style={styles.logoutButton}
                 onPress={handleLogout}
@@ -264,6 +369,170 @@ export const SettingsScreen = () => {
       </ScrollView>
 
       {/* Modal de Alteração de Senha */}
+      {/* Modal de Preferência do Ranking */}
+      <Modal
+        visible={isRankingModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsRankingModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.modalOverlay}
+        >
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setIsRankingModalVisible(false)}
+          >
+            <TouchableOpacity
+              activeOpacity={1}
+              onPress={(e) => e.stopPropagation()}
+            >
+              <View
+                style={[styles.modalContent, { backgroundColor: colors.card }]}
+              >
+                <View style={styles.modalHeader}>
+                  <Text style={[styles.modalTitle, { color: colors.text }]}>
+                    Preferências do Ranking
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => setIsRankingModalVisible(false)}
+                    style={styles.closeButton}
+                  >
+                    <Ionicons
+                      name="close"
+                      size={24}
+                      color={colors.textSecondary}
+                    />
+                  </TouchableOpacity>
+                </View>
+
+                <View style={{ paddingHorizontal: 20, paddingBottom: 20 }}>
+                  <TouchableOpacity
+                    style={[
+                      styles.optionButtonSmall,
+                      selectedRankingPref === "participate" &&
+                        styles.optionSelectedSmall,
+                    ]}
+                    disabled={isSavingRankingPref}
+                    onPress={() => setSelectedRankingPref("participate")}
+                  >
+                    <Text
+                      style={[styles.optionTitleSmall, { color: colors.text }]}
+                    >
+                      Participar
+                    </Text>
+                    <Text
+                      style={[
+                        styles.optionTextSmall,
+                        { color: colors.textSecondary },
+                      ]}
+                    >
+                      Você aparece no ranking e acompanha as outras pessoas.
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.optionButtonSmall,
+                      selectedRankingPref === "view_only" &&
+                        styles.optionSelectedSmall,
+                    ]}
+                    disabled={isSavingRankingPref}
+                    onPress={() => setSelectedRankingPref("view_only")}
+                  >
+                    <Text
+                      style={[styles.optionTitleSmall, { color: colors.text }]}
+                    >
+                      Apenas visualizar
+                    </Text>
+                    <Text
+                      style={[
+                        styles.optionTextSmall,
+                        { color: colors.textSecondary },
+                      ]}
+                    >
+                      Você não aparece no ranking, mas pode acompanhar o
+                      resultado.
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.optionButtonSmall,
+                      selectedRankingPref === "hidden" &&
+                        styles.optionSelectedSmall,
+                    ]}
+                    disabled={isSavingRankingPref}
+                    onPress={() => setSelectedRankingPref("hidden")}
+                  >
+                    <Text
+                      style={[styles.optionTitleSmall, { color: colors.text }]}
+                    >
+                      Esconder ranking
+                    </Text>
+                    <Text
+                      style={[
+                        styles.optionTextSmall,
+                        { color: colors.textSecondary },
+                      ]}
+                    >
+                      A aba será removida do menu e poderá ser reativada em
+                      Configurações.
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.saveButton,
+                      (!selectedRankingPref || isSavingRankingPref) &&
+                        styles.saveButtonDisabled,
+                    ]}
+                    disabled={!selectedRankingPref || isSavingRankingPref}
+                    onPress={async () => {
+                      if (!user?.id || !selectedRankingPref) return;
+                      try {
+                        setIsSavingRankingPref(true);
+                        await userService.updateUserPreferences(user.id, {
+                          rankingPreference: selectedRankingPref,
+                        });
+                        await refreshUser();
+                        setIsRankingModalVisible(false);
+                        if (selectedRankingPref === "hidden") {
+                          Alert.alert(
+                            "Atualizado",
+                            "Preferência salva. A aba Ranking foi ocultada.",
+                          );
+                        } else {
+                          Alert.alert("Atualizado", "Preferência salva.");
+                        }
+                      } catch (error) {
+                        console.error(
+                          "Erro ao salvar preferência de ranking:",
+                          error,
+                        );
+                        Alert.alert(
+                          "Erro",
+                          "Não foi possível salvar sua preferência agora.",
+                        );
+                      } finally {
+                        setIsSavingRankingPref(false);
+                      }
+                    }}
+                  >
+                    {isSavingRankingPref ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <Text style={styles.saveButtonText}>Salvar</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </KeyboardAvoidingView>
+      </Modal>
       <Modal
         visible={isPasswordModalVisible}
         transparent
@@ -271,7 +540,7 @@ export const SettingsScreen = () => {
         onRequestClose={() => setIsPasswordModalVisible(false)}
       >
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
           style={styles.modalOverlay}
         >
           <TouchableOpacity
@@ -283,14 +552,22 @@ export const SettingsScreen = () => {
               activeOpacity={1}
               onPress={(e) => e.stopPropagation()}
             >
-              <View style={[styles.modalContent, { backgroundColor: colors.card }]}>
+              <View
+                style={[styles.modalContent, { backgroundColor: colors.card }]}
+              >
                 <View style={styles.modalHeader}>
-                  <Text style={[styles.modalTitle, { color: colors.text }]}>Alterar Senha</Text>
+                  <Text style={[styles.modalTitle, { color: colors.text }]}>
+                    Alterar Senha
+                  </Text>
                   <TouchableOpacity
                     onPress={() => setIsPasswordModalVisible(false)}
                     style={styles.closeButton}
                   >
-                    <Ionicons name="close" size={24} color={colors.textSecondary} />
+                    <Ionicons
+                      name="close"
+                      size={24}
+                      color={colors.textSecondary}
+                    />
                   </TouchableOpacity>
                 </View>
 
@@ -301,8 +578,18 @@ export const SettingsScreen = () => {
                 >
                   {/* Senha Atual */}
                   <View style={styles.inputGroup}>
-                    <Text style={[styles.inputLabel, { color: colors.text }]}>Senha Atual</Text>
-                    <View style={[styles.passwordInput, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}>
+                    <Text style={[styles.inputLabel, { color: colors.text }]}>
+                      Senha Atual
+                    </Text>
+                    <View
+                      style={[
+                        styles.passwordInput,
+                        {
+                          backgroundColor: colors.inputBackground,
+                          borderColor: colors.border,
+                        },
+                      ]}
+                    >
                       <TextInput
                         style={[styles.input, { color: colors.text }]}
                         value={currentPassword}
@@ -313,11 +600,13 @@ export const SettingsScreen = () => {
                         autoCapitalize="none"
                       />
                       <TouchableOpacity
-                        onPress={() => setShowCurrentPassword(!showCurrentPassword)}
+                        onPress={() =>
+                          setShowCurrentPassword(!showCurrentPassword)
+                        }
                         style={styles.eyeButton}
                       >
                         <Ionicons
-                          name={showCurrentPassword ? 'eye-off' : 'eye'}
+                          name={showCurrentPassword ? "eye-off" : "eye"}
                           size={20}
                           color={colors.textSecondary}
                         />
@@ -327,8 +616,18 @@ export const SettingsScreen = () => {
 
                   {/* Nova Senha */}
                   <View style={styles.inputGroup}>
-                    <Text style={[styles.inputLabel, { color: colors.text }]}>Nova Senha</Text>
-                    <View style={[styles.passwordInput, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}>
+                    <Text style={[styles.inputLabel, { color: colors.text }]}>
+                      Nova Senha
+                    </Text>
+                    <View
+                      style={[
+                        styles.passwordInput,
+                        {
+                          backgroundColor: colors.inputBackground,
+                          borderColor: colors.border,
+                        },
+                      ]}
+                    >
                       <TextInput
                         style={[styles.input, { color: colors.text }]}
                         value={newPassword}
@@ -343,21 +642,36 @@ export const SettingsScreen = () => {
                         style={styles.eyeButton}
                       >
                         <Ionicons
-                          name={showNewPassword ? 'eye-off' : 'eye'}
+                          name={showNewPassword ? "eye-off" : "eye"}
                           size={20}
                           color={colors.textSecondary}
                         />
                       </TouchableOpacity>
                     </View>
-                    <Text style={[styles.inputHint, { color: colors.textSecondary }]}>
+                    <Text
+                      style={[
+                        styles.inputHint,
+                        { color: colors.textSecondary },
+                      ]}
+                    >
                       Mínimo de 6 caracteres
                     </Text>
                   </View>
 
                   {/* Confirmar Nova Senha */}
                   <View style={styles.inputGroup}>
-                    <Text style={[styles.inputLabel, { color: colors.text }]}>Confirmar Nova Senha</Text>
-                    <View style={[styles.passwordInput, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}>
+                    <Text style={[styles.inputLabel, { color: colors.text }]}>
+                      Confirmar Nova Senha
+                    </Text>
+                    <View
+                      style={[
+                        styles.passwordInput,
+                        {
+                          backgroundColor: colors.inputBackground,
+                          borderColor: colors.border,
+                        },
+                      ]}
+                    >
                       <TextInput
                         style={[styles.input, { color: colors.text }]}
                         value={confirmPassword}
@@ -368,11 +682,13 @@ export const SettingsScreen = () => {
                         autoCapitalize="none"
                       />
                       <TouchableOpacity
-                        onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                        onPress={() =>
+                          setShowConfirmPassword(!showConfirmPassword)
+                        }
                         style={styles.eyeButton}
                       >
                         <Ionicons
-                          name={showConfirmPassword ? 'eye-off' : 'eye'}
+                          name={showConfirmPassword ? "eye-off" : "eye"}
                           size={20}
                           color={colors.textSecondary}
                         />
@@ -383,11 +699,20 @@ export const SettingsScreen = () => {
                   {/* Botões */}
                   <View style={styles.modalButtons}>
                     <TouchableOpacity
-                      style={[styles.modalButton, styles.cancelButton, { borderColor: colors.border }]}
+                      style={[
+                        styles.modalButton,
+                        styles.cancelButton,
+                        { borderColor: colors.border },
+                      ]}
                       onPress={() => setIsPasswordModalVisible(false)}
                       disabled={isChangingPassword}
                     >
-                      <Text style={[styles.cancelButtonText, { color: colors.textSecondary }]}>
+                      <Text
+                        style={[
+                          styles.cancelButtonText,
+                          { color: colors.textSecondary },
+                        ]}
+                      >
                         Cancelar
                       </Text>
                     </TouchableOpacity>
@@ -425,20 +750,20 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
     marginBottom: 12,
     marginLeft: 4,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
     letterSpacing: 0.5,
   },
   sectionCard: {
     borderRadius: 16,
-    overflow: 'hidden',
+    overflow: "hidden",
     borderWidth: 1,
   },
   settingItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     padding: 16,
     gap: 16,
   },
@@ -446,15 +771,15 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   settingContent: {
     flex: 1,
   },
   settingTitle: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
     marginBottom: 2,
   },
   settingSubtitle: {
@@ -465,39 +790,39 @@ const styles = StyleSheet.create({
     marginLeft: 76,
   },
   logoutButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     padding: 16,
     gap: 12,
   },
   logoutText: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#ff4d6d',
+    fontWeight: "600",
+    color: "#ff4d6d",
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    justifyContent: "center",
+    alignItems: "center",
   },
   modalContent: {
-    width: '90%',
+    width: "90%",
     maxWidth: 400,
     borderRadius: 20,
-    maxHeight: '80%',
+    maxHeight: "80%",
   },
   modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     padding: 20,
     paddingBottom: 16,
   },
   modalTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
   closeButton: {
     padding: 4,
@@ -511,12 +836,12 @@ const styles = StyleSheet.create({
   },
   inputLabel: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
     marginBottom: 8,
   },
   passwordInput: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     borderRadius: 12,
     borderWidth: 1,
     paddingHorizontal: 16,
@@ -535,7 +860,7 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   modalButtons: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 12,
     marginTop: 8,
     marginBottom: 20,
@@ -544,8 +869,8 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 14,
     borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     minHeight: 48,
   },
   cancelButton: {
@@ -553,15 +878,53 @@ const styles = StyleSheet.create({
   },
   cancelButtonText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   confirmButton: {
-    backgroundColor: '#8c52ff',
+    backgroundColor: "#8c52ff",
   },
   confirmButtonText: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
+    fontWeight: "600",
+    color: "#fff",
+  },
+  optionButtonSmall: {
+    borderWidth: 1,
+    borderColor: "#333",
+    borderRadius: 12,
+    padding: 12,
+    backgroundColor: "#1f1f1f",
+    marginBottom: 8,
+  },
+  optionSelectedSmall: {
+    borderColor: "#8c52ff",
+    backgroundColor: "rgba(140,82,255,0.06)",
+  },
+  optionTitleSmall: {
+    fontSize: 15,
+    fontWeight: "700",
+    marginBottom: 2,
+  },
+  optionTextSmall: {
+    fontSize: 12,
+    marginBottom: 4,
+  },
+  saveButton: {
+    marginTop: 8,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: "#8c52ff",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 44,
+  },
+  saveButtonDisabled: {
+    opacity: 0.5,
+  },
+  saveButtonText: {
+    color: "#fff",
+    fontSize: 15,
+    fontWeight: "700",
   },
 });
 

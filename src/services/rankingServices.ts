@@ -7,6 +7,7 @@ import {
   convertBudgetFromFirestore,
   getDocData,
 } from "../lib/firestore";
+import { userService } from "./userServices";
 
 /**
  * Entrada do ranking
@@ -41,9 +42,24 @@ export const rankingServices = {
         ([userId, zeroDays]) => ({ userId, zeroDays }),
       );
 
-      arr.sort((a, b) => b.zeroDays - a.zeroDays);
+      const filtered: RankingEntry[] = [];
+      for (const entry of arr) {
+        try {
+          const user = await userService.getUserById(entry.userId);
+          if (user?.rankingPreference === "participate") {
+            filtered.push(entry);
+          }
+        } catch (error) {
+          console.error(
+            `❌ [RANKING SERVICE] Erro ao validar usuário ${entry.userId}:`,
+            error,
+          );
+        }
+      }
 
-      return arr.slice(0, topN);
+      filtered.sort((a, b) => b.zeroDays - a.zeroDays);
+
+      return filtered.slice(0, topN);
     } catch (error) {
       console.error("❌ [RANKING SERVICE] Erro ao calcular ranking:", error);
       return [];

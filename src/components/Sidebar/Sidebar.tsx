@@ -41,6 +41,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const { colors } = useTheme();
   const slideAnim = useRef(new Animated.Value(-300)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const isCommonUser = !user?.isAdmin && user?.role !== "consultor";
+  const shouldHideRankingItem =
+    isCommonUser && user?.rankingPreference === "hidden";
 
   useEffect(() => {
     if (visible) {
@@ -206,6 +209,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
           contentContainerStyle={styles.menuContent}
         >
           {menuItems.map((item) => {
+            if (item.id === "Ranking" && shouldHideRankingItem) {
+              return null;
+            }
+
             const isActive = currentScreen === item.id;
             return (
               <TouchableOpacity

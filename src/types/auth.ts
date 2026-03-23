@@ -1,3 +1,9 @@
+export type RankingPreference =
+  | "participate"
+  | "view_only"
+  | "hidden"
+  | "unset";
+
 export interface User {
   id: string;
   name: string;
@@ -12,6 +18,7 @@ export interface User {
   isActive?: boolean;
   currency?: string;
   showInRanking?: boolean;
+  rankingPreference?: RankingPreference;
   photoBase64?: string;
   createdAt: Date;
   updatedAt: Date;

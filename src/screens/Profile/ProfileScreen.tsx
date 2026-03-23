@@ -30,9 +30,6 @@ export const ProfileScreen = () => {
   const [showSuccess, setShowSuccess] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
   const [currency, setCurrency] = useState<string>(user?.currency || "BRL");
-  const [showInRanking, setShowInRanking] = useState<boolean>(
-    user?.showInRanking === true,
-  );
   const [savingPrefs, setSavingPrefs] = useState<boolean>(false);
 
   const [editingName, setEditingName] = useState<string>(user?.name || "");
@@ -300,18 +297,10 @@ export const ProfileScreen = () => {
             </View>
 
             <View style={styles.infoItem}>
-              <Text style={styles.infoLabel}>Participar do Ranking</Text>
-              <TouchableOpacity
-                onPress={() => setShowInRanking((s) => !s)}
-                style={styles.toggleButton}
-              >
-                <View
-                  style={[
-                    styles.toggleDot,
-                    showInRanking && styles.toggleDotActive,
-                  ]}
-                />
-              </TouchableOpacity>
+              <Text style={styles.infoLabel}>Ranking</Text>
+              <Text style={styles.infoValue}>
+                Preferências de ranking agora ficam em Configurações
+              </Text>
             </View>
 
             <TouchableOpacity
@@ -325,7 +314,6 @@ export const ProfileScreen = () => {
                   setSavingPrefs(true);
                   await userService.updateUserPreferences(user.id, {
                     currency,
-                    showInRanking,
                   });
                   // refresh user data in context
                   await refreshUser();

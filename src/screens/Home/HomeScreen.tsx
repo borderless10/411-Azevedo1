@@ -270,7 +270,9 @@ export const HomeScreen = () => {
         calcExpectedExpenses = sumBills + sumByCategory + sumExpExpenses;
         calcExpectedIncomes = monthly + sumExpIncomes;
         // expected savings: monthlyIncome + expectedIncomes - expectedExpenses
-        calcExpectedSavings = calcExpectedIncomes - calcExpectedExpenses;
+        // ensure numbers (coalesce nulls) to avoid `possibly null` TypeScript errors
+        calcExpectedSavings =
+          (calcExpectedIncomes ?? 0) - (calcExpectedExpenses ?? 0);
       }
 
       setExpectedExpenses(calcExpectedExpenses);
@@ -978,7 +980,7 @@ export const HomeScreen = () => {
                     </View>
                     <View style={styles.balanceIconContainer}>
                       <Ionicons
-                        name="ios-piggy-bank"
+                        name={"piggy-bank" as any}
                         size={28}
                         color="#8c52ff"
                       />
@@ -1225,6 +1227,37 @@ export const HomeScreen = () => {
             )}
           </Animated.View>
 
+          {/* Ações rápidas */}
+          <View style={styles.actionsContainer}>
+            <Text style={styles.sectionTitle}>Ações Rápidas</Text>
+
+            <View style={styles.actionsGrid}>
+              <ActionCard
+                icon="add-circle"
+                label="Adicionar Renda"
+                color="#8c52ff"
+                onPress={() => navigate("AddIncome")}
+                delay={0}
+              />
+              <ActionCard
+                icon="remove-circle"
+                label="Adicionar Gasto"
+                color="#ff4d6d"
+                onPress={() => navigate("AddExpense")}
+                delay={100}
+              />
+              {user?.role !== "consultor" && !user?.isAdmin && (
+                <ActionCard
+                  icon="calendar"
+                  label="Planejamento"
+                  color="#c084fc"
+                  onPress={() => navigate("PlanningView")}
+                  delay={200}
+                />
+              )}
+            </View>
+          </View>
+
           {/* Gráficos */}
           {(categoryChartData.length > 0 || lineChartData.length > 0) && (
             <Animated.View
@@ -1279,28 +1312,6 @@ export const HomeScreen = () => {
               )}
             </Animated.View>
           )}
-
-          {/* Ações rápidas */}
-          <View style={styles.actionsContainer}>
-            <Text style={styles.sectionTitle}>Ações Rápidas</Text>
-
-            <View style={styles.actionsGrid}>
-              <ActionCard
-                icon="add-circle"
-                label="Adicionar Renda"
-                color="#8c52ff"
-                onPress={() => navigate("AddIncome")}
-                delay={0}
-              />
-              <ActionCard
-                icon="remove-circle"
-                label="Adicionar Gasto"
-                color="#ff4d6d"
-                onPress={() => navigate("AddExpense")}
-                delay={100}
-              />
-            </View>
-          </View>
 
           {/* Filtros e Busca */}
           <View style={styles.filtersContainer}>
@@ -1649,6 +1660,7 @@ const styles = StyleSheet.create({
     marginTop: 0,
   },
   actionsContainer: {
+    marginTop: 16,
     marginBottom: 16,
   },
   sectionTitle: {
