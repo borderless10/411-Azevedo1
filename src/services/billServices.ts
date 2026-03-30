@@ -17,6 +17,7 @@ import {
   getBillDoc,
   convertBillFromFirestore,
   convertBillToFirestore,
+  getDocData,
 } from "../lib/firestore";
 import {
   Bill,
@@ -81,10 +82,9 @@ export const getBills = async (
       }
 
       const snapshot = await getDocs(q);
-      return snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...convertBillFromFirestore(doc.data() as any),
-      }));
+      return snapshot.docs.map((doc) =>
+        convertBillFromFirestore(getDocData(doc)),
+      );
     } catch (indexError: any) {
       // Se falhar por falta de índice, fazer query simples e ordenar no cliente
       if (indexError.code === "failed-precondition") {
@@ -108,10 +108,9 @@ export const getBills = async (
         }
 
         const snapshot = await getDocs(q);
-        const bills = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...convertBillFromFirestore(doc.data() as any),
-        }));
+        const bills = snapshot.docs.map((doc) =>
+          convertBillFromFirestore(getDocData(doc)),
+        );
 
         // Ordenar no cliente por data de vencimento
         return bills.sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime());
@@ -143,10 +142,9 @@ export const getBillsDueToday = async (userId: string): Promise<Bill[]> => {
     );
 
     const snapshot = await getDocs(q);
-    return snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...convertBillFromFirestore(doc.data() as any),
-    }));
+    return snapshot.docs.map((doc) =>
+      convertBillFromFirestore(getDocData(doc)),
+    );
   } catch (error) {
     console.error("Erro ao buscar contas do dia:", error);
     return [];

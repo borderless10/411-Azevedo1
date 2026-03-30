@@ -12,14 +12,14 @@ import {
   where,
   orderBy,
   Timestamp,
-} from 'firebase/firestore';
+} from "firebase/firestore";
 import {
   getGoalsCollection,
   getGoalDoc,
   convertGoalFromFirestore,
   convertGoalToFirestore,
   getDocData,
-} from '../lib/firestore';
+} from "../lib/firestore";
 import {
   Goal,
   CreateGoalData,
@@ -27,9 +27,9 @@ import {
   GoalContribution,
   GoalStats,
   GoalStatus,
-} from '../types/goal';
-import { activityServices } from './activityServices';
-import { formatCurrency } from '../utils/currencyUtils';
+} from "../types/goal";
+import { activityServices } from "./activityServices";
+import { formatCurrency } from "../utils/currencyUtils";
 
 /**
  * Validar dados de criação de meta
@@ -38,19 +38,19 @@ const validateCreateGoalData = (data: CreateGoalData): string[] => {
   const errors: string[] = [];
 
   if (!data.title || data.title.trim().length === 0) {
-    errors.push('Título é obrigatório');
+    errors.push("Título é obrigatório");
   }
 
   if (data.title && data.title.trim().length < 3) {
-    errors.push('Título deve ter pelo menos 3 caracteres');
+    errors.push("Título deve ter pelo menos 3 caracteres");
   }
 
   if (!data.targetAmount || data.targetAmount <= 0) {
-    errors.push('Valor da meta deve ser maior que zero');
+    errors.push("Valor da meta deve ser maior que zero");
   }
 
   if (data.deadline && data.deadline < new Date()) {
-    errors.push('Prazo não pode ser no passado');
+    errors.push("Prazo não pode ser no passado");
   }
 
   return errors;
@@ -64,14 +64,14 @@ export const goalServices = {
    * Criar uma nova meta
    */
   async createGoal(userId: string, data: CreateGoalData): Promise<Goal> {
-    console.log('🎯 [GOAL SERVICE] Criando meta...');
-    console.log('🎯 [GOAL SERVICE] Dados:', data);
+    console.log("🎯 [GOAL SERVICE] Criando meta...");
+    console.log("🎯 [GOAL SERVICE] Dados:", data);
 
     // Validar dados
     const errors = validateCreateGoalData(data);
     if (errors.length > 0) {
-      console.error('❌ [GOAL SERVICE] Erros de validação:', errors);
-      throw new Error(errors.join(', '));
+      console.error("❌ [GOAL SERVICE] Erros de validação:", errors);
+      throw new Error(errors.join(", "));
     }
 
     try {
@@ -79,11 +79,12 @@ export const goalServices = {
       const goalData: any = {
         userId,
         title: data.title.trim(),
-        description: data.description?.trim() || '',
+        description: data.description?.trim() || "",
         targetAmount: data.targetAmount,
         currentAmount: 0,
         category: data.category,
-        status: 'active' as GoalStatus,
+        ...(data.prazo && { prazo: data.prazo }),
+        status: "active" as GoalStatus,
         contributions: [],
         createdAt: Timestamp.fromDate(now),
         updatedAt: Timestamp.fromDate(now),
@@ -95,7 +96,7 @@ export const goalServices = {
       }
 
       const docRef = await addDoc(getGoalsCollection(), goalData);
-      console.log('✅ [GOAL SERVICE] Meta criada com ID:', docRef.id);
+      console.log("✅ [GOAL SERVICE] Meta criada com ID:", docRef.id);
 
       const goal: Goal = {
         id: docRef.id,
@@ -106,7 +107,8 @@ export const goalServices = {
         currentAmount: 0,
         category: data.category,
         deadline: data.deadline,
-        status: 'active',
+        prazo: data.prazo,
+        status: "active",
         contributions: [],
         createdAt: now,
         updatedAt: now,
@@ -114,7 +116,7 @@ export const goalServices = {
 
       // Registrar atividade
       await activityServices.logActivity(userId, {
-        type: 'goal_created',
+        type: "goal_created",
         title: `Meta criada: ${data.title.trim()}`,
         description: `Meta de ${formatCurrency(data.targetAmount)}`,
         metadata: {
@@ -126,7 +128,7 @@ export const goalServices = {
 
       return goal;
     } catch (error) {
-      console.error('❌ [GOAL SERVICE] Erro ao criar meta:', error);
+      console.error("❌ [GOAL SERVICE] Erro ao criar meta:", error);
       throw error;
     }
   },
@@ -135,30 +137,27 @@ export const goalServices = {
    * Buscar metas do usuário
    */
   async getGoals(userId: string, status?: GoalStatus): Promise<Goal[]> {
-    console.log('🎯 [GOAL SERVICE] Buscando metas...');
+    console.log("🎯 [GOAL SERVICE] Buscando metas...");
 
     try {
-      let q = query(
-        getGoalsCollection(),
-        where('userId', '==', userId)
-      );
+      let q = query(getGoalsCollection(), where("userId", "==", userId));
 
       if (status) {
-        q = query(q, where('status', '==', status));
+        q = query(q, where("status", "==", status));
       }
 
       const snapshot = await getDocs(q);
       let goals = snapshot.docs.map((doc) =>
-        convertGoalFromFirestore(getDocData(doc))
+        convertGoalFromFirestore(getDocData(doc)),
       );
 
       // Ordenar por data de criação (mais recente primeiro)
       goals.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
-      console.log('🎯 [GOAL SERVICE] Total de metas:', goals.length);
+      console.log("🎯 [GOAL SERVICE] Total de metas:", goals.length);
       return goals;
     } catch (error) {
-      console.error('❌ [GOAL SERVICE] Erro ao buscar metas:', error);
+      console.error("❌ [GOAL SERVICE] Erro ao buscar metas:", error);
       throw error;
     }
   },
@@ -167,22 +166,22 @@ export const goalServices = {
    * Buscar meta por ID
    */
   async getGoalById(id: string): Promise<Goal | null> {
-    console.log('🎯 [GOAL SERVICE] Buscando meta por ID:', id);
+    console.log("🎯 [GOAL SERVICE] Buscando meta por ID:", id);
 
     try {
       const docRef = getGoalDoc(id);
       const docSnap = await getDoc(docRef);
 
       if (!docSnap.exists()) {
-        console.log('⚠️ [GOAL SERVICE] Meta não encontrada');
+        console.log("⚠️ [GOAL SERVICE] Meta não encontrada");
         return null;
       }
 
       const goal = convertGoalFromFirestore(getDocData(docSnap));
-      console.log('✅ [GOAL SERVICE] Meta encontrada:', goal);
+      console.log("✅ [GOAL SERVICE] Meta encontrada:", goal);
       return goal;
     } catch (error) {
-      console.error('❌ [GOAL SERVICE] Erro ao buscar meta:', error);
+      console.error("❌ [GOAL SERVICE] Erro ao buscar meta:", error);
       throw error;
     }
   },
@@ -191,8 +190,8 @@ export const goalServices = {
    * Atualizar meta
    */
   async updateGoal(id: string, data: UpdateGoalData): Promise<Goal> {
-    console.log('🎯 [GOAL SERVICE] Atualizando meta:', id);
-    console.log('🎯 [GOAL SERVICE] Novos dados:', data);
+    console.log("🎯 [GOAL SERVICE] Atualizando meta:", id);
+    console.log("🎯 [GOAL SERVICE] Novos dados:", data);
 
     try {
       const docRef = getGoalDoc(id);
@@ -202,17 +201,17 @@ export const goalServices = {
       });
 
       await updateDoc(docRef, updateData);
-      console.log('✅ [GOAL SERVICE] Meta atualizada');
+      console.log("✅ [GOAL SERVICE] Meta atualizada");
 
       // Buscar meta atualizada
       const updated = await this.getGoalById(id);
       if (!updated) {
-        throw new Error('Erro ao buscar meta atualizada');
+        throw new Error("Erro ao buscar meta atualizada");
       }
 
       return updated;
     } catch (error) {
-      console.error('❌ [GOAL SERVICE] Erro ao atualizar meta:', error);
+      console.error("❌ [GOAL SERVICE] Erro ao atualizar meta:", error);
       throw error;
     }
   },
@@ -221,20 +220,20 @@ export const goalServices = {
    * Deletar meta
    */
   async deleteGoal(id: string): Promise<void> {
-    console.log('🎯 [GOAL SERVICE] Deletando meta:', id);
+    console.log("🎯 [GOAL SERVICE] Deletando meta:", id);
 
     try {
       // Buscar meta antes de deletar para registrar atividade
       const goal = await this.getGoalById(id);
-      
+
       const docRef = getGoalDoc(id);
       await deleteDoc(docRef);
-      console.log('✅ [GOAL SERVICE] Meta deletada');
+      console.log("✅ [GOAL SERVICE] Meta deletada");
 
       // Registrar atividade
       if (goal) {
         await activityServices.logActivity(goal.userId, {
-          type: 'goal_deleted',
+          type: "goal_deleted",
           title: `Meta removida: ${goal.title}`,
           description: `Meta de ${formatCurrency(goal.targetAmount)}`,
           metadata: {
@@ -244,7 +243,7 @@ export const goalServices = {
         });
       }
     } catch (error) {
-      console.error('❌ [GOAL SERVICE] Erro ao deletar meta:', error);
+      console.error("❌ [GOAL SERVICE] Erro ao deletar meta:", error);
       throw error;
     }
   },
@@ -255,18 +254,18 @@ export const goalServices = {
   async addContribution(
     id: string,
     amount: number,
-    note?: string
+    note?: string,
   ): Promise<Goal> {
-    console.log('🎯 [GOAL SERVICE] Adicionando contribuição à meta:', id);
+    console.log("🎯 [GOAL SERVICE] Adicionando contribuição à meta:", id);
 
     if (amount <= 0) {
-      throw new Error('Valor da contribuição deve ser maior que zero');
+      throw new Error("Valor da contribuição deve ser maior que zero");
     }
 
     try {
       const goal = await this.getGoalById(id);
       if (!goal) {
-        throw new Error('Meta não encontrada');
+        throw new Error("Meta não encontrada");
       }
 
       const now = new Date();
@@ -281,7 +280,7 @@ export const goalServices = {
 
       // Verificar se atingiu a meta
       const newStatus: GoalStatus =
-        newCurrentAmount >= goal.targetAmount ? 'completed' : goal.status;
+        newCurrentAmount >= goal.targetAmount ? "completed" : goal.status;
 
       const updateData: any = {
         contributions: updatedContributions,
@@ -291,20 +290,20 @@ export const goalServices = {
       };
 
       // Se completou, adicionar data de conclusão
-      if (newStatus === 'completed' && goal.status !== 'completed') {
+      if (newStatus === "completed" && goal.status !== "completed") {
         updateData.completedAt = now;
       }
 
       const docRef = getGoalDoc(id);
       const firestoreData = convertGoalToFirestore(updateData);
-      
+
       await updateDoc(docRef, firestoreData);
 
-      console.log('✅ [GOAL SERVICE] Contribuição adicionada');
+      console.log("✅ [GOAL SERVICE] Contribuição adicionada");
 
       // Registrar atividade
       await activityServices.logActivity(goal.userId, {
-        type: 'goal_contribution',
+        type: "goal_contribution",
         title: `Contribuição em ${goal.title}`,
         description: `Adicionado ${formatCurrency(amount)}`,
         metadata: {
@@ -315,9 +314,9 @@ export const goalServices = {
       });
 
       // Se completou a meta, registrar atividade de conclusão
-      if (newStatus === 'completed' && goal.status !== 'completed') {
+      if (newStatus === "completed" && goal.status !== "completed") {
         await activityServices.logActivity(goal.userId, {
-          type: 'goal_completed',
+          type: "goal_completed",
           title: `Meta concluída: ${goal.title}`,
           description: `Meta de ${formatCurrency(goal.targetAmount)} alcançada! 🎉`,
           metadata: {
@@ -330,12 +329,12 @@ export const goalServices = {
       // Buscar meta atualizada
       const updated = await this.getGoalById(id);
       if (!updated) {
-        throw new Error('Erro ao buscar meta atualizada');
+        throw new Error("Erro ao buscar meta atualizada");
       }
 
       return updated;
     } catch (error) {
-      console.error('❌ [GOAL SERVICE] Erro ao adicionar contribuição:', error);
+      console.error("❌ [GOAL SERVICE] Erro ao adicionar contribuição:", error);
       throw error;
     }
   },
@@ -345,29 +344,32 @@ export const goalServices = {
    */
   async removeContribution(
     id: string,
-    contributionIndex: number
+    contributionIndex: number,
   ): Promise<Goal> {
-    console.log('🎯 [GOAL SERVICE] Removendo contribuição da meta:', id);
+    console.log("🎯 [GOAL SERVICE] Removendo contribuição da meta:", id);
 
     try {
       const goal = await this.getGoalById(id);
       if (!goal) {
-        throw new Error('Meta não encontrada');
+        throw new Error("Meta não encontrada");
       }
 
-      if (contributionIndex < 0 || contributionIndex >= goal.contributions.length) {
-        throw new Error('Índice de contribuição inválido');
+      if (
+        contributionIndex < 0 ||
+        contributionIndex >= goal.contributions.length
+      ) {
+        throw new Error("Índice de contribuição inválido");
       }
 
       const removedContribution = goal.contributions[contributionIndex];
       const updatedContributions = goal.contributions.filter(
-        (_, index) => index !== contributionIndex
+        (_, index) => index !== contributionIndex,
       );
       const newCurrentAmount = goal.currentAmount - removedContribution.amount;
 
       // Recalcular status
       const newStatus: GoalStatus =
-        newCurrentAmount >= goal.targetAmount ? 'completed' : 'active';
+        newCurrentAmount >= goal.targetAmount ? "completed" : "active";
 
       const updateData: any = {
         contributions: updatedContributions,
@@ -378,20 +380,20 @@ export const goalServices = {
 
       const docRef = getGoalDoc(id);
       const firestoreData = convertGoalToFirestore(updateData);
-      
+
       await updateDoc(docRef, firestoreData);
 
-      console.log('✅ [GOAL SERVICE] Contribuição removida');
+      console.log("✅ [GOAL SERVICE] Contribuição removida");
 
       // Buscar meta atualizada
       const updated = await this.getGoalById(id);
       if (!updated) {
-        throw new Error('Erro ao buscar meta atualizada');
+        throw new Error("Erro ao buscar meta atualizada");
       }
 
       return updated;
     } catch (error) {
-      console.error('❌ [GOAL SERVICE] Erro ao remover contribuição:', error);
+      console.error("❌ [GOAL SERVICE] Erro ao remover contribuição:", error);
       throw error;
     }
   },
@@ -400,17 +402,27 @@ export const goalServices = {
    * Calcular estatísticas das metas
    */
   async getGoalStats(userId: string): Promise<GoalStats> {
-    console.log('🎯 [GOAL SERVICE] Calculando estatísticas das metas...');
+    console.log("🎯 [GOAL SERVICE] Calculando estatísticas das metas...");
 
     try {
       const goals = await this.getGoals(userId);
 
-      const activeGoals = goals.filter(g => g.status === 'active').length;
-      const completedGoals = goals.filter(g => g.status === 'completed').length;
-      const totalTargetAmount = goals.reduce((sum, g) => sum + g.targetAmount, 0);
-      const totalCurrentAmount = goals.reduce((sum, g) => sum + g.currentAmount, 0);
+      const activeGoals = goals.filter((g) => g.status === "active").length;
+      const completedGoals = goals.filter(
+        (g) => g.status === "completed",
+      ).length;
+      const totalTargetAmount = goals.reduce(
+        (sum, g) => sum + g.targetAmount,
+        0,
+      );
+      const totalCurrentAmount = goals.reduce(
+        (sum, g) => sum + g.currentAmount,
+        0,
+      );
       const totalProgress =
-        totalTargetAmount > 0 ? (totalCurrentAmount / totalTargetAmount) * 100 : 0;
+        totalTargetAmount > 0
+          ? (totalCurrentAmount / totalTargetAmount) * 100
+          : 0;
 
       const stats: GoalStats = {
         totalGoals: goals.length,
@@ -421,10 +433,10 @@ export const goalServices = {
         totalProgress,
       };
 
-      console.log('🎯 [GOAL SERVICE] Estatísticas calculadas:', stats);
+      console.log("🎯 [GOAL SERVICE] Estatísticas calculadas:", stats);
       return stats;
     } catch (error) {
-      console.error('❌ [GOAL SERVICE] Erro ao calcular estatísticas:', error);
+      console.error("❌ [GOAL SERVICE] Erro ao calcular estatísticas:", error);
       throw error;
     }
   },
@@ -433,10 +445,10 @@ export const goalServices = {
    * Marcar meta como concluída
    */
   async completeGoal(id: string): Promise<Goal> {
-    console.log('🎯 [GOAL SERVICE] Marcando meta como concluída:', id);
+    console.log("🎯 [GOAL SERVICE] Marcando meta como concluída:", id);
 
     return this.updateGoal(id, {
-      status: 'completed',
+      status: "completed",
     });
   },
 
@@ -444,10 +456,10 @@ export const goalServices = {
    * Cancelar meta
    */
   async cancelGoal(id: string): Promise<Goal> {
-    console.log('🎯 [GOAL SERVICE] Cancelando meta:', id);
+    console.log("🎯 [GOAL SERVICE] Cancelando meta:", id);
 
     return this.updateGoal(id, {
-      status: 'cancelled',
+      status: "cancelled",
     });
   },
 
@@ -455,10 +467,10 @@ export const goalServices = {
    * Reativar meta
    */
   async reactivateGoal(id: string): Promise<Goal> {
-    console.log('🎯 [GOAL SERVICE] Reativando meta:', id);
+    console.log("🎯 [GOAL SERVICE] Reativando meta:", id);
 
     return this.updateGoal(id, {
-      status: 'active',
+      status: "active",
     });
   },
 };

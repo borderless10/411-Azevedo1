@@ -18,6 +18,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Layout } from "../../components/Layout/Layout";
+import { useTheme } from "../../contexts/ThemeContext";
 import { useAuth } from "../../hooks/useAuth";
 import { useNavigation } from "../../routes/NavigationContext";
 import { planningServices } from "../../services/planningServices";
@@ -29,6 +30,7 @@ import { formatCurrency } from "../../utils/currencyUtils";
 export const ClientPlanningScreen = () => {
   const { user } = useAuth();
   const { navigate, params } = useNavigation();
+  const { colors } = useTheme();
   const [selectedClient, setSelectedClient] = useState<any | null>(null);
   const [notes, setNotes] = useState<string>("");
   const [saving, setSaving] = useState(false);
@@ -68,6 +70,19 @@ export const ClientPlanningScreen = () => {
         setLoading(true);
         const currentClient = await userService.getUserById(params.clientId);
         if (currentClient) {
+          // se o usuário atual for consultor, somente permitir clientes atribuídos
+          if (
+            user &&
+            user.role === "consultor" &&
+            (currentClient as any).consultantId !== user.id
+          ) {
+            Alert.alert(
+              "Acesso negado",
+              "Você não tem permissão para acessar este cliente.",
+            );
+            navigate("ClientList");
+            return;
+          }
           setSelectedClient(currentClient);
           return;
         }
@@ -342,10 +357,10 @@ export const ClientPlanningScreen = () => {
       <Layout
         title="Planejamento do Cliente"
         showBackButton={true}
-        showSidebar={true}
+        showSidebar={false}
       >
         <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color="#8c52ff" />
+          <ActivityIndicator size="large" color={colors.primary} />
         </View>
       </Layout>
     );
@@ -356,7 +371,7 @@ export const ClientPlanningScreen = () => {
       <Layout
         title="Planejamento do Cliente"
         showBackButton={true}
-        showSidebar={true}
+        showSidebar={false}
       >
         <View style={styles.centerContainer}>
           <Text style={styles.emptyText}>Nenhum cliente disponível</Text>
@@ -369,7 +384,7 @@ export const ClientPlanningScreen = () => {
     <Layout
       title="Planejamento do Cliente"
       showBackButton={true}
-      showSidebar={true}
+      showSidebar={false}
     >
       <ScrollView contentContainerStyle={styles.container}>
         <View style={styles.tabsContainer}>

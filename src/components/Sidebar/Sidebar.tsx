@@ -83,9 +83,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
       color: "#a47aff",
     },
     { id: "Bills", label: "Contas a Pagar", icon: "receipt", color: "#ff4d6d" },
+    { id: "Cartoes", label: "Cartões", icon: "card", color: "#8c52ff" },
     { id: "Feed", label: "Feed", icon: "newspaper", color: "#8c52ff" },
     { id: "Chat", label: "Chat", icon: "chatbubbles", color: "#a47aff" },
-    { id: "Metas", label: "Metas", icon: "flag", color: "#8c52ff" },
     { id: "Ranking", label: "Ranking", icon: "trophy", color: "#c084fc" },
     {
       id: "Recomendacao",
@@ -116,6 +116,28 @@ export const Sidebar: React.FC<SidebarProps> = ({
       id: "AdminUsers",
       label: "Gerenciar Usuários",
       icon: "people",
+      color: "#8c52ff",
+    });
+  }
+
+  // Itens exclusivos para clientes premium
+  if (user?.role === "cliente_premium") {
+    menuItems.push({
+      id: "Metas",
+      label: "Metas",
+      icon: "flag",
+      color: "#8c52ff",
+    });
+    menuItems.push({
+      id: "Wishlist",
+      label: "Lista de Desejos",
+      icon: "heart",
+      color: "#ff4d6d",
+    });
+    menuItems.push({
+      id: "Investments",
+      label: "Investimentos",
+      icon: "trending-up",
       color: "#8c52ff",
     });
   }

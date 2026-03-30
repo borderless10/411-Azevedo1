@@ -73,7 +73,7 @@ export const Layout: React.FC<LayoutProps> = ({
             <Header
               title={title}
               showBackButton={showBackButton}
-              showProfile={!showSidebar}
+              showProfile={true}
               rightAction={rightAction}
               style={styles.header}
             />

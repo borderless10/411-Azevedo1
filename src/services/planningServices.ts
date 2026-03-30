@@ -21,6 +21,24 @@ const getUserPlanningDoc = (userId: string) =>
   doc(db, "users", userId, "planning", "current");
 
 export const planningServices = {
+  // helper: ensure the acting consultant is allowed to manage this user's planning
+  async ensureOwnerOrAdmin(consultantId: string, userId: string) {
+    const consultant = await userService.getUserById(consultantId);
+    if (
+      !consultant ||
+      (consultant.role !== "consultor" && consultant.role !== "admin")
+    ) {
+      throw new Error("Usuário não autorizado a modificar planejamento");
+    }
+    // admins can manage any client
+    if (consultant.role === "admin") return;
+
+    const target = await userService.getUserById(userId);
+    if (!target) throw new Error("Cliente não encontrado");
+    if ((target as any).consultantId !== consultantId) {
+      throw new Error("Usuário não autorizado a modificar dados deste cliente");
+    }
+  },
   async getPlanning(userId: string): Promise<Planning | null> {
     try {
       const docRef = getUserPlanningDoc(userId);
@@ -106,6 +124,115 @@ export const planningServices = {
     }
   },
 
+  // ---- Investments history (simple entries with date and totals per category) ----
+  async getInvestments(userId: string): Promise<Array<any>> {
+    try {
+      const docRef = getUserPlanningDoc(userId);
+      const snap = await getDoc(docRef);
+      if (!snap.exists()) return [];
+      const data = snap.data() as any;
+      const entries = (data.investments || []).map((e: any) => ({
+        id: e.id,
+        date: e.date
+          ? e.date.toDate
+            ? e.date.toDate()
+            : new Date(e.date)
+          : null,
+        totals: e.totals || {},
+        createdAt: e.createdAt
+          ? e.createdAt.toDate
+            ? e.createdAt.toDate()
+            : new Date(e.createdAt)
+          : undefined,
+      }));
+      // sort descending by date
+      entries.sort((a: any, b: any) => {
+        const da = a.date ? a.date.getTime() : 0;
+        const db = b.date ? b.date.getTime() : 0;
+        return db - da;
+      });
+      return entries;
+    } catch (error) {
+      console.error(
+        "❌ [PLANNING SERVICE] Erro ao buscar investimentos:",
+        error,
+      );
+      throw error;
+    }
+  },
+
+  async addInvestmentsEntry(
+    consultantId: string,
+    userId: string,
+    totals: { caixa?: number; ipca?: number; outros?: number },
+  ): Promise<any> {
+    try {
+      await planningServices.ensureOwnerOrAdmin(consultantId, userId);
+
+      const docRef = getUserPlanningDoc(userId);
+      const snap = await getDoc(docRef);
+      const now = Timestamp.now();
+
+      if (!snap.exists()) {
+        await setDoc(docRef, {
+          consultantId,
+          createdAt: now,
+          updatedAt: now,
+          bills: [],
+          expectedIncomes: [],
+          expectedExpenses: [],
+          investments: [],
+        });
+      }
+
+      const id = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+      const entry: any = {
+        id,
+        date: now,
+        totals: {
+          caixa: totals.caixa || 0,
+          ipca: totals.ipca || 0,
+          outros: totals.outros || 0,
+        },
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      const currentSnap = await getDoc(docRef);
+      const current = currentSnap.exists() ? (currentSnap.data() as any) : {};
+      const existing = current.investments || [];
+      const updated = [entry, ...existing];
+
+      await updateDoc(docRef, { investments: updated, updatedAt: now });
+
+      // activity log
+      try {
+        await activityServices.logActivity(userId, {
+          type: "investments_update",
+          title: "Investimentos atualizados",
+          description: "Seu consultor atualizou os valores de investimentos.",
+          metadata: { consultantId },
+        });
+      } catch (e) {
+        console.warn(
+          "⚠️ [PLANNING SERVICE] Falha ao registrar atividade de investimentos:",
+          e,
+        );
+      }
+
+      return {
+        id,
+        date: now.toDate(),
+        totals: entry.totals,
+      };
+    } catch (error) {
+      console.error(
+        "❌ [PLANNING SERVICE] Erro ao adicionar entry de investimentos:",
+        error,
+      );
+      throw error;
+    }
+  },
   async syncOverduePlanningBills(userId: string): Promise<void> {
     try {
       const docRef = getUserPlanningDoc(userId);
@@ -210,14 +337,7 @@ export const planningServices = {
     data: CreatePlanningData,
   ): Promise<Planning> {
     try {
-      // checar se consultantId tem role de consultor (ou admin)
-      const consultant = await userService.getUserById(consultantId);
-      if (
-        !consultant ||
-        (consultant.role !== "consultor" && consultant.role !== "admin")
-      ) {
-        throw new Error("Usuário não autorizado a criar planejamento");
-      }
+      await planningServices.ensureOwnerOrAdmin(consultantId, userId);
 
       const now = Timestamp.now();
       const docRef = getUserPlanningDoc(userId);
@@ -299,13 +419,7 @@ export const planningServices = {
     data: UpdatePlanningData,
   ): Promise<Planning | null> {
     try {
-      const consultant = await userService.getUserById(consultantId);
-      if (
-        !consultant ||
-        (consultant.role !== "consultor" && consultant.role !== "admin")
-      ) {
-        throw new Error("Usuário não autorizado a atualizar planejamento");
-      }
+      await planningServices.ensureOwnerOrAdmin(consultantId, userId);
 
       const docRef = getUserPlanningDoc(userId);
       const snap = await getDoc(docRef);
@@ -382,13 +496,7 @@ export const planningServices = {
     bill: Bill,
   ): Promise<Bill> {
     try {
-      const consultant = await userService.getUserById(consultantId);
-      if (
-        !consultant ||
-        (consultant.role !== "consultor" && consultant.role !== "admin")
-      ) {
-        throw new Error("Usuário não autorizado a modificar planejamento");
-      }
+      await planningServices.ensureOwnerOrAdmin(consultantId, userId);
 
       const docRef = getUserPlanningDoc(userId);
       const snap = await getDoc(docRef);
@@ -467,13 +575,7 @@ export const planningServices = {
     changes: Partial<Bill>,
   ): Promise<Bill | null> {
     try {
-      const consultant = await userService.getUserById(consultantId);
-      if (
-        !consultant ||
-        (consultant.role !== "consultor" && consultant.role !== "admin")
-      ) {
-        throw new Error("Usuário não autorizado a modificar planejamento");
-      }
+      await planningServices.ensureOwnerOrAdmin(consultantId, userId);
 
       const docRef = getUserPlanningDoc(userId);
       const snap = await getDoc(docRef);
@@ -517,13 +619,7 @@ export const planningServices = {
     billId: string,
   ): Promise<void> {
     try {
-      const consultant = await userService.getUserById(consultantId);
-      if (
-        !consultant ||
-        (consultant.role !== "consultor" && consultant.role !== "admin")
-      ) {
-        throw new Error("Usuário não autorizado a modificar planejamento");
-      }
+      await planningServices.ensureOwnerOrAdmin(consultantId, userId);
 
       const docRef = getUserPlanningDoc(userId);
       const snap = await getDoc(docRef);
@@ -547,13 +643,7 @@ export const planningServices = {
     item: ExpectedItem,
   ): Promise<ExpectedItem> {
     try {
-      const consultant = await userService.getUserById(consultantId);
-      if (
-        !consultant ||
-        (consultant.role !== "consultor" && consultant.role !== "admin")
-      ) {
-        throw new Error("Usuário não autorizado a modificar planejamento");
-      }
+      await planningServices.ensureOwnerOrAdmin(consultantId, userId);
 
       const docRef = getUserPlanningDoc(userId);
       const snap = await getDoc(docRef);
@@ -618,13 +708,7 @@ export const planningServices = {
     changes: Partial<ExpectedItem>,
   ): Promise<ExpectedItem | null> {
     try {
-      const consultant = await userService.getUserById(consultantId);
-      if (
-        !consultant ||
-        (consultant.role !== "consultor" && consultant.role !== "admin")
-      ) {
-        throw new Error("Usuário não autorizado a modificar planejamento");
-      }
+      await planningServices.ensureOwnerOrAdmin(consultantId, userId);
 
       const docRef = getUserPlanningDoc(userId);
       const snap = await getDoc(docRef);
@@ -670,13 +754,7 @@ export const planningServices = {
     itemId: string,
   ): Promise<void> {
     try {
-      const consultant = await userService.getUserById(consultantId);
-      if (
-        !consultant ||
-        (consultant.role !== "consultor" && consultant.role !== "admin")
-      ) {
-        throw new Error("Usuário não autorizado a modificar planejamento");
-      }
+      await planningServices.ensureOwnerOrAdmin(consultantId, userId);
 
       const docRef = getUserPlanningDoc(userId);
       const snap = await getDoc(docRef);

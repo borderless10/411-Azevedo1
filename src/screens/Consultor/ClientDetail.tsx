@@ -10,6 +10,8 @@ import {
 } from "react-native";
 import { Layout } from "../../components/Layout/Layout";
 import { useNavigation } from "../../routes/NavigationContext";
+import { useAuth } from "../../hooks/useAuth";
+import { userService } from "../../services/userServices";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { expenseServices } from "../../services/expenseServices";
 import { incomeServices } from "../../services/incomeServices";
@@ -18,9 +20,11 @@ import { formatCurrency, getBalanceColor } from "../../utils/currencyUtils";
 import { useTheme } from "../../contexts/ThemeContext";
 
 export const ClientDetail: React.FC = () => {
-  const { params } = useNavigation() as any;
+  const { params, navigate } = useNavigation() as any;
+  const { user } = useAuth();
   const clientId: string = params?.clientId || "";
   const [loading, setLoading] = useState(false);
+  const [clientDoc, setClientDoc] = useState<any | null>(null);
   const [expenses, setExpenses] = useState<any[]>([]);
   const [incomes, setIncomes] = useState<any[]>([]);
   const [monthlyExpenses, setMonthlyExpenses] = useState<number>(0);
@@ -60,6 +64,23 @@ export const ClientDetail: React.FC = () => {
   useEffect(() => {
     async function load() {
       if (!clientId) return;
+      // se o usuário atual for consultor, verificar propriedade do cliente
+      try {
+        if (user && user.role === "consultor") {
+          const client = await userService.getUserById(clientId);
+          setClientDoc(client ?? null);
+          if (client && (client as any).consultantId !== user.id) {
+            navigate("Home");
+            return;
+          }
+        } else {
+          // if not a consultant, still try to load client profile for display
+          const client = await userService.getUserById(clientId);
+          setClientDoc(client ?? null);
+        }
+      } catch (e) {
+        console.warn("Erro na verificação de permissão do consultor", e);
+      }
       setLoading(true);
       try {
         // compute start and end of current month
@@ -140,6 +161,59 @@ export const ClientDetail: React.FC = () => {
         <Text style={[styles.heading, { color: colors.text }]}>
           Visão Geral
         </Text>
+        <View style={styles.actionColumn}>
+          <TouchableOpacity
+            style={[
+              styles.actionButtonFull,
+              { backgroundColor: colors.primary },
+            ]}
+            onPress={() => navigate("ClientPlanning", { clientId })}
+          >
+            <Text style={styles.actionButtonText}>Abrir Planejamento</Text>
+          </TouchableOpacity>
+
+          {clientDoc?.role === "cliente_premium" && (
+            <TouchableOpacity
+              style={[
+                styles.actionButtonFull,
+                { backgroundColor: colors.primary },
+              ]}
+              onPress={() =>
+                navigate(
+                  user && user.role === "consultor"
+                    ? "ClientInvestments"
+                    : "ClientInvestmentsView",
+                  { clientId },
+                )
+              }
+            >
+              <Text style={styles.actionButtonText}>Investimentos</Text>
+            </TouchableOpacity>
+          )}
+
+          {clientDoc?.role === "cliente_premium" && (
+            <TouchableOpacity
+              style={[
+                styles.actionButtonFull,
+                { backgroundColor: colors.primary },
+              ]}
+              onPress={() => navigate("Metas", { clientId })}
+            >
+              <Text style={styles.actionButtonText}>Metas</Text>
+            </TouchableOpacity>
+          )}
+          {clientDoc?.role === "cliente_premium" && (
+            <TouchableOpacity
+              style={[
+                styles.actionButtonFull,
+                { backgroundColor: colors.primary },
+              ]}
+              onPress={() => navigate("Wishlist", { clientId })}
+            >
+              <Text style={styles.actionButtonText}>Lista de Desejos</Text>
+            </TouchableOpacity>
+          )}
+        </View>
         <View style={[styles.row, { borderColor: colors.border }]}>
           <View style={styles.col}>
             <Text style={[styles.label, { color: colors.textSecondary }]}>
@@ -388,7 +462,10 @@ export const ClientDetail: React.FC = () => {
         pointerEvents="box-none"
       >
         <TouchableOpacity
-          style={[styles.sendMessageButton, { backgroundColor: "#2b6cb0" }]}
+          style={[
+            styles.sendMessageButton,
+            { backgroundColor: colors.primary },
+          ]}
           onPress={() => setMessageModalVisible(true)}
         >
           <Text style={styles.sendMessageText}>Enviar mensagem ao cliente</Text>
@@ -401,6 +478,17 @@ export const ClientDetail: React.FC = () => {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   heading: { fontSize: 18, fontWeight: "700", marginBottom: 12 },
+  actionRow: { flexDirection: "row", gap: 8, marginBottom: 12 },
+  actionColumn: { flexDirection: "column", marginBottom: 12 },
+  actionButtonFull: {
+    width: "100%",
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  actionButtonText: { color: "#fff", fontWeight: "700" },
   subheading: {
     fontSize: 16,
     fontWeight: "600",

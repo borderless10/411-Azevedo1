@@ -103,6 +103,7 @@ export const userService = {
         id: userDoc.id,
         name: userData.name || "",
         nickname: userData.nickname || "",
+        consultantId: userData.consultantId || undefined,
         photoBase64: userData.photoBase64 || "",
         email: userData.email || "",
         username: userData.username || "",
@@ -325,6 +326,7 @@ export const userService = {
       phone?: string;
       nickname?: string;
       photoBase64?: string;
+      role?: string;
     },
   ): Promise<void> {
     try {
@@ -340,7 +342,7 @@ export const userService = {
           photoBase64: userData.photoBase64 || "",
           email: userData.email,
           phone: userData.phone || "",
-          role: "user", // Garantir que é usuário normal
+          role: userData.role || "user", // Use provided role or default to user
           isAdmin: false, // Garantir que não é admin
           isActive: true, // Conta ativa por padrão
           createdAt: now,
@@ -396,6 +398,7 @@ export const userService = {
           id: docSnap.id,
           name: data.name || "",
           nickname: data.nickname || "",
+          consultantId: data.consultantId || undefined,
           photoBase64: data.photoBase64 || "",
           email: data.email || "",
           username: data.username || "",
@@ -434,6 +437,9 @@ export const userService = {
       const usersRef = collection(db, "users");
       const q = query(usersRef, where("role", "==", role));
       const snapshot = await getDocs(q);
+      console.log(
+        `[USER SERVICE] getUsersByRole('${role}'): ${snapshot.size} resultados encontrados`,
+      );
       const results: User[] = [];
       snapshot.forEach((docSnap) => {
         const data: any = docSnap.data();
@@ -441,6 +447,7 @@ export const userService = {
           id: docSnap.id,
           name: data.name || "",
           nickname: data.nickname || "",
+          consultantId: data.consultantId || undefined,
           photoBase64: data.photoBase64 || "",
           email: data.email || "",
           username: data.username || "",
@@ -526,6 +533,7 @@ export const userService = {
       photoBase64?: string | null;
       role?: string;
       isAdmin?: boolean;
+      consultantId?: string | null;
     },
   ): Promise<void> {
     try {
@@ -541,6 +549,8 @@ export const userService = {
       if (payload.role !== undefined) updatePayload.role = payload.role;
       if (payload.isAdmin !== undefined)
         updatePayload.isAdmin = payload.isAdmin;
+      if (payload.consultantId !== undefined)
+        updatePayload.consultantId = payload.consultantId;
       await updateDoc(userRef, updatePayload);
       console.log(`✅ Usuário ${userId} atualizado`, updatePayload);
     } catch (error) {

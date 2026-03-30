@@ -12,6 +12,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  TouchableOpacity,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../hooks/useAuth";
@@ -24,15 +25,24 @@ import { CategoryPicker } from "../../components/CategoryPicker";
 import expenseServices from "../../services/expenseServices";
 import { formatCurrency } from "../../utils/currencyUtils";
 import ExpenseCreatedModal from "../../components/ui/ExpenseCreatedModal";
+import { creditCardServices } from "../../services/creditCardServices";
+import { CreditCard } from "../../types/creditCard";
 
 export const AddExpenseScreen = () => {
   const { user } = useAuth();
-  const { navigate } = useNavigation();
+  const { navigate, params } = useNavigation() as any;
 
   const [value, setValue] = useState(0);
   const [description, setDescription] = useState("");
-  const [date, setDate] = useState(new Date());
+  const [date, setDate] = useState<Date>(
+    params?.prefillDate ? new Date(params.prefillDate) : new Date(),
+  );
   const [category, setCategory] = useState<string>("Alimentação");
+  const [paymentMethod, setPaymentMethod] = useState<
+    "cash" | "debit_card" | "credit_card" | "pix" | "other"
+  >("cash");
+  const [selectedCardId, setSelectedCardId] = useState<string>("");
+  const [cards, setCards] = useState<CreditCard[]>([]);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({
     value: "",
@@ -95,6 +105,31 @@ export const AddExpenseScreen = () => {
     }
   };
 
+  // Se navegaram para cá com uma data predefinida, aplicar
+  React.useEffect(() => {
+    if (params?.prefillDate) {
+      try {
+        setDate(new Date(params.prefillDate));
+      } catch (e) {
+        // ignora se inválido
+      }
+    }
+  }, [params?.prefillDate]);
+
+  React.useEffect(() => {
+    const loadCards = async () => {
+      if (!user?.id) return;
+      try {
+        const loaded = await creditCardServices.getCreditCards(user.id);
+        setCards(loaded.filter((card) => card.isActive !== false));
+      } catch (error) {
+        console.warn("Erro ao carregar cartões", error);
+      }
+    };
+
+    loadCards();
+  }, [user?.id]);
+
   const handleDescriptionChange = (text: string) => {
     setDescription(text);
     if (errors.description || text.trim()) {
@@ -132,14 +167,24 @@ export const AddExpenseScreen = () => {
     const descriptionError = validateDescription(description);
     const dateError = validateDate(date);
     const categoryError = validateCategory(category);
+    const cardError =
+      paymentMethod === "credit_card" && !selectedCardId
+        ? "Selecione um cartão"
+        : "";
 
-    if (valueError || descriptionError || dateError || categoryError) {
+    if (
+      valueError ||
+      descriptionError ||
+      dateError ||
+      categoryError ||
+      cardError
+    ) {
       setErrors({
         value: valueError,
         description: descriptionError,
         date: dateError,
         category: categoryError,
-        general: "Por favor, corrija os erros antes de salvar",
+        general: cardError || "Por favor, corrija os erros antes de salvar",
       });
       return;
     }
@@ -157,6 +202,10 @@ export const AddExpenseScreen = () => {
         description: description.trim(),
         date,
         category,
+        paymentMethod,
+        ...(paymentMethod === "credit_card" && selectedCardId
+          ? { cardId: selectedCardId }
+          : {}),
       };
 
       const newExpense = await expenseServices.createExpense(
@@ -173,6 +222,8 @@ export const AddExpenseScreen = () => {
       setDescription("");
       setDate(new Date());
       setCategory("Alimentação");
+      setPaymentMethod("cash");
+      setSelectedCardId("");
 
       // Parar loading antes de mostrar modal
       setLoading(false);
@@ -318,6 +369,85 @@ export const AddExpenseScreen = () => {
                 ) : null}
               </View>
 
+              <View style={styles.inputContainer}>
+                <Text style={styles.label}>
+                  <Ionicons name="card" size={16} color="#8c52ff" /> Forma de
+                  pagamento
+                </Text>
+                <View style={styles.paymentMethodsRow}>
+                  {[
+                    { id: "cash", label: "Dinheiro" },
+                    { id: "debit_card", label: "Débito" },
+                    { id: "credit_card", label: "Cartão" },
+                    { id: "pix", label: "PIX" },
+                  ].map((method) => {
+                    const active = paymentMethod === method.id;
+                    return (
+                      <TouchableOpacity
+                        key={method.id}
+                        style={[
+                          styles.paymentChip,
+                          active ? styles.paymentChipActive : null,
+                        ]}
+                        onPress={() => {
+                          setPaymentMethod(method.id as any);
+                          if (method.id !== "credit_card") {
+                            setSelectedCardId("");
+                          }
+                        }}
+                        disabled={loading}
+                      >
+                        <Text
+                          style={[
+                            styles.paymentChipText,
+                            active ? styles.paymentChipTextActive : null,
+                          ]}
+                        >
+                          {method.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {paymentMethod === "credit_card" ? (
+                <View style={styles.inputContainer}>
+                  <Text style={styles.label}>Cartão específico</Text>
+                  {cards.length === 0 ? (
+                    <Text style={styles.errorTextSmall}>
+                      Você não tem cartões cadastrados. Cadastre na aba Cartões.
+                    </Text>
+                  ) : (
+                    <View style={styles.paymentMethodsRow}>
+                      {cards.map((card) => {
+                        const active = selectedCardId === card.id;
+                        return (
+                          <TouchableOpacity
+                            key={card.id}
+                            style={[
+                              styles.paymentChip,
+                              active ? styles.paymentChipActive : null,
+                            ]}
+                            onPress={() => setSelectedCardId(card.id)}
+                            disabled={loading}
+                          >
+                            <Text
+                              style={[
+                                styles.paymentChipText,
+                                active ? styles.paymentChipTextActive : null,
+                              ]}
+                            >
+                              {card.bank} ••••{card.last4}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  )}
+                </View>
+              ) : null}
+
               {/* Botões */}
               <View style={styles.buttonContainer}>
                 <Button
@@ -461,6 +591,31 @@ const styles = StyleSheet.create({
   },
   button: {
     flex: 1,
+  },
+  paymentMethodsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  paymentChip: {
+    borderWidth: 1,
+    borderColor: "#444",
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    backgroundColor: "#2b2b2b",
+  },
+  paymentChipActive: {
+    backgroundColor: "#8c52ff",
+    borderColor: "#8c52ff",
+  },
+  paymentChipText: {
+    color: "#ddd",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  paymentChipTextActive: {
+    color: "#fff",
   },
 });
 

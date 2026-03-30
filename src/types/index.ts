@@ -3,31 +3,37 @@
  */
 
 // User types
-export * from './auth';
+export * from "./auth";
 
 // Income types
-export * from './income';
+export * from "./income";
 
 // Expense types
-export * from './expense';
+export * from "./expense";
 
 // Category types
-export * from './category';
+export * from "./category";
 
 // Transaction types
-export * from './transaction';
+export * from "./transaction";
 
 // Balance types
-export * from './balance';
+export * from "./balance";
 
 // Budget types
-export * from './budget';
+export * from "./budget";
 
 // Goal types
-export * from './goal';
+export * from "./goal";
 
 // Activity types
-export * from './activity';
+export * from "./activity";
 
 // Bill types
-export * from './bill';
+export * from "./bill";
+
+// Wishlist types
+export * from "./wishlist";
+
+// Credit card types
+export * from "./creditCard";

@@ -230,9 +230,59 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         }
       } catch (error) {
         if (__DEV__) {
-          console.log("Erro ao buscar dados do usuário:", error);
+          console.log("Erro ao buscar dados do usuário no signIn:", error);
         }
-        setUser(userData);
+        // Se houver erro ao buscar pelo ID (por exemplo permissões ou falha de rede),
+        // tentar fallback por email. Se o fallback também falhar por exceção,
+        // não permitir login silencioso — propagar o erro para a UI.
+        try {
+          if (userData.email) {
+            const byEmail = await userService.getUserByEmail(userData.email);
+            if (byEmail) {
+              if (byEmail.isActive === false) {
+                try {
+                  await authServices.logout();
+                } catch (e) {
+                  if (__DEV__)
+                    console.log(
+                      "Erro ao deslogar conta desativada (fallback signIn):",
+                      e,
+                    );
+                }
+                throw {
+                  code: "auth/user-disabled",
+                  message: "Conta desativada",
+                };
+              }
+
+              setUser({
+                ...userData,
+                ...byEmail,
+              });
+              // fallback succeeded, continuar
+            } else {
+              // Sem documento por email — não conseguimos confirmar status;
+              // por segurança, bloquear login até que a leitura seja possível.
+              throw {
+                code: "auth/user-data-unavailable",
+                message:
+                  "Não foi possível verificar o status da conta. Tente novamente mais tarde.",
+              };
+            }
+          } else {
+            // Sem email disponível para fallback — bloquear login
+            throw {
+              code: "auth/user-data-unavailable",
+              message:
+                "Não foi possível verificar o status da conta. Tente novamente mais tarde.",
+            };
+          }
+        } catch (fallbackErr) {
+          if (__DEV__) {
+            console.log("Erro no fallback por email no signIn:", fallbackErr);
+          }
+          throw fallbackErr;
+        }
       }
 
       console.log("🟢 [AUTH CONTEXT] Estado do usuário atualizado");

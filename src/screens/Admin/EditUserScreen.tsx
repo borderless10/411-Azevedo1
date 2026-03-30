@@ -7,11 +7,13 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
+  ScrollView,
 } from "react-native";
 import { Layout } from "../../components/Layout/Layout";
 import { useNavigation } from "../../routes/NavigationContext";
 import { useAuth } from "../../hooks/useAuth";
 import { userService } from "../../services/userServices";
+import ConsultantPicker from "../../components/ui/ConsultantPicker";
 
 export const EditUserScreen: React.FC = ({}: any) => {
   const { navigate, params } = useNavigation() as any;
@@ -23,7 +25,11 @@ export const EditUserScreen: React.FC = ({}: any) => {
   const [name, setName] = useState("");
   const [nickname, setNickname] = useState("");
   const [phone, setPhone] = useState("");
-  const [role, setRole] = useState<"user" | "consultor" | "admin">("user");
+  const [role, setRole] = useState<
+    "user" | "consultor" | "admin" | "cliente_premium"
+  >("user");
+  const [consultants, setConsultants] = useState<any[]>([]);
+  const [consultantId, setConsultantId] = useState<string | null>(null);
 
   useEffect(() => {
     if (
@@ -34,6 +40,16 @@ export const EditUserScreen: React.FC = ({}: any) => {
       return;
     }
     if (userId) fetchUser();
+    // load consultants for selector
+    async function load() {
+      try {
+        const list = await userService.getUsersByRole("consultor");
+        setConsultants(list);
+      } catch (e) {
+        console.warn("Erro ao carregar consultores", e);
+      }
+    }
+    load();
   }, [userId]);
 
   const fetchUser = async () => {
@@ -45,6 +61,7 @@ export const EditUserScreen: React.FC = ({}: any) => {
         setNickname((u as any).nickname || "");
         setPhone(u.phone || "");
         setRole((u.role as any) || "user");
+        setConsultantId((u as any).consultantId || null);
       }
     } catch (error) {
       console.error("Erro ao carregar usuário para edição", error);
@@ -58,13 +75,21 @@ export const EditUserScreen: React.FC = ({}: any) => {
     if (!userId) return;
     setSaving(true);
     try {
+      console.log(
+        "[EDIT USER] Salvando usuário:",
+        userId,
+        "com consultantId:",
+        consultantId,
+      );
       await userService.updateUser(userId, {
         name: name.trim(),
         nickname: nickname.trim(),
         phone: phone.trim(),
         role,
         isAdmin: role === "admin",
+        consultantId: consultantId === null ? null : consultantId,
       });
+      console.log("[EDIT USER] ✅ Usuário atualizado com sucesso");
       Alert.alert("Sucesso", "Usuário atualizado.");
       navigate("AdminUsers");
     } catch (error) {
@@ -140,6 +165,22 @@ export const EditUserScreen: React.FC = ({}: any) => {
               <TouchableOpacity
                 style={[
                   styles.roleButton,
+                  role === "cliente_premium" && styles.roleActive,
+                ]}
+                onPress={() => setRole("cliente_premium")}
+              >
+                <Text
+                  style={[
+                    styles.roleText,
+                    role === "cliente_premium" && styles.roleTextActive,
+                  ]}
+                >
+                  Cliente Premium
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.roleButton,
                   role === "admin" && styles.roleActive,
                 ]}
                 onPress={() => setRole("admin")}
@@ -154,6 +195,17 @@ export const EditUserScreen: React.FC = ({}: any) => {
                 </Text>
               </TouchableOpacity>
             </View>
+
+            {(role === "user" || role === "cliente_premium") && (
+              <>
+                <Text style={styles.label}>Consultor responsável</Text>
+                <ConsultantPicker
+                  consultants={consultants}
+                  value={consultantId}
+                  onChange={(id) => setConsultantId(id)}
+                />
+              </>
+            )}
 
             <TouchableOpacity
               style={[styles.saveButton, saving && styles.saveDisabled]}

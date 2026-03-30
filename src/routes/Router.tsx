@@ -14,6 +14,8 @@ import { ConsumoModeradoScreen } from "../screens/ConsumoModerado/ConsumoModerad
 import { FeedScreen } from "../screens/Feed/FeedScreen";
 import { ChatScreen } from "../screens/Chat/ChatScreen";
 import { MetasScreen } from "../screens/Metas/MetasScreen";
+import { WishlistScreen } from "../screens/Wishlist/WishlistScreen";
+import { InvestmentsScreen } from "../screens/Investments/InvestmentsScreen";
 import { RecomendacaoScreen } from "../screens/Recomendacao/RecomendacaoScreen";
 import { BudgetScreen } from "../screens/Budget/BudgetScreen";
 import { RankingScreen } from "../screens/Ranking/RankingScreen";
@@ -22,12 +24,15 @@ import { CadastrarClienteScreen } from "../screens/Admin/CadastrarClienteScreen"
 import { AdminUsersScreen } from "../screens/Admin/AdminUsersScreen";
 import { ClientPlanningScreen } from "../screens/Consultor/ClientPlanningScreen";
 import { ClientDetail } from "../screens/Consultor/ClientDetail";
+import { ClientInvestments } from "../screens/Consultor/ClientInvestments";
+import { ClientInvestmentsView } from "../screens/Consultor/ClientInvestmentsView";
 import { ClientList } from "../screens/Consultor/ClientList";
 import { PlanningViewScreen } from "../screens/Client/PlanningViewScreen";
 import { useNavigation } from "./NavigationContext";
 import { useAuth } from "../hooks/useAuth";
 import { ConsultorHome } from "../screens/Consultor/ConsultorHome";
 import { EditUserScreen } from "../screens/Admin/EditUserScreen";
+import { CardsScreen } from "../screens/Cards";
 
 export const Router = () => {
   const { currentScreen, navigate } = useNavigation();
@@ -106,12 +111,20 @@ export const Router = () => {
         return <ChatScreen />;
       case "Metas":
         return <MetasScreen />;
+      case "Wishlist":
+        return <WishlistScreen />;
+      case "Investments":
+        return <InvestmentsScreen />;
       case "Recomendacao":
         return <RecomendacaoScreen />;
       case "Budget":
         return <BudgetScreen />;
       case "ClientPlanning":
         return <ClientPlanningScreen />;
+      case "ClientInvestments":
+        return <ClientInvestments />;
+      case "ClientInvestmentsView":
+        return <ClientInvestmentsView />;
       case "ClientList":
         return <ClientList />;
       case "ClientDetail":
@@ -126,6 +139,8 @@ export const Router = () => {
         return <ProfileScreen />;
       case "Settings":
         return <SettingsScreen />;
+      case "Cartoes":
+        return <CardsScreen />;
       case "CadastrarCliente":
         return <CadastrarClienteScreen />;
       case "AdminUsers":

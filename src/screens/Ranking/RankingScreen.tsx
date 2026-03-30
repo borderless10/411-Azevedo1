@@ -8,6 +8,7 @@ import {
   Modal,
   TouchableOpacity,
   Alert,
+  Image,
 } from "react-native";
 import { Layout } from "../../components/Layout/Layout";
 import { rankingServices, RankingEntry } from "../../services/rankingServices";
@@ -15,12 +16,16 @@ import { userService } from "../../services/userServices";
 import { useAuth } from "../../hooks/useAuth";
 import { useNavigation } from "../../routes/NavigationContext";
 import { RankingPreference } from "../../types/auth";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 
 type Row = {
   position: number;
   userId: string;
   displayName: string;
   zeroDays: number;
+  photoBase64?: string | null;
+  nickname?: string | null;
+  role?: string | null;
 };
 
 export const RankingScreen = () => {
@@ -95,9 +100,18 @@ export const RankingScreen = () => {
         for (let i = 0; i < ranking.length; i++) {
           const r: RankingEntry = ranking[i];
           let display = r.userId;
+          let photo: string | null = null;
+          let nickname: string | null = null;
+          let role: string | null = null;
           try {
             const u = await userService.getUserById(r.userId);
-            if (u) display = u.username || u.name || u.email || display;
+            if (u) {
+              display =
+                u.nickname || u.username || u.name || u.email || display;
+              photo = (u as any).photoBase64 ?? null;
+              nickname = (u as any).nickname ?? null;
+              role = (u as any).role ?? null;
+            }
           } catch (e) {
             // ignore
           }
@@ -106,6 +120,9 @@ export const RankingScreen = () => {
             userId: r.userId,
             displayName: display,
             zeroDays: r.zeroDays,
+            photoBase64: photo,
+            nickname,
+            role,
           });
         }
 
@@ -170,10 +187,69 @@ export const RankingScreen = () => {
           </View>
         ) : (
           rows.map((r) => (
-            <View key={r.userId} style={styles.row}>
-              <Text style={styles.pos}>{r.position}º</Text>
+            <View
+              key={r.userId}
+              style={[styles.row, r.position <= 3 ? styles.rowTop : null]}
+            >
+              <View style={styles.posWrapper}>
+                <Text
+                  style={[styles.pos, r.position <= 3 ? styles.posTop : null]}
+                >
+                  {r.position}º
+                </Text>
+              </View>
+
+              <View style={styles.avatarWrapper}>
+                {r.photoBase64 ? (
+                  <Image
+                    source={{ uri: `data:image/png;base64,${r.photoBase64}` }}
+                    style={[
+                      styles.avatar,
+                      r.position <= 3 ? styles.avatarTop : null,
+                    ]}
+                  />
+                ) : (
+                  <View
+                    style={[
+                      styles.avatarFallback,
+                      r.position <= 3 ? styles.avatarTop : null,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.avatarInitials,
+                        r.position <= 3 ? styles.avatarInitialsTop : null,
+                      ]}
+                    >
+                      {r.displayName
+                        .split(" ")
+                        .map((p) => p[0])
+                        .slice(0, 2)
+                        .join("")
+                        .toUpperCase()}
+                    </Text>
+                  </View>
+                )}
+
+                {r.role === "cliente_premium" && (
+                  <MaterialCommunityIcons
+                    name="crown"
+                    size={18}
+                    color="#7c3aed"
+                    style={[
+                      styles.crown,
+                      r.position <= 3 ? styles.crownTop : null,
+                    ]}
+                  />
+                )}
+              </View>
+
               <View style={styles.info}>
-                <Text style={styles.name}>{r.displayName}</Text>
+                <Text
+                  style={[styles.name, r.position <= 3 ? styles.nameTop : null]}
+                >
+                  {r.displayName}
+                </Text>
                 <Text style={styles.detail}>{r.zeroDays} dias com zero</Text>
               </View>
             </View>
@@ -359,6 +435,55 @@ const styles = StyleSheet.create({
     color: "#b7b7b7",
     fontSize: 12,
   },
+  posWrapper: {
+    width: 48,
+    alignItems: "center",
+  },
+  rowTop: {
+    backgroundColor: "rgba(140,82,255,0.12)",
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    marginVertical: 6,
+    borderLeftWidth: 6,
+    borderLeftColor: "#8c52ff",
+  },
+  posTop: {
+    fontSize: 18,
+    color: "#8c52ff",
+    fontWeight: "800",
+  },
+  avatarWrapper: {
+    width: 48,
+    height: 48,
+    marginRight: 12,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  avatar: { width: 48, height: 48, borderRadius: 24 },
+  avatarTop: { width: 56, height: 56, borderRadius: 28 },
+  avatarFallback: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "#2b2b2b",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  avatarInitials: { color: "#fff", fontWeight: "700", fontSize: 14 },
+  avatarInitialsTop: { fontSize: 16, fontWeight: "800" },
+  crown: {
+    position: "absolute",
+    left: -18,
+    top: 16,
+    backgroundColor: "transparent",
+    zIndex: 3,
+  },
+  crownTop: {
+    left: -20,
+    top: 18,
+  },
+  nameTop: { fontSize: 17, fontWeight: "800" },
 });
 
 export default RankingScreen;

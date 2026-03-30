@@ -52,6 +52,7 @@ export interface Goal {
   currentAmount: number;
   category: GoalCategory;
   deadline?: Date;
+  prazo?: "curto" | "medio" | "longo";
   status: GoalStatus;
   contributions: GoalContribution[];
   createdAt: Date;
@@ -71,6 +72,7 @@ export interface GoalFirestore {
   currentAmount: number;
   category: GoalCategory;
   deadline?: Timestamp;
+  prazo?: string;
   status: GoalStatus;
   contributions: GoalContributionFirestore[];
   createdAt: Timestamp;
@@ -87,6 +89,7 @@ export interface CreateGoalData {
   targetAmount: number;
   category: GoalCategory;
   deadline?: Date;
+  prazo?: "curto" | "medio" | "longo";
 }
 
 /**
@@ -98,6 +101,7 @@ export interface UpdateGoalData {
   targetAmount?: number;
   category?: GoalCategory;
   deadline?: Date;
+  prazo?: "curto" | "medio" | "longo";
   status?: GoalStatus;
 }
 

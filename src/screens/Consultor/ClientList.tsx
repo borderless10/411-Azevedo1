@@ -10,12 +10,14 @@ import {
 } from "react-native";
 import { Layout } from "../../components/Layout/Layout";
 import { useNavigation } from "../../routes/NavigationContext";
-import { userService } from "../../services/userServices";
+import { useAuth } from "../../hooks/useAuth";
+import consultantServices from "../../services/consultantServices";
 import { useTheme } from "../../contexts/ThemeContext";
 
 export const ClientList: React.FC = () => {
   const { navigate } = useNavigation();
   const { colors } = useTheme();
+  const { user } = useAuth();
   const [clients, setClients] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [term, setTerm] = useState("");
@@ -24,7 +26,8 @@ export const ClientList: React.FC = () => {
     async function load() {
       setLoading(true);
       try {
-        const list = await userService.getUsersByRole("user");
+        if (!user) return;
+        const list = await consultantServices.getClientsByConsultant(user.id);
         setClients(list);
       } catch (e) {
         console.warn("Erro ao carregar clientes", e);

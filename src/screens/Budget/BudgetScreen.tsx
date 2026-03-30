@@ -13,6 +13,7 @@ import {
   Animated,
   Alert,
   ActivityIndicator,
+  Modal,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Layout } from "../../components/Layout/Layout";
@@ -40,7 +41,7 @@ import {
 
 export const BudgetScreen = () => {
   const { user } = useAuth();
-  const { currentScreen } = useNavigation();
+  const { currentScreen, navigate } = useNavigation() as any;
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
 
@@ -53,6 +54,9 @@ export const BudgetScreen = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [saving, setSaving] = useState<boolean>(false);
   const [zeroConfirmedDays, setZeroConfirmedDays] = useState<number[]>([]);
+  const [choiceModalVisible, setChoiceModalVisible] = useState(false);
+  const [choiceModalDayLabel, setChoiceModalDayLabel] = useState("");
+  const [choiceModalDate, setChoiceModalDate] = useState<Date | null>(null);
   const [planningLoaded, setPlanningLoaded] = useState<boolean>(false);
 
   // Calcular dias do mês atual
@@ -71,8 +75,11 @@ export const BudgetScreen = () => {
 
   // Calcular total gasto e média real
   const totalSpent = dailyExpenses.reduce((sum, item) => sum + item.amount, 0);
-  const daysPassed = dailyExpenses.length;
-  const actualDailyAverage = daysPassed > 0 ? totalSpent / daysPassed : 0;
+  // Contar apenas dias com gasto (>0) ou que foram marcados como zero
+  const countedDays = dailyExpenses.filter(
+    (d) => d.amount > 0 || zeroConfirmedDays.includes(d.day),
+  ).length;
+  const actualDailyAverage = countedDays > 0 ? totalSpent / countedDays : 0;
 
   // Status da média (se está acima ou abaixo do ideal)
   const isOverBudget =
@@ -364,6 +371,49 @@ export const BudgetScreen = () => {
     setTempValue(existing ? existing.amount.toString() : "");
   };
 
+  const handleOpenNoRecordActions = (day: number) => {
+    if (!user) return;
+    const date = new Date(today.getFullYear(), today.getMonth(), day);
+    const label = `Dia ${day}`;
+
+    setChoiceModalDayLabel(label);
+    setChoiceModalDate(date);
+    setChoiceModalVisible(true);
+  };
+
+  const handleChooseRegister = () => {
+    if (!choiceModalDate) return;
+    setChoiceModalVisible(false);
+    navigate("AddExpense", { prefillDate: choiceModalDate.toISOString() });
+  };
+
+  const handleChooseMarkZero = async () => {
+    if (!user || !choiceModalDate) return;
+    setChoiceModalVisible(false);
+    try {
+      setSaving(true);
+      await budgetServices.confirmZeroExpenseDay(user.id, choiceModalDate);
+
+      const day = choiceModalDate.getDate();
+      setZeroConfirmedDays((prev) =>
+        Array.from(new Set([...prev, day])).sort((a, b) => a - b),
+      );
+
+      setDailyExpenses((prev) => {
+        const exists = prev.some((d) => d.day === day);
+        if (exists)
+          return prev.map((d) => (d.day === day ? { ...d, amount: 0 } : d));
+        const out = [...prev, { day, amount: 0 }];
+        return out.sort((a, b) => a.day - b.day);
+      });
+    } catch (err) {
+      console.error("❌ [BUDGET] Erro ao confirmar zero:", err);
+      Alert.alert("Erro", "Não foi possível confirmar o zero agora.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const getDayExpense = (day: number): number => {
     const expense = dailyExpenses.find((item) => item.day === day);
     return expense ? expense.amount : 0;
@@ -599,6 +649,19 @@ export const BudgetScreen = () => {
                             <Ionicons name="close" size={20} color="#fff" />
                           </TouchableOpacity>
                         </View>
+                      ) : // Se o dia não tem registro e não está confirmado, mostrar
+                      // a exclamação rosa maior na ponta em vez do lápis.
+                      expense === 0 && !isZeroConfirmed ? (
+                        <TouchableOpacity
+                          style={styles.alertIconButton}
+                          onPress={() => handleOpenNoRecordActions(day)}
+                        >
+                          <Ionicons
+                            name="alert-circle"
+                            size={24}
+                            color="#ff4d6d"
+                          />
+                        </TouchableOpacity>
                       ) : (
                         <TouchableOpacity
                           style={styles.editIconButton}
@@ -629,6 +692,35 @@ export const BudgetScreen = () => {
           )}
         </Animated.View>
       </ScrollView>
+      {/* Modal de escolha: Registrar gasto ou Marcar zero (apenas duas ações) */}
+      <Modal transparent visible={choiceModalVisible} animationType="fade">
+        <View style={modalStyles.backdrop}>
+          <View style={modalStyles.container}>
+            <Text style={modalStyles.title}>Dia sem registro</Text>
+            <Text style={modalStyles.message}>{choiceModalDayLabel}</Text>
+            <View style={modalStyles.actionsRow}>
+              <TouchableOpacity
+                style={modalStyles.buttonPurple}
+                onPress={handleChooseMarkZero}
+              >
+                <Text style={modalStyles.buttonWhiteLabel}>
+                  Marcar zero na planilha
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={modalStyles.buttonPink}
+                onPress={handleChooseRegister}
+              >
+                <Text style={modalStyles.buttonWhiteLabel}>
+                  Registrar gasto
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* confirmation now happens directly when choosing 'Marcar zero' */}
     </Layout>
   );
 };
@@ -914,6 +1006,11 @@ const styles = StyleSheet.create({
   editIconButton: {
     padding: 8,
   },
+  alertIconButton: {
+    padding: 6,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   saveButton: {
     backgroundColor: "#8c52ff",
     width: 32,
@@ -943,6 +1040,61 @@ const styles = StyleSheet.create({
     color: "#999",
     marginTop: 12,
     textAlign: "center",
+  },
+});
+
+const modalStyles = StyleSheet.create({
+  backdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.65)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
+  },
+  container: {
+    width: "100%",
+    maxWidth: 460,
+    backgroundColor: "#0e0c14",
+    borderRadius: 12,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: "#2a2040",
+  },
+  title: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "700",
+    marginBottom: 6,
+  },
+  message: {
+    color: "#a89fc0",
+    fontSize: 14,
+    marginBottom: 12,
+  },
+  actionsRow: {
+    flexDirection: "row",
+    gap: 12,
+    marginBottom: 12,
+  },
+  buttonPurple: {
+    flex: 1,
+    backgroundColor: "#8c52ff",
+    borderRadius: 10,
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  buttonPink: {
+    flex: 1,
+    backgroundColor: "#ff4d6d",
+    borderRadius: 10,
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  buttonWhiteLabel: {
+    color: "#fff",
+    fontWeight: "700",
   },
 });
 

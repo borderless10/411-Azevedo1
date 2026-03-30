@@ -26,6 +26,8 @@ import {
 } from "firebase/auth";
 import { doc, setDoc, Timestamp } from "firebase/firestore";
 import { auth, db, firebaseConfig } from "../../lib/firebase";
+import { userService } from "../../services/userServices";
+import ConsultantPicker from "../../components/ui/ConsultantPicker";
 
 export const CadastrarClienteScreen = () => {
   const { navigate } = useNavigation();
@@ -39,7 +41,11 @@ export const CadastrarClienteScreen = () => {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [phone, setPhone] = useState("");
   const [loading, setLoading] = useState(false);
-  const [role, setRole] = useState<"user" | "consultor">("user");
+  const [role, setRole] = useState<"user" | "consultor" | "cliente_premium">(
+    "user",
+  );
+  const [consultants, setConsultants] = useState<Array<any>>([]);
+  const [consultantId, setConsultantId] = useState<string | null>(null);
 
   // Função para aplicar máscara de telefone brasileiro
   const formatPhone = (text: string): string => {
@@ -66,6 +72,18 @@ export const CadastrarClienteScreen = () => {
   };
 
   useEffect(() => {
+    // carregar consultores para preencher seletor
+    async function loadConsultants() {
+      try {
+        const list = await userService.getUsersByRole("consultor");
+        console.log("[CADASTRAR] Consultores carregados:", list.length, list);
+        setConsultants(list);
+      } catch (e) {
+        console.warn("Erro ao carregar consultores", e);
+      }
+    }
+    loadConsultants();
+
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
@@ -80,6 +98,11 @@ export const CadastrarClienteScreen = () => {
       }),
     ]).start();
   }, []);
+
+  // Track consultantId changes
+  useEffect(() => {
+    console.log("[CADASTRAR] consultantId state mudou para:", consultantId);
+  }, [consultantId]);
 
   const handleCadastrar = async () => {
     if (!name.trim() || !email.trim() || !password.trim()) {
@@ -100,6 +123,17 @@ export const CadastrarClienteScreen = () => {
     setLoading(true);
 
     try {
+      const selectedConsultant = consultants.find((c) => c.id === consultantId);
+      console.log(
+        "[CADASTRAR] role:",
+        role,
+        "consultantId:",
+        consultantId,
+        "consultantName:",
+        selectedConsultant?.name,
+        "consultants count:",
+        consultants.length,
+      );
       // Criar usuário no Firebase Auth usando um app secundário para
       // evitar que o admin atual seja deslogado (createUserWithEmailAndPassword
       // faz sign-in no auth padrão). O usuário criado ficará no Auth do projeto,
@@ -125,17 +159,30 @@ export const CadastrarClienteScreen = () => {
         const now = Timestamp.now();
         // Remover máscara do telefone antes de salvar (apenas números)
         const phoneNumbers = phone.replace(/\D/g, "");
-        await setDoc(doc(db, "users", userCredential.user.uid), {
+        const docData = {
           name,
           nickname: nickname || "",
           email,
           phone: phoneNumbers || "",
-          role: role === "consultor" ? "consultor" : "user",
+          role: role,
+          // Allow assigning a consultant for regular users and premium clients
+          consultantId:
+            role === "user" || role === "cliente_premium"
+              ? consultantId || null
+              : undefined,
           isAdmin: false,
           isActive: true,
           createdAt: now,
           updatedAt: now,
-        });
+        };
+        console.log("[CADASTRAR] Documento a salvar:", docData);
+        await setDoc(doc(db, "users", userCredential.user.uid), docData);
+        console.log(
+          "[CADASTRAR] ✅ Documento salvo com sucesso para userId:",
+          userCredential.user.uid,
+          "com consultantId:",
+          docData.consultantId,
+        );
 
         // Não reautenticar o admin — o uso do app secundário isolou o novo login.
         // Limpar a instância secundária.
@@ -231,6 +278,22 @@ export const CadastrarClienteScreen = () => {
                   Consultor
                 </Text>
               </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.roleButton,
+                  role === "cliente_premium" && styles.roleActive,
+                ]}
+                onPress={() => setRole("cliente_premium")}
+              >
+                <Text
+                  style={[
+                    styles.roleText,
+                    role === "cliente_premium" && styles.roleTextActive,
+                  ]}
+                >
+                  Cliente Premium
+                </Text>
+              </TouchableOpacity>
             </View>
 
             <View style={styles.form}>
@@ -316,6 +379,17 @@ export const CadastrarClienteScreen = () => {
                   />
                 </View>
               </View>
+
+              {(role === "user" || role === "cliente_premium") && (
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Consultor responsável</Text>
+                  <ConsultantPicker
+                    consultants={consultants}
+                    value={consultantId}
+                    onChange={(id) => setConsultantId(id)}
+                  />
+                </View>
+              )}
 
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Senha *</Text>

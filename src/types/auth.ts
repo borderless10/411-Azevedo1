@@ -12,7 +12,7 @@ export interface User {
   username?: string;
   bio?: string;
   phone?: string;
-  role?: "admin" | "consultor" | "user";
+  role?: "admin" | "consultor" | "user" | "cliente_premium";
   consultantId?: string; // id do consultor responsável (se houver)
   isAdmin?: boolean;
   isActive?: boolean;

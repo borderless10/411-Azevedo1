@@ -461,6 +461,29 @@ export const HomeScreen = () => {
       return;
     }
 
+    // Não perguntar no primeiro dia do usuário (quando a conta foi criada hoje)
+    try {
+      const rawCreated = (user as any).createdAt;
+      if (rawCreated) {
+        const createdDate =
+          typeof rawCreated === "string"
+            ? new Date(rawCreated)
+            : rawCreated instanceof Date
+              ? rawCreated
+              : new Date(rawCreated);
+
+        const startOfCreated = getStartOfDay(createdDate);
+        const startOfToday = getStartOfDay(new Date());
+        if (startOfCreated.getTime() === startOfToday.getTime()) {
+          // Usuário criado hoje — não solicitar confirmação do dia anterior
+          return;
+        }
+      }
+    } catch (e) {
+      // Se qualquer erro ao interpretar createdAt, continuar com verificação
+      if (__DEV__) console.log("[HOME] erro ao interpretar createdAt:", e);
+    }
+
     const yesterday = getStartOfDay(subtractDays(new Date(), 1));
     const checkKey = `${user.id}-${formatDateToString(yesterday)}`;
 
@@ -941,6 +964,12 @@ export const HomeScreen = () => {
         }
       >
         <View style={styles.content}>
+          <View style={styles.pageGreeting}>
+            <Text style={styles.pageGreetingHello}>Olá,</Text>
+            <Text style={styles.pageGreetingName} numberOfLines={1}>
+              {user?.name || user?.email || "Usuário"}
+            </Text>
+          </View>
           {/* Cards de resumo rápido */}
           <Animated.View
             style={[
@@ -954,40 +983,6 @@ export const HomeScreen = () => {
             {user?.role !== "consultor" && !user?.isAdmin ? (
               // Normal user: show planning-based expected cards
               <>
-                <Animated.View
-                  style={[
-                    styles.summaryCardHorizontal,
-                    styles.cardBlue,
-                    {
-                      opacity: fadeAnim,
-                      transform: [{ translateY: slideAnim }],
-                    },
-                  ]}
-                >
-                  <View style={styles.balanceContent}>
-                    <View style={styles.balanceTextContainer}>
-                      <Text style={styles.summaryLabelBalance}>
-                        Poupança Esperada
-                      </Text>
-                      <Text style={styles.summaryValue}>
-                        {expectedSavings === null
-                          ? "-"
-                          : formatCurrency(expectedSavings)}
-                      </Text>
-                      <Text style={styles.summarySubtext}>
-                        Este mês (estimado)
-                      </Text>
-                    </View>
-                    <View style={styles.balanceIconContainer}>
-                      <Ionicons
-                        name={"piggy-bank" as any}
-                        size={28}
-                        color="#8c52ff"
-                      />
-                    </View>
-                  </View>
-                </Animated.View>
-
                 <View style={styles.summaryRow}>
                   <View style={styles.expectedSummaryColumn}>
                     <TouchableOpacity
@@ -1120,6 +1115,40 @@ export const HomeScreen = () => {
                     onSeeMore={() => navigate("PlanningView")}
                   />
                 )}
+
+                <Animated.View
+                  style={[
+                    styles.summaryCardHorizontal,
+                    styles.cardBlue,
+                    {
+                      opacity: fadeAnim,
+                      transform: [{ translateY: slideAnim }],
+                    },
+                  ]}
+                >
+                  <View style={styles.balanceContent}>
+                    <View style={styles.balanceTextContainer}>
+                      <Text style={styles.summaryLabelBalance}>
+                        Poupança Esperada
+                      </Text>
+                      <Text style={styles.summaryValue}>
+                        {expectedSavings === null
+                          ? "-"
+                          : formatCurrency(expectedSavings)}
+                      </Text>
+                      <Text style={styles.summarySubtext}>
+                        Este mês (estimado)
+                      </Text>
+                    </View>
+                    <View style={styles.balanceIconContainer}>
+                      <Ionicons
+                        name={"piggy-bank" as any}
+                        size={28}
+                        color="#8c52ff"
+                      />
+                    </View>
+                  </View>
+                </Animated.View>
               </>
             ) : (
               // Consultor/admin: manter cards antigos
@@ -1467,6 +1496,20 @@ const styles = StyleSheet.create({
     padding: 12,
     backgroundColor: "#000",
   },
+  pageGreeting: {
+    marginBottom: 8,
+  },
+  pageGreetingHello: {
+    color: "#bbb",
+    fontSize: 14,
+  },
+  pageGreetingName: {
+    color: "#fff",
+    fontSize: 20,
+    fontWeight: "700",
+    marginTop: 2,
+    maxWidth: "100%",
+  },
   summaryContainer: {
     marginBottom: 16,
   },
@@ -1477,6 +1520,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 14,
     marginBottom: 8,
+    marginTop: 8,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
@@ -1505,11 +1549,13 @@ const styles = StyleSheet.create({
   // Cards Quadrados (Total Gasto e Total Recebido)
   summaryRow: {
     flexDirection: "row",
-    gap: 8,
     alignItems: "flex-start",
+    marginBottom: 12,
+    // espaçamento entre colunas (RN não tem `gap` em todas as versões)
   },
   expectedSummaryColumn: {
     flex: 1,
+    paddingHorizontal: 6,
   },
   expectedCardPressable: {
     width: "100%",

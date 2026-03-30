@@ -12,7 +12,7 @@ import {
   Image,
   Animated,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useAuth } from "../../hooks/useAuth";
 import { useNavigation } from "../../routes/NavigationContext";
 import { useTheme } from "../../contexts/ThemeContext";
@@ -33,7 +33,7 @@ export const Header: React.FC<HeaderProps> = ({
   style,
 }) => {
   const { user } = useAuth();
-  const { navigate, currentScreen } = useNavigation();
+  const { navigate, currentScreen, params } = useNavigation();
   const { colors } = useTheme();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(-20)).current;
@@ -42,18 +42,31 @@ export const Header: React.FC<HeaderProps> = ({
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 400,
+        duration: 250,
         useNativeDriver: true,
       }),
       Animated.timing(slideAnim, {
         toValue: 0,
-        duration: 400,
+        duration: 250,
         useNativeDriver: true,
       }),
     ]).start();
-  }, []);
+  }, [fadeAnim, slideAnim]);
 
   const handleBack = () => {
+    // If coming from client-specific subscreens, return to ClientDetail with the same params
+    if (
+      currentScreen === "ClientInvestments" ||
+      currentScreen === "ClientInvestmentsView" ||
+      currentScreen === "ClientPlanning" ||
+      currentScreen === "Wishlist" ||
+      (currentScreen === "Metas" && params && params.clientId)
+    ) {
+      navigate("ClientDetail", params);
+      return;
+    }
+
+    // fallback behavior for other screens
     if (currentScreen === "AddIncome" || currentScreen === "AddExpense") {
       navigate("Home");
     } else {
@@ -84,29 +97,14 @@ export const Header: React.FC<HeaderProps> = ({
             <Ionicons name="arrow-back" size={24} color={colors.text} />
           </TouchableOpacity>
         )}
-        {!title && (
+        {!title ? (
           <Image
             source={require("../../../assets/logo411.png")}
             style={styles.logo}
             resizeMode="contain"
           />
-        )}
-        {title ? (
-          <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
         ) : (
-          <View style={styles.headerContent}>
-            <View>
-              <Text style={[styles.greeting, { color: colors.textSecondary }]}>
-                Olá,
-              </Text>
-              <Text
-                style={[styles.userName, { color: colors.text }]}
-                numberOfLines={1}
-              >
-                {user?.name || user?.email || "Usuário"}
-              </Text>
-            </View>
-          </View>
+          <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
         )}
       </View>
 
@@ -118,18 +116,43 @@ export const Header: React.FC<HeaderProps> = ({
                 onPress={handleProfile}
                 style={styles.profileButton}
               >
-                <View
-                  style={[
-                    styles.avatar,
-                    {
-                      backgroundColor: colors.card,
-                      borderColor: colors.border,
-                    },
-                  ]}
-                >
-                  <Text style={[styles.avatarText, { color: colors.text }]}>
-                    {(user?.name?.[0] || user?.email?.[0] || "U").toUpperCase()}
-                  </Text>
+                <View style={styles.profileWrapper}>
+                  {user?.photoBase64 ? (
+                    <Image
+                      source={{
+                        uri: `data:image/png;base64,${user.photoBase64}`,
+                      }}
+                      style={styles.avatar}
+                    />
+                  ) : (
+                    <View
+                      style={[
+                        styles.avatar,
+                        {
+                          backgroundColor: colors.card,
+                          borderColor: colors.border,
+                        },
+                      ]}
+                    >
+                      <Text style={[styles.avatarText, { color: colors.text }]}>
+                        {(
+                          user?.name?.[0] ||
+                          user?.email?.[0] ||
+                          "U"
+                        ).toUpperCase()}
+                      </Text>
+                    </View>
+                  )}
+
+                  {user?.role === "cliente_premium" && (
+                    <View style={styles.crownContainer} pointerEvents="none">
+                      <MaterialCommunityIcons
+                        name="crown"
+                        size={14}
+                        color="#8c52ff"
+                      />
+                    </View>
+                  )}
                 </View>
               </TouchableOpacity>
             )}
@@ -172,17 +195,6 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: "bold",
   },
-  headerContent: {
-    flex: 1,
-  },
-  greeting: {
-    fontSize: 14,
-  },
-  userName: {
-    fontSize: 18,
-    fontWeight: "bold",
-    maxWidth: 200,
-  },
   right: {
     flexDirection: "row",
     alignItems: "center",
@@ -198,6 +210,17 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     alignItems: "center",
     justifyContent: "center",
+  },
+  profileWrapper: {
+    position: "relative",
+  },
+  crownContainer: {
+    position: "absolute",
+    top: -14,
+    left: "50%",
+    marginLeft: -7,
+    backgroundColor: "transparent",
+    borderRadius: 8,
   },
   avatarText: {
     fontSize: 16,

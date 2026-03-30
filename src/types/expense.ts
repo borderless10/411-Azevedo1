@@ -12,6 +12,12 @@ export interface Expense {
   description: string;
   date: Date;
   category: string; // Obrigatório para gastos
+  paymentMethod?: "cash" | "debit_card" | "credit_card" | "pix" | "other";
+  cardId?: string;
+  cardLast4?: string;
+  invoiceYearMonth?: string;
+  isAutoDebitPayment?: boolean;
+  autoDebitInvoiceKey?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -24,6 +30,12 @@ export interface CreateExpenseData {
   description: string;
   date: Date;
   category: string;
+  paymentMethod?: "cash" | "debit_card" | "credit_card" | "pix" | "other";
+  cardId?: string;
+  cardLast4?: string;
+  invoiceYearMonth?: string;
+  isAutoDebitPayment?: boolean;
+  autoDebitInvoiceKey?: string;
 }
 
 /**
@@ -34,6 +46,12 @@ export interface UpdateExpenseData {
   description?: string;
   date?: Date;
   category?: string;
+  paymentMethod?: "cash" | "debit_card" | "credit_card" | "pix" | "other";
+  cardId?: string;
+  cardLast4?: string;
+  invoiceYearMonth?: string;
+  isAutoDebitPayment?: boolean;
+  autoDebitInvoiceKey?: string;
 }
 
 /**
@@ -44,6 +62,9 @@ export interface ExpenseFilters {
   endDate?: Date;
   category?: string;
   categories?: string[]; // Múltiplas categorias
+  paymentMethod?: "cash" | "debit_card" | "credit_card" | "pix" | "other";
+  cardId?: string;
+  invoiceYearMonth?: string;
   minValue?: number;
   maxValue?: number;
   searchTerm?: string;
@@ -59,6 +80,12 @@ export interface ExpenseFirestore {
   description: string;
   date: any; // Timestamp do Firestore
   category: string;
+  paymentMethod?: "cash" | "debit_card" | "credit_card" | "pix" | "other";
+  cardId?: string;
+  cardLast4?: string;
+  invoiceYearMonth?: string;
+  isAutoDebitPayment?: boolean;
+  autoDebitInvoiceKey?: string;
   createdAt: any; // Timestamp do Firestore
   updatedAt: any; // Timestamp do Firestore
 }

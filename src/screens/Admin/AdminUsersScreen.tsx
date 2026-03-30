@@ -9,6 +9,7 @@ import {
   Alert,
   TextInput,
 } from "react-native";
+
 import { Layout } from "../../components/Layout/Layout";
 import { userService } from "../../services/userServices";
 import { useAuth } from "../../hooks/useAuth";
@@ -74,6 +75,9 @@ export const AdminUsersScreen: React.FC = () => {
           <Text style={styles.meta}>
             {item.phone ? `Telefone: ${item.phone}` : "Telefone: —"}
           </Text>
+          {item.role === "cliente_premium" && (
+            <Text style={[styles.meta, { color: "#c084fc" }]}>Premium</Text>
+          )}
         </View>
         <View style={styles.actionsRow}>
           <TouchableOpacity
@@ -110,7 +114,12 @@ export const AdminUsersScreen: React.FC = () => {
   const filteredUsers = users
     .filter((u) => {
       if (tab === "clients")
-        return u.role === "user" || !u.role || u.role === "cliente";
+        return (
+          u.role === "user" ||
+          !u.role ||
+          u.role === "cliente" ||
+          u.role === "cliente_premium"
+        );
       return u.role === "consultor";
     })
     .filter((u) => {
@@ -127,12 +136,11 @@ export const AdminUsersScreen: React.FC = () => {
       if (statusFilter === "active") return u.isActive === true;
       return u.isActive === false;
     });
-
   return (
     <Layout
       title="Gerenciar Usuários"
-      showBackButton={true}
-      showSidebar={false}
+      showBackButton={false}
+      showSidebar={true}
     >
       <View style={styles.container}>
         <View style={styles.header}>
@@ -402,6 +410,25 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   filterTextActive: {
+    color: "#fff",
+  },
+  clientTypeRow: {
+    marginTop: 8,
+    marginBottom: 12,
+  },
+  filterLabel: {
+    color: "#bbb",
+    marginBottom: 6,
+    fontWeight: "600",
+  },
+  pickerContainer: {
+    backgroundColor: "#0f0f0f",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#222",
+    overflow: "hidden",
+  },
+  picker: {
     color: "#fff",
   },
 });

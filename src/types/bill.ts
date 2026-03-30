@@ -19,6 +19,7 @@ export interface Bill {
 }
 
 export interface BillFirestore {
+  id?: string;
   userId: string;
   title: string;
   description?: string;

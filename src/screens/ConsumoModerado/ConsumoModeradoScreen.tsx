@@ -10,6 +10,7 @@ import {
   ScrollView,
   Animated,
   ActivityIndicator,
+  TouchableOpacity,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Layout } from "../../components/Layout/Layout";
@@ -25,15 +26,79 @@ import {
   addDays,
 } from "../../utils/dateUtils";
 import { useNavigation } from "../../routes/NavigationContext";
+import ZeroPlanilhaConfirmModal from "../../components/ui/ZeroPlanilhaConfirmModal";
+import budgetServices from "../../services/budgetServices";
+import { Alert } from "react-native";
 
 export const ConsumoModeradoScreen = () => {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
 
   const { user } = useAuth();
-  const { currentScreen } = useNavigation();
+  const { currentScreen, navigate } = useNavigation() as any;
   const [loading, setLoading] = useState(false);
   const [days, setDays] = useState<Array<{ date: Date; total: number }>>([]);
+
+  const fetchMonth = async () => {
+    if (!user?.id) return;
+    setLoading(true);
+    try {
+      const today = new Date();
+      const start = getFirstDayOfMonth(today);
+      const end = getEndOfDay(today);
+
+      const expenses = await expenseServices.getExpenses(user.id, {
+        startDate: start,
+        endDate: end,
+      });
+
+      // Inicializar mapa de datas para todos os dias do mês até hoje
+      const map = new Map<string, number>();
+      let cursor = getStartOfDay(start);
+      while (cursor <= getStartOfDay(today)) {
+        map.set(cursor.toDateString(), 0);
+        cursor = addDays(cursor, 1);
+      }
+
+      // Agregar valores por dia (forçando value como número)
+      expenses.forEach((exp) => {
+        const expDate = new Date(exp.date);
+        const key = getStartOfDay(expDate).toDateString();
+        const prev = map.get(key) ?? 0;
+        const val =
+          typeof exp.value === "number"
+            ? exp.value
+            : parseFloat(String(exp.value)) || 0;
+        map.set(key, prev + val);
+      });
+
+      const list: Array<{ date: Date; total: number }> = [];
+      Array.from(map.entries()).forEach(([k, v]) => {
+        list.push({ date: new Date(k), total: v });
+      });
+
+      // Buscar dias já confirmados como zero na planilha
+      const budget = await budgetServices.getCurrentBudget(user.id);
+      const zeroConfirmedDays = new Set<number>(
+        (budget?.zeroConfirmedDays || []).map((d) => Number(d)),
+      );
+
+      // Anexar informação de confirmação como propriedade extra (opcional)
+      const enriched = list.map((it) => ({
+        ...it,
+        confirmedZero: zeroConfirmedDays.has(it.date.getDate()),
+      }));
+
+      setDays(enriched as any);
+    } catch (err) {
+      console.error(
+        "❌ [CONSUMO] Erro ao buscar gastos para Consumo Moderado:",
+        err,
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     Animated.parallel([
@@ -50,63 +115,62 @@ export const ConsumoModeradoScreen = () => {
       }),
     ]).start();
 
-    const fetchMonth = async () => {
-      if (!user?.id) return;
-      setLoading(true);
-      try {
-        const today = new Date();
-        const start = getFirstDayOfMonth(today);
-        const end = getEndOfDay(today);
-
-        const expenses = await expenseServices.getExpenses(user.id, {
-          startDate: start,
-          endDate: end,
-        });
-
-        // Inicializar mapa de datas para todos os dias do mês até hoje
-        const map = new Map<string, number>();
-        let cursor = getStartOfDay(start);
-        while (cursor <= getStartOfDay(today)) {
-          map.set(cursor.toDateString(), 0);
-          cursor = addDays(cursor, 1);
-        }
-
-        // Debug: mostrar alguns gastos retornados
-        console.log("🔎 [CONSUMO] expenses sample:", expenses.slice(0, 6));
-
-        // Agregar valores por dia (forçando value como número)
-        expenses.forEach((exp) => {
-          const expDate = new Date(exp.date);
-          const key = getStartOfDay(expDate).toDateString();
-          const prev = map.get(key) ?? 0;
-          const val =
-            typeof exp.value === "number"
-              ? exp.value
-              : parseFloat(String(exp.value)) || 0;
-          map.set(key, prev + val);
-        });
-
-        const list: Array<{ date: Date; total: number }> = [];
-        Array.from(map.entries()).forEach(([k, v]) => {
-          list.push({ date: new Date(k), total: v });
-        });
-
-        setDays(list);
-      } catch (err) {
-        console.error(
-          "❌ [CONSUMO] Erro ao buscar gastos para Consumo Moderado:",
-          err,
-        );
-      } finally {
-        setLoading(false);
-      }
-    };
-
     // Buscar ao montar e sempre que a tela ficar ativa
     if (currentScreen === "ConsumoModerado") {
       fetchMonth();
     }
-  }, [user]);
+  }, [user, currentScreen]);
+
+  const [zeroConfirmVisible, setZeroConfirmVisible] = useState(false);
+  const [zeroConfirmDate, setZeroConfirmDate] = useState<Date | null>(null);
+  const [zeroConfirmDayLabel, setZeroConfirmDayLabel] = useState("");
+  const [confirmingZero, setConfirmingZero] = useState(false);
+
+  const handleOpenNoRecordActions = (date: Date) => {
+    const label = getFriendlyDateLabel(date);
+
+    Alert.alert("Dia sem registro", `Dia ${label} sem gastos registrados.`, [
+      {
+        text: "Cancelar",
+        style: "cancel",
+      },
+      {
+        text: "Registrar gasto",
+        onPress: () => {
+          navigate("AddExpense", { prefillDate: date.toISOString() });
+        },
+      },
+      {
+        text: "Marcar zero na planilha",
+        onPress: () => {
+          setZeroConfirmDayLabel(label);
+          setZeroConfirmDate(date);
+          setZeroConfirmVisible(true);
+        },
+      },
+    ]);
+  };
+
+  const handleConfirmZero = async () => {
+    if (!user?.id || !zeroConfirmDate) {
+      setZeroConfirmVisible(false);
+      return;
+    }
+
+    try {
+      setConfirmingZero(true);
+      await budgetServices.confirmZeroExpenseDay(user.id, zeroConfirmDate);
+      setZeroConfirmVisible(false);
+      setZeroConfirmDate(null);
+      // Recarregar lista
+      fetchMonth();
+    } catch (err) {
+      console.error("❌ [CONSUMO] Erro ao confirmar zero:", err);
+      Alert.alert("Erro", "Não foi possível confirmar o zero agora.");
+    } finally {
+      setConfirmingZero(false);
+    }
+  };
 
   return (
     <Layout title="Consumo Moderado" showBackButton={false} showSidebar={true}>
@@ -134,14 +198,41 @@ export const ConsumoModeradoScreen = () => {
               <ActivityIndicator color="#8c52ff" style={{ marginTop: 12 }} />
             ) : (
               <View style={{ marginTop: 12 }}>
-                {days.map((d) => (
+                {days.map((d: any) => (
                   <View style={styles.dayRow} key={d.date.toDateString()}>
                     <Text style={styles.dayLabel}>
                       {getFriendlyDateLabel(d.date)}
                     </Text>
-                    <Text style={styles.dayAmount}>
-                      {formatCurrency(d.total)}
-                    </Text>
+
+                    <View
+                      style={{ flexDirection: "row", alignItems: "center" }}
+                    >
+                      {d.total === 0 && !d.confirmedZero ? (
+                        <TouchableOpacity
+                          onPress={() => handleOpenNoRecordActions(d.date)}
+                          style={{ marginRight: 10 }}
+                        >
+                          <Ionicons
+                            name="alert-circle"
+                            size={22}
+                            color="#ffcc00"
+                          />
+                        </TouchableOpacity>
+                      ) : null}
+
+                      {d.total === 0 && d.confirmedZero ? (
+                        <Ionicons
+                          name="checkmark-circle"
+                          size={18}
+                          color="#4caf50"
+                          style={{ marginRight: 8 }}
+                        />
+                      ) : null}
+
+                      <Text style={styles.dayAmount}>
+                        {formatCurrency(d.total)}
+                      </Text>
+                    </View>
                   </View>
                 ))}
               </View>
@@ -153,6 +244,17 @@ export const ConsumoModeradoScreen = () => {
           </View>
         </Animated.View>
       </ScrollView>
+      <ZeroPlanilhaConfirmModal
+        visible={zeroConfirmVisible}
+        dayLabel={zeroConfirmDayLabel}
+        loading={confirmingZero}
+        onConfirm={handleConfirmZero}
+        onCancel={() => {
+          if (confirmingZero) return;
+          setZeroConfirmVisible(false);
+          setZeroConfirmDate(null);
+        }}
+      />
     </Layout>
   );
 };

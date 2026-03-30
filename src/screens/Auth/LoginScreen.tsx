@@ -307,16 +307,7 @@ export const LoginScreen = () => {
               )}
             </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.linkButton}
-              onPress={handleGoToRegister}
-              disabled={loading}
-            >
-              <Text style={styles.linkText}>
-                Não tem conta?{" "}
-                <Text style={styles.linkTextBold}>Criar cadastro</Text>
-              </Text>
-            </TouchableOpacity>
+
           </View>
           <CustomModal
             visible={modalVisible}

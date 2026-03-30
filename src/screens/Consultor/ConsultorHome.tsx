@@ -9,7 +9,6 @@ import {
 import { Layout } from "../../components/Layout/Layout";
 import { useAuth } from "../../hooks/useAuth";
 import consultantServices from "../../services/consultantServices";
-import { userService } from "../../services/userServices";
 import { User } from "../../types/auth";
 import { useNavigation } from "../../routes/NavigationContext";
 import { useTheme } from "../../contexts/ThemeContext";
@@ -26,8 +25,31 @@ export const ConsultorHome: React.FC = () => {
       if (!user) return;
       setLoading(true);
       try {
-        // load all users with role 'user' as clients for now
-        const list = await userService.getUsersByRole("user");
+        // defensive: some user objects may have `id` or `uid` depending on source
+        const consultantId =
+          (user as any).id || (user as any).uid || (user as any).userId;
+        if (!consultantId) {
+          console.warn("Consultor sem id válido, user:", user);
+          setClients([]);
+          setLoading(false);
+          return;
+        }
+
+        // load only clients assigned to this consultant
+        console.log("Carregando clientes para consultorId:", consultantId);
+        const list =
+          await consultantServices.getClientsByConsultant(consultantId);
+        console.log(
+          "[CONSULTOR HOME] ✅ Clientes carregados:",
+          list.length,
+          "clientes encontrados",
+        );
+        if (list.length === 0) {
+          console.warn(
+            "[CONSULTOR HOME] ⚠️ Nenhum cliente encontrado para consultantId:",
+            consultantId,
+          );
+        }
         setClients(list);
       } catch (e) {
         console.warn("Erro ao carregar clientes do consultor", e);
@@ -71,16 +93,7 @@ export const ConsultorHome: React.FC = () => {
               </View>
               <View style={styles.cardRight}>
                 <TouchableOpacity
-                  style={[
-                    styles.button,
-                    { backgroundColor: "#2b6cb0", marginBottom: 8 },
-                  ]}
-                  onPress={() => openPlanning(item.id)}
-                >
-                  <Text style={styles.buttonText}>Abrir Planejamento</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.button, { backgroundColor: "#8c52ff" }]}
+                  style={[styles.button, { backgroundColor: colors.primary }]}
                   onPress={() =>
                     navigate("ClientDetail", { clientId: item.id })
                   }
@@ -109,7 +122,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: 12,
     borderRadius: 8,
-    backgroundColor: "#111",
+    backgroundColor: "transparent",
     marginBottom: 10,
   },
   cardLeft: { flex: 1 },
@@ -117,7 +130,6 @@ const styles = StyleSheet.create({
   name: { color: "#fff", fontSize: 16, fontWeight: "600" },
   subtitle: { color: "#bbb", fontSize: 12 },
   button: {
-    backgroundColor: "#2b6cb0",
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 6,

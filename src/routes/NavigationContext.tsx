@@ -17,16 +17,23 @@ export type ScreenName =
   | "Feed"
   | "Chat"
   | "Metas"
+  | "Wishlist"
+  | "Investments"
   | "Recomendacao"
   | "Ranking"
   | "ClientPlanning"
+  | "ClientInvestments"
+  | "ClientInvestmentsView"
   | "ClientDetail"
   | "ClientList"
   | "ConsultorHome"
   | "PlanningView"
   | "Budget"
   | "Bills"
-  | "CadastrarCliente";
+  | "CadastrarCliente"
+  | "AdminUsers"
+  | "EditUser"
+  | "Cartoes";
 
 interface NavigationContextType {
   currentScreen: ScreenName;

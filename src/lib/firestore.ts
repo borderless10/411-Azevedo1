@@ -22,6 +22,7 @@ import {
   Bill,
   BillFirestore,
 } from "../types";
+import { CreditCard, CreditCardFirestore } from "../types/creditCard";
 
 /**
  * Nomes das coleções do Firestore
@@ -35,6 +36,8 @@ export const COLLECTIONS = {
   GOALS: "goals",
   ACTIVITIES: "activities",
   BILLS: "bills",
+  WISHLISTS: "wishlists",
+  CREDIT_CARDS: "creditCards",
 } as const;
 
 /**
@@ -64,12 +67,20 @@ export const getGoalsCollection = (): CollectionReference => {
   return collection(db, COLLECTIONS.GOALS);
 };
 
+export const getWishlistsCollection = (): CollectionReference => {
+  return collection(db, COLLECTIONS.WISHLISTS);
+};
+
 export const getActivitiesCollection = (): CollectionReference => {
   return collection(db, COLLECTIONS.ACTIVITIES);
 };
 
 export const getBillsCollection = (): CollectionReference => {
   return collection(db, COLLECTIONS.BILLS);
+};
+
+export const getCreditCardsCollection = (): CollectionReference => {
+  return collection(db, COLLECTIONS.CREDIT_CARDS);
 };
 
 /**
@@ -99,12 +110,20 @@ export const getGoalDoc = (id: string): DocumentReference => {
   return doc(db, COLLECTIONS.GOALS, id);
 };
 
+export const getWishlistDoc = (id: string): DocumentReference => {
+  return doc(db, COLLECTIONS.WISHLISTS, id);
+};
+
 export const getActivityDoc = (id: string): DocumentReference => {
   return doc(db, COLLECTIONS.ACTIVITIES, id);
 };
 
 export const getBillDoc = (id: string): DocumentReference => {
   return doc(db, COLLECTIONS.BILLS, id);
+};
+
+export const getCreditCardDoc = (id: string): DocumentReference => {
+  return doc(db, COLLECTIONS.CREDIT_CARDS, id);
 };
 
 /**
@@ -242,6 +261,7 @@ export const convertGoalFromFirestore = (data: GoalFirestore): Goal => {
   return {
     ...data,
     deadline: data.deadline ? timestampToDate(data.deadline) : undefined,
+    prazo: (data as any).prazo ? (data as any).prazo : undefined,
     contributions: data.contributions.map((contrib) => ({
       ...contrib,
       date: timestampToDate(contrib.date),
@@ -274,6 +294,10 @@ export const convertGoalToFirestore = (goal: Partial<Goal>): any => {
     result.deadline = dateToTimestamp(deadline);
   }
 
+  if ((goal as any).prazo) {
+    result.prazo = (goal as any).prazo;
+  }
+
   if (contributions) {
     result.contributions = contributions.map((contrib) => ({
       amount: contrib.amount,
@@ -298,6 +322,42 @@ export const convertGoalToFirestore = (goal: Partial<Goal>): any => {
 };
 
 /**
+ * Converter Wishlist do Firestore para o tipo da aplicação
+ */
+export const convertWishlistFromFirestore = (
+  data: any,
+): import("../types").WishlistItem => {
+  return {
+    id: data.id,
+    userId: data.userId,
+    name: data.name,
+    value: data.value,
+    description: data.description || undefined,
+    createdAt: timestampToDate(data.createdAt),
+    updatedAt: timestampToDate(data.updatedAt),
+  };
+};
+
+/**
+ * Converter Wishlist para o Firestore
+ */
+export const convertWishlistToFirestore = (
+  wishlist: Partial<import("../types").WishlistItem>,
+): any => {
+  const { createdAt, updatedAt, ...rest } = wishlist as any;
+  const result: any = { ...rest };
+
+  if (createdAt) {
+    result.createdAt = dateToTimestamp(createdAt);
+  }
+  if (updatedAt) {
+    result.updatedAt = dateToTimestamp(updatedAt);
+  }
+
+  return result;
+};
+
+/**
  * Converter Activity do Firestore para o tipo da aplicação
  */
 export const convertActivityFromFirestore = (
@@ -306,6 +366,56 @@ export const convertActivityFromFirestore = (
   return {
     ...data,
     createdAt: timestampToDate(data.createdAt),
+  };
+};
+
+export const convertCreditCardFromFirestore = (
+  data: CreditCardFirestore,
+): CreditCard => {
+  const parsedBestDay = Number((data as any).bestDay);
+  const bestDay =
+    Number.isInteger(parsedBestDay) && parsedBestDay >= 1 && parsedBestDay <= 31
+      ? parsedBestDay
+      : data.cardDueDay;
+
+  const cardDueMonth = (data as any).cardDueMonth
+    ? Number((data as any).cardDueMonth)
+    : 1;
+  const cardExpiryMonth = (data as any).cardExpiryMonth
+    ? Number((data as any).cardExpiryMonth)
+    : cardDueMonth;
+  const cardExpiryYear = (data as any).cardExpiryYear
+    ? Number((data as any).cardExpiryYear)
+    : new Date().getFullYear();
+
+  return {
+    id: (data as any).id || "",
+    userId: (data as any).userId,
+    bank: (data as any).bank,
+    last4: (data as any).last4,
+    bestDay,
+    cardDueDay: (data as any).cardDueDay,
+    cardExpiryMonth,
+    cardExpiryYear,
+    invoiceDueDay: (data as any).invoiceDueDay,
+    limit: (data as any).limit,
+    autoDebit: (data as any).autoDebit,
+    isActive: (data as any).isActive,
+    lastAutoDebitInvoiceKey: (data as any).lastAutoDebitInvoiceKey,
+    createdAt: timestampToDate(data.createdAt),
+    updatedAt: timestampToDate(data.updatedAt),
+  } as CreditCard;
+};
+
+export const convertCreditCardToFirestore = (
+  card: Partial<CreditCard>,
+): Partial<CreditCardFirestore> => {
+  const { createdAt, updatedAt, ...rest } = card;
+
+  return {
+    ...rest,
+    ...(createdAt && { createdAt: dateToTimestamp(createdAt) }),
+    ...(updatedAt && { updatedAt: dateToTimestamp(updatedAt) }),
   };
 };
 
@@ -332,6 +442,7 @@ export const convertActivityToFirestore = (
 export const convertBillFromFirestore = (data: BillFirestore): Bill => {
   return {
     ...data,
+    id: data.id || "",
     dueDate: timestampToDate(data.dueDate),
     paidDate: data.paidDate ? timestampToDate(data.paidDate) : undefined,
     createdAt: timestampToDate(data.createdAt),
