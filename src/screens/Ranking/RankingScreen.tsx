@@ -16,7 +16,6 @@ import { userService } from "../../services/userServices";
 import { useAuth } from "../../hooks/useAuth";
 import { useNavigation } from "../../routes/NavigationContext";
 import { RankingPreference } from "../../types/auth";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
 
 type Row = {
   position: number;
@@ -229,18 +228,6 @@ export const RankingScreen = () => {
                         .toUpperCase()}
                     </Text>
                   </View>
-                )}
-
-                {r.role === "cliente_premium" && (
-                  <MaterialCommunityIcons
-                    name="crown"
-                    size={18}
-                    color="#7c3aed"
-                    style={[
-                      styles.crown,
-                      r.position <= 3 ? styles.crownTop : null,
-                    ]}
-                  />
                 )}
               </View>
 
@@ -472,17 +459,6 @@ const styles = StyleSheet.create({
   },
   avatarInitials: { color: "#fff", fontWeight: "700", fontSize: 14 },
   avatarInitialsTop: { fontSize: 16, fontWeight: "800" },
-  crown: {
-    position: "absolute",
-    left: -18,
-    top: 16,
-    backgroundColor: "transparent",
-    zIndex: 3,
-  },
-  crownTop: {
-    left: -20,
-    top: 18,
-  },
   nameTop: { fontSize: 17, fontWeight: "800" },
 });
 

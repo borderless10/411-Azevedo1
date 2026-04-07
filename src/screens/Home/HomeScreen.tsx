@@ -54,6 +54,8 @@ export const HomeScreen = () => {
 
   const [totalIncome, setTotalIncome] = useState(0);
   const [totalExpense, setTotalExpense] = useState(0);
+  const [realizedExpenseTotal, setRealizedExpenseTotal] = useState(0);
+  const [realizedBalance, setRealizedBalance] = useState(0);
   const [balance, setBalance] = useState(0);
   const [expectedExpenses, setExpectedExpenses] = useState<number | null>(null);
   const [expectedIncomes, setExpectedIncomes] = useState<number | null>(null);
@@ -124,6 +126,10 @@ export const HomeScreen = () => {
       .split("")
       .reduce((acc, char) => acc + char.charCodeAt(0), 0);
     return colors[hash % colors.length];
+  };
+
+  const isCreditCardExpense = (expense: Expense | any) => {
+    return expense?.paymentMethod === "credit_card" || Boolean(expense?.cardId);
   };
 
   // Carregar dados do mês atual
@@ -242,19 +248,51 @@ export const HomeScreen = () => {
           "🏠 [HOME] planning.expectedExpenses:",
           planning.expectedExpenses,
         );
+        const isCardPayment = (method?: string) => {
+          const normalized = String(method || "")
+            .trim()
+            .toLowerCase()
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "");
+          return (
+            normalized === "card" ||
+            normalized === "credit_card" ||
+            normalized === "debit_card" ||
+            normalized === "cart" ||
+            normalized === "cartao" ||
+            normalized === "credito" ||
+            normalized === "credit"
+          );
+        };
+        const getNonCardPortion = (item: any) => {
+          const cashAmount = Number(item?.amountCash);
+          if (Number.isFinite(cashAmount) && cashAmount > 0) {
+            return cashAmount;
+          }
+
+          if (isCardPayment(item?.paymentMethod)) {
+            return 0;
+          }
+
+          const amount = Number(item?.amount);
+          return Number.isFinite(amount) ? amount : 0;
+        };
         const sumExpected = (arr: any[] | undefined) =>
           (arr || []).reduce((s, it) => {
             const n = Number(it?.amount);
             return s + (Number.isFinite(n) ? n : 0);
           }, 0);
-        const sumExpExpenses = sumExpected(planning.expectedExpenses);
+
+        const sumExpExpenses = (planning.expectedExpenses || []).reduce(
+          (sum: number, item: any) => sum + getNonCardPortion(item),
+          0,
+        );
         const sumExpIncomes = sumExpected(planning.expectedIncomes);
         const monthly = Number(planning.monthlyIncome) || 0;
 
-        // sum of bills
+        // sum of bills considering only non-card portion
         const sumBills = (planning.bills || []).reduce((s: number, b: any) => {
-          const n = Number(b?.amount);
-          return s + (Number.isFinite(n) ? n : 0);
+          return s + getNonCardPortion(b);
         }, 0);
 
         // sum of plannedByCategory values
@@ -350,6 +388,16 @@ export const HomeScreen = () => {
       // Atualizar estados
       setTotalIncome(incomeTotal);
       setTotalExpense(expenseTotal);
+      const realizedExpenses = allExpenses.filter(
+        (expense) => !isCreditCardExpense(expense),
+      );
+      const realizedExpense = realizedExpenses.reduce(
+        (sum, expense) => sum + (Number(expense.value) || 0),
+        0,
+      );
+      const realizedBalanceTotal = incomeTotal - realizedExpense;
+      setRealizedExpenseTotal(realizedExpense);
+      setRealizedBalance(realizedBalanceTotal);
       setBalance(calculatedBalance);
       setAllTransactions(allTransactionsWithType);
       setHasLoaded(true);
@@ -388,6 +436,8 @@ export const HomeScreen = () => {
       // Em caso de erro, definir valores padrão
       setTotalIncome(0);
       setTotalExpense(0);
+      setRealizedExpenseTotal(0);
+      setRealizedBalance(0);
       setBalance(0);
       setAllTransactions([]);
       setHasLoaded(true); // Marcar como carregado mesmo com erro para mostrar estado vazio
@@ -406,6 +456,39 @@ export const HomeScreen = () => {
   const buildExpenseSummary = (planning: any) => {
     if (!planning) return [] as any[];
     const map: Record<string, number> = {};
+
+    const isCardPayment = (method?: string) => {
+      const normalized = String(method || "")
+        .trim()
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "");
+
+      return (
+        normalized === "card" ||
+        normalized === "credit_card" ||
+        normalized === "debit_card" ||
+        normalized === "cart" ||
+        normalized === "cartao" ||
+        normalized === "credito" ||
+        normalized === "credit"
+      );
+    };
+
+    const getNonCardPortion = (item: any) => {
+      const cashAmount = Number(item?.amountCash);
+      if (Number.isFinite(cashAmount) && cashAmount > 0) {
+        return cashAmount;
+      }
+
+      if (isCardPayment(item?.paymentMethod)) {
+        return 0;
+      }
+
+      const amount = Number(item?.amount);
+      return Number.isFinite(amount) ? amount : 0;
+    };
+
     // plannedByCategory is an object { categoryName: value }
     if (planning.plannedByCategory) {
       Object.entries(planning.plannedByCategory).forEach(([k, v]) => {
@@ -415,14 +498,16 @@ export const HomeScreen = () => {
     }
     // expectedExpenses array
     (planning.expectedExpenses || []).forEach((it: any) => {
+      const n = getNonCardPortion(it);
+      if (n <= 0) return;
       const key = it.categoryId || it.source || "Outros";
-      const n = Number(it.amount) || 0;
       map[key] = (map[key] || 0) + n;
     });
     // bills
     (planning.bills || []).forEach((b: any) => {
+      const n = getNonCardPortion(b);
+      if (n <= 0) return;
       const key = b.name || "Contas";
-      const n = Number(b.amount) || 0;
       map[key] = (map[key] || 0) + n;
     });
 
@@ -987,66 +1072,6 @@ export const HomeScreen = () => {
                   <View style={styles.expectedSummaryColumn}>
                     <TouchableOpacity
                       activeOpacity={0.9}
-                      onPress={() => toggleExpand("expense")}
-                      style={styles.expectedCardPressable}
-                    >
-                      <Animated.View
-                        style={[
-                          expanded === "expense"
-                            ? styles.expectedCardSquareExpanded
-                            : styles.expectedCardSquare,
-                          styles.cardRed,
-                          {
-                            opacity: fadeAnim,
-                            transform: [
-                              {
-                                translateY: Animated.add(
-                                  slideAnim,
-                                  new Animated.Value(10),
-                                ),
-                              },
-                            ],
-                          },
-                        ]}
-                      >
-                        <View style={styles.cardIconContainer}>
-                          <Ionicons name="calendar" size={18} color="#ff4d6d" />
-                        </View>
-                        <Text style={styles.summaryLabelExpense}>
-                          Gasto Esperado
-                        </Text>
-                        <Text style={styles.summaryValueSquare}>
-                          {expectedExpenses === null
-                            ? "-"
-                            : formatCurrency(expectedExpenses)}
-                        </Text>
-                        <Text style={styles.summarySubtext}>Este mês</Text>
-                        <View style={styles.chevronContainer}>
-                          <Ionicons
-                            name={
-                              expanded === "expense"
-                                ? "chevron-up"
-                                : "chevron-down"
-                            }
-                            size={18}
-                            color="#999"
-                            style={{
-                              transform: [
-                                {
-                                  rotate:
-                                    expanded === "expense" ? "180deg" : "0deg",
-                                },
-                              ],
-                            }}
-                          />
-                        </View>
-                      </Animated.View>
-                    </TouchableOpacity>
-                  </View>
-
-                  <View style={styles.expectedSummaryColumn}>
-                    <TouchableOpacity
-                      activeOpacity={0.9}
                       onPress={() => toggleExpand("income")}
                       style={styles.expectedCardPressable}
                     >
@@ -1103,6 +1128,66 @@ export const HomeScreen = () => {
                       </Animated.View>
                     </TouchableOpacity>
                   </View>
+
+                  <View style={styles.expectedSummaryColumn}>
+                    <TouchableOpacity
+                      activeOpacity={0.9}
+                      onPress={() => toggleExpand("expense")}
+                      style={styles.expectedCardPressable}
+                    >
+                      <Animated.View
+                        style={[
+                          expanded === "expense"
+                            ? styles.expectedCardSquareExpanded
+                            : styles.expectedCardSquare,
+                          styles.cardRed,
+                          {
+                            opacity: fadeAnim,
+                            transform: [
+                              {
+                                translateY: Animated.add(
+                                  slideAnim,
+                                  new Animated.Value(10),
+                                ),
+                              },
+                            ],
+                          },
+                        ]}
+                      >
+                        <View style={styles.cardIconContainer}>
+                          <Ionicons name="calendar" size={18} color="#ff4d6d" />
+                        </View>
+                        <Text style={styles.summaryLabelExpense}>
+                          Gasto Esperado
+                        </Text>
+                        <Text style={styles.summaryValueSquare}>
+                          {expectedExpenses === null
+                            ? "-"
+                            : formatCurrency(expectedExpenses)}
+                        </Text>
+                        <Text style={styles.summarySubtext}>Este mês</Text>
+                        <View style={styles.chevronContainer}>
+                          <Ionicons
+                            name={
+                              expanded === "expense"
+                                ? "chevron-up"
+                                : "chevron-down"
+                            }
+                            size={18}
+                            color="#999"
+                            style={{
+                              transform: [
+                                {
+                                  rotate:
+                                    expanded === "expense" ? "180deg" : "0deg",
+                                },
+                              ],
+                            }}
+                          />
+                        </View>
+                      </Animated.View>
+                    </TouchableOpacity>
+                  </View>
                 </View>
 
                 {expanded !== null && (
@@ -1119,7 +1204,7 @@ export const HomeScreen = () => {
                 <Animated.View
                   style={[
                     styles.summaryCardHorizontal,
-                    styles.cardBlue,
+                    styles.cardGreen,
                     {
                       opacity: fadeAnim,
                       transform: [{ translateY: slideAnim }],
@@ -1149,6 +1234,82 @@ export const HomeScreen = () => {
                     </View>
                   </View>
                 </Animated.View>
+
+                <View style={styles.balanceCardsSection}>
+                  <Text style={styles.sectionTitle}>Saldo</Text>
+                  <View style={styles.balanceCardsRow}>
+                    <View style={styles.expectedSummaryColumn}>
+                      <View style={styles.expectedCardPressable}>
+                        <View
+                          style={[styles.expectedCardSquare, styles.cardGreen]}
+                        >
+                          <View style={styles.cardIconContainer}>
+                            <Ionicons name="cash" size={18} color="#8c52ff" />
+                          </View>
+                          <Text style={styles.summaryLabelIncome}>
+                            Rendas Realizadas
+                          </Text>
+                          <Text style={styles.summaryValueSquare}>
+                            {formatCurrency(totalIncome)}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+
+                    <View style={styles.expectedSummaryColumn}>
+                      <View style={styles.expectedCardPressable}>
+                        <View
+                          style={[styles.expectedCardSquare, styles.cardRed]}
+                        >
+                          <View style={styles.cardIconContainer}>
+                            <Ionicons
+                              name="trending-down"
+                              size={18}
+                              color="#ff4d6d"
+                            />
+                          </View>
+                          <Text style={styles.summaryLabelExpense}>
+                            Gastos Realizados
+                          </Text>
+                          <Text style={styles.summaryValueSquare}>
+                            {formatCurrency(realizedExpenseTotal)}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+
+                    <View style={styles.expectedSummaryColumn}>
+                      <View style={styles.expectedCardPressable}>
+                        <View
+                          style={[
+                            styles.expectedCardSquare,
+                            styles.cardBalance,
+                          ]}
+                        >
+                          <View style={styles.cardIconContainer}>
+                            <Ionicons
+                              name="wallet"
+                              size={18}
+                              color={
+                                realizedBalance < 0 ? "#ff4d6d" : "#8c52ff"
+                              }
+                            />
+                          </View>
+                          <Text style={styles.summaryLabelBalance}>Saldo</Text>
+                          <Text
+                            style={[
+                              styles.summaryValueSquare,
+                              realizedBalance < 0 &&
+                                styles.summaryValueNegative,
+                            ]}
+                          >
+                            {formatCurrency(realizedBalance)}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  </View>
+                </View>
               </>
             ) : (
               // Consultor/admin: manter cards antigos
@@ -1270,7 +1431,7 @@ export const HomeScreen = () => {
               />
               <ActionCard
                 icon="remove-circle"
-                label="Adicionar Gasto"
+                label="Consumo moderado"
                 color="#ff4d6d"
                 onPress={() => navigate("AddExpense")}
                 delay={100}
@@ -1513,6 +1674,58 @@ const styles = StyleSheet.create({
   summaryContainer: {
     marginBottom: 16,
   },
+  balanceCardsSection: {
+    marginTop: 8,
+    marginBottom: 14,
+  },
+  balanceCardsRow: {
+    flexDirection: "row",
+    alignItems: "stretch",
+    marginTop: 8,
+  },
+  balanceMetricCard: {
+    flex: 1,
+    backgroundColor: "#1a1a1a",
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: "#333",
+    minHeight: 108,
+  },
+  balanceMetricCardExpense: {
+    borderLeftWidth: 4,
+    borderLeftColor: "#ff4d6d",
+  },
+  balanceMetricCardIncome: {
+    borderLeftWidth: 4,
+    borderLeftColor: "#8c52ff",
+  },
+  balanceMetricCardBalance: {
+    borderLeftWidth: 4,
+    borderLeftColor: "#8c52ff",
+  },
+  balanceMetricHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    minHeight: 24,
+  },
+  balanceMetricLabel: {
+    flex: 1,
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  balanceMetricValue: {
+    color: "#fff",
+    fontSize: 17,
+    fontWeight: "800",
+    marginTop: 8,
+  },
+  balanceMetricValueNegative: {
+    color: "#ff4d6d",
+  },
   // Card Horizontal (Saldo Atual)
   summaryCardHorizontal: {
     backgroundColor: "#1a1a1a",
@@ -1555,7 +1768,7 @@ const styles = StyleSheet.create({
   },
   expectedSummaryColumn: {
     flex: 1,
-    paddingHorizontal: 6,
+    paddingHorizontal: 4,
   },
   expectedCardPressable: {
     width: "100%",
@@ -1563,7 +1776,7 @@ const styles = StyleSheet.create({
   expectedCardSquare: {
     backgroundColor: "#1a1a1a",
     borderRadius: 12,
-    paddingVertical: 10,
+    paddingVertical: 12,
     paddingHorizontal: 12,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
@@ -1572,7 +1785,7 @@ const styles = StyleSheet.create({
     elevation: 3,
     borderWidth: 1,
     borderColor: "#333",
-    minHeight: 110,
+    minHeight: 118,
     alignItems: "center",
     justifyContent: "center",
     width: "100%",
@@ -1601,12 +1814,6 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 12,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 3,
-    borderWidth: 1,
-    borderColor: "#333",
     minHeight: 110,
     alignItems: "center",
     justifyContent: "center",
@@ -1655,6 +1862,10 @@ const styles = StyleSheet.create({
     borderLeftColor: "#ff4d6d",
   },
   cardBlue: {
+    borderLeftWidth: 4,
+    borderLeftColor: "#8c52ff",
+  },
+  cardBalance: {
     borderLeftWidth: 4,
     borderLeftColor: "#8c52ff",
   },
@@ -1713,7 +1924,7 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: "700",
     color: "#fff",
-    marginBottom: 20,
+    marginBottom: 10,
     letterSpacing: -0.3,
   },
   actionsGrid: {
@@ -1929,12 +2140,12 @@ const styles = StyleSheet.create({
   transactionFooter: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "flex-start",
+    alignItems: "center",
   },
   transactionPriceContainer: {
     flex: 1,
     alignItems: "flex-start",
-    marginTop: -20,
+    marginTop: 6,
   },
   transactionDateContainer: {
     alignItems: "flex-end",

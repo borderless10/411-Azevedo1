@@ -104,6 +104,30 @@ export const DEFAULT_EXPENSE_CATEGORIES: Omit<
   },
 ];
 
+const normalizeCategoryToken = (value: string): string =>
+  String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+
+export const toExpenseCategoryLookupKey = (value: string): string =>
+  normalizeCategoryToken(value);
+
+export const resolveExpenseCategoryName = (value: string): string | null => {
+  const key = normalizeCategoryToken(value);
+  if (!key) return null;
+
+  const match = DEFAULT_EXPENSE_CATEGORIES.find(
+    (category) => normalizeCategoryToken(category.name) === key,
+  );
+
+  return match?.name || null;
+};
+
+export const isValidExpenseCategoryName = (value: string): boolean =>
+  !!resolveExpenseCategoryName(value);
+
 /**
  * Obter todas as categorias padrão
  */

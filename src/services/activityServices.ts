@@ -29,9 +29,9 @@ export const activityServices = {
     userId: string,
     data: CreateActivityData,
   ): Promise<Activity> {
-    console.log("📝 [ACTIVITY SERVICE] Criando atividade...");
-    console.log("📝 [ACTIVITY SERVICE] Type:", data.type);
-    console.log("📝 [ACTIVITY SERVICE] Title:", data.title);
+    if (__DEV__) console.log("📝 [ACTIVITY SERVICE] Criando atividade...");
+    if (__DEV__) console.log("📝 [ACTIVITY SERVICE] Type:", data.type);
+    if (__DEV__) console.log("📝 [ACTIVITY SERVICE] Title:", data.title);
 
     try {
       const now = new Date();
@@ -51,10 +51,18 @@ export const activityServices = {
         activityData.metadata = data.metadata;
       }
 
-      console.log("📝 [ACTIVITY SERVICE] Dados a serem salvos:", activityData);
+      if (__DEV__)
+        console.log(
+          "📝 [ACTIVITY SERVICE] Dados a serem salvos:",
+          activityData,
+        );
 
       const docRef = await addDoc(getActivitiesCollection(), activityData);
-      console.log("✅ [ACTIVITY SERVICE] Atividade criada com ID:", docRef.id);
+      if (__DEV__)
+        console.log(
+          "✅ [ACTIVITY SERVICE] Atividade criada com ID:",
+          docRef.id,
+        );
 
       const activity: Activity = {
         id: docRef.id,
@@ -81,10 +89,11 @@ export const activityServices = {
     userId: string,
     limitCount: number = 50,
   ): Promise<Activity[]> {
-    console.log(
-      "📝 [ACTIVITY SERVICE] Buscando atividades para userId:",
-      userId,
-    );
+    if (__DEV__)
+      console.log(
+        "📝 [ACTIVITY SERVICE] Buscando atividades para userId:",
+        userId,
+      );
 
     try {
       // Tentar com índice primeiro (query otimizada)
@@ -95,22 +104,29 @@ export const activityServices = {
         limit(limitCount),
       );
 
-      console.log("📝 [ACTIVITY SERVICE] Executando query com índice...");
+      if (__DEV__)
+        console.log("📝 [ACTIVITY SERVICE] Executando query com índice...");
       const snapshot = await getDocs(q);
 
-      console.log("📝 [ACTIVITY SERVICE] Snapshot size:", snapshot.size);
+      if (__DEV__)
+        console.log("📝 [ACTIVITY SERVICE] Snapshot size:", snapshot.size);
 
       const activities = snapshot.docs.map((doc) =>
         convertActivityFromFirestore(getDocData(doc)),
       );
 
-      console.log(
-        "✅ [ACTIVITY SERVICE] Atividades encontradas:",
-        activities.length,
-      );
+      if (__DEV__)
+        console.log(
+          "✅ [ACTIVITY SERVICE] Atividades encontradas:",
+          activities.length,
+        );
 
       if (activities.length > 0) {
-        console.log("📝 [ACTIVITY SERVICE] Primeira atividade:", activities[0]);
+        if (__DEV__)
+          console.log(
+            "📝 [ACTIVITY SERVICE] Primeira atividade:",
+            activities[0],
+          );
       }
 
       return activities;
@@ -151,10 +167,11 @@ export const activityServices = {
           // Limitar no cliente
           activities = activities.slice(0, limitCount);
 
-          console.log(
-            "✅ [ACTIVITY SERVICE] Atividades encontradas (sem índice):",
-            activities.length,
-          );
+          if (__DEV__)
+            console.log(
+              "✅ [ACTIVITY SERVICE] Atividades encontradas (sem índice):",
+              activities.length,
+            );
           return activities;
         } catch (fallbackError) {
           console.error(

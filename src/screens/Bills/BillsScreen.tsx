@@ -203,22 +203,64 @@ export const BillsScreen = () => {
 
     try {
       setLoading(true);
-      // If regular user (client), load planning bills (consultant-managed)
-      if (user.role === "user") {
+      // Clients (regular or premium) load consultant-managed planning bills
+      if (user.role === "user" || user.role === "cliente_premium") {
         // mark source so actions use planningServices
         setIsPlanningSource(true);
 
         // Sincroniza status overdue no documento de planning (inclui fallback legado)
         await planningServices.syncOverduePlanningBills(user.id);
 
-        const planning = await planningServices.getPlanning(user.id);
+        let planning = await planningServices.getPlanning(user.id);
+
+        // Se planning não existe, cria um vazio (pode ser preenchido pelo consultor depois)
+        if (!planning && user.consultantId) {
+          if (__DEV__) {
+            console.log("[BILLS] planning não existe, criando um vazio", {
+              userId: user.id,
+              consultantId: user.consultantId,
+            });
+          }
+          // Cria um planning básico
+          try {
+            await planningServices.savePlanning(user.consultantId, user.id, {
+              consultantId: user.consultantId,
+            } as any);
+            // Busca novamente após criar
+            planning = await planningServices.getPlanning(user.id);
+          } catch (e) {
+            console.warn("[BILLS] erro ao criar planning básico", e);
+          }
+        }
+
         if (__DEV__) {
           console.log("[BILLS] loadBills planning-source", {
             userId: user.id,
+            role: user.role,
+            planningExists: !!planning,
             billsCount: planning?.bills?.length || 0,
+            expectedExpensesCount: planning?.expectedExpenses?.length || 0,
+            planning: planning
+              ? {
+                  id: planning.id,
+                  consultantId: planning.consultantId,
+                  bills: planning.bills?.map((b) => ({
+                    id: b.id,
+                    name: b.name,
+                    amount: b.amount,
+                  })),
+                  expectedExpenses: planning.expectedExpenses?.map((e) => ({
+                    id: e.id,
+                    source: e.source,
+                    amount: e.amount,
+                  })),
+                }
+              : "NO_PLANNING",
           });
         }
+        const mapping_result = { mapped: 0, expectedExpenses: 0 };
         const mapped = (planning?.bills || []).map((b) => {
+          mapping_result.mapped++;
           // create a reasonable dueDate from dueDay if available
           let dueDate: Date = b.dueDate || b.createdAt || new Date();
           if (b.dueDay !== undefined && b.dueDay !== null) {
@@ -255,7 +297,57 @@ export const BillsScreen = () => {
             updatedAt: b.updatedAt || new Date(),
           } as Bill;
         });
-        setBills(mapped);
+
+        // Mapear Expected Expenses como contas também
+        const mappedExpectedExpenses = (planning?.expectedExpenses || []).map(
+          (exp) => {
+            mapping_result.expectedExpenses++;
+            // Usar o expectedMonth para calcular uma data estimada
+            let dueDate = new Date();
+            if (exp.expectedMonth) {
+              const [year, month] = exp.expectedMonth.split("-");
+              if (year && month) {
+                dueDate = new Date(parseInt(year), parseInt(month) - 1, 1);
+              }
+            }
+            return {
+              id: exp.id!,
+              userId: user.id,
+              title: exp.source || "Gasto Esperado",
+              description:
+                exp.notes || `${exp.paymentMethod || "Sem método definido"}`,
+              amount: exp.amount,
+              dueDate,
+              status: "pending" as const,
+              paidDate: undefined,
+              notificationId: undefined,
+              createdAt: exp.createdAt || new Date(),
+              updatedAt: exp.updatedAt || new Date(),
+              _isExpectedExpense: true as any,
+            } as Bill;
+          },
+        );
+
+        // Mesclar bills e expected expenses
+        if (__DEV__) {
+          console.log("[BILLS] setting bills state", {
+            mappingResult: mapping_result,
+            billsToSet: mapped.length,
+            expectedExpensesToSet: mappedExpectedExpenses.length,
+            totalCount: mapped.length + mappedExpectedExpenses.length,
+            bills: mapped.map((b) => ({
+              id: b.id,
+              title: b.title,
+              amount: b.amount,
+            })),
+            expectedExpenses: mappedExpectedExpenses.map((e) => ({
+              id: e.id,
+              title: e.title,
+              amount: e.amount,
+            })),
+          });
+        }
+        setBills([...mapped, ...mappedExpectedExpenses]);
       } else {
         setIsPlanningSource(false);
         if (__DEV__) {
@@ -375,6 +467,15 @@ export const BillsScreen = () => {
         "Ação não permitida",
         "Você não pode excluir contas do planejamento.",
       );
+
+    // Prevent deletion of expected expenses (consultant-managed)
+    if ((bill as any)._isExpectedExpense) {
+      return Alert.alert(
+        "Ação não permitida",
+        "Gastos esperados são gerenciados pelo consultor e não podem ser excluídos. Solicite ao consultor para remover esta conta.",
+      );
+    }
+
     setBillToDelete(bill);
     setIsDeleteModalVisible(true);
   };
@@ -624,9 +725,37 @@ export const BillsScreen = () => {
               >
                 <View style={styles.billHeader}>
                   <View style={styles.billInfo}>
-                    <Text style={[styles.billTitle, { color: colors.text }]}>
-                      {bill.title}
-                    </Text>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 8,
+                      }}
+                    >
+                      <Text style={[styles.billTitle, { color: colors.text }]}>
+                        {bill.title}
+                      </Text>
+                      {(bill as any)._isExpectedExpense && (
+                        <View
+                          style={{
+                            backgroundColor: "#8c52ff40",
+                            paddingHorizontal: 8,
+                            paddingVertical: 2,
+                            borderRadius: 4,
+                          }}
+                        >
+                          <Text
+                            style={{
+                              color: "#8c52ff",
+                              fontSize: 11,
+                              fontWeight: "600",
+                            }}
+                          >
+                            Esperado
+                          </Text>
+                        </View>
+                      )}
+                    </View>
                     {bill.description && (
                       <Text
                         style={[

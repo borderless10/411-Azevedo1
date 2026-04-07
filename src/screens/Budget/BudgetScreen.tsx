@@ -22,16 +22,14 @@ import { useAuth } from "../../contexts/AuthContext";
 import { useNavigation } from "../../routes/NavigationContext";
 import {
   budgetServices,
-  getCurrentMonthYear,
+  getMonthYearFromDate,
 } from "../../services/budgetServices";
 import expenseServices from "../../services/expenseServices";
-import { planningServices } from "../../services/planningServices";
 import {
-  getFirstDayOfMonth,
-  getStartOfDay,
-  getEndOfDay,
-  addDays,
-} from "../../utils/dateUtils";
+  getPlanningCycleLabel,
+  planningServices,
+} from "../../services/planningServices";
+import { getStartOfDay, getEndOfDay, addDays } from "../../utils/dateUtils";
 import { DailyExpense } from "../../types/budget";
 import {
   requestNotificationPermissions,
@@ -49,6 +47,7 @@ export const BudgetScreen = () => {
   const [plannedMonthlySpending, setPlannedMonthlySpending] =
     useState<number>(0);
   const [dailyExpenses, setDailyExpenses] = useState<DailyExpense[]>([]);
+  const [dailyExpenseDates, setDailyExpenseDates] = useState<Date[]>([]);
   const [editingDay, setEditingDay] = useState<number | null>(null);
   const [tempValue, setTempValue] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(true);
@@ -58,27 +57,50 @@ export const BudgetScreen = () => {
   const [choiceModalDayLabel, setChoiceModalDayLabel] = useState("");
   const [choiceModalDate, setChoiceModalDate] = useState<Date | null>(null);
   const [planningLoaded, setPlanningLoaded] = useState<boolean>(false);
+  const [planningTotals, setPlanningTotals] = useState<any>(null);
+  const [planningItems, setPlanningItems] = useState<any>(null);
+  const [planningCycleLabel, setPlanningCycleLabel] = useState<string>("");
+  const [cycleDateStart, setCycleDateStart] = useState<Date | null>(null);
+  const [cycleDateEnd, setCycleDateEnd] = useState<Date | null>(null);
+  const [plannedCycleDurationDays, setPlannedCycleDurationDays] =
+    useState<number>(0);
 
   // Calcular dias do mês atual
   const today = new Date();
   const currentDay = today.getDate();
-  const currentMonthYear = getCurrentMonthYear();
   const daysInMonth = new Date(
     today.getFullYear(),
     today.getMonth() + 1,
     0,
   ).getDate();
 
+  // Calcular dias no ciclo
+  const calculateDaysInCycle = (): number => {
+    if (!cycleDateStart || !cycleDateEnd) return daysInMonth;
+    const start = getStartOfDay(cycleDateStart);
+    const end = getStartOfDay(cycleDateEnd);
+    const diffTime = end.getTime() - start.getTime();
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
+    return Math.max(1, diffDays);
+  };
+
+  const daysInCycle = calculateDaysInCycle();
+  const daysForIdealTarget =
+    plannedCycleDurationDays > 0 ? plannedCycleDurationDays : daysInCycle;
+
   // Calcular média diária ideal
   const budgetValue = plannedMonthlySpending || 0;
-  const idealDailyAverage = budgetValue / daysInMonth;
+  const idealDailyAverage = budgetValue / daysForIdealTarget;
 
   // Calcular total gasto e média real
   const totalSpent = dailyExpenses.reduce((sum, item) => sum + item.amount, 0);
-  // Contar apenas dias com gasto (>0) ou que foram marcados como zero
-  const countedDays = dailyExpenses.filter(
-    (d) => d.amount > 0 || zeroConfirmedDays.includes(d.day),
-  ).length;
+  // Contar apenas dias DENTRO DO CICLO com gasto (>0) ou que foram marcados como zero
+  const countedDays = dailyExpenseDates.filter((date) => {
+    const day = date.getDate();
+    const hasExpense = dailyExpenses.some((d) => d.day === day && d.amount > 0);
+    const isZeroConfirmed = zeroConfirmedDays.includes(day);
+    return hasExpense || isZeroConfirmed;
+  }).length;
   const actualDailyAverage = countedDays > 0 ? totalSpent / countedDays : 0;
 
   // Status da média (se está acima ou abaixo do ideal)
@@ -127,6 +149,50 @@ export const BudgetScreen = () => {
 
   const performanceIndicator = getPerformanceIndicator();
 
+  const formatPaymentMethodLabel = (raw: any) => {
+    const pm = String(raw || "").toLowerCase();
+    if (pm.includes("card") || pm.includes("cart")) return "Cartão";
+    if (pm.includes("pix") || pm.includes("dinheiro") || pm.includes("cash")) {
+      return "Dinheiro / Pix";
+    }
+    return raw ? String(raw) : "Não informado";
+  };
+
+  const isCardPayment = (raw?: any) => {
+    const pm = String(raw || "").toLowerCase();
+    return /card|cart|cartão|credit|debit|cr[eé]dito|d[eé]bito/.test(pm);
+  };
+
+  const formatItemDateLabel = (item: any) => {
+    const parsedDate =
+      item?.date || item?.expectedDate || item?.dueDate || item?.createdAt;
+
+    if (parsedDate) {
+      const d = new Date(parsedDate);
+      if (!Number.isNaN(d.getTime())) {
+        return d.toLocaleDateString("pt-BR");
+      }
+    }
+
+    if (item?.expectedMonth && String(item.expectedMonth).length >= 7) {
+      const [year, month] = String(item.expectedMonth).split("-");
+      if (year && month) return `${month}/${year}`;
+    }
+
+    if (typeof item?.dueDay === "number") {
+      return `Dia ${item.dueDay}`;
+    }
+
+    return "Não informada";
+  };
+
+  const formatDayMonthLabel = (date: Date) => {
+    return date.toLocaleDateString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+    });
+  };
+
   // Carregar dados do Firebase ao montar componente
   useEffect(() => {
     if (currentScreen === "Budget" && user) {
@@ -162,24 +228,66 @@ export const BudgetScreen = () => {
 
       // 1) Buscar valor mensal esperado do planejamento do consultor
       const planning = await planningServices.getPlanning(user.id);
+      setPlanningCycleLabel(getPlanningCycleLabel(planning) || "");
+      setPlannedCycleDurationDays(
+        Number(planning?.consumoModeradoCycleDurationDays || 0),
+      );
       const totalPlannedByCategory = planning?.plannedByCategory
         ? Object.values(planning.plannedByCategory).reduce(
             (sum, value) => sum + (Number(value) || 0),
             0,
           )
         : 0;
-      const totalBills = (planning?.bills || []).reduce(
-        (sum, bill) => sum + (Number(bill.amount) || 0),
-        0,
-      );
-      const totalExpectedExpenses = (planning?.expectedExpenses || []).reduce(
+      const billsArr = planning?.bills || [];
+      const totalBills = billsArr.reduce((sum, bill) => {
+        if (isCardPayment(bill?.paymentMethod)) return sum;
+        return sum + (Number(bill.amount) || 0);
+      }, 0);
+
+      // Separate expected expenses by payment method
+      const expectedExpensesArr = planning?.expectedExpenses || [];
+      const totalExpectedExpensesAll = expectedExpensesArr.reduce(
         (sum, item) => sum + (Number(item.amount) || 0),
         0,
       );
 
+      const totalCardExpenses = [...billsArr, ...expectedExpensesArr].reduce(
+        (total: number, item: any) => {
+          if (isCardPayment(item?.paymentMethod))
+            return total + (Number(item?.amount) || 0);
+          return total;
+        },
+        0,
+      );
+
+      const totalExpectedExpenses = expectedExpensesArr.reduce(
+        (total: number, item: any) => {
+          if (isCardPayment(item?.paymentMethod)) return total;
+          return total + (Number(item?.amount) || 0);
+        },
+        0,
+      );
+
+      // Use the explicit field configured by the consultant for Consumo moderado.
+      const consumoModerado = Number(planning?.consumoModerado ?? 0);
+
       const totalPlannedSpending =
         totalPlannedByCategory + totalBills + totalExpectedExpenses;
-      setPlannedMonthlySpending(totalPlannedSpending);
+      setPlannedMonthlySpending(consumoModerado);
+      setPlanningTotals({
+        totalBills,
+        totalExpectedExpensesAll,
+        totalExpectedExpenses,
+        totalCardExpenses,
+        consumoModerado,
+        totalPlannedByCategory,
+        totalPlannedSpending,
+      });
+      setPlanningItems({
+        bills: billsArr,
+        expectedExpenses: expectedExpensesArr || [],
+        plannedByCategory: planning?.plannedByCategory || {},
+      });
       setPlanningLoaded(!!planning);
 
       if (__DEV__) {
@@ -198,11 +306,30 @@ export const BudgetScreen = () => {
       if (budget) {
         setZeroConfirmedDays(budget.zeroConfirmedDays || []);
 
-        // Tentar preencher dailyExpenses a partir dos gastos reais do mês
+        // Tentar preencher dailyExpenses a partir dos gastos reais do ciclo
         try {
           const today = new Date();
-          const start = getFirstDayOfMonth(today);
-          const end = getEndOfDay(today);
+          const cycleStartDate = planning?.consumoModeradoCycleStartedAt
+            ? getStartOfDay(new Date(planning.consumoModeradoCycleStartedAt))
+            : null;
+          const cycleEndDate = planning?.consumoModeradoCycleEndedAt
+            ? getEndOfDay(new Date(planning.consumoModeradoCycleEndedAt))
+            : null;
+
+          const start = cycleStartDate || getStartOfDay(today);
+          const end = cycleEndDate || getEndOfDay(today);
+
+          setCycleDateStart(start);
+          setCycleDateEnd(end);
+
+          const cycleDates: Date[] = [];
+          let dateCursor = getStartOfDay(start);
+          const lastDate = getStartOfDay(end);
+          while (dateCursor <= lastDate) {
+            cycleDates.push(new Date(dateCursor));
+            dateCursor = addDays(dateCursor, 1);
+          }
+          setDailyExpenseDates(cycleDates);
 
           const expenses = await expenseServices.getExpenses(user.id, {
             startDate: start,
@@ -211,7 +338,7 @@ export const BudgetScreen = () => {
 
           const map = new Map<number, number>();
           let cursor = getStartOfDay(start);
-          while (cursor <= getStartOfDay(today)) {
+          while (cursor <= getStartOfDay(end)) {
             map.set(cursor.getDate(), 0);
             cursor = addDays(cursor, 1);
           }
@@ -261,6 +388,10 @@ export const BudgetScreen = () => {
       } else {
         console.log("⚠️ Nenhum orçamento encontrado para este mês");
         setZeroConfirmedDays([]);
+        setPlanningCycleLabel("");
+        setDailyExpenseDates([]);
+        setCycleDateStart(null);
+        setCycleDateEnd(null);
       }
     } catch (error) {
       console.error("❌ Erro ao carregar orçamento:", error);
@@ -302,7 +433,7 @@ export const BudgetScreen = () => {
     }
   };
 
-  const handleSaveExpense = async (day: number) => {
+  const handleSaveExpense = async (day: number, date: Date) => {
     if (!user) return;
 
     const value =
@@ -338,7 +469,7 @@ export const BudgetScreen = () => {
       // Salvar no Firebase
       await budgetServices.updateDailyExpense(
         user.id,
-        currentMonthYear,
+        getMonthYearFromDate(date),
         day,
         value,
       );
@@ -371,10 +502,9 @@ export const BudgetScreen = () => {
     setTempValue(existing ? existing.amount.toString() : "");
   };
 
-  const handleOpenNoRecordActions = (day: number) => {
+  const handleOpenNoRecordActions = (date: Date) => {
     if (!user) return;
-    const date = new Date(today.getFullYear(), today.getMonth(), day);
-    const label = `Dia ${day}`;
+    const label = formatDayMonthLabel(date);
 
     setChoiceModalDayLabel(label);
     setChoiceModalDate(date);
@@ -384,7 +514,11 @@ export const BudgetScreen = () => {
   const handleChooseRegister = () => {
     if (!choiceModalDate) return;
     setChoiceModalVisible(false);
-    navigate("AddExpense", { prefillDate: choiceModalDate.toISOString() });
+    // informar origem para retornar corretamente após cadastro
+    navigate("AddExpense", {
+      prefillDate: choiceModalDate.toISOString(),
+      returnTo: "Budget",
+    });
   };
 
   const handleChooseMarkZero = async () => {
@@ -453,6 +587,9 @@ export const BudgetScreen = () => {
             <Text style={styles.subtitle}>
               Controle quanto você pode gastar por dia
             </Text>
+            {planningCycleLabel ? (
+              <Text style={styles.cycleLabel}>{planningCycleLabel}</Text>
+            ) : null}
             {saving && (
               <View style={styles.savingIndicator}>
                 <ActivityIndicator size="small" color="#8c52ff" />
@@ -498,41 +635,43 @@ export const BudgetScreen = () => {
 
           {/* Estatísticas */}
           {budgetValue > 0 && (
-            <View style={styles.statsContainer}>
-              <View style={styles.statCard}>
-                <Ionicons name="calendar-outline" size={24} color="#8c52ff" />
-                <Text style={styles.statLabel}>Dias no mês</Text>
-                <Text style={styles.statValue}>{daysInMonth}</Text>
-              </View>
+            <View>
+              <View style={styles.statsContainer}>
+                <View style={styles.statCard}>
+                  <Ionicons name="calendar-outline" size={24} color="#8c52ff" />
+                  <Text style={styles.statLabel}>Dias no ciclo</Text>
+                  <Text style={styles.statValue}>{daysInCycle}</Text>
+                </View>
 
-              <View style={styles.statCard}>
-                <Ionicons name="cash-outline" size={24} color="#8c52ff" />
-                <Text style={styles.statLabel}>Total gasto</Text>
-                <Text style={styles.statValue}>
-                  {formatCurrency(totalSpent)}
-                </Text>
-              </View>
+                <View style={styles.statCard}>
+                  <Ionicons name="cash-outline" size={24} color="#8c52ff" />
+                  <Text style={styles.statLabel}>Total gasto</Text>
+                  <Text style={styles.statValue}>
+                    {formatCurrency(totalSpent)}
+                  </Text>
+                </View>
 
-              <View
-                style={[
-                  styles.statCard,
-                  isOverBudget && styles.statCardWarning,
-                ]}
-              >
-                <Ionicons
-                  name={isOverBudget ? "trending-up" : "trending-down"}
-                  size={24}
-                  color={isOverBudget ? "#ff4d6d" : "#8c52ff"}
-                />
-                <Text style={styles.statLabel}>Média real/dia</Text>
-                <Text
+                <View
                   style={[
-                    styles.statValue,
-                    isOverBudget && styles.statValueWarning,
+                    styles.statCard,
+                    isOverBudget && styles.statCardWarning,
                   ]}
                 >
-                  {formatCurrency(actualDailyAverage)}
-                </Text>
+                  <Ionicons
+                    name={isOverBudget ? "trending-up" : "trending-down"}
+                    size={24}
+                    color={isOverBudget ? "#ff4d6d" : "#8c52ff"}
+                  />
+                  <Text style={styles.statLabel}>Média real/dia</Text>
+                  <Text
+                    style={[
+                      styles.statValue,
+                      isOverBudget && styles.statValueWarning,
+                    ]}
+                  >
+                    {formatCurrency(actualDailyAverage)}
+                  </Text>
+                </View>
               </View>
             </View>
           )}
@@ -583,22 +722,24 @@ export const BudgetScreen = () => {
               </Text>
 
               <View style={styles.daysList}>
-                {Array.from({ length: currentDay }, (_, i) => {
-                  const day = i + 1;
+                {dailyExpenseDates.map((date) => {
+                  const day = date.getDate();
                   const expense = getDayExpense(day);
                   const isEditing = editingDay === day;
                   const isZeroConfirmed = zeroConfirmedDays.includes(day);
 
                   return (
                     <View
-                      key={day}
+                      key={date.toISOString()}
                       style={[
                         styles.dayRow,
                         isZeroConfirmed && styles.dayRowZeroConfirmed,
                       ]}
                     >
                       <View style={styles.dayInfo}>
-                        <Text style={styles.dayNumber}>Dia {day}</Text>
+                        <Text style={styles.dayNumber}>
+                          {formatDayMonthLabel(date)}
+                        </Text>
                         {!isEditing && expense > 0 && (
                           <Text style={styles.dayExpense}>
                             {formatCurrency(expense)}
@@ -635,7 +776,7 @@ export const BudgetScreen = () => {
                           />
                           <TouchableOpacity
                             style={styles.saveButton}
-                            onPress={() => handleSaveExpense(day)}
+                            onPress={() => handleSaveExpense(day, date)}
                           >
                             <Ionicons name="checkmark" size={20} color="#fff" />
                           </TouchableOpacity>
@@ -654,7 +795,7 @@ export const BudgetScreen = () => {
                       expense === 0 && !isZeroConfirmed ? (
                         <TouchableOpacity
                           style={styles.alertIconButton}
-                          onPress={() => handleOpenNoRecordActions(day)}
+                          onPress={() => handleOpenNoRecordActions(date)}
                         >
                           <Ionicons
                             name="alert-circle"
@@ -745,6 +886,35 @@ const styles = StyleSheet.create({
     padding: 16,
     gap: 16,
   },
+  topTotalsWrapper: { gap: 12, marginBottom: 8 },
+  topTotalCardFull: {
+    backgroundColor: "#121212",
+    padding: 14,
+    borderRadius: 10,
+    alignItems: "center",
+  },
+  topTotalLabel: { color: "#999", fontSize: 13 },
+  topTotalValue: {
+    color: "#fff",
+    fontSize: 20,
+    fontWeight: "700",
+    marginTop: 6,
+  },
+  topTotalsRow: { flexDirection: "row", marginTop: 8 },
+  topTotalSmall: {
+    flex: 1,
+    backgroundColor: "#0f0b12",
+    padding: 10,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  topTotalSmallLabel: { color: "#999", fontSize: 12 },
+  topTotalSmallValue: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "600",
+    marginTop: 4,
+  },
   header: {
     alignItems: "center",
     marginBottom: 8,
@@ -760,6 +930,13 @@ const styles = StyleSheet.create({
     color: "#999",
     textAlign: "center",
     marginTop: 4,
+  },
+  cycleLabel: {
+    marginTop: 10,
+    color: "#b89aff",
+    fontSize: 13,
+    fontWeight: "700",
+    textAlign: "center",
   },
   savingIndicator: {
     flexDirection: "row",
@@ -1027,6 +1204,30 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  planningSection: { marginTop: 12, gap: 12 },
+  sectionTitle: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "700",
+    marginBottom: 8,
+  },
+  sectionCard: {
+    backgroundColor: "#0f0f12",
+    padding: 12,
+    borderRadius: 10,
+    marginBottom: 8,
+  },
+  emptyTextSmall: { color: "#999", fontSize: 13 },
+  itemCard: {
+    flexDirection: "row",
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#151515",
+  },
+  itemTitle: { color: "#fff", fontSize: 15, fontWeight: "600" },
+  itemSub: { color: "#999", fontSize: 13, marginTop: 4 },
+  itemMethod: { color: "#cfcfcf", fontSize: 12 },
+  itemMeta: { color: "#b5b5b5", fontSize: 12, marginTop: 2 },
   emptyState: {
     alignItems: "center",
     padding: 40,

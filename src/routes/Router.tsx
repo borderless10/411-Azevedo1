@@ -28,6 +28,7 @@ import { ClientInvestments } from "../screens/Consultor/ClientInvestments";
 import { ClientInvestmentsView } from "../screens/Consultor/ClientInvestmentsView";
 import { ClientList } from "../screens/Consultor/ClientList";
 import { PlanningViewScreen } from "../screens/Client/PlanningViewScreen";
+import { CategoryBudgetScreen } from "../screens/Client/CategoryBudgetScreen";
 import { useNavigation } from "./NavigationContext";
 import { useAuth } from "../hooks/useAuth";
 import { ConsultorHome } from "../screens/Consultor/ConsultorHome";
@@ -42,11 +43,15 @@ export const Router = () => {
   useEffect(() => {
     if (isAuthenticated && !loading) {
       if (currentScreen === "Login" || currentScreen === "Register") {
-        console.log("🔄 [ROUTER] Usuário autenticado, navegando para Home...", {
-          currentScreen,
-          isAuthenticated,
-          loading,
-        });
+        if (__DEV__)
+          console.log(
+            "🔄 [ROUTER] Usuário autenticado, navegando para Home...",
+            {
+              currentScreen,
+              isAuthenticated,
+              loading,
+            },
+          );
         // Redirect based on role: consultor -> ConsultorHome, admin -> AdminUsers, others -> Home
         if (user && user.role === "consultor") {
           navigate("ConsultorHome");
@@ -61,7 +66,8 @@ export const Router = () => {
 
   // Mostrar loading enquanto verifica autenticação inicial
   if (loading && !isAuthenticated) {
-    console.log("⏳ [ROUTER] Aguardando verificação de autenticação...");
+    if (__DEV__)
+      console.log("⏳ [ROUTER] Aguardando verificação de autenticação...");
     return null;
   }
 
@@ -131,6 +137,8 @@ export const Router = () => {
         return <ClientDetail />;
       case "PlanningView":
         return <PlanningViewScreen />;
+      case "CategoryBudget":
+        return <CategoryBudgetScreen />;
       case "Bills":
         return <BillsScreen />;
       case "Ranking":

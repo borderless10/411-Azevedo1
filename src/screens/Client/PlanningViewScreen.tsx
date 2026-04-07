@@ -32,8 +32,35 @@ export const PlanningViewScreen = () => {
   const totals = useMemo(() => {
     const sum = (arr?: any[]) =>
       (arr || []).reduce((s, a) => s + (Number(a?.amount) || 0), 0);
-    const totalBills = sum(planning?.bills);
-    const totalExpectedExpenses = sum(planning?.expectedExpenses);
+
+    const isCardPayment = (raw: any) => {
+      const pm = String(raw || "").toLowerCase();
+      return (
+        pm.includes("card") ||
+        pm.includes("cart") ||
+        pm.includes("cartão") ||
+        pm.includes("credito") ||
+        pm.includes("credit")
+      );
+    };
+
+    const sumExpectedNonCard = (arr?: any[]) =>
+      (arr || []).reduce((s, a) => {
+        if (isCardPayment(a?.paymentMethod)) return s;
+        return s + (Number(a?.amount) || 0);
+      }, 0);
+
+    const totalBills = (planning?.bills || []).reduce((s, a) => {
+      if (isCardPayment(a?.paymentMethod)) return s;
+      return s + (Number(a?.amount) || 0);
+    }, 0);
+    const totalCardBills = (planning?.bills || []).reduce((s, a) => {
+      if (isCardPayment(a?.paymentMethod)) return s + (Number(a?.amount) || 0);
+      return s;
+    }, 0);
+    const totalExpectedExpenses = sumExpectedNonCard(
+      planning?.expectedExpenses,
+    );
     const totalExpectedIncomes = sum(planning?.expectedIncomes);
     const totalByCategory = planning?.plannedByCategory
       ? Object.values(planning.plannedByCategory).reduce(
@@ -41,11 +68,19 @@ export const PlanningViewScreen = () => {
           0,
         )
       : 0;
+    const totalCardExpenses =
+      totalCardBills +
+      (planning?.expectedExpenses || []).reduce((s, a) => {
+        if (isCardPayment(a?.paymentMethod))
+          return s + (Number(a?.amount) || 0);
+        return s;
+      }, 0);
     const totalSpending = totalBills + totalExpectedExpenses + totalByCategory;
     const expectedSavings = totalExpectedIncomes - totalSpending;
 
     return {
       totalBills,
+      totalCardExpenses,
       totalExpectedExpenses,
       totalExpectedIncomes,
       totalByCategory,
@@ -55,6 +90,34 @@ export const PlanningViewScreen = () => {
   }, [planning]);
 
   const { colors } = useTheme();
+
+  const formatPaymentMethodLabel = (raw: any) => {
+    const pm = String(raw || "").toLowerCase();
+    if (pm.includes("card") || pm.includes("cart")) return "Cartão";
+    if (pm.includes("pix") || pm.includes("dinheiro") || pm.includes("cash")) {
+      return "Dinheiro / Pix";
+    }
+    return raw ? String(raw) : "Não informado";
+  };
+
+  const formatItemDateLabel = (item: any) => {
+    const parsedDate =
+      item?.date || item?.expectedDate || item?.dueDate || item?.createdAt;
+
+    if (parsedDate) {
+      const d = new Date(parsedDate);
+      if (!Number.isNaN(d.getTime())) return d.toLocaleDateString("pt-BR");
+    }
+
+    if (item?.expectedMonth && String(item.expectedMonth).length >= 7) {
+      const [year, month] = String(item.expectedMonth).split("-");
+      if (year && month) return `${month}/${year}`;
+    }
+
+    if (typeof item?.dueDay === "number") return `Dia ${item.dueDay}`;
+
+    return "Não informada";
+  };
 
   useEffect(() => {
     const load = async () => {
@@ -141,24 +204,6 @@ export const PlanningViewScreen = () => {
                 <View style={styles.row}>
                   <Text style={styles.label}>Renda Mensal:</Text>
                   <Text style={styles.value}>{formatCurrency(4500)}</Text>
-                </View>
-
-                <View style={{ marginTop: 12 }}>
-                  <Text style={styles.subTitle}>
-                    Gastos previstos por categoria
-                  </Text>
-                  <View style={styles.row}>
-                    <Text style={styles.label}>Alimentação</Text>
-                    <Text style={styles.value}>{formatCurrency(900)}</Text>
-                  </View>
-                  <View style={styles.row}>
-                    <Text style={styles.label}>Transporte</Text>
-                    <Text style={styles.value}>{formatCurrency(300)}</Text>
-                  </View>
-                  <View style={styles.row}>
-                    <Text style={styles.label}>Moradia</Text>
-                    <Text style={styles.value}>{formatCurrency(1500)}</Text>
-                  </View>
                 </View>
 
                 <View style={{ marginTop: 12 }}>
@@ -250,20 +295,6 @@ export const PlanningViewScreen = () => {
                 <View style={{ marginTop: 12 }}>
                   <Text style={styles.sectionTitle}>Gastos - Detalhes</Text>
 
-                  {planning.plannedByCategory && (
-                    <View style={{ marginTop: 6 }}>
-                      {Object.entries(planning.plannedByCategory).map(
-                        ([cat, amt]) => (
-                          <DetailCard
-                            key={cat}
-                            title={cat}
-                            value={formatCurrency(Number(amt) || 0)}
-                          />
-                        ),
-                      )}
-                    </View>
-                  )}
-
                   {planning.bills && planning.bills.length > 0 && (
                     <View style={{ marginTop: 8 }}>
                       <Text style={styles.sectionTitle}>
@@ -274,7 +305,7 @@ export const PlanningViewScreen = () => {
                           key={b.id}
                           title={b.name}
                           value={formatCurrency(Number(b.amount) || 0)}
-                          note={b.notes}
+                          note={`Método: ${formatPaymentMethodLabel(b.paymentMethod)}\nData: ${formatItemDateLabel(b)}${b.notes ? `\n${b.notes}` : ""}`}
                         />
                       ))}
                     </View>
@@ -291,7 +322,7 @@ export const PlanningViewScreen = () => {
                             key={it.id}
                             title={it.source || "Outros"}
                             value={formatCurrency(it.amount)}
-                            note={it.notes}
+                            note={`Método: ${formatPaymentMethodLabel(it.paymentMethod)}\nData: ${formatItemDateLabel(it)}${it.notes ? `\n${it.notes}` : ""}`}
                           />
                         ))}
                       </View>
@@ -310,23 +341,6 @@ export const PlanningViewScreen = () => {
                           value={formatCurrency(it.amount)}
                           note={it.notes}
                         />
-                      ))}
-                    </View>
-                  )}
-
-                {planning.expectedExpenses &&
-                  planning.expectedExpenses.length > 0 && (
-                    <View style={{ marginTop: 12 }}>
-                      <Text style={styles.subTitle}>Gastos esperados</Text>
-                      {planning.expectedExpenses.map((it: any) => (
-                        <View key={it.id} style={styles.row}>
-                          <Text style={styles.label}>
-                            {it.source || "Outros"}
-                          </Text>
-                          <Text style={styles.value}>
-                            {formatCurrency(it.amount)}
-                          </Text>
-                        </View>
                       ))}
                     </View>
                   )}

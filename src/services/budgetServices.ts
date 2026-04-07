@@ -80,6 +80,10 @@ export const budgetServices = {
           dailyExpenses: data.dailyExpenses ?? existing.dailyExpenses,
           zeroConfirmedDays:
             data.zeroConfirmedDays ?? existing.zeroConfirmedDays ?? [],
+          zeroConfirmedDaysNoRanking:
+            data.zeroConfirmedDaysNoRanking ??
+            existing.zeroConfirmedDaysNoRanking ??
+            [],
           createdAt: Timestamp.fromDate(existing.createdAt),
           updatedAt: Timestamp.fromDate(now),
         };
@@ -91,6 +95,7 @@ export const budgetServices = {
           monthlyBudget: (data as CreateBudgetData).monthlyBudget || 0,
           dailyExpenses: data.dailyExpenses || [],
           zeroConfirmedDays: data.zeroConfirmedDays || [],
+          zeroConfirmedDaysNoRanking: data.zeroConfirmedDaysNoRanking || [],
           createdAt: Timestamp.fromDate(now),
           updatedAt: Timestamp.fromDate(now),
         };
@@ -106,6 +111,7 @@ export const budgetServices = {
         monthlyBudget: budgetData.monthlyBudget,
         dailyExpenses: budgetData.dailyExpenses,
         zeroConfirmedDays: budgetData.zeroConfirmedDays || [],
+        zeroConfirmedDaysNoRanking: budgetData.zeroConfirmedDaysNoRanking || [],
         createdAt: budgetData.createdAt.toDate(),
         updatedAt: budgetData.updatedAt.toDate(),
       };
@@ -199,6 +205,9 @@ export const budgetServices = {
       const updatedZeroConfirmedDays = (budget.zeroConfirmedDays || []).filter(
         (d) => d !== day || amount <= 0,
       );
+      const updatedZeroNoRankingDays = (
+        budget.zeroConfirmedDaysNoRanking || []
+      ).filter((d) => d !== day || amount <= 0);
 
       // Ordenar por dia
       updatedExpenses.sort((a, b) => a.day - b.day);
@@ -207,6 +216,7 @@ export const budgetServices = {
         monthlyBudget: budget.monthlyBudget,
         dailyExpenses: updatedExpenses,
         zeroConfirmedDays: updatedZeroConfirmedDays,
+        zeroConfirmedDaysNoRanking: updatedZeroNoRankingDays,
       });
     } catch (error) {
       console.error(
@@ -244,11 +254,65 @@ export const budgetServices = {
 
     const zeroConfirmedSet = new Set<number>(budget.zeroConfirmedDays || []);
     zeroConfirmedSet.add(day);
+    const zeroNoRankingSet = new Set<number>(
+      budget.zeroConfirmedDaysNoRanking || [],
+    );
+    zeroNoRankingSet.delete(day);
 
     return this.saveBudget(userId, monthYear, {
       monthlyBudget: budget.monthlyBudget,
       dailyExpenses,
       zeroConfirmedDays: Array.from(zeroConfirmedSet).sort((a, b) => a - b),
+      zeroConfirmedDaysNoRanking: Array.from(zeroNoRankingSet).sort(
+        (a, b) => a - b,
+      ),
+    });
+  },
+
+  async confirmZeroExpenseDayNoRanking(
+    userId: string,
+    date: Date,
+  ): Promise<Budget> {
+    const monthYear = getMonthYearFromDate(date);
+    const day = date.getDate();
+
+    const budget = await this.getBudget(userId, monthYear);
+
+    if (!budget) {
+      return this.saveBudget(userId, monthYear, {
+        monthlyBudget: 0,
+        dailyExpenses: [{ day, amount: 0 }],
+        zeroConfirmedDays: [day],
+        zeroConfirmedDaysNoRanking: [day],
+      });
+    }
+
+    const dailyExpenses = [...(budget.dailyExpenses || [])];
+    const dayIndex = dailyExpenses.findIndex((item) => item.day === day);
+
+    if (dayIndex >= 0) {
+      dailyExpenses[dayIndex] = { day, amount: 0 };
+    } else {
+      dailyExpenses.push({ day, amount: 0 });
+    }
+
+    dailyExpenses.sort((a, b) => a.day - b.day);
+
+    const zeroConfirmedSet = new Set<number>(budget.zeroConfirmedDays || []);
+    zeroConfirmedSet.add(day);
+
+    const zeroNoRankingSet = new Set<number>(
+      budget.zeroConfirmedDaysNoRanking || [],
+    );
+    zeroNoRankingSet.add(day);
+
+    return this.saveBudget(userId, monthYear, {
+      monthlyBudget: budget.monthlyBudget,
+      dailyExpenses,
+      zeroConfirmedDays: Array.from(zeroConfirmedSet).sort((a, b) => a - b),
+      zeroConfirmedDaysNoRanking: Array.from(zeroNoRankingSet).sort(
+        (a, b) => a - b,
+      ),
     });
   },
 

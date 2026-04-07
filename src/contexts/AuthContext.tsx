@@ -53,7 +53,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
           if (fullUserData) {
             if (fullUserData.isActive === false) {
-              console.log(
+              console.warn(
                 "⚠️ Conta desativada detectada no onAuthStateChange, efetuando logout.",
               );
               try {
@@ -77,7 +77,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                 );
                 if (byEmail) {
                   if (byEmail.isActive === false) {
-                    console.log(
+                    console.warn(
                       "⚠️ Conta desativada encontrada por email no onAuthStateChange, efetuando logout.",
                     );
                     try {
@@ -156,17 +156,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
    * Função de login
    */
   const signIn = async (credentials: LoginCredentials): Promise<void> => {
-    console.log("🟢 [AUTH CONTEXT] signIn chamado");
-    console.log("🟢 [AUTH CONTEXT] Credentials:", {
-      email: credentials.email,
-      passwordLength: credentials.password.length,
-    });
+    if (__DEV__) console.log("🟢 [AUTH CONTEXT] signIn chamado");
+    if (__DEV__)
+      console.log("🟢 [AUTH CONTEXT] Credentials:", {
+        email: credentials.email,
+        passwordLength: credentials.password.length,
+      });
     try {
       // NOTA: não definir `loading` global aqui para evitar que o `Router`
       // volte a `null` enquanto a UI local está controlando o estado de carregamento.
-      console.log("🟢 [AUTH CONTEXT] Chamando authServices.login...");
+      if (__DEV__)
+        console.log("🟢 [AUTH CONTEXT] Chamando authServices.login...");
       const userData = await authServices.login(credentials);
-      console.log("🟢 [AUTH CONTEXT] Login bem-sucedido, user:", userData);
+      if (__DEV__)
+        console.log("🟢 [AUTH CONTEXT] Login bem-sucedido, user:", userData);
 
       // Buscar dados completos do Firestore
       try {
@@ -285,7 +288,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         }
       }
 
-      console.log("🟢 [AUTH CONTEXT] Estado do usuário atualizado");
+      if (__DEV__)
+        console.log("🟢 [AUTH CONTEXT] Estado do usuário atualizado");
       // Disparar atualização de contas vencidas no cliente após login (não bloqueante)
       try {
         if (userData && userData.id) {

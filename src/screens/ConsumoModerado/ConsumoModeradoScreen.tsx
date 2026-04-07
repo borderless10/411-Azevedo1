@@ -18,17 +18,16 @@ import { useAuth } from "../../hooks/useAuth";
 import expenseServices from "../../services/expenseServices";
 import { formatCurrency } from "../../utils/currencyUtils";
 import {
-  subtractDays,
-  getStartOfDay,
-  getEndOfDay,
-  getFriendlyDateLabel,
-  getFirstDayOfMonth,
-  addDays,
-} from "../../utils/dateUtils";
+  getPlanningCycleLabel,
+  planningServices,
+} from "../../services/planningServices";
+import { getStartOfDay, getEndOfDay, addDays } from "../../utils/dateUtils";
 import { useNavigation } from "../../routes/NavigationContext";
 import ZeroPlanilhaConfirmModal from "../../components/ui/ZeroPlanilhaConfirmModal";
 import budgetServices from "../../services/budgetServices";
 import { Alert } from "react-native";
+import { ConsumptionCategoryRelease } from "../../types/planning";
+import { toExpenseCategoryLookupKey } from "../../types/category";
 
 export const ConsumoModeradoScreen = () => {
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -38,30 +37,74 @@ export const ConsumoModeradoScreen = () => {
   const { currentScreen, navigate } = useNavigation() as any;
   const [loading, setLoading] = useState(false);
   const [days, setDays] = useState<Array<{ date: Date; total: number }>>([]);
+  const [tabReleases, setTabReleases] = useState<ConsumptionCategoryRelease[]>(
+    [],
+  );
+  const [activeTabCategory, setActiveTabCategory] = useState<string>("");
+  const [categoryDaysMap, setCategoryDaysMap] = useState<
+    Record<string, Array<{ date: Date; total: number }>>
+  >({});
+  const [cycleLabel, setCycleLabel] = useState<string>("");
+
+  const isCreditCardExpense = (exp: any) => {
+    return (
+      exp.paymentMethod === "credit_card" ||
+      (exp.cardId && exp.cardId.length > 0)
+    );
+  };
 
   const fetchMonth = async () => {
     if (!user?.id) return;
     setLoading(true);
     try {
       const today = new Date();
-      const start = getFirstDayOfMonth(today);
-      const end = getEndOfDay(today);
+      const planning = await planningServices.getPlanning(user.id);
+      const cycleStartDate = planning?.consumoModeradoCycleStartedAt
+        ? getStartOfDay(new Date(planning.consumoModeradoCycleStartedAt))
+        : null;
+      const cycleEndDate = planning?.consumoModeradoCycleEndedAt
+        ? getEndOfDay(new Date(planning.consumoModeradoCycleEndedAt))
+        : null;
+
+      const start = cycleStartDate || getStartOfDay(today);
+      const end = cycleEndDate || getEndOfDay(today);
+      setCycleLabel(getPlanningCycleLabel(planning) || "");
+
+      const releases = Object.values(planning?.categoryReleases || {})
+        .filter((release) => release.status === "active")
+        .sort((a, b) => a.categoryName.localeCompare(b.categoryName, "pt-BR"));
+
+      setTabReleases(releases);
+      if (releases.length > 0) {
+        setActiveTabCategory((current) =>
+          current &&
+          releases.some((release) => release.categoryName === current)
+            ? current
+            : releases[0].categoryName,
+        );
+      } else {
+        setActiveTabCategory("");
+      }
 
       const expenses = await expenseServices.getExpenses(user.id, {
         startDate: start,
         endDate: end,
       });
 
-      // Inicializar mapa de datas para todos os dias do mês até hoje
+      // Filtrar despesas de cartão de crédito (não contabilizam no consumo)
+      const filteredExpenses = expenses.filter(
+        (exp) => !isCreditCardExpense(exp),
+      );
       const map = new Map<string, number>();
       let cursor = getStartOfDay(start);
-      while (cursor <= getStartOfDay(today)) {
+      const lastDay = getStartOfDay(end);
+      while (cursor <= lastDay) {
         map.set(cursor.toDateString(), 0);
         cursor = addDays(cursor, 1);
       }
 
       // Agregar valores por dia (forçando value como número)
-      expenses.forEach((exp) => {
+      filteredExpenses.forEach((exp) => {
         const expDate = new Date(exp.date);
         const key = getStartOfDay(expDate).toDateString();
         const prev = map.get(key) ?? 0;
@@ -76,6 +119,58 @@ export const ConsumoModeradoScreen = () => {
       Array.from(map.entries()).forEach(([k, v]) => {
         list.push({ date: new Date(k), total: v });
       });
+
+      const categoryMap: Record<
+        string,
+        Array<{ date: Date; total: number }>
+      > = {};
+      if (releases.length > 0) {
+        const releaseKeys = releases.map((release) => ({
+          categoryName: release.categoryName,
+          lookupKey: toExpenseCategoryLookupKey(release.categoryName),
+        }));
+
+        const categoryDayBuckets = new Map<string, Map<string, number>>();
+        releaseKeys.forEach((release) => {
+          const dayMap = new Map<string, number>();
+          let dayCursor = getStartOfDay(start);
+          while (dayCursor <= lastDay) {
+            dayMap.set(dayCursor.toDateString(), 0);
+            dayCursor = addDays(dayCursor, 1);
+          }
+          categoryDayBuckets.set(release.categoryName, dayMap);
+        });
+
+        filteredExpenses.forEach((exp) => {
+          const expDate = new Date(exp.date);
+          const dayKey = getStartOfDay(expDate).toDateString();
+          const expenseKey = toExpenseCategoryLookupKey(exp.category);
+          const expenseValue =
+            typeof exp.value === "number"
+              ? exp.value
+              : parseFloat(String(exp.value)) || 0;
+
+          releaseKeys.forEach((release) => {
+            if (release.lookupKey !== expenseKey) return;
+            const dayMap = categoryDayBuckets.get(release.categoryName);
+            if (!dayMap) return;
+            dayMap.set(dayKey, (dayMap.get(dayKey) ?? 0) + expenseValue);
+          });
+        });
+
+        releaseKeys.forEach((release) => {
+          const dayMap = categoryDayBuckets.get(release.categoryName);
+          if (!dayMap) return;
+          categoryMap[release.categoryName] = Array.from(dayMap.entries()).map(
+            ([key, value]) => ({
+              date: new Date(key),
+              total: value,
+            }),
+          );
+        });
+      }
+
+      setCategoryDaysMap(categoryMap);
 
       // Buscar dias já confirmados como zero na planilha
       const budget = await budgetServices.getCurrentBudget(user.id);
@@ -127,7 +222,10 @@ export const ConsumoModeradoScreen = () => {
   const [confirmingZero, setConfirmingZero] = useState(false);
 
   const handleOpenNoRecordActions = (date: Date) => {
-    const label = getFriendlyDateLabel(date);
+    const label = date.toLocaleDateString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+    });
 
     Alert.alert("Dia sem registro", `Dia ${label} sem gastos registrados.`, [
       {
@@ -137,7 +235,11 @@ export const ConsumoModeradoScreen = () => {
       {
         text: "Registrar gasto",
         onPress: () => {
-          navigate("AddExpense", { prefillDate: date.toISOString() });
+          // informar origem para que a tela de cadastro saiba para onde voltar
+          navigate("AddExpense", {
+            prefillDate: date.toISOString(),
+            returnTo: "ConsumoModerado",
+          });
         },
       },
       {
@@ -172,6 +274,21 @@ export const ConsumoModeradoScreen = () => {
     }
   };
 
+  const isCategoryMode = tabReleases.length > 0;
+  const activeRelease = tabReleases.find(
+    (release) => release.categoryName === activeTabCategory,
+  );
+  const displayedDays = isCategoryMode
+    ? categoryDaysMap[activeTabCategory] || []
+    : days;
+  const todayKey = getStartOfDay(new Date()).toDateString();
+  const spentToday =
+    displayedDays.find(
+      (day) => getStartOfDay(day.date).toDateString() === todayKey,
+    )?.total || 0;
+  const currentDailyLimit = activeRelease?.dailyLimit || 0;
+  const dailyBalance = currentDailyLimit - spentToday;
+
   return (
     <Layout title="Consumo Moderado" showBackButton={false} showSidebar={true}>
       <ScrollView style={styles.container}>
@@ -190,24 +307,90 @@ export const ConsumoModeradoScreen = () => {
             <Text style={styles.subtitle}>
               Acompanhe e gerencie seu consumo de forma consciente
             </Text>
+            {cycleLabel ? (
+              <Text style={styles.cycleLabel}>{cycleLabel}</Text>
+            ) : null}
           </View>
 
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>Consumo dos últimos 7 dias</Text>
+            <Text style={styles.cardTitle}>Consumo do ciclo atual</Text>
+            {isCategoryMode ? (
+              <>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.tabScroll}
+                >
+                  {tabReleases.map((release) => {
+                    const isActive = release.categoryName === activeTabCategory;
+                    return (
+                      <TouchableOpacity
+                        key={release.categoryName}
+                        style={[
+                          styles.tabChip,
+                          isActive && styles.tabChipActive,
+                        ]}
+                        onPress={() =>
+                          setActiveTabCategory(release.categoryName)
+                        }
+                      >
+                        <Text
+                          style={[
+                            styles.tabChipText,
+                            isActive && styles.tabChipTextActive,
+                          ]}
+                        >
+                          {release.categoryName}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+
+                <View style={styles.dailySummaryCard}>
+                  <Text style={styles.dailySummaryTitle}>
+                    Meta diária: {formatCurrency(currentDailyLimit)}
+                  </Text>
+                  <Text style={styles.dailySummaryText}>
+                    Consumido hoje: {formatCurrency(spentToday)}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.dailySummaryText,
+                      dailyBalance >= 0
+                        ? styles.dailyBalancePositive
+                        : styles.dailyBalanceNegative,
+                    ]}
+                  >
+                    Saldo diário: {formatCurrency(dailyBalance)}
+                  </Text>
+                </View>
+              </>
+            ) : (
+              <Text style={styles.emptyStateText}>
+                Seu consultor ainda não liberou categorias para o Consumo
+                Moderado específico.
+              </Text>
+            )}
+
             {loading ? (
               <ActivityIndicator color="#8c52ff" style={{ marginTop: 12 }} />
             ) : (
               <View style={{ marginTop: 12 }}>
-                {days.map((d: any) => (
+                {displayedDays.map((d: any) => (
                   <View style={styles.dayRow} key={d.date.toDateString()}>
                     <Text style={styles.dayLabel}>
-                      {getFriendlyDateLabel(d.date)}
+                      {d.date.toLocaleDateString("pt-BR", {
+                        weekday: "short",
+                        day: "2-digit",
+                        month: "2-digit",
+                      })}
                     </Text>
 
                     <View
                       style={{ flexDirection: "row", alignItems: "center" }}
                     >
-                      {d.total === 0 && !d.confirmedZero ? (
+                      {!isCategoryMode && d.total === 0 && !d.confirmedZero ? (
                         <TouchableOpacity
                           onPress={() => handleOpenNoRecordActions(d.date)}
                           style={{ marginRight: 10 }}
@@ -220,7 +403,7 @@ export const ConsumoModeradoScreen = () => {
                         </TouchableOpacity>
                       ) : null}
 
-                      {d.total === 0 && d.confirmedZero ? (
+                      {!isCategoryMode && d.total === 0 && d.confirmedZero ? (
                         <Ionicons
                           name="checkmark-circle"
                           size={18}
@@ -235,11 +418,18 @@ export const ConsumoModeradoScreen = () => {
                     </View>
                   </View>
                 ))}
+                {!displayedDays.length && isCategoryMode ? (
+                  <Text style={styles.emptyStateText}>
+                    Nenhum gasto encontrado para a categoria selecionada neste
+                    ciclo.
+                  </Text>
+                ) : null}
               </View>
             )}
             <Text style={[styles.cardText, { marginTop: 14 }]}>
-              Os valores acima foram extraídos dos gastos que você já cadastrou
-              na tela principal.
+              {isCategoryMode
+                ? "Os valores acima consideram apenas os gastos da categoria liberada pelo consultor."
+                : "Os valores acima foram extraídos dos gastos que você já cadastrou na tela principal."}
             </Text>
           </View>
         </Animated.View>
@@ -284,6 +474,12 @@ const styles = StyleSheet.create({
     color: "#999",
     textAlign: "center",
   },
+  cycleLabel: {
+    marginTop: 10,
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#b89aff",
+  },
   card: {
     backgroundColor: "#1a1a1a",
     borderRadius: 16,
@@ -297,10 +493,65 @@ const styles = StyleSheet.create({
     color: "#fff",
     marginBottom: 12,
   },
+  tabScroll: {
+    marginTop: 4,
+  },
+  tabChip: {
+    borderWidth: 1,
+    borderColor: "#3b3b3b",
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginRight: 8,
+    backgroundColor: "#121212",
+  },
+  tabChipActive: {
+    borderColor: "#8c52ff",
+    backgroundColor: "#2b174d",
+  },
+  tabChipText: {
+    color: "#cfcfcf",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  tabChipTextActive: {
+    color: "#fff",
+  },
+  dailySummaryCard: {
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: "#2a2040",
+    borderRadius: 10,
+    backgroundColor: "#12101d",
+    padding: 12,
+  },
+  dailySummaryTitle: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "700",
+    marginBottom: 4,
+  },
+  dailySummaryText: {
+    color: "#c8bfdf",
+    fontSize: 13,
+    marginBottom: 2,
+  },
+  dailyBalancePositive: {
+    color: "#4caf50",
+  },
+  dailyBalanceNegative: {
+    color: "#ff6666",
+  },
   cardText: {
     fontSize: 14,
     color: "#ccc",
     lineHeight: 20,
+  },
+  emptyStateText: {
+    color: "#999",
+    fontSize: 13,
+    marginTop: 10,
+    lineHeight: 19,
   },
   dayRow: {
     flexDirection: "row",

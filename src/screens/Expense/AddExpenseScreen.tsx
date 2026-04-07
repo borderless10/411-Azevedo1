@@ -32,6 +32,10 @@ export const AddExpenseScreen = () => {
   const { user } = useAuth();
   const { navigate, params } = useNavigation() as any;
 
+  const navigateToReturnScreen = () => {
+    navigate(params?.returnTo || "Home", params?.returnParams);
+  };
+
   const [value, setValue] = useState(0);
   const [description, setDescription] = useState("");
   const [date, setDate] = useState<Date>(
@@ -115,6 +119,12 @@ export const AddExpenseScreen = () => {
       }
     }
   }, [params?.prefillDate]);
+
+  React.useEffect(() => {
+    if (params?.prefillCategory) {
+      setCategory(String(params.prefillCategory));
+    }
+  }, [params?.prefillCategory]);
 
   React.useEffect(() => {
     const loadCards = async () => {
@@ -242,7 +252,8 @@ export const AddExpenseScreen = () => {
   };
 
   const handleCancel = () => {
-    navigate("Home");
+    // voltar para onde a tela foi aberta (se informado), senão Home
+    navigateToReturnScreen();
   };
 
   return (
@@ -477,7 +488,8 @@ export const AddExpenseScreen = () => {
           amount={savedValueForModal}
           onClose={() => {
             setSuccessModalVisible(false);
-            navigate("Home");
+            // se a tela foi aberta a partir de outra (ex: ConsumoModerado), retornar pra lá
+            navigateToReturnScreen();
           }}
           onViewList={() => {
             setSuccessModalVisible(false);

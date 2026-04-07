@@ -34,6 +34,7 @@ import { formatDateToString } from "../utils/dateUtils";
 import { formatCurrency } from "../utils/currencyUtils";
 import { activityServices } from "./activityServices";
 import { creditCardServices } from "./creditCardServices";
+import { toExpenseCategoryLookupKey } from "../types/category";
 
 /**
  * Validar dados de criação de gasto
@@ -271,8 +272,10 @@ export const expenseServices = {
       }
 
       if (filters?.category) {
+        const targetCategoryKey = toExpenseCategoryLookupKey(filters.category);
         expenses = expenses.filter(
-          (expense) => expense.category === filters.category,
+          (expense) =>
+            toExpenseCategoryLookupKey(expense.category) === targetCategoryKey,
         );
         console.log(
           "💸 [EXPENSE SERVICE] Após filtrar por categoria:",
@@ -300,8 +303,13 @@ export const expenseServices = {
       }
 
       if (filters?.categories && filters.categories.length > 0) {
+        const categoryKeys = new Set(
+          filters.categories.map((category) =>
+            toExpenseCategoryLookupKey(category),
+          ),
+        );
         expenses = expenses.filter((expense) =>
-          filters.categories!.includes(expense.category),
+          categoryKeys.has(toExpenseCategoryLookupKey(expense.category)),
         );
       }
 

@@ -22,6 +22,7 @@ export interface Budget {
   monthlyBudget: number;
   dailyExpenses: DailyExpense[];
   zeroConfirmedDays: number[];
+  zeroConfirmedDaysNoRanking?: number[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -36,6 +37,7 @@ export interface BudgetFirestore {
   monthlyBudget: number;
   dailyExpenses: DailyExpense[];
   zeroConfirmedDays?: number[];
+  zeroConfirmedDaysNoRanking?: number[];
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
@@ -47,6 +49,7 @@ export interface CreateBudgetData {
   monthlyBudget: number;
   dailyExpenses?: DailyExpense[];
   zeroConfirmedDays?: number[];
+  zeroConfirmedDaysNoRanking?: number[];
 }
 
 /**
@@ -56,4 +59,5 @@ export interface UpdateBudgetData {
   monthlyBudget?: number;
   dailyExpenses?: DailyExpense[];
   zeroConfirmedDays?: number[];
+  zeroConfirmedDaysNoRanking?: number[];
 }

@@ -32,9 +32,19 @@ export const rankingServices = {
         const data: any = getDocData(doc);
         const budget = convertBudgetFromFirestore(data);
         const uid = budget.userId;
-        const zeros = Array.isArray(budget.zeroConfirmedDays)
-          ? budget.zeroConfirmedDays.length
-          : 0;
+        const zeroSet = new Set<number>(
+          Array.isArray(budget.zeroConfirmedDays)
+            ? budget.zeroConfirmedDays
+            : [],
+        );
+        const zeroNoRankingSet = new Set<number>(
+          Array.isArray(budget.zeroConfirmedDaysNoRanking)
+            ? budget.zeroConfirmedDaysNoRanking
+            : [],
+        );
+        const zeros = Array.from(zeroSet).filter(
+          (day) => !zeroNoRankingSet.has(day),
+        ).length;
         counts[uid] = (counts[uid] || 0) + zeros;
       });
 

@@ -29,6 +29,7 @@ export type ScreenName =
   | "ConsultorHome"
   | "PlanningView"
   | "Budget"
+  | "CategoryBudget"
   | "Bills"
   | "CadastrarCliente"
   | "AdminUsers"
@@ -50,11 +51,12 @@ export const NavigationProvider = ({ children }: { children: ReactNode }) => {
   const [params, setParams] = useState<any>(null);
 
   const navigate = (screen: ScreenName, navigationParams?: any) => {
-    console.log(
-      "🗺️ [NAVIGATION] Navegando para:",
-      screen,
-      navigationParams ? "com params" : "",
-    );
+    if (__DEV__)
+      console.log(
+        "🗺️ [NAVIGATION] Navegando para:",
+        screen,
+        navigationParams ? "com params" : "",
+      );
     setParams(navigationParams || null);
     setCurrentScreen(screen);
   };

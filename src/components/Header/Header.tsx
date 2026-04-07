@@ -54,6 +54,11 @@ export const Header: React.FC<HeaderProps> = ({
   }, [fadeAnim, slideAnim]);
 
   const handleBack = () => {
+    if (params?.returnTo) {
+      navigate(params.returnTo);
+      return;
+    }
+
     // If coming from client-specific subscreens, return to ClientDetail with the same params
     if (
       currentScreen === "ClientInvestments" ||
@@ -67,11 +72,7 @@ export const Header: React.FC<HeaderProps> = ({
     }
 
     // fallback behavior for other screens
-    if (currentScreen === "AddIncome" || currentScreen === "AddExpense") {
-      navigate("Home");
-    } else {
-      navigate("Home");
-    }
+    navigate("Home");
   };
 
   const handleProfile = () => {

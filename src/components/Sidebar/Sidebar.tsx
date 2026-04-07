@@ -2,7 +2,7 @@
  * Componente de Sidebar/Menu Lateral
  */
 
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -17,6 +17,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../hooks/useAuth";
 import { useNavigation, ScreenName } from "../../routes/NavigationContext";
 import { useTheme } from "../../contexts/ThemeContext";
+import { planningServices } from "../../services/planningServices";
+import type { ConsumptionCategoryRelease } from "../../types/planning";
 
 interface SidebarProps {
   visible: boolean;
@@ -37,13 +39,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
   style,
 }) => {
   const { user, signOut } = useAuth();
-  const { navigate, currentScreen } = useNavigation();
+  const { navigate, currentScreen, params } = useNavigation() as any;
   const { colors } = useTheme();
   const slideAnim = useRef(new Animated.Value(-300)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const isCommonUser = !user?.isAdmin && user?.role !== "consultor";
   const shouldHideRankingItem =
     isCommonUser && user?.rankingPreference === "hidden";
+  const [releasedCategories, setReleasedCategories] = useState<
+    ConsumptionCategoryRelease[]
+  >([]);
 
   useEffect(() => {
     if (visible) {
@@ -74,6 +79,31 @@ export const Sidebar: React.FC<SidebarProps> = ({
       ]).start();
     }
   }, [visible]);
+
+  useEffect(() => {
+    const loadReleasedCategories = async () => {
+      if (!user?.id || !isCommonUser) {
+        setReleasedCategories([]);
+        return;
+      }
+
+      try {
+        const planning = await planningServices.getPlanning(user.id);
+        const activeReleases = Object.values(planning?.categoryReleases || {})
+          .filter((release) => release.status === "active")
+          .sort((a, b) =>
+            a.categoryName.localeCompare(b.categoryName, "pt-BR"),
+          );
+        setReleasedCategories(activeReleases);
+      } catch (error) {
+        console.warn("Erro ao carregar categorias acompanhadas", error);
+        setReleasedCategories([]);
+      }
+    };
+
+    loadReleasedCategories();
+  }, [user?.id, isCommonUser]);
+
   const menuItems: MenuItem[] = [
     { id: "Home", label: "Início", icon: "home", color: "#8c52ff" },
     {
@@ -171,6 +201,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
       }
     }
     navigate(screen);
+    onClose();
+  };
+
+  const handleNavigateWithParams = (
+    screen: ScreenName,
+    navigationParams?: any,
+  ) => {
+    navigate(screen, navigationParams);
     onClose();
   };
 
@@ -278,6 +316,73 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </TouchableOpacity>
             );
           })}
+
+          {isCommonUser && releasedCategories.length > 0 ? (
+            <View
+              style={[
+                styles.categorySection,
+                { borderTopColor: colors.border },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.categorySectionTitle,
+                  { color: colors.textSecondary },
+                ]}
+              >
+                Categorias acompanhadas
+              </Text>
+              {releasedCategories.map((release) => {
+                const isActive =
+                  currentScreen === "CategoryBudget" &&
+                  params?.categoryName === release.categoryName;
+
+                return (
+                  <TouchableOpacity
+                    key={release.categoryName}
+                    style={[
+                      styles.menuItem,
+                      { borderBottomColor: colors.border },
+                      isActive && [
+                        styles.menuItemActive,
+                        { backgroundColor: colors.background },
+                      ],
+                    ]}
+                    onPress={() =>
+                      handleNavigateWithParams("CategoryBudget", {
+                        categoryName: release.categoryName,
+                      })
+                    }
+                  >
+                    <View style={styles.menuItemLeft}>
+                      <Ionicons
+                        name="folder-open"
+                        size={24}
+                        color={isActive ? "#8c52ff" : colors.textSecondary}
+                      />
+                      <Text
+                        style={[
+                          styles.menuItemText,
+                          { color: colors.textSecondary },
+                          isActive && styles.menuItemTextActive,
+                          isActive && { color: "#8c52ff" },
+                        ]}
+                      >
+                        {release.categoryName}
+                      </Text>
+                    </View>
+                    {isActive && (
+                      <Ionicons
+                        name="chevron-forward"
+                        size={20}
+                        color="#8c52ff"
+                      />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          ) : null}
         </ScrollView>
 
         {/* Footer */}
@@ -353,6 +458,19 @@ const styles = StyleSheet.create({
   },
   menuContent: {
     paddingTop: 8,
+  },
+  categorySection: {
+    borderTopWidth: 1,
+    marginTop: 8,
+    paddingTop: 8,
+  },
+  categorySectionTitle: {
+    fontSize: 12,
+    fontWeight: "700",
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
+    paddingHorizontal: 20,
+    paddingVertical: 8,
   },
   menuItem: {
     flexDirection: "row",

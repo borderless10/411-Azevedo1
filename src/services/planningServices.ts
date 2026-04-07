@@ -9,6 +9,8 @@ import {
   CreatePlanningData,
   UpdatePlanningData,
   PlanningFirestore,
+  CategoryReleases,
+  CategoryReleasesFirestore,
   Bill,
   BillFirestore,
   ExpectedItem,
@@ -16,9 +18,118 @@ import {
 } from "../types/planning";
 import { userService } from "./userServices";
 import { activityServices } from "./activityServices";
+import { resolveExpenseCategoryName } from "../types/category";
 
 const getUserPlanningDoc = (userId: string) =>
   doc(db, "users", userId, "planning", "current");
+
+const removeUndefinedFields = <T extends Record<string, any>>(value: T): T =>
+  Object.fromEntries(
+    Object.entries(value).filter(([, fieldValue]) => fieldValue !== undefined),
+  ) as T;
+
+const normalizeCycleStart = (date: Date): Date => {
+  const normalized = new Date(date);
+  normalized.setHours(0, 0, 0, 0);
+  return normalized;
+};
+
+const normalizeCycleEnd = (date: Date): Date => {
+  const normalized = new Date(date);
+  normalized.setHours(23, 59, 59, 999);
+  return normalized;
+};
+
+const sanitizeCategoryReleasesToFirestore = (
+  categoryReleases: CategoryReleases | undefined,
+  actingConsultantId: string,
+): CategoryReleasesFirestore | undefined => {
+  if (!categoryReleases) return undefined;
+
+  const sanitized: CategoryReleasesFirestore = {};
+  Object.entries(categoryReleases).forEach(([rawKey, release]) => {
+    const canonicalCategory = resolveExpenseCategoryName(
+      release?.categoryName || rawKey,
+    );
+    if (!canonicalCategory) return;
+
+    const monthlyLimit = Number(release?.monthlyLimit ?? 0);
+    if (!Number.isFinite(monthlyLimit) || monthlyLimit < 0) return;
+
+    const computedDailyLimit = Number(release?.dailyLimit);
+    const dailyLimit =
+      Number.isFinite(computedDailyLimit) && computedDailyLimit >= 0
+        ? computedDailyLimit
+        : monthlyLimit / 30;
+
+    const status = release?.status === "inactive" ? "inactive" : "active";
+    const releasedAtDate =
+      release?.releasedAt instanceof Date ? release.releasedAt : new Date();
+    const updatedAtDate =
+      release?.updatedAt instanceof Date ? release.updatedAt : new Date();
+
+    sanitized[canonicalCategory] = {
+      categoryName: canonicalCategory,
+      monthlyLimit,
+      dailyLimit,
+      status,
+      releasedBy: release?.releasedBy || actingConsultantId,
+      releasedAt: Timestamp.fromDate(releasedAtDate),
+      updatedAt: Timestamp.fromDate(updatedAtDate),
+    };
+  });
+
+  return sanitized;
+};
+
+const mapCategoryReleasesFromFirestore = (
+  categoryReleases?: CategoryReleasesFirestore,
+): CategoryReleases | undefined => {
+  if (!categoryReleases) return undefined;
+
+  const mapped: CategoryReleases = {};
+  Object.entries(categoryReleases).forEach(([key, release]) => {
+    const canonicalCategory = resolveExpenseCategoryName(
+      release?.categoryName || key,
+    );
+    if (!canonicalCategory) return;
+
+    mapped[canonicalCategory] = {
+      categoryName: canonicalCategory,
+      monthlyLimit: Number(release?.monthlyLimit || 0),
+      dailyLimit: Number(release?.dailyLimit || 0),
+      status: release?.status === "inactive" ? "inactive" : "active",
+      releasedBy: release?.releasedBy || "",
+      releasedAt: release?.releasedAt?.toDate
+        ? release.releasedAt.toDate()
+        : new Date(),
+      updatedAt: release?.updatedAt?.toDate
+        ? release.updatedAt.toDate()
+        : undefined,
+    };
+  });
+
+  return mapped;
+};
+
+export const getPlanningCycleLabel = (
+  planning?: Planning | null,
+): string | null => {
+  if (!planning?.consumoModeradoCycleStartedAt) return null;
+
+  const start = new Date(planning.consumoModeradoCycleStartedAt);
+  const end = planning.consumoModeradoCycleEndedAt
+    ? new Date(planning.consumoModeradoCycleEndedAt)
+    : null;
+
+  const format = (date: Date) =>
+    date.toLocaleDateString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+    });
+
+  return `${format(start)}${end ? ` - ${format(end)}` : " - em andamento"}`;
+};
 
 export const planningServices = {
   // helper: ensure the acting consultant is allowed to manage this user's planning
@@ -58,8 +169,11 @@ export const planningServices = {
         id: b.id,
         name: b.name,
         amount: b.amount,
+        paymentMethod: b.paymentMethod,
         dueDay: b.dueDay,
         dueDate: b.dueDate ? b.dueDate.toDate() : undefined,
+        amountCard: b.amountCard,
+        amountCash: b.amountCash,
         categoryId: b.categoryId,
         recurring: b.recurring,
         notes: b.notes,
@@ -90,6 +204,8 @@ export const planningServices = {
         expectedMonth: it.expectedMonth,
         categoryId: it.categoryId,
         notes: it.notes,
+        amountCard: it.amountCard,
+        amountCash: it.amountCash,
         createdAt: it.createdAt ? it.createdAt.toDate() : undefined,
         updatedAt: it.updatedAt ? it.updatedAt.toDate() : undefined,
       }));
@@ -99,8 +215,11 @@ export const planningServices = {
         source: it.source,
         amount: it.amount,
         expectedMonth: it.expectedMonth,
+        paymentMethod: it.paymentMethod,
         categoryId: it.categoryId,
         notes: it.notes,
+        amountCard: it.amountCard,
+        amountCash: it.amountCash,
         createdAt: it.createdAt ? it.createdAt.toDate() : undefined,
         updatedAt: it.updatedAt ? it.updatedAt.toDate() : undefined,
       }));
@@ -109,6 +228,20 @@ export const planningServices = {
         id: snap.id,
         consultantId: data.consultantId,
         monthlyIncome: data.monthlyIncome,
+        consumoModerado: data.consumoModerado,
+        consumoModeradoCycleStartedAt: data.consumoModeradoCycleStartedAt
+          ? data.consumoModeradoCycleStartedAt.toDate()
+          : null,
+        consumoModeradoCard: data.consumoModeradoCard,
+        consumoModeradoCash: data.consumoModeradoCash,
+        consumoModeradoCycleEndedAt: data.consumoModeradoCycleEndedAt
+          ? data.consumoModeradoCycleEndedAt.toDate()
+          : null,
+        consumoModeradoCycleStatus: data.consumoModeradoCycleStatus,
+        consumoModeradoCycleDurationDays: data.consumoModeradoCycleDurationDays,
+        categoryReleases: mapCategoryReleasesFromFirestore(
+          data.categoryReleases,
+        ),
         plannedByCategory: data.plannedByCategory,
         modules: data.modules,
         notes: data.notes,
@@ -355,6 +488,42 @@ export const planningServices = {
       if (data.monthlyIncome !== undefined && data.monthlyIncome !== null) {
         payload.monthlyIncome = data.monthlyIncome;
       }
+      if (data.consumoModerado !== undefined && data.consumoModerado !== null) {
+        payload.consumoModerado = data.consumoModerado;
+      }
+      if (
+        data.consumoModeradoCard !== undefined &&
+        data.consumoModeradoCard !== null
+      ) {
+        payload.consumoModeradoCard = data.consumoModeradoCard;
+      }
+      if (data.consumoModeradoCycleStartedAt !== undefined) {
+        payload.consumoModeradoCycleStartedAt =
+          data.consumoModeradoCycleStartedAt
+            ? Timestamp.fromDate(data.consumoModeradoCycleStartedAt)
+            : null;
+      }
+      if (data.consumoModeradoCycleEndedAt !== undefined) {
+        payload.consumoModeradoCycleEndedAt = data.consumoModeradoCycleEndedAt
+          ? Timestamp.fromDate(data.consumoModeradoCycleEndedAt)
+          : null;
+      }
+      if (data.consumoModeradoCycleStatus !== undefined) {
+        payload.consumoModeradoCycleStatus = data.consumoModeradoCycleStatus;
+      }
+      if (data.consumoModeradoCycleDurationDays !== undefined) {
+        payload.consumoModeradoCycleDurationDays =
+          data.consumoModeradoCycleDurationDays;
+      }
+      if (
+        data.categoryReleases !== undefined &&
+        data.categoryReleases !== null
+      ) {
+        payload.categoryReleases = sanitizeCategoryReleasesToFirestore(
+          data.categoryReleases,
+          consultantId,
+        );
+      }
       if (data.modules !== undefined && data.modules !== null) {
         payload.modules = data.modules;
       }
@@ -401,6 +570,21 @@ export const planningServices = {
       return {
         consultantId: payload.consultantId,
         monthlyIncome: payload.monthlyIncome,
+        consumoModerado: payload.consumoModerado,
+        consumoModeradoCycleStartedAt: payload.consumoModeradoCycleStartedAt
+          ? payload.consumoModeradoCycleStartedAt.toDate()
+          : null,
+        consumoModeradoCard: payload.consumoModeradoCard,
+        consumoModeradoCash: payload.consumoModeradoCash,
+        consumoModeradoCycleEndedAt: payload.consumoModeradoCycleEndedAt
+          ? payload.consumoModeradoCycleEndedAt.toDate()
+          : null,
+        consumoModeradoCycleStatus: payload.consumoModeradoCycleStatus,
+        consumoModeradoCycleDurationDays:
+          payload.consumoModeradoCycleDurationDays,
+        categoryReleases: mapCategoryReleasesFromFirestore(
+          payload.categoryReleases,
+        ),
         plannedByCategory: payload.plannedByCategory || {},
         modules: payload.modules,
         notes: payload.notes,
@@ -434,6 +618,38 @@ export const planningServices = {
 
       if (data.monthlyIncome !== undefined)
         updatePayload.monthlyIncome = data.monthlyIncome;
+      if (data.consumoModerado !== undefined)
+        updatePayload.consumoModerado = data.consumoModerado;
+      if (data.consumoModeradoCard !== undefined)
+        updatePayload.consumoModeradoCard = data.consumoModeradoCard;
+      if (data.consumoModeradoCash !== undefined)
+        updatePayload.consumoModeradoCash = data.consumoModeradoCash;
+      if (data.consumoModeradoCycleStartedAt !== undefined) {
+        updatePayload.consumoModeradoCycleStartedAt =
+          data.consumoModeradoCycleStartedAt
+            ? Timestamp.fromDate(data.consumoModeradoCycleStartedAt)
+            : null;
+      }
+      if (data.consumoModeradoCycleEndedAt !== undefined) {
+        updatePayload.consumoModeradoCycleEndedAt =
+          data.consumoModeradoCycleEndedAt
+            ? Timestamp.fromDate(data.consumoModeradoCycleEndedAt)
+            : null;
+      }
+      if (data.consumoModeradoCycleStatus !== undefined) {
+        updatePayload.consumoModeradoCycleStatus =
+          data.consumoModeradoCycleStatus;
+      }
+      if (data.consumoModeradoCycleDurationDays !== undefined) {
+        updatePayload.consumoModeradoCycleDurationDays =
+          data.consumoModeradoCycleDurationDays;
+      }
+      if (data.categoryReleases !== undefined) {
+        updatePayload.categoryReleases = sanitizeCategoryReleasesToFirestore(
+          data.categoryReleases,
+          consultantId,
+        );
+      }
       if (
         data.plannedByCategory !== undefined &&
         data.plannedByCategory !== null
@@ -477,6 +693,21 @@ export const planningServices = {
         id: updatedSnap.id,
         consultantId: updatedData.consultantId,
         monthlyIncome: updatedData.monthlyIncome,
+        consumoModerado: updatedData.consumoModerado,
+        consumoModeradoCycleStartedAt: updatedData.consumoModeradoCycleStartedAt
+          ? updatedData.consumoModeradoCycleStartedAt.toDate()
+          : null,
+        consumoModeradoCard: updatedData.consumoModeradoCard,
+        consumoModeradoCash: updatedData.consumoModeradoCash,
+        consumoModeradoCycleEndedAt: updatedData.consumoModeradoCycleEndedAt
+          ? updatedData.consumoModeradoCycleEndedAt.toDate()
+          : null,
+        consumoModeradoCycleStatus: updatedData.consumoModeradoCycleStatus,
+        consumoModeradoCycleDurationDays:
+          updatedData.consumoModeradoCycleDurationDays,
+        categoryReleases: mapCategoryReleasesFromFirestore(
+          updatedData.categoryReleases,
+        ),
         plannedByCategory: updatedData.plannedByCategory,
         modules: updatedData.modules,
         notes: updatedData.notes,
@@ -487,6 +718,127 @@ export const planningServices = {
       console.error("❌ [PLANNING SERVICE] Erro ao atualizar planning:", error);
       throw error;
     }
+  },
+
+  async startConsumptionCycle(
+    consultantId: string,
+    userId: string,
+    startedAt: Date = new Date(),
+  ): Promise<Planning | null> {
+    return this.updatePlanning(consultantId, userId, {
+      consumoModeradoCycleStartedAt: normalizeCycleStart(startedAt),
+      consumoModeradoCycleEndedAt: null,
+      consumoModeradoCycleStatus: "active",
+    });
+  },
+
+  async closeConsumptionCycle(
+    consultantId: string,
+    userId: string,
+    endedAt: Date = new Date(),
+  ): Promise<Planning | null> {
+    return this.updatePlanning(consultantId, userId, {
+      consumoModeradoCycleEndedAt: normalizeCycleEnd(endedAt),
+      consumoModeradoCycleStatus: "closed",
+    });
+  },
+
+  async restartConsumptionCycle(
+    consultantId: string,
+    userId: string,
+    durationDays?: number,
+    startedAt: Date = new Date(),
+  ): Promise<Planning | null> {
+    return this.updatePlanning(consultantId, userId, {
+      consumoModeradoCycleStartedAt: normalizeCycleStart(startedAt),
+      consumoModeradoCycleEndedAt: null,
+      consumoModeradoCycleStatus: "active",
+      consumoModeradoCycleDurationDays: durationDays,
+    });
+  },
+
+  async upsertCategoryRelease(
+    consultantId: string,
+    userId: string,
+    input: {
+      categoryName: string;
+      monthlyLimit: number;
+      dailyLimit?: number;
+    },
+  ): Promise<Planning | null> {
+    await planningServices.ensureOwnerOrAdmin(consultantId, userId);
+
+    const canonicalCategory = resolveExpenseCategoryName(input.categoryName);
+    if (!canonicalCategory) {
+      throw new Error("Categoria inválida para Consumo Moderado");
+    }
+
+    const monthlyLimit = Number(input.monthlyLimit);
+    if (!Number.isFinite(monthlyLimit) || monthlyLimit < 0) {
+      throw new Error("Limite mensal inválido");
+    }
+
+    const calculatedDailyLimit = Number(input.dailyLimit);
+    const dailyLimit =
+      Number.isFinite(calculatedDailyLimit) && calculatedDailyLimit >= 0
+        ? calculatedDailyLimit
+        : monthlyLimit / 30;
+
+    const currentPlanning = await planningServices.getPlanning(userId);
+    const currentReleases = currentPlanning?.categoryReleases || {};
+    const existingRelease = currentReleases[canonicalCategory];
+    const now = new Date();
+
+    const nextReleases: CategoryReleases = {
+      ...currentReleases,
+      [canonicalCategory]: {
+        categoryName: canonicalCategory,
+        monthlyLimit,
+        dailyLimit,
+        status: "active",
+        releasedBy: existingRelease?.releasedBy || consultantId,
+        releasedAt: existingRelease?.releasedAt || now,
+        updatedAt: now,
+      },
+    };
+
+    return planningServices.updatePlanning(consultantId, userId, {
+      categoryReleases: nextReleases,
+    });
+  },
+
+  async deactivateCategoryRelease(
+    consultantId: string,
+    userId: string,
+    categoryName: string,
+  ): Promise<Planning | null> {
+    await planningServices.ensureOwnerOrAdmin(consultantId, userId);
+
+    const canonicalCategory = resolveExpenseCategoryName(categoryName);
+    if (!canonicalCategory) {
+      throw new Error("Categoria inválida para Consumo Moderado");
+    }
+
+    const currentPlanning = await planningServices.getPlanning(userId);
+    const currentReleases = currentPlanning?.categoryReleases || {};
+    const currentRelease = currentReleases[canonicalCategory];
+
+    if (!currentRelease) {
+      throw new Error("Categoria não encontrada nas liberações");
+    }
+
+    const nextReleases: CategoryReleases = {
+      ...currentReleases,
+      [canonicalCategory]: {
+        ...currentRelease,
+        status: "inactive",
+        updatedAt: new Date(),
+      },
+    };
+
+    return planningServices.updatePlanning(consultantId, userId, {
+      categoryReleases: nextReleases,
+    });
   },
 
   // ---- Bills and Expected Items (consultant-managed) ----
@@ -521,7 +873,10 @@ export const planningServices = {
         id,
         name: bill.name,
         amount: bill.amount,
+        paymentMethod: bill.paymentMethod || "cash",
         recurring: bill.recurring || false,
+        amountCard: bill.amountCard,
+        amountCash: bill.amountCash,
         notes: bill.notes || "",
         createdAt: now,
         updatedAt: now,
@@ -537,7 +892,12 @@ export const planningServices = {
       const existing: BillFirestore[] = current.bills || [];
       const updated = [...existing, billFs];
 
-      await updateDoc(docRef, { bills: updated, updatedAt: now });
+      await updateDoc(docRef, {
+        bills: updated.map((billItem) =>
+          removeUndefinedFields(billItem as any),
+        ),
+        updatedAt: now,
+      });
 
       // activity
       try {
@@ -555,6 +915,9 @@ export const planningServices = {
         id,
         name: bill.name,
         amount: bill.amount,
+        amountCard: bill.amountCard,
+        amountCash: bill.amountCash,
+        paymentMethod: bill.paymentMethod || "cash",
         dueDay: bill.dueDay,
         categoryId: bill.categoryId,
         recurring: bill.recurring || false,
@@ -592,14 +955,20 @@ export const planningServices = {
         ...changes,
         updatedAt: now,
       } as BillFirestore;
-      bills[idx] = updatedBill;
+      bills[idx] = removeUndefinedFields(updatedBill as any);
 
-      await updateDoc(docRef, { bills, updatedAt: now });
+      await updateDoc(docRef, {
+        bills: bills.map((billItem) => removeUndefinedFields(billItem as any)),
+        updatedAt: now,
+      });
 
       return {
         id: updatedBill.id,
         name: updatedBill.name,
         amount: updatedBill.amount,
+        amountCard: updatedBill.amountCard,
+        amountCash: updatedBill.amountCash,
+        paymentMethod: updatedBill.paymentMethod,
         dueDay: updatedBill.dueDay,
         categoryId: updatedBill.categoryId,
         recurring: updatedBill.recurring,
@@ -666,7 +1035,10 @@ export const planningServices = {
         id,
         source: item.source,
         amount: item.amount,
+        paymentMethod: item.paymentMethod || null,
         notes: item.notes || "",
+        amountCard: item.amountCard,
+        amountCash: item.amountCash,
         createdAt: now,
         updatedAt: now,
       };
@@ -680,15 +1052,23 @@ export const planningServices = {
       const existing: ExpectedItemFirestore[] = current.expectedIncomes || [];
       const updated = [...existing, itFs];
 
-      await updateDoc(docRef, { expectedIncomes: updated, updatedAt: now });
+      await updateDoc(docRef, {
+        expectedIncomes: updated.map((incomeItem) =>
+          removeUndefinedFields(incomeItem as any),
+        ),
+        updatedAt: now,
+      });
 
       return {
         id,
         source: item.source,
         amount: item.amount,
+        amountCard: item.amountCard,
+        amountCash: item.amountCash,
         expectedMonth: item.expectedMonth,
         categoryId: item.categoryId,
         notes: item.notes,
+        paymentMethod: item.paymentMethod,
         createdAt: now.toDate(),
         updatedAt: now.toDate(),
       } as ExpectedItem;
@@ -725,17 +1105,25 @@ export const planningServices = {
         ...changes,
         updatedAt: now,
       } as ExpectedItemFirestore;
-      arr[idx] = updated;
+      arr[idx] = removeUndefinedFields(updated as any);
 
-      await updateDoc(docRef, { expectedIncomes: arr, updatedAt: now });
+      await updateDoc(docRef, {
+        expectedIncomes: arr.map((incomeItem) =>
+          removeUndefinedFields(incomeItem as any),
+        ),
+        updatedAt: now,
+      });
 
       return {
         id: updated.id,
         source: updated.source,
         amount: updated.amount,
+        amountCard: updated.amountCard,
+        amountCash: updated.amountCash,
         expectedMonth: updated.expectedMonth,
         categoryId: updated.categoryId,
         notes: updated.notes,
+        paymentMethod: updated.paymentMethod,
         createdAt: updated.createdAt.toDate(),
         updatedAt: updated.updatedAt.toDate(),
       } as ExpectedItem;
@@ -810,7 +1198,10 @@ export const planningServices = {
         id,
         source: item.source,
         amount: item.amount,
+        paymentMethod: item.paymentMethod,
         notes: item.notes || "",
+        amountCard: item.amountCard,
+        amountCash: item.amountCash,
         createdAt: now,
         updatedAt: now,
       };
@@ -824,15 +1215,23 @@ export const planningServices = {
       const existing: ExpectedItemFirestore[] = current.expectedExpenses || [];
       const updated = [...existing, itFs];
 
-      await updateDoc(docRef, { expectedExpenses: updated, updatedAt: now });
+      await updateDoc(docRef, {
+        expectedExpenses: updated.map((expenseItem) =>
+          removeUndefinedFields(expenseItem as any),
+        ),
+        updatedAt: now,
+      });
 
       return {
         id,
         source: item.source,
         amount: item.amount,
+        amountCard: item.amountCard,
+        amountCash: item.amountCash,
         expectedMonth: item.expectedMonth,
         categoryId: item.categoryId,
         notes: item.notes,
+        paymentMethod: item.paymentMethod,
         createdAt: now.toDate(),
         updatedAt: now.toDate(),
       } as ExpectedItem;
@@ -883,6 +1282,8 @@ export const planningServices = {
         id: updated.id,
         source: updated.source,
         amount: updated.amount,
+        amountCard: updated.amountCard,
+        amountCash: updated.amountCash,
         expectedMonth: updated.expectedMonth,
         categoryId: updated.categoryId,
         notes: updated.notes,

@@ -2,10 +2,13 @@
  * Input com máscara de moeda brasileira (R$)
  */
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { View, Text, TextInput, StyleSheet, ViewStyle } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { applyCurrencyMask, parseCurrency } from "../utils/currencyUtils";
+import {
+  formatCurrencyWithoutSymbol,
+  parseCurrency,
+} from "../utils/currencyUtils";
 
 interface CurrencyInputProps {
   label: string;
@@ -28,17 +31,39 @@ export const CurrencyInput: React.FC<CurrencyInputProps> = ({
   icon = "cash",
   style,
 }) => {
-  const [displayValue, setDisplayValue] = useState(
-    value > 0 ? applyCurrencyMask(String(value * 100)) : "",
-  );
+  const [displayValue, setDisplayValue] = useState("");
+  const [isFocused, setIsFocused] = useState(false);
+
+  useEffect(() => {
+    if (isFocused) return;
+    setDisplayValue(value > 0 ? formatCurrencyWithoutSymbol(value) : "");
+  }, [value, isFocused]);
 
   const handleChangeText = (text: string) => {
-    // Aplicar máscara
-    const masked = applyCurrencyMask(text);
-    setDisplayValue(masked);
+    if (!text.trim()) {
+      setDisplayValue("");
+      onChangeValue(0);
+      return;
+    }
 
-    // Converter para número e chamar callback
-    const numericValue = parseCurrency(masked);
+    const numericValue = parseCurrency(text);
+    setDisplayValue(text);
+    onChangeValue(numericValue);
+  };
+
+  const handleFocus = () => {
+    setIsFocused(true);
+    if (value > 0) {
+      setDisplayValue(String(value));
+    }
+  };
+
+  const handleBlur = () => {
+    setIsFocused(false);
+    const numericValue = parseCurrency(displayValue);
+    setDisplayValue(
+      numericValue > 0 ? formatCurrencyWithoutSymbol(numericValue) : "",
+    );
     onChangeValue(numericValue);
   };
 
@@ -60,8 +85,10 @@ export const CurrencyInput: React.FC<CurrencyInputProps> = ({
           style={styles.input}
           placeholder={placeholder}
           placeholderTextColor="#6b6480"
-          value={displayValue.replace("R$ ", "")}
+          value={displayValue}
           onChangeText={handleChangeText}
+          onFocus={handleFocus}
+          onBlur={handleBlur}
           keyboardType="numeric"
           editable={editable}
         />
