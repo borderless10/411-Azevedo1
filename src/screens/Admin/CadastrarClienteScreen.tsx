@@ -159,17 +159,20 @@ export const CadastrarClienteScreen = () => {
         const now = Timestamp.now();
         // Remover máscara do telefone antes de salvar (apenas números)
         const phoneNumbers = phone.replace(/\D/g, "");
+        const shouldPersistConsultant =
+          role === "user" || role === "cliente_premium";
+        const normalizedConsultantId = consultantId || null;
+
         const docData = {
           name,
           nickname: nickname || "",
           email,
           phone: phoneNumbers || "",
           role: role,
-          // Allow assigning a consultant for regular users and premium clients
-          consultantId:
-            role === "user" || role === "cliente_premium"
-              ? consultantId || null
-              : undefined,
+          // Persist consultantId only for roles that support consultant assignment.
+          ...(shouldPersistConsultant
+            ? { consultantId: normalizedConsultantId }
+            : {}),
           isAdmin: false,
           isActive: true,
           createdAt: now,
