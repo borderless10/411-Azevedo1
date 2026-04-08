@@ -15,6 +15,7 @@ import {
 import { Layout } from "../../components/Layout/Layout";
 import { useAuth } from "../../hooks/useAuth";
 import { useTheme } from "../../contexts/ThemeContext";
+import { useNavigation } from "../../routes/NavigationContext";
 import { creditCardServices } from "../../services/creditCardServices";
 import {
   CreditCard,
@@ -48,6 +49,17 @@ const toDayMask = (value: string): string => {
 export const CardsScreen: React.FC = () => {
   const { user } = useAuth();
   const { colors } = useTheme();
+  const { params } = useNavigation() as any;
+  const clientId = params?.clientId;
+
+  // Determine which userId to use: clientId when managing client cards (consultant), or user.id for own cards
+  const targetUserId = clientId || user?.id;
+
+  // Consultant is managing a client's cards
+  const isConsultorManaging = !!clientId && user?.role === "consultor";
+
+  // Only consultants managing a specific client can create/edit/delete cards
+  const canEdit = isConsultorManaging;
 
   const [cards, setCards] = useState<CreditCard[]>([]);
   const [invoices, setInvoices] = useState<CreditCardInvoiceSummary[]>([]);
@@ -67,19 +79,18 @@ export const CardsScreen: React.FC = () => {
   const [cardDueDay, setCardDueDay] = useState<string>("");
   const [invoiceDueDay, setInvoiceDueDay] = useState<string>("");
   const [limit, setLimit] = useState<string>("");
-  const [autoDebit, setAutoDebit] = useState<boolean>(false);
 
   const currentInvoiceKey = toInvoiceKey(new Date());
   const nextInvoiceKey = toInvoiceKey(addMonths(new Date(), 1));
 
   const loadData = async () => {
-    if (!user?.id) return;
+    if (!targetUserId) return;
 
     try {
       setLoading(true);
       const [loadedCards, loadedInvoices] = await Promise.all([
-        creditCardServices.getCreditCards(user.id),
-        creditCardServices.getInvoiceSummaries(user.id),
+        creditCardServices.getCreditCards(targetUserId),
+        creditCardServices.getInvoiceSummaries(targetUserId),
       ]);
       setCards(loadedCards);
       setInvoices(loadedInvoices);
@@ -93,7 +104,7 @@ export const CardsScreen: React.FC = () => {
 
   useEffect(() => {
     loadData();
-  }, [user?.id]);
+  }, [targetUserId]);
 
   const summary = useMemo(() => {
     const currentTotal = invoices
@@ -141,7 +152,6 @@ export const CardsScreen: React.FC = () => {
     setCardDueDay("");
     setInvoiceDueDay("");
     setLimit("R$ 0,00");
-    setAutoDebit(false);
     setEditingCard(null);
   };
 
@@ -160,12 +170,11 @@ export const CardsScreen: React.FC = () => {
     );
     setInvoiceDueDay(`${String(card.invoiceDueDay).padStart(2, "0")}`);
     setLimit(applyCurrencyMask(String(Math.round(card.limit * 100))));
-    setAutoDebit(!!card.autoDebit);
     setModalVisible(true);
   };
 
   const handleSaveCard = async () => {
-    if (!user?.id) return;
+    if (!targetUserId) return;
 
     try {
       // parse cardDueDay as MM/YYYY (expiry)
@@ -182,13 +191,12 @@ export const CardsScreen: React.FC = () => {
         cardExpiryYear: parsedExpiryYear,
         invoiceDueDay: toDay(invoiceDueDay),
         limit: parseCurrency(limit),
-        autoDebit,
       };
 
       if (editingCard) {
         await creditCardServices.updateCreditCard(editingCard.id, payload);
       } else {
-        await creditCardServices.createCreditCard(user.id, payload);
+        await creditCardServices.createCreditCard(targetUserId, payload);
       }
 
       setModalVisible(false);
@@ -225,7 +233,11 @@ export const CardsScreen: React.FC = () => {
   };
 
   return (
-    <Layout title="Cartões" showBackButton={true} showSidebar={false}>
+    <Layout
+      title={isConsultorManaging ? "Cartões do Cliente" : "Cartões"}
+      showBackButton={true}
+      showSidebar={false}
+    >
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 24 }}>
           <View style={[styles.summaryRow]}>
@@ -265,17 +277,19 @@ export const CardsScreen: React.FC = () => {
           >
             <View style={styles.sectionHeader}>
               <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                Meus cartões
+                {isConsultorManaging ? "Cartões do Cliente" : "Meus cartões"}
               </Text>
-              <TouchableOpacity
-                style={[
-                  styles.smallButton,
-                  { backgroundColor: colors.primary },
-                ]}
-                onPress={openCreateModal}
-              >
-                <Text style={styles.smallButtonText}>Adicionar</Text>
-              </TouchableOpacity>
+              {canEdit && (
+                <TouchableOpacity
+                  style={[
+                    styles.smallButton,
+                    { backgroundColor: colors.primary },
+                  ]}
+                  onPress={openCreateModal}
+                >
+                  <Text style={styles.smallButtonText}>Adicionar</Text>
+                </TouchableOpacity>
+              )}
             </View>
 
             {cards.length === 0 ? (
@@ -302,23 +316,26 @@ export const CardsScreen: React.FC = () => {
                     <Text style={{ color: colors.textSecondary, marginTop: 2 }}>
                       Limite: {formatCurrency(card.limit)}
                     </Text>
-                    <Text style={{ color: colors.textSecondary, marginTop: 2 }}>
-                      Débito automático: {card.autoDebit ? "Sim" : "Não"}
-                    </Text>
                   </View>
                   <View style={styles.cardActions}>
-                    <TouchableOpacity onPress={() => openEditModal(card)}>
-                      <Text
-                        style={{ color: colors.primary, fontWeight: "700" }}
-                      >
-                        Editar
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => handleDeleteCard(card)}>
-                      <Text style={{ color: "#ff4d6d", fontWeight: "700" }}>
-                        Excluir
-                      </Text>
-                    </TouchableOpacity>
+                    {canEdit && (
+                      <>
+                        <TouchableOpacity onPress={() => openEditModal(card)}>
+                          <Text
+                            style={{ color: colors.primary, fontWeight: "700" }}
+                          >
+                            Editar
+                          </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() => handleDeleteCard(card)}
+                        >
+                          <Text style={{ color: "#ff4d6d", fontWeight: "700" }}>
+                            Excluir
+                          </Text>
+                        </TouchableOpacity>
+                      </>
+                    )}
                   </View>
                 </View>
               ))
@@ -622,30 +639,6 @@ export const CardsScreen: React.FC = () => {
                   placeholderTextColor={colors.textSecondary}
                   returnKeyType="done"
                 />
-
-                <TouchableOpacity
-                  style={styles.checkboxRow}
-                  activeOpacity={0.8}
-                  onPress={() => setAutoDebit((prev) => !prev)}
-                >
-                  <View
-                    style={[
-                      styles.checkbox,
-                      { borderColor: colors.border },
-                      autoDebit && {
-                        backgroundColor: colors.primary,
-                        borderColor: colors.primary,
-                      },
-                    ]}
-                  >
-                    {autoDebit ? (
-                      <Text style={styles.checkboxTick}>✓</Text>
-                    ) : null}
-                  </View>
-                  <Text style={{ color: colors.text }}>
-                    Ativar débito automático da fatura
-                  </Text>
-                </TouchableOpacity>
               </ScrollView>
 
               <View style={styles.modalActions}>

@@ -28,6 +28,7 @@ import { budgetServices } from "../../services/budgetServices";
 import { planningServices } from "../../services/planningServices";
 import { activityServices } from "../../services/activityServices";
 import { formatCurrency } from "../../utils/currencyUtils";
+import MaskedAmount from "../../components/ui/MaskedAmount";
 import {
   formatDateForDisplay,
   formatDateToString,
@@ -1100,11 +1101,14 @@ export const HomeScreen = () => {
                         <Text style={styles.summaryLabelIncome}>
                           Renda Esperada
                         </Text>
-                        <Text style={styles.summaryValueSquare}>
-                          {expectedIncomes === null
-                            ? "-"
-                            : formatCurrency(expectedIncomes)}
-                        </Text>
+                        {expectedIncomes === null ? (
+                          <Text style={styles.summaryValueSquare}>-</Text>
+                        ) : (
+                          <MaskedAmount
+                            value={expectedIncomes}
+                            style={styles.summaryValueSquare}
+                          />
+                        )}
                         <Text style={styles.summarySubtext}>Este mês</Text>
                         <View style={styles.chevronContainer}>
                           <Ionicons
@@ -1160,11 +1164,14 @@ export const HomeScreen = () => {
                         <Text style={styles.summaryLabelExpense}>
                           Gasto Esperado
                         </Text>
-                        <Text style={styles.summaryValueSquare}>
-                          {expectedExpenses === null
-                            ? "-"
-                            : formatCurrency(expectedExpenses)}
-                        </Text>
+                        {expectedExpenses === null ? (
+                          <Text style={styles.summaryValueSquare}>-</Text>
+                        ) : (
+                          <MaskedAmount
+                            value={expectedExpenses}
+                            style={styles.summaryValueSquare}
+                          />
+                        )}
                         <Text style={styles.summarySubtext}>Este mês</Text>
                         <View style={styles.chevronContainer}>
                           <Ionicons
@@ -1216,11 +1223,14 @@ export const HomeScreen = () => {
                       <Text style={styles.summaryLabelBalance}>
                         Poupança Esperada
                       </Text>
-                      <Text style={styles.summaryValue}>
-                        {expectedSavings === null
-                          ? "-"
-                          : formatCurrency(expectedSavings)}
-                      </Text>
+                      {expectedSavings === null ? (
+                        <Text style={styles.summaryValue}>-</Text>
+                      ) : (
+                        <MaskedAmount
+                          value={expectedSavings}
+                          style={styles.summaryValue}
+                        />
+                      )}
                       <Text style={styles.summarySubtext}>
                         Este mês (estimado)
                       </Text>
@@ -1249,9 +1259,10 @@ export const HomeScreen = () => {
                           <Text style={styles.summaryLabelIncome}>
                             Rendas Realizadas
                           </Text>
-                          <Text style={styles.summaryValueSquare}>
-                            {formatCurrency(totalIncome)}
-                          </Text>
+                          <MaskedAmount
+                            value={totalIncome}
+                            style={styles.summaryValueSquare}
+                          />
                         </View>
                       </View>
                     </View>
@@ -1271,9 +1282,10 @@ export const HomeScreen = () => {
                           <Text style={styles.summaryLabelExpense}>
                             Gastos Realizados
                           </Text>
-                          <Text style={styles.summaryValueSquare}>
-                            {formatCurrency(realizedExpenseTotal)}
-                          </Text>
+                          <MaskedAmount
+                            value={realizedExpenseTotal}
+                            style={styles.summaryValueSquare}
+                          />
                         </View>
                       </View>
                     </View>
@@ -1296,15 +1308,14 @@ export const HomeScreen = () => {
                             />
                           </View>
                           <Text style={styles.summaryLabelBalance}>Saldo</Text>
-                          <Text
+                          <MaskedAmount
+                            value={realizedBalance}
                             style={[
                               styles.summaryValueSquare,
                               realizedBalance < 0 &&
                                 styles.summaryValueNegative,
                             ]}
-                          >
-                            {formatCurrency(realizedBalance)}
-                          </Text>
+                          />
                         </View>
                       </View>
                     </View>
@@ -1331,14 +1342,13 @@ export const HomeScreen = () => {
                       <Text style={styles.summaryLabelBalance}>
                         Saldo Atual
                       </Text>
-                      <Text
+                      <MaskedAmount
+                        value={balance}
                         style={[
                           styles.summaryValue,
                           balance < 0 && styles.summaryValueNegative,
                         ]}
-                      >
-                        {formatCurrency(balance)}
-                      </Text>
+                      />
                       <Text style={styles.summarySubtext}>Disponível</Text>
                     </View>
                     <View style={styles.balanceIconContainer}>
@@ -1376,9 +1386,10 @@ export const HomeScreen = () => {
                     <Text style={styles.summaryLabelIncome}>
                       Total Recebido
                     </Text>
-                    <Text style={styles.summaryValueSquare}>
-                      {formatCurrency(totalIncome)}
-                    </Text>
+                    <MaskedAmount
+                      value={totalIncome}
+                      style={styles.summaryValueSquare}
+                    />
                     <Text style={styles.summarySubtext}>Este mês</Text>
                   </Animated.View>
 
@@ -1407,9 +1418,10 @@ export const HomeScreen = () => {
                       />
                     </View>
                     <Text style={styles.summaryLabelExpense}>Total Gasto</Text>
-                    <Text style={styles.summaryValueSquare}>
-                      {formatCurrency(totalExpense)}
-                    </Text>
+                    <MaskedAmount
+                      value={totalExpense}
+                      style={styles.summaryValueSquare}
+                    />
                     <Text style={styles.summarySubtext}>Este mês</Text>
                   </Animated.View>
                 </View>

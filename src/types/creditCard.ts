@@ -9,9 +9,7 @@ export interface CreditCard {
   cardExpiryYear: number;
   invoiceDueDay: number;
   limit: number;
-  autoDebit: boolean;
   isActive: boolean;
-  lastAutoDebitInvoiceKey?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -25,7 +23,6 @@ export interface CreateCreditCardData {
   cardExpiryYear: number;
   invoiceDueDay: number;
   limit: number;
-  autoDebit: boolean;
 }
 
 export interface UpdateCreditCardData {
@@ -37,9 +34,7 @@ export interface UpdateCreditCardData {
   cardExpiryYear?: number;
   invoiceDueDay?: number;
   limit?: number;
-  autoDebit?: boolean;
   isActive?: boolean;
-  lastAutoDebitInvoiceKey?: string;
 }
 
 export interface CreditCardFirestore {
@@ -53,9 +48,7 @@ export interface CreditCardFirestore {
   cardExpiryYear: number;
   invoiceDueDay: number;
   limit: number;
-  autoDebit: boolean;
   isActive: boolean;
-  lastAutoDebitInvoiceKey?: string;
   createdAt: any;
   updatedAt: any;
 }

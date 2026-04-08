@@ -1,7 +1,7 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
-import { formatCurrency } from "../../utils/currencyUtils";
 import { useTheme } from "../../contexts/ThemeContext";
+import MaskedAmount from "./MaskedAmount";
 
 type Props = {
   title: string;
@@ -14,8 +14,6 @@ export default function SummaryCard({ title, value, color, subtitle }: Props) {
   const { colors } = useTheme();
   const bgColor = colors.card; // card background
   const border = color || colors.primary;
-  const textColor = colors.text;
-  const formatted = typeof value === "number" ? formatCurrency(value) : value;
 
   return (
     <View
@@ -24,7 +22,7 @@ export default function SummaryCard({ title, value, color, subtitle }: Props) {
       <Text style={[styles.title, { color: colors.textSecondary }]}>
         {title}
       </Text>
-      <Text style={[styles.value, { color: textColor }]}>{formatted}</Text>
+      <MaskedAmount value={value} style={styles.value} />
       {subtitle ? (
         <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
           {subtitle}

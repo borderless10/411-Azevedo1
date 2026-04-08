@@ -163,14 +163,6 @@ export const expenseServices = {
         );
       }
 
-      if (data.isAutoDebitPayment) {
-        expenseData.isAutoDebitPayment = true;
-      }
-
-      if (data.autoDebitInvoiceKey) {
-        expenseData.autoDebitInvoiceKey = data.autoDebitInvoiceKey;
-      }
-
       const docRef = await addDoc(getExpensesCollection(), expenseData);
       console.log("✅ [EXPENSE SERVICE] Gasto criado com ID:", docRef.id);
 

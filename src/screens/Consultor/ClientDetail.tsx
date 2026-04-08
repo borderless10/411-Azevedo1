@@ -202,7 +202,7 @@ export const ClientDetail: React.FC = () => {
               <Text style={styles.actionButtonText}>Metas</Text>
             </TouchableOpacity>
           )}
-          {clientDoc?.role === "cliente_premium" && (
+          {clientDoc && (
             <TouchableOpacity
               style={[
                 styles.actionButtonFull,
@@ -211,6 +211,30 @@ export const ClientDetail: React.FC = () => {
               onPress={() => navigate("Wishlist", { clientId })}
             >
               <Text style={styles.actionButtonText}>Lista de Desejos</Text>
+            </TouchableOpacity>
+          )}
+
+          {clientDoc && (
+            <TouchableOpacity
+              style={[
+                styles.actionButtonFull,
+                { backgroundColor: colors.primary },
+              ]}
+              onPress={() => navigate("Recomendacao", { clientId })}
+            >
+              <Text style={styles.actionButtonText}>Recomendações</Text>
+            </TouchableOpacity>
+          )}
+
+          {clientDoc && (
+            <TouchableOpacity
+              style={[
+                styles.actionButtonFull,
+                { backgroundColor: colors.primary },
+              ]}
+              onPress={() => navigate("Cartoes", { clientId })}
+            >
+              <Text style={styles.actionButtonText}>Cartões</Text>
             </TouchableOpacity>
           )}
         </View>

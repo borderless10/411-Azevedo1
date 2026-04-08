@@ -34,10 +34,25 @@ import { useAuth } from "../hooks/useAuth";
 import { ConsultorHome } from "../screens/Consultor/ConsultorHome";
 import { EditUserScreen } from "../screens/Admin/EditUserScreen";
 import { CardsScreen } from "../screens/Cards";
+import CustomModal from "../components/ui/CustomModal";
 
 export const Router = () => {
   const { currentScreen, navigate } = useNavigation();
   const { isAuthenticated, loading, user } = useAuth();
+  const isBasicUser = user?.role === "user";
+
+  const renderAdvancedConsultingOnlyModal = () => (
+    <>
+      <HomeScreen />
+      <CustomModal
+        visible={true}
+        title="Função exclusiva"
+        message="Esta função é exclusiva para consultoria avançada."
+        primaryLabel="Fechar"
+        onClose={() => navigate("Home")}
+      />
+    </>
+  );
 
   // Navegar para Home quando autenticado pela primeira vez
   useEffect(() => {
@@ -116,10 +131,16 @@ export const Router = () => {
       case "Chat":
         return <ChatScreen />;
       case "Metas":
+        if (isBasicUser) {
+          return renderAdvancedConsultingOnlyModal();
+        }
         return <MetasScreen />;
       case "Wishlist":
         return <WishlistScreen />;
       case "Investments":
+        if (isBasicUser) {
+          return renderAdvancedConsultingOnlyModal();
+        }
         return <InvestmentsScreen />;
       case "Recomendacao":
         return <RecomendacaoScreen />;

@@ -37,3 +37,6 @@ export * from "./wishlist";
 
 // Credit card types
 export * from "./creditCard";
+
+// Recommendation types
+export * from "./recommendation";

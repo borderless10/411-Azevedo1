@@ -43,6 +43,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const { colors } = useTheme();
   const slideAnim = useRef(new Animated.Value(-300)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const isConsultor = user?.role === "consultor";
+  const isAdminUser = user?.isAdmin === true || user?.role === "admin";
   const isCommonUser = !user?.isAdmin && user?.role !== "consultor";
   const shouldHideRankingItem =
     isCommonUser && user?.rankingPreference === "hidden";
@@ -104,54 +106,73 @@ export const Sidebar: React.FC<SidebarProps> = ({
     loadReleasedCategories();
   }, [user?.id, isCommonUser]);
 
-  const menuItems: MenuItem[] = [
-    { id: "Home", label: "Início", icon: "home", color: "#8c52ff" },
-    {
-      id: "Budget",
-      label: "Consumo Moderado",
-      icon: "wallet",
-      color: "#a47aff",
-    },
-    { id: "Bills", label: "Contas a Pagar", icon: "receipt", color: "#ff4d6d" },
-    { id: "Cartoes", label: "Cartões", icon: "card", color: "#8c52ff" },
-    { id: "Feed", label: "Feed", icon: "newspaper", color: "#8c52ff" },
-    { id: "Chat", label: "Chat", icon: "chatbubbles", color: "#a47aff" },
-    { id: "Ranking", label: "Ranking", icon: "trophy", color: "#c084fc" },
-    {
-      id: "Recomendacao",
-      label: "Recomendação",
-      icon: "bulb",
-      color: "#a47aff",
-    },
-  ];
+  const menuItems: MenuItem[] = isConsultor
+    ? [
+        { id: "Home", label: "Início", icon: "home", color: "#8c52ff" },
+        { id: "Feed", label: "Feed", icon: "newspaper", color: "#8c52ff" },
+        { id: "Chat", label: "Chat", icon: "chatbubbles", color: "#a47aff" },
+        { id: "Ranking", label: "Ranking", icon: "trophy", color: "#c084fc" },
+      ]
+    : isAdminUser
+      ? [
+          {
+            id: "AdminUsers",
+            label: "Gerenciar Usuários",
+            icon: "people",
+            color: "#8c52ff",
+          },
+          { id: "Feed", label: "Feed", icon: "newspaper", color: "#8c52ff" },
+          {
+            id: "Chat",
+            label: "Chat",
+            icon: "chatbubbles",
+            color: "#a47aff",
+          },
+          {
+            id: "Ranking",
+            label: "Ranking",
+            icon: "trophy",
+            color: "#c084fc",
+          },
+        ]
+      : [
+          { id: "Home", label: "Início", icon: "home", color: "#8c52ff" },
+          {
+            id: "Budget",
+            label: "Consumo Moderado",
+            icon: "wallet",
+            color: "#a47aff",
+          },
+          {
+            id: "Bills",
+            label: "Contas a Pagar",
+            icon: "receipt",
+            color: "#ff4d6d",
+          },
+          { id: "Cartoes", label: "Cartões", icon: "card", color: "#8c52ff" },
+          { id: "Feed", label: "Feed", icon: "newspaper", color: "#8c52ff" },
+          { id: "Chat", label: "Chat", icon: "chatbubbles", color: "#a47aff" },
+          { id: "Ranking", label: "Ranking", icon: "trophy", color: "#c084fc" },
+          {
+            id: "Recomendacao",
+            label: "Recomendação",
+            icon: "bulb",
+            color: "#a47aff",
+          },
+        ];
 
-  // Rota de Planejamento — visível para todos os usuários (visualização)
-  menuItems.push({
-    id: "PlanningView",
-    label: "Planejamento",
-    icon: "document-text",
-    color: "#a47aff",
-  });
-
-  // Adicionar rota de gerenciamento para consultores/admins
-  if (user?.role === "consultor" || user?.isAdmin) {
+  // Rota de Planejamento — visível para usuários não consultores
+  if (!isConsultor && !isAdminUser) {
     menuItems.push({
-      id: "ClientList",
-      label: "Planejamento (Clientes)",
-      icon: "clipboard",
+      id: "PlanningView",
+      label: "Planejamento",
+      icon: "document-text",
       color: "#a47aff",
-    });
-    // Gerenciamento de usuários (consultor/admin)
-    menuItems.push({
-      id: "AdminUsers",
-      label: "Gerenciar Usuários",
-      icon: "people",
-      color: "#8c52ff",
     });
   }
 
-  // Itens exclusivos para clientes premium
-  if (user?.role === "cliente_premium") {
+  // Itens para usuários comuns: wishlist para todos; metas/investimentos visíveis
+  if (isCommonUser) {
     menuItems.push({
       id: "Metas",
       label: "Metas",
@@ -435,8 +456,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   logo: {
-    width: 200,
-    height: 80,
+    width: 240,
+    height: 100,
     alignSelf: "center",
   },
   closeButton: {

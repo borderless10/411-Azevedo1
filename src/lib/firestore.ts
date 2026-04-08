@@ -21,6 +21,8 @@ import {
   ActivityFirestore,
   Bill,
   BillFirestore,
+  Recommendation,
+  RecommendationFirestore,
 } from "../types";
 import { CreditCard, CreditCardFirestore } from "../types/creditCard";
 
@@ -38,6 +40,7 @@ export const COLLECTIONS = {
   BILLS: "bills",
   WISHLISTS: "wishlists",
   CREDIT_CARDS: "creditCards",
+  RECOMMENDATIONS: "recommendations",
 } as const;
 
 /**
@@ -83,6 +86,10 @@ export const getCreditCardsCollection = (): CollectionReference => {
   return collection(db, COLLECTIONS.CREDIT_CARDS);
 };
 
+export const getRecommendationsCollection = (): CollectionReference => {
+  return collection(db, COLLECTIONS.RECOMMENDATIONS);
+};
+
 /**
  * Referências para documentos
  */
@@ -124,6 +131,10 @@ export const getBillDoc = (id: string): DocumentReference => {
 
 export const getCreditCardDoc = (id: string): DocumentReference => {
   return doc(db, COLLECTIONS.CREDIT_CARDS, id);
+};
+
+export const getRecommendationDoc = (id: string): DocumentReference => {
+  return doc(db, COLLECTIONS.RECOMMENDATIONS, id);
 };
 
 /**
@@ -473,6 +484,32 @@ export const convertBillToFirestore = (bill: Partial<Bill>): any => {
   }
 
   return result;
+};
+
+export const convertRecommendationFromFirestore = (
+  data: RecommendationFirestore & { id: string },
+): Recommendation => {
+  return {
+    ...data,
+    recommendationDate: timestampToDate(data.recommendationDate),
+    createdAt: timestampToDate(data.createdAt),
+    updatedAt: timestampToDate(data.updatedAt),
+  };
+};
+
+export const convertRecommendationToFirestore = (
+  recommendation: Partial<Recommendation>,
+): Partial<RecommendationFirestore> => {
+  const { recommendationDate, createdAt, updatedAt, ...rest } = recommendation;
+
+  return {
+    ...rest,
+    ...(recommendationDate && {
+      recommendationDate: dateToTimestamp(recommendationDate),
+    }),
+    ...(createdAt && { createdAt: dateToTimestamp(createdAt) }),
+    ...(updatedAt && { updatedAt: dateToTimestamp(updatedAt) }),
+  };
 };
 
 /**

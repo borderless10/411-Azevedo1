@@ -16,8 +16,6 @@ export interface Expense {
   cardId?: string;
   cardLast4?: string;
   invoiceYearMonth?: string;
-  isAutoDebitPayment?: boolean;
-  autoDebitInvoiceKey?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -34,8 +32,6 @@ export interface CreateExpenseData {
   cardId?: string;
   cardLast4?: string;
   invoiceYearMonth?: string;
-  isAutoDebitPayment?: boolean;
-  autoDebitInvoiceKey?: string;
 }
 
 /**
@@ -50,8 +46,6 @@ export interface UpdateExpenseData {
   cardId?: string;
   cardLast4?: string;
   invoiceYearMonth?: string;
-  isAutoDebitPayment?: boolean;
-  autoDebitInvoiceKey?: string;
 }
 
 /**
@@ -84,8 +78,6 @@ export interface ExpenseFirestore {
   cardId?: string;
   cardLast4?: string;
   invoiceYearMonth?: string;
-  isAutoDebitPayment?: boolean;
-  autoDebitInvoiceKey?: string;
   createdAt: any; // Timestamp do Firestore
   updatedAt: any; // Timestamp do Firestore
 }

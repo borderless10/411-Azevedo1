@@ -1,6 +1,7 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { useTheme } from "../../contexts/ThemeContext";
+import MaskedAmount from "./MaskedAmount";
 
 type Props = {
   title: string;
@@ -20,9 +21,7 @@ export default function DetailCard({ title, value, note, small }: Props) {
     >
       <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
       {value !== undefined ? (
-        <Text style={[styles.value, { color: colors.text }]}>
-          {typeof value === "number" ? value.toLocaleString() : value}
-        </Text>
+        <MaskedAmount value={value as number | string} style={styles.value} />
       ) : null}
       {note ? (
         <Text style={[styles.note, { color: colors.textSecondary }]}>

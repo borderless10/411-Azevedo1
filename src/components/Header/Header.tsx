@@ -13,6 +13,7 @@ import {
   Animated,
 } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { useShowValues } from "../../contexts/ShowValuesContext";
 import { useAuth } from "../../hooks/useAuth";
 import { useNavigation } from "../../routes/NavigationContext";
 import { useTheme } from "../../contexts/ThemeContext";
@@ -35,6 +36,7 @@ export const Header: React.FC<HeaderProps> = ({
   const { user } = useAuth();
   const { navigate, currentScreen, params } = useNavigation();
   const { colors } = useTheme();
+  const { showValues, toggleShowValues } = useShowValues();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(-20)).current;
 
@@ -98,20 +100,42 @@ export const Header: React.FC<HeaderProps> = ({
             <Ionicons name="arrow-back" size={24} color={colors.text} />
           </TouchableOpacity>
         )}
+
         {!title ? (
-          <Image
-            source={require("../../../assets/logo411.png")}
-            style={styles.logo}
-            resizeMode="contain"
-          />
+          // keep left area for back button but render logo centered absolutely below
+          <></>
         ) : (
           <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
         )}
       </View>
 
+      {/* Centered logo when there's no title */}
+      {!title && (
+        <View style={styles.centerLogo} pointerEvents="none">
+          <Image
+            source={require("../../../assets/logo411.png")}
+            style={styles.logo}
+            resizeMode="contain"
+          />
+        </View>
+      )}
+
       <View style={styles.right}>
         {rightAction || (
           <>
+            {currentScreen === "Home" && (
+              <TouchableOpacity
+                onPress={toggleShowValues}
+                style={{ padding: 6 }}
+              >
+                <Ionicons
+                  name={showValues ? "eye" : "eye-off"}
+                  size={22}
+                  color={colors.text}
+                />
+              </TouchableOpacity>
+            )}
+
             {showProfile && (
               <TouchableOpacity
                 onPress={handleProfile}
@@ -200,6 +224,27 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
+  },
+  titleRow: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-start",
+    gap: 8,
+  },
+  eyeButton: {
+    padding: 6,
+    marginLeft: 8,
+  },
+  centerLogo: {
+    position: "absolute",
+    left: -50,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 2,
   },
   profileButton: {
     padding: 4,

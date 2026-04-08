@@ -2,6 +2,7 @@ import React from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider } from "./src/contexts/AuthContext";
 import { ThemeProvider } from "./src/contexts/ThemeContext";
+import { ShowValuesProvider } from "./src/contexts/ShowValuesContext";
 import { NavigationProvider } from "./src/routes/NavigationContext";
 import { Router } from "./src/routes/Router";
 import { AppContent } from "./src/components/AppContent";
@@ -15,9 +16,11 @@ export default function App() {
     <ThemeProvider>
       <SafeAreaProvider>
         <AuthProvider>
-          <NavigationProvider>
-            <AppContent />
-          </NavigationProvider>
+          <ShowValuesProvider>
+            <NavigationProvider>
+              <AppContent />
+            </NavigationProvider>
+          </ShowValuesProvider>
         </AuthProvider>
       </SafeAreaProvider>
     </ThemeProvider>

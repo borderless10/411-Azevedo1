@@ -82,7 +82,6 @@ const normalizeCreatePayload = (data: CreateCreditCardData) => {
     cardExpiryYear: (data as any).cardExpiryYear || new Date().getFullYear(),
     invoiceDueDay: data.invoiceDueDay,
     limit: data.limit,
-    autoDebit: !!data.autoDebit,
   };
 };
 
@@ -284,82 +283,6 @@ export const creditCardServices = {
     return Array.from(invoiceMap.values()).sort(
       (a, b) => b.dueDate.getTime() - a.dueDate.getTime(),
     );
-  },
-
-  async runAutoDebitForUser(
-    userId: string,
-    runDate: Date = new Date(),
-  ): Promise<void> {
-    const today = new Date(runDate);
-    today.setHours(0, 0, 0, 0);
-
-    const cards = (await this.getCreditCards(userId)).filter(
-      (card) => card.isActive !== false && card.autoDebit,
-    );
-
-    if (cards.length === 0) return;
-
-    const expensesSnap = await getDocs(
-      query(getExpensesCollection(), where("userId", "==", userId)),
-    );
-    const expenses = expensesSnap.docs.map((doc) => {
-      const expense = convertExpenseFromFirestore(getDocData(doc) as any);
-      return { ...expense, id: doc.id } as any;
-    });
-
-    const dueInvoiceDate = new Date(
-      today.getFullYear(),
-      today.getMonth() - 1,
-      1,
-    );
-    const dueInvoiceKey = toInvoiceKey(dueInvoiceDate);
-
-    for (const card of cards) {
-      if (today.getDate() !== card.invoiceDueDay) {
-        continue;
-      }
-
-      if (card.lastAutoDebitInvoiceKey === dueInvoiceKey) {
-        continue;
-      }
-
-      const invoiceTotal = expenses
-        .filter(
-          (expense) =>
-            expense.paymentMethod === "credit_card" &&
-            expense.cardId === card.id &&
-            expense.invoiceYearMonth === dueInvoiceKey,
-        )
-        .reduce((acc, expense) => acc + (expense.value || 0), 0);
-
-      const alreadyCreated = expenses.some(
-        (expense) =>
-          expense.isAutoDebitPayment === true &&
-          expense.cardId === card.id &&
-          expense.autoDebitInvoiceKey === dueInvoiceKey,
-      );
-
-      if (invoiceTotal > 0 && !alreadyCreated) {
-        await addDoc(getExpensesCollection(), {
-          userId,
-          value: invoiceTotal,
-          description: `Fatura ${card.bank} ••••${card.last4} (${dueInvoiceKey})`,
-          date: Timestamp.fromDate(today),
-          category: "Cartão de Crédito",
-          paymentMethod: "other",
-          cardId: card.id,
-          cardLast4: card.last4,
-          isAutoDebitPayment: true,
-          autoDebitInvoiceKey: dueInvoiceKey,
-          createdAt: Timestamp.fromDate(new Date()),
-          updatedAt: Timestamp.fromDate(new Date()),
-        });
-      }
-
-      await this.updateCreditCard(card.id, {
-        lastAutoDebitInvoiceKey: dueInvoiceKey,
-      });
-    }
   },
 
   getInvoiceKeyForPurchase,
