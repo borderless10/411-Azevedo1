@@ -124,6 +124,24 @@ export const budgetServices = {
   },
 
   /**
+   * Reinicia os dados do orçamento do mês referência sem alterar o teto mensal.
+   */
+  async resetBudgetForDate(
+    userId: string,
+    referenceDate: Date = new Date(),
+  ): Promise<Budget> {
+    const monthYear = getMonthYearFromDate(referenceDate);
+    const currentBudget = await this.getBudget(userId, monthYear);
+
+    return this.saveBudget(userId, monthYear, {
+      monthlyBudget: currentBudget?.monthlyBudget,
+      dailyExpenses: [],
+      zeroConfirmedDays: [],
+      zeroConfirmedDaysNoRanking: [],
+    });
+  },
+
+  /**
    * Buscar orçamento de um mês específico
    */
   async getBudget(userId: string, monthYear: string): Promise<Budget | null> {

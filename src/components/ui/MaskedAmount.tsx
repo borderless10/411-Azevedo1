@@ -8,9 +8,19 @@ type Props = {
   value?: number | string;
   style?: TextStyle | TextStyle[];
   placeholder?: string;
+  numberOfLines?: number;
+  adjustsFontSizeToFit?: boolean;
+  minimumFontScale?: number;
 };
 
-export default function MaskedAmount({ value, style, placeholder }: Props) {
+export default function MaskedAmount({
+  value,
+  style,
+  placeholder,
+  numberOfLines,
+  adjustsFontSizeToFit,
+  minimumFontScale,
+}: Props) {
   const { showValues } = useShowValues();
   const { colors } = useTheme();
 
@@ -20,14 +30,24 @@ export default function MaskedAmount({ value, style, placeholder }: Props) {
 
   if (!showValues) {
     return (
-      <Text style={[styles.mask, style, { color: colors.text }]}>
+      <Text
+        style={[styles.mask, style, { color: colors.text }]}
+        numberOfLines={numberOfLines}
+        adjustsFontSizeToFit={adjustsFontSizeToFit}
+        minimumFontScale={minimumFontScale}
+      >
         {placeholder ?? "R$ •••"}
       </Text>
     );
   }
 
   return (
-    <Text style={[styles.value, style, { color: colors.text }]}>
+    <Text
+      style={[styles.value, style, { color: colors.text }]}
+      numberOfLines={numberOfLines}
+      adjustsFontSizeToFit={adjustsFontSizeToFit}
+      minimumFontScale={minimumFontScale}
+    >
       {formatted}
     </Text>
   );

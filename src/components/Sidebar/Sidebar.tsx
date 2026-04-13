@@ -18,7 +18,7 @@ import { useAuth } from "../../hooks/useAuth";
 import { useNavigation, ScreenName } from "../../routes/NavigationContext";
 import { useTheme } from "../../contexts/ThemeContext";
 import { planningServices } from "../../services/planningServices";
-import type { ConsumptionCategoryRelease } from "../../types/planning";
+import { useUserChats } from "../../hooks/useUserChats";
 
 interface SidebarProps {
   visible: boolean;
@@ -41,6 +41,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const { user, signOut } = useAuth();
   const { navigate, currentScreen, params } = useNavigation() as any;
   const { colors } = useTheme();
+  const { chats } = useUserChats(user?.id || null, user?.role || null);
   const slideAnim = useRef(new Animated.Value(-300)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const isConsultor = user?.role === "consultor";
@@ -48,9 +49,39 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const isCommonUser = !user?.isAdmin && user?.role !== "consultor";
   const shouldHideRankingItem =
     isCommonUser && user?.rankingPreference === "hidden";
-  const [releasedCategories, setReleasedCategories] = useState<
-    ConsumptionCategoryRelease[]
-  >([]);
+  const [trackedExpenseTitles, setTrackedExpenseTitles] = useState<string[]>(
+    [],
+  );
+  const [trackedIncomeTitles, setTrackedIncomeTitles] = useState<string[]>([]);
+
+  const normalizeTitle = (value?: string) =>
+    String(value || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim()
+      .replace(/\s+/g, " ")
+      .toLocaleLowerCase("pt-BR");
+
+  const toJsDate = (value: any): Date | null => {
+    if (!value) return null;
+    if (value instanceof Date) return value;
+    if (typeof value?.toDate === "function") return value.toDate();
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  };
+
+  const hasUnreadChats = (chats || []).some((chat: any) => {
+    if (!user?.id) return false;
+    const senderId = chat?.lastMessage?.senderId;
+    if (!senderId || senderId === user.id) return false;
+
+    const lastMessageAt = toJsDate(chat?.lastMessageAt);
+    if (!lastMessageAt) return false;
+
+    const lastReadAt = toJsDate(chat?.lastReadBy?.[user.id]);
+    if (!lastReadAt) return true;
+    return lastMessageAt.getTime() > lastReadAt.getTime();
+  });
 
   useEffect(() => {
     if (visible) {
@@ -83,33 +114,74 @@ export const Sidebar: React.FC<SidebarProps> = ({
   }, [visible]);
 
   useEffect(() => {
-    const loadReleasedCategories = async () => {
+    const loadTrackedExpenses = async () => {
       if (!user?.id || !isCommonUser) {
-        setReleasedCategories([]);
+        setTrackedExpenseTitles([]);
+        setTrackedIncomeTitles([]);
         return;
       }
 
       try {
         const planning = await planningServices.getPlanning(user.id);
-        const activeReleases = Object.values(planning?.categoryReleases || {})
-          .filter((release) => release.status === "active")
-          .sort((a, b) =>
-            a.categoryName.localeCompare(b.categoryName, "pt-BR"),
-          );
-        setReleasedCategories(activeReleases);
+        const rawTitles = [
+          ...(planning?.bills || [])
+            .filter((bill) => bill.dailyTracking)
+            .map((bill) => bill.name),
+          ...(planning?.expectedExpenses || [])
+            .filter((expense) => expense.dailyTracking)
+            .map((expense) => expense.source),
+        ]
+          .map((title) => String(title || "").trim())
+          .filter(Boolean);
+
+        const byKey = new Map<string, string>();
+        rawTitles.forEach((title) => {
+          const key = normalizeTitle(title);
+          if (!key || byKey.has(key)) return;
+          byKey.set(key, title);
+        });
+
+        const uniqueTitles = Array.from(byKey.values()).sort((a, b) =>
+          a.localeCompare(b, "pt-BR"),
+        );
+        setTrackedExpenseTitles(uniqueTitles);
+
+        const rawIncomeTitles = (planning?.expectedIncomes || [])
+          .filter((income) => income.dailyTracking)
+          .map((income) => income.source)
+          .map((title) => String(title || "").trim())
+          .filter(Boolean);
+
+        const byIncomeKey = new Map<string, string>();
+        rawIncomeTitles.forEach((title) => {
+          const key = normalizeTitle(title);
+          if (!key || byIncomeKey.has(key)) return;
+          byIncomeKey.set(key, title);
+        });
+
+        const uniqueIncomeTitles = Array.from(byIncomeKey.values()).sort(
+          (a, b) => a.localeCompare(b, "pt-BR"),
+        );
+        setTrackedIncomeTitles(uniqueIncomeTitles);
       } catch (error) {
-        console.warn("Erro ao carregar categorias acompanhadas", error);
-        setReleasedCategories([]);
+        console.warn("Erro ao carregar gastos acompanhados", error);
+        setTrackedExpenseTitles([]);
+        setTrackedIncomeTitles([]);
       }
     };
 
-    loadReleasedCategories();
+    loadTrackedExpenses();
   }, [user?.id, isCommonUser]);
 
   const menuItems: MenuItem[] = isConsultor
     ? [
         { id: "Home", label: "Início", icon: "home", color: "#8c52ff" },
-        { id: "Feed", label: "Feed", icon: "newspaper", color: "#8c52ff" },
+        {
+          id: "Feed",
+          label: "Linha do Tempo",
+          icon: "newspaper",
+          color: "#8c52ff",
+        },
         { id: "Chat", label: "Chat", icon: "chatbubbles", color: "#a47aff" },
         { id: "Ranking", label: "Ranking", icon: "trophy", color: "#c084fc" },
       ]
@@ -121,7 +193,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
             icon: "people",
             color: "#8c52ff",
           },
-          { id: "Feed", label: "Feed", icon: "newspaper", color: "#8c52ff" },
+          {
+            id: "Feed",
+            label: "Linha do Tempo",
+            icon: "newspaper",
+            color: "#8c52ff",
+          },
           {
             id: "Chat",
             label: "Chat",
@@ -150,7 +227,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
             color: "#ff4d6d",
           },
           { id: "Cartoes", label: "Cartões", icon: "card", color: "#8c52ff" },
-          { id: "Feed", label: "Feed", icon: "newspaper", color: "#8c52ff" },
+          {
+            id: "Feed",
+            label: "Linha do Tempo",
+            icon: "newspaper",
+            color: "#8c52ff",
+          },
           { id: "Chat", label: "Chat", icon: "chatbubbles", color: "#a47aff" },
           { id: "Ranking", label: "Ranking", icon: "trophy", color: "#c084fc" },
           {
@@ -326,6 +408,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   >
                     {item.label}
                   </Text>
+                  {item.id === "Chat" && hasUnreadChats ? (
+                    <View style={styles.unreadDot} />
+                  ) : null}
                 </View>
                 {isActive && (
                   <Ionicons
@@ -338,7 +423,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             );
           })}
 
-          {isCommonUser && releasedCategories.length > 0 ? (
+          {isCommonUser && trackedExpenseTitles.length > 0 ? (
             <View
               style={[
                 styles.categorySection,
@@ -351,16 +436,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   { color: colors.textSecondary },
                 ]}
               >
-                Categorias acompanhadas
+                Gastos acompanhados
               </Text>
-              {releasedCategories.map((release) => {
+              {trackedExpenseTitles.map((title) => {
+                const activeParamTitle = String(
+                  params?.trackedTitle || params?.categoryName || "",
+                );
                 const isActive =
                   currentScreen === "CategoryBudget" &&
-                  params?.categoryName === release.categoryName;
+                  normalizeTitle(activeParamTitle) === normalizeTitle(title);
 
                 return (
                   <TouchableOpacity
-                    key={release.categoryName}
+                    key={title}
                     style={[
                       styles.menuItem,
                       { borderBottomColor: colors.border },
@@ -371,13 +459,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     ]}
                     onPress={() =>
                       handleNavigateWithParams("CategoryBudget", {
-                        categoryName: release.categoryName,
+                        trackedTitle: title,
                       })
                     }
                   >
                     <View style={styles.menuItemLeft}>
                       <Ionicons
-                        name="folder-open"
+                        name="analytics"
                         size={24}
                         color={isActive ? "#8c52ff" : colors.textSecondary}
                       />
@@ -389,7 +477,75 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           isActive && { color: "#8c52ff" },
                         ]}
                       >
-                        {release.categoryName}
+                        {title}
+                      </Text>
+                    </View>
+                    {isActive && (
+                      <Ionicons
+                        name="chevron-forward"
+                        size={20}
+                        color="#8c52ff"
+                      />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          ) : null}
+
+          {isCommonUser && trackedIncomeTitles.length > 0 ? (
+            <View
+              style={[
+                styles.categorySection,
+                { borderTopColor: colors.border },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.categorySectionTitle,
+                  { color: colors.textSecondary },
+                ]}
+              >
+                Rendas acompanhadas
+              </Text>
+              {trackedIncomeTitles.map((title) => {
+                const activeIncomeTitle = String(params?.trackedTitle || "");
+                const isActive =
+                  currentScreen === "TrackedIncome" &&
+                  normalizeTitle(activeIncomeTitle) === normalizeTitle(title);
+
+                return (
+                  <TouchableOpacity
+                    key={`tracked-income-${title}`}
+                    style={[
+                      styles.menuItem,
+                      { borderBottomColor: colors.border },
+                      isActive && [
+                        styles.menuItemActive,
+                        { backgroundColor: colors.background },
+                      ],
+                    ]}
+                    onPress={() =>
+                      handleNavigateWithParams("TrackedIncome", {
+                        trackedTitle: title,
+                      })
+                    }
+                  >
+                    <View style={styles.menuItemLeft}>
+                      <Ionicons
+                        name="cash-outline"
+                        size={24}
+                        color={isActive ? "#8c52ff" : colors.textSecondary}
+                      />
+                      <Text
+                        style={[
+                          styles.menuItemText,
+                          { color: colors.textSecondary },
+                          isActive && styles.menuItemTextActive,
+                          isActive && { color: "#8c52ff" },
+                        ]}
+                      >
+                        {title}
                       </Text>
                     </View>
                     {isActive && (
@@ -517,6 +673,13 @@ const styles = StyleSheet.create({
   },
   menuItemTextActive: {
     fontWeight: "600",
+  },
+  unreadDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: "#8c52ff",
+    marginLeft: 10,
   },
   footer: {
     borderTopWidth: 1,

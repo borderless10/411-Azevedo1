@@ -188,6 +188,21 @@ export const markBillAsPaid = async (billId: string): Promise<void> => {
 };
 
 /**
+ * Marcar conta como não paga
+ */
+export const markBillAsUnpaid = async (billId: string): Promise<void> => {
+  try {
+    await updateBill(billId, {
+      status: "pending",
+      paidDate: undefined,
+    });
+  } catch (error) {
+    console.error("Erro ao marcar conta como não paga:", error);
+    throw error;
+  }
+};
+
+/**
  * Deletar conta
  */
 export const deleteBill = async (billId: string): Promise<void> => {

@@ -1,5 +1,5 @@
 /**
- * Tela de orçamento por categoria acompanhada pelo cliente
+ * Tela de acompanhamento diario por titulo personalizado
  */
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
@@ -25,8 +25,6 @@ import {
 } from "../../services/planningServices";
 import { getStartOfDay, getEndOfDay, addDays } from "../../utils/dateUtils";
 import { useNavigation } from "../../routes/NavigationContext";
-import { ConsumptionCategoryRelease } from "../../types/planning";
-import { toExpenseCategoryLookupKey } from "../../types/category";
 import ZeroPlanilhaConfirmModal from "../../components/ui/ZeroPlanilhaConfirmModal";
 
 type DaySummary = {
@@ -40,12 +38,12 @@ export const CategoryBudgetScreen = () => {
 
   const { user } = useAuth();
   const { navigate, params } = useNavigation() as any;
-  const categoryName = String(params?.categoryName || "").trim();
+  const trackedTitle = String(
+    params?.trackedTitle || params?.categoryName || "",
+  ).trim();
   const [loading, setLoading] = useState(true);
-  const [release, setRelease] = useState<ConsumptionCategoryRelease | null>(
-    null,
-  );
   const [days, setDays] = useState<DaySummary[]>([]);
+  const [plannedAmount, setPlannedAmount] = useState<number>(0);
   const [cycleLabel, setCycleLabel] = useState<string>("");
   const [zeroConfirmedDays, setZeroConfirmedDays] = useState<number[]>([]);
   const [zeroConfirmVisible, setZeroConfirmVisible] = useState(false);
@@ -60,8 +58,46 @@ export const CategoryBudgetScreen = () => {
     );
   };
 
+  const normalizeTitle = (value?: string) =>
+    String(value || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim()
+      .replace(/\s+/g, " ")
+      .toLocaleLowerCase("pt-BR");
+
+  const isTrackedDailyCategory = (category?: string) => {
+    const normalizedCategory = String(category || "")
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+
+    return (
+      normalizedCategory === "acompanhamento diario" ||
+      normalizedCategory === "gasto acompanhado"
+    );
+  };
+
+  const getPlannedAmount = (item: any) => {
+    const amountCard = Number(item?.amountCard);
+    const amountCash = Number(item?.amountCash);
+    const hasSplitValues =
+      Number.isFinite(amountCard) || Number.isFinite(amountCash);
+
+    if (hasSplitValues) {
+      return (
+        (Number.isFinite(amountCard) ? amountCard : 0) +
+        (Number.isFinite(amountCash) ? amountCash : 0)
+      );
+    }
+
+    const amount = Number(item?.amount);
+    return Number.isFinite(amount) ? amount : 0;
+  };
+
   const loadData = async () => {
-    if (!user?.id || !categoryName) {
+    if (!user?.id || !trackedTitle) {
       setLoading(false);
       return;
     }
@@ -70,16 +106,30 @@ export const CategoryBudgetScreen = () => {
     try {
       const today = new Date();
       const planning = await planningServices.getPlanning(user.id);
-      const activeRelease = Object.values(planning?.categoryReleases || {})
-        .filter((item) => item.status === "active")
-        .find(
-          (item) =>
-            toExpenseCategoryLookupKey(item.categoryName) ===
-            toExpenseCategoryLookupKey(categoryName),
-        );
-
-      setRelease(activeRelease || null);
       setCycleLabel(getPlanningCycleLabel(planning) || "");
+
+      const targetTitleKey = normalizeTitle(trackedTitle);
+      const plannedFromBills = (planning?.bills || [])
+        .filter(
+          (bill: any) =>
+            Boolean(bill?.dailyTracking) &&
+            normalizeTitle(bill?.name) === targetTitleKey,
+        )
+        .reduce((sum: number, bill: any) => {
+          return sum + getPlannedAmount(bill);
+        }, 0);
+
+      const plannedFromExpectedExpenses = (planning?.expectedExpenses || [])
+        .filter(
+          (item: any) =>
+            Boolean(item?.dailyTracking) &&
+            normalizeTitle(item?.source) === targetTitleKey,
+        )
+        .reduce((sum: number, item: any) => {
+          return sum + getPlannedAmount(item);
+        }, 0);
+
+      setPlannedAmount(plannedFromBills + plannedFromExpectedExpenses);
 
       const cycleStartDate = planning?.consumoModeradoCycleStartedAt
         ? getStartOfDay(new Date(planning.consumoModeradoCycleStartedAt))
@@ -96,12 +146,10 @@ export const CategoryBudgetScreen = () => {
         endDate: end,
       });
 
-      const targetLookupKey = toExpenseCategoryLookupKey(
-        activeRelease?.categoryName || categoryName,
-      );
       const filteredExpenses = expenses.filter((exp) => {
         if (isCreditCardExpense(exp)) return false;
-        return toExpenseCategoryLookupKey(exp.category) === targetLookupKey;
+        if (!isTrackedDailyCategory((exp as any)?.category)) return false;
+        return normalizeTitle(exp.description) === targetTitleKey;
       });
 
       const dayMap = new Map<string, number>();
@@ -143,7 +191,7 @@ export const CategoryBudgetScreen = () => {
       );
     } catch (error) {
       console.error("❌ [CATEGORY BUDGET] Erro ao carregar dados:", error);
-      Alert.alert("Erro", "Não foi possível carregar a categoria agora.");
+      Alert.alert("Erro", "Não foi possível carregar o acompanhamento agora.");
     } finally {
       setLoading(false);
     }
@@ -167,56 +215,33 @@ export const CategoryBudgetScreen = () => {
 
   useEffect(() => {
     loadData();
-  }, [user?.id, categoryName]);
+  }, [user?.id, trackedTitle]);
 
-  const budgetValue = release?.monthlyLimit || 0;
   const daysInCycle = days.length > 0 ? days.length : 1;
-  const idealDailyAverage = release?.dailyLimit || budgetValue / daysInCycle;
   const totalSpent = useMemo(
     () => days.reduce((sum, item) => sum + item.total, 0),
     [days],
   );
+  const remainingToSpend = Math.max(0, plannedAmount - totalSpent);
+  const overPlannedAmount = Math.max(0, totalSpent - plannedAmount);
   const actualDailyAverage = days.length > 0 ? totalSpent / days.length : 0;
-  const isOverBudget =
-    actualDailyAverage > idealDailyAverage && budgetValue > 0;
+  const hasData = days.some((item) => item.total > 0);
 
   const performanceIndicator = (() => {
-    if (budgetValue <= 0) {
+    if (!hasData) {
       return {
-        label: "Sem categoria liberada",
-        detail:
-          "Peça ao consultor para liberar esta categoria no planejamento.",
+        label: "Sem lancamentos",
+        detail: "Ainda nao existem gastos lancados para este acompanhamento.",
         color: "#999",
         icon: "information-circle-outline" as const,
       };
     }
 
-    const difference = actualDailyAverage - idealDailyAverage;
-    const tolerance = 0.01;
-
-    if (difference > tolerance) {
-      return {
-        label: "Acima da meta",
-        detail: `${formatCurrency(Math.abs(difference))} acima da meta diária.`,
-        color: "#ff4d6d",
-        icon: "trending-up" as const,
-      };
-    }
-
-    if (difference < -tolerance) {
-      return {
-        label: "Abaixo da meta",
-        detail: `${formatCurrency(Math.abs(difference))} abaixo da meta diária.`,
-        color: "#8c52ff",
-        icon: "trending-down" as const,
-      };
-    }
-
     return {
-      label: "Dentro da meta",
-      detail: "Seu gasto diário está alinhado com a meta definida.",
+      label: "Em acompanhamento",
+      detail: "Continue registrando para acompanhar sua media diaria.",
       color: "#c084fc",
-      icon: "checkmark-circle" as const,
+      icon: "analytics" as const,
     };
   })();
 
@@ -236,9 +261,9 @@ export const CategoryBudgetScreen = () => {
         onPress: () => {
           navigate("AddExpense", {
             prefillDate: date.toISOString(),
-            prefillCategory: categoryName,
+            prefillDescription: trackedTitle,
             returnTo: "CategoryBudget",
-            returnParams: { categoryName },
+            returnParams: { trackedTitle },
           });
         },
       },
@@ -282,10 +307,14 @@ export const CategoryBudgetScreen = () => {
 
   if (loading) {
     return (
-      <Layout title="Categoria" showBackButton={false} showSidebar={true}>
+      <Layout
+        title="Acompanhamento Diario"
+        showBackButton={false}
+        showSidebar={true}
+      >
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#8c52ff" />
-          <Text style={styles.loadingText}>Carregando categoria...</Text>
+          <Text style={styles.loadingText}>Carregando acompanhamento...</Text>
         </View>
       </Layout>
     );
@@ -293,7 +322,7 @@ export const CategoryBudgetScreen = () => {
 
   return (
     <Layout
-      title={release?.categoryName || categoryName || "Categoria"}
+      title={trackedTitle || "Acompanhamento"}
       showBackButton={false}
       showSidebar={true}
     >
@@ -309,11 +338,9 @@ export const CategoryBudgetScreen = () => {
         >
           <View style={styles.header}>
             <Ionicons name="wallet-outline" size={64} color="#8c52ff" />
-            <Text style={styles.title}>
-              {release?.categoryName || categoryName}
-            </Text>
+            <Text style={styles.title}>{trackedTitle}</Text>
             <Text style={styles.subtitle}>
-              Acompanhe os gastos diários desta categoria
+              Acompanhe os gastos diarios desse titulo personalizado
             </Text>
             {cycleLabel ? (
               <Text style={styles.cycleLabel}>{cycleLabel}</Text>
@@ -321,102 +348,77 @@ export const CategoryBudgetScreen = () => {
           </View>
 
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>💰 Meta mensal da categoria</Text>
+            <Text style={styles.cardTitle}>💰 Quanto falta no ciclo</Text>
             <View style={styles.inputContainerReadOnly}>
               <Text style={styles.readOnlyBudgetValue}>
-                {formatCurrency(budgetValue)}
+                {formatCurrency(remainingToSpend)}
               </Text>
             </View>
-            <Text style={styles.helperText}>
-              {release
-                ? "Valor liberado pelo consultor para esta categoria."
-                : "Esta categoria ainda não foi liberada pelo consultor."}
-            </Text>
-            {budgetValue > 0 && (
-              <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>Média diária ideal:</Text>
-                <Text style={styles.infoValue}>
-                  {formatCurrency(idealDailyAverage)}
-                </Text>
-              </View>
+            {overPlannedAmount > 0 && (
+              <Text style={styles.overPlannedText}>
+                Você passou {formatCurrency(overPlannedAmount)} do planejado.
+              </Text>
             )}
+            <Text style={styles.helperText}>
+              Cálculo: gasto esperado do ciclo menos total gasto até agora.
+            </Text>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Media diaria:</Text>
+              <Text style={styles.infoValue}>
+                {formatCurrency(actualDailyAverage)}
+              </Text>
+            </View>
           </View>
 
-          {budgetValue > 0 && (
-            <View style={styles.statsContainer}>
-              <View style={styles.statCard}>
-                <Ionicons name="calendar-outline" size={24} color="#8c52ff" />
-                <Text style={styles.statLabel}>Dias do ciclo</Text>
-                <Text style={styles.statValue}>{daysInCycle}</Text>
-              </View>
+          <View style={styles.statsContainer}>
+            <View style={styles.statCard}>
+              <Ionicons name="calendar-outline" size={24} color="#8c52ff" />
+              <Text style={styles.statLabel}>Dias do ciclo</Text>
+              <Text style={styles.statValue}>{daysInCycle}</Text>
+            </View>
 
-              <View style={styles.statCard}>
-                <Ionicons name="cash-outline" size={24} color="#8c52ff" />
-                <Text style={styles.statLabel}>Total gasto</Text>
-                <Text style={styles.statValue}>
-                  {formatCurrency(totalSpent)}
-                </Text>
-              </View>
+            <View style={styles.statCard}>
+              <Ionicons name="cash-outline" size={24} color="#8c52ff" />
+              <Text style={styles.statLabel}>Total gasto</Text>
+              <Text style={styles.statValue}>{formatCurrency(totalSpent)}</Text>
+            </View>
 
-              <View
+            <View style={styles.statCard}>
+              <Ionicons name="analytics" size={24} color="#8c52ff" />
+              <Text style={styles.statLabel}>Media real/dia</Text>
+              <Text style={styles.statValue}>
+                {formatCurrency(actualDailyAverage)}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.performanceCard}>
+            <View style={styles.performanceHeader}>
+              <Ionicons
+                name={performanceIndicator.icon}
+                size={22}
+                color={performanceIndicator.color}
+              />
+              <Text
                 style={[
-                  styles.statCard,
-                  isOverBudget && styles.statCardWarning,
+                  styles.performanceTitle,
+                  { color: performanceIndicator.color },
                 ]}
               >
-                <Ionicons
-                  name={isOverBudget ? "trending-up" : "trending-down"}
-                  size={24}
-                  color={isOverBudget ? "#ff4d6d" : "#8c52ff"}
-                />
-                <Text style={styles.statLabel}>Média real/dia</Text>
-                <Text
-                  style={[
-                    styles.statValue,
-                    isOverBudget && styles.statValueWarning,
-                  ]}
-                >
-                  {formatCurrency(actualDailyAverage)}
-                </Text>
-              </View>
-            </View>
-          )}
-
-          {budgetValue > 0 && (
-            <View style={styles.performanceCard}>
-              <View style={styles.performanceHeader}>
-                <Ionicons
-                  name={performanceIndicator.icon}
-                  size={22}
-                  color={performanceIndicator.color}
-                />
-                <Text
-                  style={[
-                    styles.performanceTitle,
-                    { color: performanceIndicator.color },
-                  ]}
-                >
-                  {performanceIndicator.label}
-                </Text>
-              </View>
-              <Text style={styles.performanceDetail}>
-                {performanceIndicator.detail}
+                {performanceIndicator.label}
               </Text>
-              <View style={styles.performanceMetaRow}>
-                <Text style={styles.performanceMetaLabel}>Meta diária</Text>
-                <Text style={styles.performanceMetaValue}>
-                  {formatCurrency(idealDailyAverage)}
-                </Text>
-              </View>
             </View>
-          )}
+            <Text style={styles.performanceDetail}>
+              {performanceIndicator.detail}
+            </Text>
+          </View>
 
           <View style={styles.daysCard}>
             <View style={styles.daysHeaderRow}>
               <View>
                 <Text style={styles.cardTitle}>📅 Gastos por dia</Text>
                 <Text style={styles.cardSubtitle}>
-                  Detalhamento dos gastos desta categoria no ciclo atual
+                  Detalhamento dos gastos deste acompanhamento no ciclo atual
                 </Text>
               </View>
             </View>
@@ -489,7 +491,7 @@ export const CategoryBudgetScreen = () => {
 
             {!days.length ? (
               <Text style={styles.emptyText}>
-                Nenhum gasto encontrado para esta categoria no ciclo atual.
+                Nenhum gasto encontrado para este acompanhamento no ciclo atual.
               </Text>
             ) : null}
           </View>
@@ -593,6 +595,13 @@ const styles = StyleSheet.create({
     color: "#999",
     marginTop: 10,
     lineHeight: 18,
+  },
+  overPlannedText: {
+    marginTop: 10,
+    color: "#ff4d6d",
+    fontSize: 15,
+    fontWeight: "700",
+    lineHeight: 20,
   },
   infoRow: {
     flexDirection: "row",

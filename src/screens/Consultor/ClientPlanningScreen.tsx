@@ -26,15 +26,12 @@ import {
   getPlanningCycleLabel,
   planningServices,
 } from "../../services/planningServices";
+import { budgetServices } from "../../services/budgetServices";
 import { userService } from "../../services/userServices";
-import type {
-  Bill,
-  ExpectedItem,
-  ConsumptionCategoryRelease,
-} from "../../types/planning";
+import type { Bill, ExpectedItem } from "../../types/planning";
 import { formatCurrency } from "../../utils/currencyUtils";
 import { CurrencyInput } from "../../components/CurrencyInput";
-import { DEFAULT_EXPENSE_CATEGORIES } from "../../types/category";
+import DatePicker from "../../components/DatePicker";
 
 export const ClientPlanningScreen = () => {
   const { user } = useAuth();
@@ -49,14 +46,6 @@ export const ClientPlanningScreen = () => {
   const expenseModalScrollMaxHeight = Math.max(
     260,
     expenseModalMaxHeight - 250,
-  );
-  const categoryReleaseModalMaxHeight = Math.min(
-    isWeb ? 620 : 720,
-    Math.floor(windowHeight * (isWeb ? 0.72 : 0.82)),
-  );
-  const categoryReleaseModalScrollMaxHeight = Math.max(
-    260,
-    categoryReleaseModalMaxHeight - 170,
   );
   const [selectedClient, setSelectedClient] = useState<any | null>(null);
   const [notes, setNotes] = useState<string>("");
@@ -90,6 +79,7 @@ export const ClientPlanningScreen = () => {
     null,
   );
   const [incomeMonth, setIncomeMonth] = useState("");
+  const [incomeDailyTracking, setIncomeDailyTracking] = useState(false);
   const [savingIncome, setSavingIncome] = useState(false);
   const [activeTab, setActiveTab] = useState<"gastos" | "rendas">("rendas");
 
@@ -100,7 +90,11 @@ export const ClientPlanningScreen = () => {
   const [expenseAmountCard, setExpenseAmountCard] = useState(0);
   const [expenseAmountCash, setExpenseAmountCash] = useState(0);
   const [expenseDate, setExpenseDate] = useState("");
-  const [expenseIsBill, setExpenseIsBill] = useState(false); // if true, create/update a Bill instead
+  const [expenseIsRecurring, setExpenseIsRecurring] = useState(true);
+  const [expenseRecurringDay, setExpenseRecurringDay] = useState(
+    String(new Date().getDate()),
+  );
+  const [expenseDailyTracking, setExpenseDailyTracking] = useState(false);
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
   const [editingBillId, setEditingBillId] = useState<string | null>(null);
   const [editingIncomeId, setEditingIncomeId] = useState<string | null>(null);
@@ -118,19 +112,6 @@ export const ClientPlanningScreen = () => {
   const [consumoModeradoValue, setConsumoModeradoValue] = useState<string>("");
   const [consumoModeradoAmountCard, setConsumoModeradoAmountCard] = useState(0);
   const [consumoModeradoAmountCash, setConsumoModeradoAmountCash] = useState(0);
-  const [categoryReleases, setCategoryReleases] = useState<
-    Record<string, ConsumptionCategoryRelease>
-  >({});
-  const [isCategoryReleaseModalVisible, setIsCategoryReleaseModalVisible] =
-    useState(false);
-  const [releaseCategoryName, setReleaseCategoryName] = useState<string>(
-    DEFAULT_EXPENSE_CATEGORIES[0]?.name || "Alimentação",
-  );
-  const [releaseMonthlyLimitValue, setReleaseMonthlyLimitValue] = useState(0);
-  const [editingReleaseCategory, setEditingReleaseCategory] = useState<
-    string | null
-  >(null);
-  const [savingReleaseCategory, setSavingReleaseCategory] = useState(false);
   const [savingConsumo, setSavingConsumo] = useState(false);
   const [consumptionCycleLabel, setConsumptionCycleLabel] =
     useState<string>("");
@@ -148,6 +129,7 @@ export const ClientPlanningScreen = () => {
     consumoModeradoCycleDurationDays,
     setConsumoModeradoCycleDurationDays,
   ] = useState<number>(0);
+  const [cycleDateStart, setCycleDateStart] = useState<Date>(new Date());
 
   useEffect(() => {
     async function init() {
@@ -240,7 +222,6 @@ export const ClientPlanningScreen = () => {
           setConsumoModeradoCycleDurationDays(
             planning.consumoModeradoCycleDurationDays || 0,
           );
-          setCategoryReleases(planning.categoryReleases || {});
           return;
         }
 
@@ -257,7 +238,6 @@ export const ClientPlanningScreen = () => {
         setConsumptionCycleLabel("");
         setConsumptionCycleStatus("");
         setConsumoModeradoCycleDurationDays(0);
-        setCategoryReleases({});
       } catch (error) {
         console.warn("Erro ao carregar planning do cliente", error);
       }
@@ -445,6 +425,9 @@ export const ClientPlanningScreen = () => {
     const totalExpectedIncomes = sum(expectedIncomes);
     const totalSpending = totalCashExpenses;
     const expectedSavings = totalExpectedIncomes - totalCashExpenses;
+    const dailyTrackedCount =
+      (bills || []).filter((bill) => bill.dailyTracking).length +
+      (expectedExpenses || []).filter((item) => item.dailyTracking).length;
 
     return {
       totalCardExpenses,
@@ -453,6 +436,7 @@ export const ClientPlanningScreen = () => {
       totalExpectedIncomes,
       totalSpending,
       expectedSavings,
+      dailyTrackedCount,
     };
   }, [
     bills,
@@ -463,81 +447,6 @@ export const ClientPlanningScreen = () => {
     consumoModeradoAmountCard,
     consumoModeradoAmountCash,
   ]);
-
-  const activeCategoryReleases = useMemo(
-    () =>
-      Object.values(categoryReleases || {})
-        .filter((release) => release.status === "active")
-        .sort((a, b) => a.categoryName.localeCompare(b.categoryName, "pt-BR")),
-    [categoryReleases],
-  );
-
-  const openCreateReleaseModal = () => {
-    setEditingReleaseCategory(null);
-    setReleaseCategoryName(
-      DEFAULT_EXPENSE_CATEGORIES[0]?.name || "Alimentação",
-    );
-    setReleaseMonthlyLimitValue(0);
-    setIsCategoryReleaseModalVisible(true);
-  };
-
-  const openEditReleaseModal = (release: ConsumptionCategoryRelease) => {
-    setEditingReleaseCategory(release.categoryName);
-    setReleaseCategoryName(release.categoryName);
-    setReleaseMonthlyLimitValue(Number(release.monthlyLimit || 0));
-    setIsCategoryReleaseModalVisible(true);
-  };
-
-  const handleSaveCategoryRelease = async () => {
-    if (!user || !selectedClient) return;
-
-    const monthlyLimit = Number(releaseMonthlyLimitValue) || 0;
-    if (monthlyLimit <= 0) {
-      Alert.alert("Erro", "Informe um limite mensal maior que zero.");
-      return;
-    }
-
-    const durationDays = consumoModeradoCycleDurationDays || 30;
-    const dailyLimit = monthlyLimit / durationDays;
-
-    try {
-      setSavingReleaseCategory(true);
-      const updatedPlanning = await planningServices.upsertCategoryRelease(
-        user.id,
-        selectedClient.id,
-        {
-          categoryName: releaseCategoryName,
-          monthlyLimit,
-          dailyLimit,
-        },
-      );
-
-      setCategoryReleases(updatedPlanning?.categoryReleases || {});
-      setIsCategoryReleaseModalVisible(false);
-      setEditingReleaseCategory(null);
-      setReleaseMonthlyLimitValue(0);
-    } catch (error) {
-      console.error("Erro ao salvar liberação de categoria:", error);
-      Alert.alert("Erro", "Não foi possível salvar a categoria liberada.");
-    } finally {
-      setSavingReleaseCategory(false);
-    }
-  };
-
-  const handleDeactivateCategoryRelease = async (categoryName: string) => {
-    if (!user || !selectedClient) return;
-    try {
-      const updatedPlanning = await planningServices.deactivateCategoryRelease(
-        user.id,
-        selectedClient.id,
-        categoryName,
-      );
-      setCategoryReleases(updatedPlanning?.categoryReleases || {});
-    } catch (error) {
-      console.error("Erro ao desativar categoria liberada:", error);
-      Alert.alert("Erro", "Não foi possível desativar a categoria.");
-    }
-  };
 
   const handleSave = async () => {
     if (!user || !selectedClient) {
@@ -727,6 +636,7 @@ export const ClientPlanningScreen = () => {
             source: incomeSource,
             amount,
             expectedMonth: incomeMonth || undefined,
+            dailyTracking: incomeDailyTracking,
             notes: undefined,
           } as any,
         );
@@ -744,6 +654,7 @@ export const ClientPlanningScreen = () => {
             source: incomeSource,
             amount,
             expectedMonth: incomeMonth || undefined,
+            dailyTracking: incomeDailyTracking,
             notes: undefined,
           } as any,
         );
@@ -754,6 +665,7 @@ export const ClientPlanningScreen = () => {
       setIncomeSource("");
       setIncomeAmountNumber(null);
       setIncomeMonth("");
+      setIncomeDailyTracking(false);
     } catch (error) {
       console.error("Erro ao criar renda via modal:", error);
       Alert.alert("Erro", "Não foi possível criar a renda esperada");
@@ -776,8 +688,15 @@ export const ClientPlanningScreen = () => {
             ? "card"
             : "cash";
 
-      if (expenseIsBill) {
-        // create or update bill
+      if (expenseIsRecurring) {
+        // criar/atualizar como Bill (recorrente)
+        const dayNum = parseInt(expenseRecurringDay, 10);
+        if (isNaN(dayNum) || dayNum < 1 || dayNum > 31) {
+          Alert.alert("Erro", "Dia deve estar entre 1 e 31");
+          setSavingExpense(false);
+          return;
+        }
+
         if (editingBillId) {
           const updated = await planningServices.updateBill(
             user.id,
@@ -789,6 +708,9 @@ export const ClientPlanningScreen = () => {
               amountCard,
               amountCash,
               paymentMethod,
+              dueDay: dayNum,
+              recurring: true,
+              dailyTracking: expenseDailyTracking,
               notes: "",
             } as any,
           );
@@ -806,13 +728,16 @@ export const ClientPlanningScreen = () => {
               amountCard,
               amountCash,
               paymentMethod,
+              dueDay: dayNum,
+              recurring: true,
+              dailyTracking: expenseDailyTracking,
               notes: "",
             } as any,
           );
           setBills((c) => [...c, created]);
         }
       } else {
-        // expected expense (general)
+        // criar/atualizar como ExpectedExpense (não-recorrente)
         if (editingExpenseId) {
           const updated = await planningServices.updateExpectedExpense(
             user.id,
@@ -825,6 +750,7 @@ export const ClientPlanningScreen = () => {
               amountCash,
               expectedMonth: expenseDate || undefined,
               paymentMethod,
+              dailyTracking: expenseDailyTracking,
             } as any,
           );
           if (updated) {
@@ -844,6 +770,7 @@ export const ClientPlanningScreen = () => {
               amountCash,
               expectedMonth: expenseDate || undefined,
               paymentMethod,
+              dailyTracking: expenseDailyTracking,
               notes: undefined,
             } as any,
           );
@@ -857,7 +784,9 @@ export const ClientPlanningScreen = () => {
       setExpenseAmountCard(0);
       setExpenseAmountCash(0);
       setExpenseDate("");
-      setExpenseIsBill(false);
+      setExpenseIsRecurring(true);
+      setExpenseRecurringDay(String(new Date().getDate()));
+      setExpenseDailyTracking(false);
       setEditingExpenseId(null);
       setEditingBillId(null);
     } catch (err) {
@@ -993,10 +922,19 @@ export const ClientPlanningScreen = () => {
               user.id,
               selectedClient.id,
               durationDays,
+              cycleDateStart,
             )
           : await planningServices.updatePlanning(user.id, selectedClient.id, {
               consumoModeradoCycleDurationDays: durationDays,
             });
+
+      if (cycleDurationAction === "restart") {
+        await budgetServices.resetBudgetForDate(
+          selectedClient.id,
+          cycleDateStart,
+        );
+      }
+
       setConsumptionCycleLabel(getPlanningCycleLabel(updated) || "");
       setConsumptionCycleStatus(updated?.consumoModeradoCycleStatus || "");
       setConsumoModeradoCycleDurationDays(
@@ -1169,6 +1107,13 @@ export const ClientPlanningScreen = () => {
                   </Text>
                 </View>
               </View>
+
+              <View style={[styles.trackingInfoCard, { marginTop: 8 }]}>
+                <Ionicons name="analytics" size={16} color="#8c52ff" />
+                <Text style={styles.trackingInfoText}>
+                  {totals.dailyTrackedCount} gasto(s) com Acompanhamento Diário
+                </Text>
+              </View>
             </View>
 
             <View style={{ marginBottom: 8 }}>
@@ -1185,7 +1130,9 @@ export const ClientPlanningScreen = () => {
                     setExpenseSource("");
                     setExpenseAmount("");
                     setExpenseDate("");
-                    setExpenseIsBill(false);
+                    setExpenseIsRecurring(true);
+                    setExpenseRecurringDay(String(new Date().getDate()));
+                    setExpenseDailyTracking(false);
                     setEditingExpenseId(null);
                     setEditingBillId(null);
                     setIsExpenseModalVisible(true);
@@ -1194,65 +1141,6 @@ export const ClientPlanningScreen = () => {
                   <Text style={styles.saveButtonText}>Cadastrar Gasto</Text>
                 </TouchableOpacity>
               </View>
-            </View>
-
-            <View style={styles.sectionBlock}>
-              <View style={styles.releaseSectionHeader}>
-                <Text style={styles.label}>Categorias liberadas</Text>
-                <TouchableOpacity
-                  style={styles.addReleaseButton}
-                  onPress={openCreateReleaseModal}
-                >
-                  <Text style={styles.addReleaseButtonText}>
-                    Liberar categoria
-                  </Text>
-                </TouchableOpacity>
-              </View>
-
-              {activeCategoryReleases.length === 0 ? (
-                <Text style={styles.emptyListText}>
-                  Nenhuma categoria liberada para Consumo Moderado.
-                </Text>
-              ) : (
-                activeCategoryReleases.map((release) => (
-                  <View key={release.categoryName} style={styles.releaseCard}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.releaseTitle}>
-                        {release.categoryName}
-                      </Text>
-                      <Text style={styles.releaseMeta}>
-                        Limite mensal: {formatCurrency(release.monthlyLimit)}
-                      </Text>
-                      <Text style={styles.releaseMeta}>
-                        Meta diária: {formatCurrency(release.dailyLimit)}
-                      </Text>
-                    </View>
-
-                    <View style={styles.releaseActions}>
-                      <TouchableOpacity
-                        style={[
-                          styles.actionButton,
-                          { backgroundColor: "#8c52ff" },
-                        ]}
-                        onPress={() => openEditReleaseModal(release)}
-                      >
-                        <Ionicons name="pencil" size={16} color="#fff" />
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[
-                          styles.actionButton,
-                          { backgroundColor: "#ff6666" },
-                        ]}
-                        onPress={() =>
-                          handleDeactivateCategoryRelease(release.categoryName)
-                        }
-                      >
-                        <Ionicons name="close" size={16} color="#fff" />
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                ))
-              )}
             </View>
 
             <Text style={styles.label}>Contas / Despesas fixas</Text>
@@ -1270,6 +1158,18 @@ export const ClientPlanningScreen = () => {
                   <View style={styles.billHeader}>
                     <View style={styles.billInfo}>
                       <Text style={styles.billTitle}>{bill.name}</Text>
+                      {bill.dailyTracking ? (
+                        <View style={styles.dailyTrackingBadge}>
+                          <Ionicons
+                            name="analytics"
+                            size={12}
+                            color="#8c52ff"
+                          />
+                          <Text style={styles.dailyTrackingBadgeText}>
+                            Acompanhado diariamente
+                          </Text>
+                        </View>
+                      ) : null}
                       {bill.notes ? (
                         <Text style={styles.billDescription}>{bill.notes}</Text>
                       ) : null}
@@ -1291,29 +1191,23 @@ export const ClientPlanningScreen = () => {
                         { backgroundColor: "#8c52ff" },
                       ]}
                       onPress={() => {
-                        // edit bill
-                        setBillTitle(bill.name || "");
-                        setBillDescription(bill.notes || "");
+                        // edit bill using the same expense modal
                         const split = resolveSplitAmounts(bill as any);
-                        setBillAmount(formatCurrencyValue(split.total));
-                        setBillAmountCard(split.card);
-                        setBillAmountCash(split.cash);
-                        setBillPaymentMethod(
-                          split.card > 0 && split.cash > 0
-                            ? ("cash" as any)
-                            : isCardPayment(bill.paymentMethod)
-                              ? "card"
-                              : "cash",
+                        setExpenseSource(bill.name || "");
+                        setExpenseAmount(formatCurrencyValue(split.total));
+                        setExpenseAmountCard(split.card);
+                        setExpenseAmountCash(split.cash);
+                        setExpenseIsRecurring(true);
+                        setExpenseRecurringDay(
+                          bill.dueDay
+                            ? String(bill.dueDay)
+                            : String(new Date().getDate()),
                         );
-                        setBillDueDate(
-                          bill.dueDate
-                            ? (bill.dueDate as any).toLocaleDateString("pt-BR")
-                            : bill.dueDay
-                              ? String(bill.dueDay)
-                              : "",
-                        );
+                        setExpenseDate("");
+                        setExpenseDailyTracking(Boolean(bill.dailyTracking));
+                        setEditingExpenseId(null);
                         setEditingBillId(bill.id || null);
-                        setIsBillModalVisible(true);
+                        setIsExpenseModalVisible(true);
                       }}
                     >
                       <Ionicons name="pencil" size={16} color="#fff" />
@@ -1352,6 +1246,18 @@ export const ClientPlanningScreen = () => {
                     <View style={styles.billHeader}>
                       <View style={styles.billInfo}>
                         <Text style={styles.billTitle}>{item.source}</Text>
+                        {item.dailyTracking ? (
+                          <View style={styles.dailyTrackingBadge}>
+                            <Ionicons
+                              name="analytics"
+                              size={12}
+                              color="#8c52ff"
+                            />
+                            <Text style={styles.dailyTrackingBadgeText}>
+                              Acompanhado diariamente
+                            </Text>
+                          </View>
+                        ) : null}
                         {item.notes ? (
                           <Text style={styles.billDescription}>
                             {item.notes}
@@ -1381,8 +1287,11 @@ export const ClientPlanningScreen = () => {
                           setExpenseAmountCard(split.card);
                           setExpenseAmountCash(split.cash);
                           setExpenseDate(item.expectedMonth || "");
-                          setExpenseIsBill(false);
+                          setExpenseIsRecurring(false);
+                          setExpenseRecurringDay(String(new Date().getDate()));
+                          setExpenseDailyTracking(Boolean(item.dailyTracking));
                           setEditingExpenseId(item.id || null);
+                          setEditingBillId(null);
                           setIsExpenseModalVisible(true);
                         }}
                       >
@@ -1432,7 +1341,14 @@ export const ClientPlanningScreen = () => {
             <View style={{ marginBottom: 8 }}>
               <TouchableOpacity
                 style={styles.saveButton}
-                onPress={() => setIsIncomeModalVisible(true)}
+                onPress={() => {
+                  setIncomeSource("");
+                  setIncomeAmountNumber(null);
+                  setIncomeMonth("");
+                  setIncomeDailyTracking(false);
+                  setEditingIncomeId(null);
+                  setIsIncomeModalVisible(true);
+                }}
               >
                 <Text style={styles.saveButtonText}>Cadastrar Renda</Text>
               </TouchableOpacity>
@@ -1457,6 +1373,18 @@ export const ClientPlanningScreen = () => {
                       <Text style={styles.billTitle}>
                         {item.source || "Outros"}
                       </Text>
+                      {item.dailyTracking ? (
+                        <View style={styles.dailyTrackingBadge}>
+                          <Ionicons
+                            name="analytics"
+                            size={12}
+                            color="#8c52ff"
+                          />
+                          <Text style={styles.dailyTrackingBadgeText}>
+                            Acompanhado diariamente
+                          </Text>
+                        </View>
+                      ) : null}
                       {item.notes ? (
                         <Text style={styles.billDescription}>{item.notes}</Text>
                       ) : null}
@@ -1478,6 +1406,7 @@ export const ClientPlanningScreen = () => {
                         setIncomeSource(item.source || "");
                         setIncomeAmountNumber(Number(item.amount || 0));
                         setIncomeMonth(item.expectedMonth || "");
+                        setIncomeDailyTracking(Boolean(item.dailyTracking));
                         setEditingIncomeId(item.id || null);
                         setIsIncomeModalVisible(true);
                       }}
@@ -1752,6 +1681,34 @@ export const ClientPlanningScreen = () => {
                       placeholderTextColor="#777"
                     />
                   </View>
+
+                  <View style={[styles.inputGroup, styles.lastInputGroup]}>
+                    <View
+                      style={{ flexDirection: "row", alignItems: "center" }}
+                    >
+                      <TouchableOpacity
+                        style={[
+                          styles.checkbox,
+                          incomeDailyTracking && styles.checkboxActive,
+                        ]}
+                        onPress={() =>
+                          setIncomeDailyTracking(!incomeDailyTracking)
+                        }
+                      >
+                        {incomeDailyTracking ? (
+                          <Ionicons name="checkmark" size={16} color="#fff" />
+                        ) : null}
+                      </TouchableOpacity>
+                      <Text
+                        style={[
+                          styles.inputLabel,
+                          { marginLeft: 12, marginBottom: 0 },
+                        ]}
+                      >
+                        Acompanhamento Diário
+                      </Text>
+                    </View>
+                  </View>
                 </ScrollView>
 
                 <TouchableOpacity
@@ -1803,7 +1760,9 @@ export const ClientPlanningScreen = () => {
               >
                 <View style={styles.modalHeader}>
                   <Text style={[styles.modalTitle]}>
-                    {editingExpenseId ? "Editar Gasto" : "Cadastrar Gasto"}
+                    {editingExpenseId || editingBillId
+                      ? "Editar Gasto"
+                      : "Cadastrar Gasto"}
                   </Text>
                   <TouchableOpacity
                     onPress={() => setIsExpenseModalVisible(false)}
@@ -1862,51 +1821,86 @@ export const ClientPlanningScreen = () => {
                   </View>
 
                   <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Data</Text>
-                    <TextInput
-                      style={styles.input}
-                      value={expenseDate}
-                      onChangeText={setExpenseDate}
-                      placeholder="YYYY-MM-DD"
-                      placeholderTextColor="#777"
-                    />
+                    <View
+                      style={{ flexDirection: "row", alignItems: "center" }}
+                    >
+                      <TouchableOpacity
+                        style={[
+                          styles.checkbox,
+                          expenseIsRecurring && styles.checkboxActive,
+                        ]}
+                        onPress={() =>
+                          setExpenseIsRecurring(!expenseIsRecurring)
+                        }
+                      >
+                        {expenseIsRecurring && (
+                          <Ionicons name="checkmark" size={16} color="#fff" />
+                        )}
+                      </TouchableOpacity>
+                      <Text
+                        style={[
+                          styles.inputLabel,
+                          { marginLeft: 12, marginBottom: 0 },
+                        ]}
+                      >
+                        É uma despesa recorrente?
+                      </Text>
+                    </View>
                   </View>
 
+                  {expenseIsRecurring ? (
+                    <View style={styles.inputGroup}>
+                      <Text style={styles.inputLabel}>Dia do mês (1-31) *</Text>
+                      <TextInput
+                        style={styles.input}
+                        value={expenseRecurringDay}
+                        onChangeText={setExpenseRecurringDay}
+                        placeholder="Ex: 15"
+                        placeholderTextColor="#777"
+                        keyboardType="number-pad"
+                        maxLength={2}
+                      />
+                    </View>
+                  ) : (
+                    <View style={styles.inputGroup}>
+                      <Text style={styles.inputLabel}>Data (Dia/Mês) *</Text>
+                      <TextInput
+                        style={styles.input}
+                        value={expenseDate}
+                        onChangeText={setExpenseDate}
+                        placeholder="DD/MM"
+                        placeholderTextColor="#777"
+                        keyboardType="numeric"
+                        maxLength={5}
+                      />
+                    </View>
+                  )}
+
                   <View style={[styles.inputGroup, styles.lastInputGroup]}>
-                    <Text style={styles.inputLabel}>Tipo</Text>
-                    <View style={{ flexDirection: "row", gap: 8 }}>
+                    <View
+                      style={{ flexDirection: "row", alignItems: "center" }}
+                    >
                       <TouchableOpacity
                         style={[
-                          styles.paymentChip,
-                          expenseIsBill && styles.paymentChipActive,
+                          styles.checkbox,
+                          expenseDailyTracking && styles.checkboxActive,
                         ]}
-                        onPress={() => setExpenseIsBill(true)}
+                        onPress={() =>
+                          setExpenseDailyTracking(!expenseDailyTracking)
+                        }
                       >
-                        <Text
-                          style={[
-                            styles.paymentChipText,
-                            expenseIsBill && styles.paymentChipTextActive,
-                          ]}
-                        >
-                          Conta / Fixo
-                        </Text>
+                        {expenseDailyTracking ? (
+                          <Ionicons name="checkmark" size={16} color="#fff" />
+                        ) : null}
                       </TouchableOpacity>
-                      <TouchableOpacity
+                      <Text
                         style={[
-                          styles.paymentChip,
-                          !expenseIsBill && styles.paymentChipActive,
+                          styles.inputLabel,
+                          { marginLeft: 12, marginBottom: 0 },
                         ]}
-                        onPress={() => setExpenseIsBill(false)}
                       >
-                        <Text
-                          style={[
-                            styles.paymentChipText,
-                            !expenseIsBill && styles.paymentChipTextActive,
-                          ]}
-                        >
-                          Gasto geral
-                        </Text>
-                      </TouchableOpacity>
+                        Acompanhamento Diário
+                      </Text>
                     </View>
                   </View>
                 </ScrollView>
@@ -1919,135 +1913,9 @@ export const ClientPlanningScreen = () => {
                     <ActivityIndicator color="#fff" />
                   ) : (
                     <Text style={styles.saveButtonText}>
-                      {editingExpenseId ? "Atualizar Gasto" : "Salvar Gasto"}
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-            </TouchableOpacity>
-          </TouchableOpacity>
-        </KeyboardAvoidingView>
-      </Modal>
-
-      <Modal
-        visible={isCategoryReleaseModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setIsCategoryReleaseModalVisible(false)}
-      >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={styles.modalOverlay}
-        >
-          <TouchableOpacity
-            style={styles.modalOverlay}
-            activeOpacity={1}
-            onPress={() => setIsCategoryReleaseModalVisible(false)}
-          >
-            <TouchableOpacity
-              activeOpacity={1}
-              onPress={(e) => e.stopPropagation()}
-            >
-              <View
-                style={[
-                  styles.modalContent,
-                  styles.categoryReleaseModalContent,
-                  {
-                    backgroundColor: "#0a0a0a",
-                    maxHeight: categoryReleaseModalMaxHeight,
-                    width: isWeb ? "94%" : "84%",
-                    maxWidth: isWeb ? 560 : 390,
-                  },
-                ]}
-              >
-                <View style={styles.modalHeader}>
-                  <Text style={styles.modalTitle}>
-                    {editingReleaseCategory
-                      ? "Editar categoria liberada"
-                      : "Liberar categoria"}
-                  </Text>
-                  <TouchableOpacity
-                    onPress={() => setIsCategoryReleaseModalVisible(false)}
-                  >
-                    <Ionicons name="close" size={24} color="#bbb" />
-                  </TouchableOpacity>
-                </View>
-
-                <ScrollView
-                  style={[
-                    styles.categoryReleaseModalScroll,
-                    { maxHeight: categoryReleaseModalScrollMaxHeight },
-                  ]}
-                  contentContainerStyle={
-                    styles.categoryReleaseModalScrollContent
-                  }
-                  showsVerticalScrollIndicator={false}
-                  keyboardShouldPersistTaps="handled"
-                >
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Categoria *</Text>
-                    <View style={styles.categoryGrid}>
-                      {DEFAULT_EXPENSE_CATEGORIES.map((category) => {
-                        const isActive = releaseCategoryName === category.name;
-                        return (
-                          <TouchableOpacity
-                            key={category.name}
-                            style={[
-                              styles.categoryChip,
-                              isActive && styles.categoryChipActive,
-                              editingReleaseCategory &&
-                                editingReleaseCategory !== category.name &&
-                                styles.categoryChipDisabled,
-                            ]}
-                            disabled={
-                              !!editingReleaseCategory &&
-                              editingReleaseCategory !== category.name
-                            }
-                            onPress={() =>
-                              setReleaseCategoryName(category.name)
-                            }
-                          >
-                            <Text
-                              style={[
-                                styles.categoryChipText,
-                                isActive && styles.categoryChipTextActive,
-                              ]}
-                            >
-                              {category.name}
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </View>
-                  </View>
-
-                  <View style={styles.inputGroup}>
-                    <CurrencyInput
-                      label="Limite mensal *"
-                      value={releaseMonthlyLimitValue}
-                      onChangeValue={setReleaseMonthlyLimitValue}
-                      placeholder="Ex: 450,00"
-                      editable={!savingReleaseCategory}
-                      icon="wallet"
-                    />
-                    <Text style={styles.releaseHintText}>
-                      A meta diária será calculada pela duração atual do ciclo.
-                    </Text>
-                  </View>
-                </ScrollView>
-
-                <TouchableOpacity
-                  style={[styles.saveButton, { marginTop: 12 }]}
-                  onPress={handleSaveCategoryRelease}
-                  disabled={savingReleaseCategory}
-                >
-                  {savingReleaseCategory ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <Text style={styles.saveButtonText}>
-                      {editingReleaseCategory
-                        ? "Atualizar categoria"
-                        : "Liberar categoria"}
+                      {editingExpenseId || editingBillId
+                        ? "Atualizar Gasto"
+                        : "Salvar Gasto"}
                     </Text>
                   )}
                 </TouchableOpacity>
@@ -2174,6 +2042,17 @@ export const ClientPlanningScreen = () => {
                     <Ionicons name="close" size={24} color="#bbb" />
                   </TouchableOpacity>
                 </View>
+
+                {cycleDurationAction === "restart" && (
+                  <View style={styles.inputGroup}>
+                    <DatePicker
+                      label="Data de início do ciclo"
+                      date={cycleDateStart}
+                      onChangeDate={setCycleDateStart}
+                      editable={!consumptionCycleLoading}
+                    />
+                  </View>
+                )}
 
                 <View style={styles.inputGroup}>
                   <Text style={styles.inputLabel}>
@@ -2392,6 +2271,20 @@ const styles = StyleSheet.create({
   notesInput: {
     height: 120,
   },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: "#666",
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#0a0a0a",
+  },
+  checkboxActive: {
+    backgroundColor: "#8c52ff",
+    borderColor: "#8c52ff",
+  },
   tabPanel: {
     marginTop: 16,
   },
@@ -2443,6 +2336,22 @@ const styles = StyleSheet.create({
   highlightValueSmall: {
     color: "#fff",
     fontSize: 16,
+    fontWeight: "700",
+  },
+  trackingInfoCard: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(140, 82, 255, 0.35)",
+    backgroundColor: "rgba(140, 82, 255, 0.12)",
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  trackingInfoText: {
+    color: "#d7c8ff",
+    fontSize: 13,
     fontWeight: "700",
   },
   emptyListText: {
@@ -2551,6 +2460,24 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     marginBottom: 4,
     color: "#fff",
+  },
+  dailyTrackingBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "rgba(140, 82, 255, 0.15)",
+    borderColor: "rgba(140, 82, 255, 0.45)",
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    alignSelf: "flex-start",
+    marginBottom: 6,
+  },
+  dailyTrackingBadgeText: {
+    color: "#c7b0ff",
+    fontSize: 12,
+    fontWeight: "700",
   },
   billDescription: {
     fontSize: 14,

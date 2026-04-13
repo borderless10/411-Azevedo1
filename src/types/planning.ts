@@ -125,6 +125,7 @@ export interface Bill {
   amount: number;
   amountCard?: number;
   amountCash?: number;
+  dailyTracking?: boolean;
   paymentMethod?: string; // 'card' | 'cash' | 'pix' etc.
   dueDay?: number; // dia do mês quando a conta vence (1-31)
   dueDate?: Date; // compatibilidade com dados legados
@@ -143,6 +144,7 @@ export interface BillFirestore {
   amount: number;
   amountCard?: number;
   amountCash?: number;
+  dailyTracking?: boolean;
   paymentMethod?: string;
   dueDay?: number;
   dueDate?: Timestamp;
@@ -161,6 +163,7 @@ export interface ExpectedItem {
   amount: number;
   amountCard?: number;
   amountCash?: number;
+  dailyTracking?: boolean;
   expectedMonth?: string; // opcional, formato YYYY-MM
   paymentMethod?: string; // 'card' | 'cash' | 'pix' etc.
   categoryId?: string;
@@ -175,6 +178,7 @@ export interface ExpectedItemFirestore {
   amount: number;
   amountCard?: number;
   amountCash?: number;
+  dailyTracking?: boolean;
   expectedMonth?: string;
   paymentMethod?: string;
   categoryId?: string;

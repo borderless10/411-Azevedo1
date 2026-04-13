@@ -151,6 +151,14 @@ export const expenseServices = {
         updatedAt: Timestamp.fromDate(now),
       };
 
+      if (data.isConsumoModerado) {
+        expenseData.isConsumoModerado = true;
+      }
+
+      if (data.sourceBillId) {
+        expenseData.sourceBillId = data.sourceBillId;
+      }
+
       if (paymentMethod === "credit_card" && data.cardId) {
         expenseData.cardId = data.cardId;
         expenseData.cardLast4 = cardLast4;
@@ -185,6 +193,8 @@ export const expenseServices = {
         ...(data.autoDebitInvoiceKey
           ? { autoDebitInvoiceKey: data.autoDebitInvoiceKey }
           : {}),
+        ...(data.isConsumoModerado ? { isConsumoModerado: true } : {}),
+        ...(data.sourceBillId ? { sourceBillId: data.sourceBillId } : {}),
         createdAt: now,
         updatedAt: now,
       };
@@ -474,6 +484,57 @@ export const expenseServices = {
       }
     } catch (error) {
       console.error("❌ [EXPENSE SERVICE] Erro ao deletar gasto:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Deletar gasto associado a uma conta paga
+   */
+  async deleteExpenseBySourceBillId(
+    userId: string,
+    sourceBillId: string,
+  ): Promise<boolean> {
+    console.log("💸 [EXPENSE SERVICE] Removendo gasto vinculado à conta:", {
+      userId,
+      sourceBillId,
+    });
+
+    try {
+      const q = query(getExpensesCollection(), where("userId", "==", userId));
+      const snapshot = await getDocs(q);
+
+      const match = snapshot.docs.find((doc) => {
+        const data = doc.data() as any;
+        return String(data?.sourceBillId || "") === String(sourceBillId);
+      });
+
+      if (!match) {
+        console.log("⚠️ [EXPENSE SERVICE] Nenhum gasto vinculado encontrado");
+        return false;
+      }
+
+      const expense = convertExpenseFromFirestore(getDocData(match));
+      await deleteDoc(getExpenseDoc(match.id));
+      console.log("✅ [EXPENSE SERVICE] Gasto vinculado removido");
+
+      await activityServices.logActivity(userId, {
+        type: "expense_deleted",
+        title: `Gasto removido: ${expense.description}`,
+        description: formatCurrency(expense.value),
+        metadata: {
+          amount: expense.value,
+          category: expense.category,
+          sourceBillId,
+        },
+      });
+
+      return true;
+    } catch (error) {
+      console.error(
+        "❌ [EXPENSE SERVICE] Erro ao remover gasto vinculado à conta:",
+        error,
+      );
       throw error;
     }
   },

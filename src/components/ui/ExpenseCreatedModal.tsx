@@ -1,5 +1,5 @@
 import React from "react";
-import { Modal, View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { Modal, View, Text, TouchableOpacity, StyleSheet, ScrollView } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { formatCurrency } from "../../utils/currencyUtils";
 
@@ -22,7 +22,12 @@ const ExpenseCreatedModal: React.FC<Props> = ({
     <Modal animationType="fade" transparent visible={visible}>
       <View style={styles.backdrop}>
         <View style={styles.container}>
-          <View style={styles.iconWrap}>
+          <TouchableOpacity style={styles.closeIcon} onPress={onClose} accessibilityLabel="Fechar">
+            <Ionicons name="close" size={22} color="#bdb6c9" />
+          </TouchableOpacity>
+
+          <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+            <View style={styles.iconWrap}>
             <Ionicons name="checkmark-circle" size={64} color="#ff4d6d" />
           </View>
 
@@ -34,7 +39,7 @@ const ExpenseCreatedModal: React.FC<Props> = ({
             Seu gasto foi registrado com sucesso.
           </Text>
 
-          <View style={styles.actionsRow}>
+            <View style={styles.actionsRow}>
             <TouchableOpacity
               style={styles.secondaryButton}
               onPress={() => {
@@ -53,11 +58,12 @@ const ExpenseCreatedModal: React.FC<Props> = ({
             >
               <Text style={styles.primaryLabel}>Ver gastos</Text>
             </TouchableOpacity>
-          </View>
+            </View>
 
-          <TouchableOpacity style={styles.closeRow} onPress={onClose}>
-            <Text style={styles.closeText}>Fechar</Text>
-          </TouchableOpacity>
+            <TouchableOpacity style={styles.closeRow} onPress={onClose}>
+              <Text style={styles.closeText}>Fechar</Text>
+            </TouchableOpacity>
+          </ScrollView>
         </View>
       </View>
     </Modal>
@@ -78,12 +84,29 @@ const styles = StyleSheet.create({
     backgroundColor: "#0f0f10",
     borderRadius: 14,
     padding: 20,
+    position: "relative",
+    maxHeight: "80%",
+    overflow: "hidden",
     alignItems: "center",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.6,
     shadowRadius: 16,
     elevation: 10,
+  },
+  closeIcon: {
+    position: "absolute",
+    top: 10,
+    right: 10,
+    zIndex: 20,
+    padding: 6,
+  },
+  scroll: {
+    width: "100%",
+  },
+  scrollContent: {
+    alignItems: "center",
+    paddingBottom: 8,
   },
   iconWrap: {
     marginBottom: 8,

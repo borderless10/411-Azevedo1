@@ -226,17 +226,17 @@ export const FeedScreen = () => {
 
   if (loading) {
     return (
-      <Layout title="Feed" showBackButton={false} showSidebar={true}>
+      <Layout title="Linha do Tempo" showBackButton={false} showSidebar={true}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#8c52ff" />
-          <Text style={styles.loadingText}>Carregando feed...</Text>
+          <Text style={styles.loadingText}>Carregando linha do tempo...</Text>
         </View>
       </Layout>
     );
   }
 
   return (
-    <Layout title="Feed" showBackButton={false} showSidebar={true}>
+    <Layout title="Linha do Tempo" showBackButton={false} showSidebar={true}>
       <ScrollView
         style={styles.container}
         refreshControl={
@@ -260,7 +260,7 @@ export const FeedScreen = () => {
           {/* Cabeçalho */}
           <View style={styles.header}>
             <Ionicons name="newspaper-outline" size={64} color="#8c52ff" />
-            <Text style={styles.title}>Feed</Text>
+            <Text style={styles.title}>Linha do Tempo</Text>
             <Text style={styles.subtitle}>
               Dicas rápidas e suas atividades recentes
             </Text>

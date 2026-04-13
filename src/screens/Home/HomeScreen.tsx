@@ -27,6 +27,10 @@ import expenseServices from "../../services/expenseServices";
 import { budgetServices } from "../../services/budgetServices";
 import { planningServices } from "../../services/planningServices";
 import { activityServices } from "../../services/activityServices";
+import {
+  requestNotificationPermissions,
+  syncExpectedIncomeNotifications,
+} from "../../services/notificationServices";
 import { formatCurrency } from "../../utils/currencyUtils";
 import MaskedAmount from "../../components/ui/MaskedAmount";
 import {
@@ -79,6 +83,7 @@ export const HomeScreen = () => {
     [],
   );
   const [lineChartData, setLineChartData] = useState<LineChartData[]>([]);
+  const [activePeriodLabel, setActivePeriodLabel] = useState("Este mês");
 
   // Animações
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -130,7 +135,23 @@ export const HomeScreen = () => {
   };
 
   const isCreditCardExpense = (expense: Expense | any) => {
-    return expense?.paymentMethod === "credit_card" || Boolean(expense?.cardId);
+    const paymentMethod = String(expense?.paymentMethod || "")
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+
+    const isCardMethod =
+      paymentMethod === "credit_card" ||
+      paymentMethod === "debit_card" ||
+      paymentMethod === "card" ||
+      paymentMethod === "cart" ||
+      paymentMethod === "cartao" ||
+      paymentMethod === "credito" ||
+      paymentMethod === "credit" ||
+      paymentMethod === "debito";
+
+    return isCardMethod || Boolean(expense?.cardId);
   };
 
   // Carregar dados do mês atual
@@ -156,16 +177,54 @@ export const HomeScreen = () => {
       const today = new Date();
       const startOfMonth = getFirstDayOfMonth(today);
       const endOfToday = getEndOfDay(today);
+      let activeStartDate = startOfMonth;
+      let activeEndDate = endOfToday;
+
+      // Load planning first to respect cycle start/end when present.
+      let planning: any = null;
+      try {
+        if (user.role !== "consultor" && !user.isAdmin) {
+          planning = await planningServices.getPlanning(user.id);
+
+          if (planning?.consumoModeradoCycleStartedAt) {
+            activeStartDate = getStartOfDay(
+              new Date(planning.consumoModeradoCycleStartedAt),
+            );
+            setActivePeriodLabel("No ciclo");
+
+            if (planning?.consumoModeradoCycleEndedAt) {
+              const cycleEnd = getEndOfDay(
+                new Date(planning.consumoModeradoCycleEndedAt),
+              );
+              activeEndDate = cycleEnd < endOfToday ? cycleEnd : endOfToday;
+            }
+          } else {
+            setActivePeriodLabel("Este mês");
+          }
+        } else {
+          setActivePeriodLabel("Este mês");
+        }
+      } catch (err) {
+        console.error("❌ [HOME] Erro ao buscar planning:", err);
+        setActivePeriodLabel("Este mês");
+      }
+
+      if (activeEndDate < activeStartDate) {
+        activeEndDate = getEndOfDay(activeStartDate);
+      }
 
       // Período para gráfico de linha (últimos 7 dias)
       const sevenDaysAgo = getStartOfDay(subtractDays(today, 6));
+      const lineChartStartDate =
+        sevenDaysAgo > activeStartDate ? sevenDaysAgo : activeStartDate;
+      const canLoadLineChart = lineChartStartDate <= activeEndDate;
 
       console.log("🏠 [HOME] Buscando dados do período:", {
-        startOfMonth,
-        endOfToday,
+        start: activeStartDate,
+        end: activeEndDate,
       });
 
-      // Carregar totais do mês, todas as transações e dados dos gráficos em paralelo
+      // Carregar totais, transações e dados dos gráficos em paralelo (respeitando ciclo)
       const [
         incomeTotal,
         expenseTotal,
@@ -176,27 +235,37 @@ export const HomeScreen = () => {
         last7DaysExpenses,
       ] = await Promise.all([
         incomeServices
-          .getIncomesTotal(user.id, startOfMonth, endOfToday)
+          .getIncomesTotal(user.id, activeStartDate, activeEndDate)
           .catch((err) => {
             console.error("❌ [HOME] Erro ao buscar totais de renda:", err);
             return 0;
           }),
         expenseServices
-          .getExpensesTotal(user.id, startOfMonth, endOfToday)
+          .getExpensesTotal(user.id, activeStartDate, activeEndDate)
           .catch((err) => {
             console.error("❌ [HOME] Erro ao buscar totais de gastos:", err);
             return 0;
           }),
-        incomeServices.getIncomes(user.id).catch((err) => {
-          console.error("❌ [HOME] Erro ao buscar rendas:", err);
-          return [];
-        }),
-        expenseServices.getExpenses(user.id).catch((err) => {
-          console.error("❌ [HOME] Erro ao buscar gastos:", err);
-          return [];
-        }),
+        incomeServices
+          .getIncomes(user.id, {
+            startDate: activeStartDate,
+            endDate: activeEndDate,
+          })
+          .catch((err) => {
+            console.error("❌ [HOME] Erro ao buscar rendas:", err);
+            return [];
+          }),
         expenseServices
-          .getExpensesGroupedByCategory(user.id, startOfMonth, endOfToday)
+          .getExpenses(user.id, {
+            startDate: activeStartDate,
+            endDate: activeEndDate,
+          })
+          .catch((err) => {
+            console.error("❌ [HOME] Erro ao buscar gastos:", err);
+            return [];
+          }),
+        expenseServices
+          .getExpensesGroupedByCategory(user.id, activeStartDate, activeEndDate)
           .catch((err) => {
             console.error(
               "❌ [HOME] Erro ao buscar gastos por categoria:",
@@ -204,38 +273,35 @@ export const HomeScreen = () => {
             );
             return [];
           }),
-        incomeServices
-          .getIncomes(user.id, { startDate: sevenDaysAgo, endDate: endOfToday })
-          .catch((err) => {
-            console.error(
-              "❌ [HOME] Erro ao buscar rendas dos últimos 7 dias:",
-              err,
-            );
-            return [];
-          }),
-        expenseServices
-          .getExpenses(user.id, {
-            startDate: sevenDaysAgo,
-            endDate: endOfToday,
-          })
-          .catch((err) => {
-            console.error(
-              "❌ [HOME] Erro ao buscar gastos dos últimos 7 dias:",
-              err,
-            );
-            return [];
-          }),
+        canLoadLineChart
+          ? incomeServices
+              .getIncomes(user.id, {
+                startDate: lineChartStartDate,
+                endDate: activeEndDate,
+              })
+              .catch((err) => {
+                console.error(
+                  "❌ [HOME] Erro ao buscar rendas dos últimos 7 dias:",
+                  err,
+                );
+                return [];
+              })
+          : Promise.resolve([]),
+        canLoadLineChart
+          ? expenseServices
+              .getExpenses(user.id, {
+                startDate: lineChartStartDate,
+                endDate: activeEndDate,
+              })
+              .catch((err) => {
+                console.error(
+                  "❌ [HOME] Erro ao buscar gastos dos últimos 7 dias:",
+                  err,
+                );
+                return [];
+              })
+          : Promise.resolve([]),
       ]);
-
-      // Load planning for normal users (consultant provides expected incomes/expenses)
-      let planning: any = null;
-      try {
-        if (user.role !== "consultor" && !user.isAdmin) {
-          planning = await planningServices.getPlanning(user.id);
-        }
-      } catch (err) {
-        console.error("❌ [HOME] Erro ao buscar planning:", err);
-      }
 
       setPlanningData(planning || null);
 
@@ -308,8 +374,6 @@ export const HomeScreen = () => {
         // gasto esperado no mês = bills + plannedByCategory + expectedExpenses
         calcExpectedExpenses = sumBills + sumByCategory + sumExpExpenses;
         calcExpectedIncomes = monthly + sumExpIncomes;
-        // expected savings: monthlyIncome + expectedIncomes - expectedExpenses
-        // ensure numbers (coalesce nulls) to avoid `possibly null` TypeScript errors
         calcExpectedSavings =
           (calcExpectedIncomes ?? 0) - (calcExpectedExpenses ?? 0);
       }
@@ -318,13 +382,28 @@ export const HomeScreen = () => {
       setExpectedIncomes(calcExpectedIncomes);
       setExpectedSavings(calcExpectedSavings);
 
+      // Sincronizar notificações de renda prevista (somente cliente comum/premium).
+      if (planning && user.role !== "consultor" && !user.isAdmin) {
+        const hasPermission = await requestNotificationPermissions();
+        if (hasPermission) {
+          await syncExpectedIncomeNotifications(
+            user.id,
+            (planning.expectedIncomes || []).map((income: any) => ({
+              id: String(income.id || ""),
+              source: String(income.source || "Renda esperada"),
+              expectedMonth: income.expectedMonth,
+            })),
+          );
+        }
+      }
+
       console.log("🏠 [HOME] Dados recebidos:", {
         incomeTotal,
         expenseTotal,
         allIncomesCount: allIncomes.length,
         allExpensesCount: allExpenses.length,
-        startOfMonth: startOfMonth.toISOString(),
-        endOfToday: endOfToday.toISOString(),
+        start: activeStartDate.toISOString(),
+        end: activeEndDate.toISOString(),
       });
 
       // Combinar e ordenar por data de criação
@@ -389,15 +468,19 @@ export const HomeScreen = () => {
       // Atualizar estados
       setTotalIncome(incomeTotal);
       setTotalExpense(expenseTotal);
-      const realizedExpenses = allExpenses.filter(
-        (expense) => !isCreditCardExpense(expense),
-      );
-      const realizedExpense = realizedExpenses.reduce(
+      const realizedExpenseAll = allExpenses.reduce(
         (sum, expense) => sum + (Number(expense.value) || 0),
         0,
       );
-      const realizedBalanceTotal = incomeTotal - realizedExpense;
-      setRealizedExpenseTotal(realizedExpense);
+      const realizedExpenses = allExpenses.filter(
+        (expense) => !isCreditCardExpense(expense),
+      );
+      const realizedExpenseForBalance = realizedExpenses.reduce(
+        (sum, expense) => sum + (Number(expense.value) || 0),
+        0,
+      );
+      const realizedBalanceTotal = incomeTotal - realizedExpenseForBalance;
+      setRealizedExpenseTotal(realizedExpenseAll);
       setRealizedBalance(realizedBalanceTotal);
       setBalance(calculatedBalance);
       setAllTransactions(allTransactionsWithType);
@@ -1232,7 +1315,7 @@ export const HomeScreen = () => {
                         />
                       )}
                       <Text style={styles.summarySubtext}>
-                        Este mês (estimado)
+                        {activePeriodLabel} (estimado)
                       </Text>
                     </View>
                     <View style={styles.balanceIconContainer}>
@@ -1262,7 +1345,13 @@ export const HomeScreen = () => {
                           <MaskedAmount
                             value={totalIncome}
                             style={styles.summaryValueSquare}
+                            numberOfLines={1}
+                            adjustsFontSizeToFit={true}
+                            minimumFontScale={0.7}
                           />
+                          <Text style={styles.summarySubtext}>
+                            {activePeriodLabel}
+                          </Text>
                         </View>
                       </View>
                     </View>
@@ -1285,7 +1374,13 @@ export const HomeScreen = () => {
                           <MaskedAmount
                             value={realizedExpenseTotal}
                             style={styles.summaryValueSquare}
+                            numberOfLines={1}
+                            adjustsFontSizeToFit={true}
+                            minimumFontScale={0.7}
                           />
+                          <Text style={styles.summarySubtext}>
+                            {activePeriodLabel}
+                          </Text>
                         </View>
                       </View>
                     </View>
@@ -1312,10 +1407,17 @@ export const HomeScreen = () => {
                             value={realizedBalance}
                             style={[
                               styles.summaryValueSquare,
-                              realizedBalance < 0 &&
-                                styles.summaryValueNegative,
+                              realizedBalance < 0
+                                ? styles.summaryValueNegative
+                                : undefined,
                             ]}
+                            numberOfLines={1}
+                            adjustsFontSizeToFit={true}
+                            minimumFontScale={0.7}
                           />
+                          <Text style={styles.summarySubtext}>
+                            {activePeriodLabel}
+                          </Text>
                         </View>
                       </View>
                     </View>
@@ -1346,8 +1448,11 @@ export const HomeScreen = () => {
                         value={balance}
                         style={[
                           styles.summaryValue,
-                          balance < 0 && styles.summaryValueNegative,
+                          balance < 0 ? styles.summaryValueNegative : undefined,
                         ]}
+                        numberOfLines={1}
+                        adjustsFontSizeToFit={true}
+                        minimumFontScale={0.7}
                       />
                       <Text style={styles.summarySubtext}>Disponível</Text>
                     </View>
@@ -1389,8 +1494,13 @@ export const HomeScreen = () => {
                     <MaskedAmount
                       value={totalIncome}
                       style={styles.summaryValueSquare}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit={true}
+                      minimumFontScale={0.7}
                     />
-                    <Text style={styles.summarySubtext}>Este mês</Text>
+                    <Text style={styles.summarySubtext}>
+                      {activePeriodLabel}
+                    </Text>
                   </Animated.View>
 
                   <Animated.View
@@ -1421,8 +1531,13 @@ export const HomeScreen = () => {
                     <MaskedAmount
                       value={totalExpense}
                       style={styles.summaryValueSquare}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit={true}
+                      minimumFontScale={0.7}
                     />
-                    <Text style={styles.summarySubtext}>Este mês</Text>
+                    <Text style={styles.summarySubtext}>
+                      {activePeriodLabel}
+                    </Text>
                   </Animated.View>
                 </View>
               </>
@@ -1443,10 +1558,24 @@ export const HomeScreen = () => {
               />
               <ActionCard
                 icon="remove-circle"
-                label="Consumo moderado"
+                label="Adicionar Gasto"
                 color="#ff4d6d"
                 onPress={() => navigate("AddExpense")}
                 delay={100}
+              />
+              <ActionCard
+                icon="cash-outline"
+                label="Ver Todas as Rendas"
+                color="#a47aff"
+                onPress={() => navigate("IncomeList")}
+                delay={200}
+              />
+              <ActionCard
+                icon="receipt-outline"
+                label="Ver Todos os Gastos"
+                color="#ff6b8a"
+                onPress={() => navigate("ExpenseList")}
+                delay={300}
               />
               {user?.role !== "consultor" && !user?.isAdmin && (
                 <ActionCard
@@ -1454,7 +1583,7 @@ export const HomeScreen = () => {
                   label="Planejamento"
                   color="#c084fc"
                   onPress={() => navigate("PlanningView")}
-                  delay={200}
+                  delay={400}
                 />
               )}
             </View>
@@ -1915,6 +2044,9 @@ const styles = StyleSheet.create({
     color: "#fff",
     marginTop: 1,
     letterSpacing: -0.3,
+    flexShrink: 1,
+    width: "100%",
+    textAlign: "center",
   },
   summaryValueSquare: {
     fontSize: 16,
@@ -1922,6 +2054,9 @@ const styles = StyleSheet.create({
     color: "#fff",
     marginTop: 1,
     letterSpacing: -0.3,
+    flexShrink: 1,
+    width: "100%",
+    textAlign: "center",
   },
   summarySubtext: {
     fontSize: 10,

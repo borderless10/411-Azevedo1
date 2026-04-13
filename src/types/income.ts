@@ -12,6 +12,7 @@ export interface Income {
   description: string;
   date: Date;
   category?: string;
+  dailyTracking?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -24,6 +25,7 @@ export interface CreateIncomeData {
   description: string;
   date: Date;
   category?: string;
+  dailyTracking?: boolean;
 }
 
 /**
@@ -34,6 +36,7 @@ export interface UpdateIncomeData {
   description?: string;
   date?: Date;
   category?: string;
+  dailyTracking?: boolean;
 }
 
 /**
@@ -46,6 +49,7 @@ export interface IncomeFilters {
   minValue?: number;
   maxValue?: number;
   searchTerm?: string;
+  dailyTrackingOnly?: boolean;
 }
 
 /**
@@ -58,6 +62,7 @@ export interface IncomeFirestore {
   description: string;
   date: any; // Timestamp do Firestore
   category?: string;
+  dailyTracking?: boolean;
   createdAt: any; // Timestamp do Firestore
   updatedAt: any; // Timestamp do Firestore
 }

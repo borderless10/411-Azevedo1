@@ -1,8 +1,9 @@
 ﻿/**
  * Tela de Cadastro de Gasto
+ * Suporta 3 tipos: Consumo Moderado, Gasto Acompanhado e Conta
  */
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -13,6 +14,7 @@ import {
   Platform,
   Alert,
   TouchableOpacity,
+  ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../hooks/useAuth";
@@ -23,10 +25,13 @@ import { CurrencyInput } from "../../components/CurrencyInput";
 import DatePicker from "../../components/DatePicker";
 import { CategoryPicker } from "../../components/CategoryPicker";
 import expenseServices from "../../services/expenseServices";
+import { planningServices } from "../../services/planningServices";
 import { formatCurrency } from "../../utils/currencyUtils";
 import ExpenseCreatedModal from "../../components/ui/ExpenseCreatedModal";
 import { creditCardServices } from "../../services/creditCardServices";
+import { markBillAsPaid } from "../../services/billServices";
 import { CreditCard } from "../../types/creditCard";
+import { Bill } from "../../types/planning";
 
 export const AddExpenseScreen = () => {
   const { user } = useAuth();
@@ -36,166 +41,218 @@ export const AddExpenseScreen = () => {
     navigate(params?.returnTo || "Home", params?.returnParams);
   };
 
-  const [value, setValue] = useState(0);
-  const [description, setDescription] = useState("");
-  const [date, setDate] = useState<Date>(
+  // Tipo de gasto
+  const [expenseType, setExpenseType] = useState<
+    "consumption" | "tracked" | "bill"
+  >("consumption");
+
+  // Estado para dados de planejamento
+  const [trackedExpenses, setTrackedExpenses] = useState<
+    Array<{ id?: string; name: string }>
+  >([]);
+  const [bills, setBills] = useState<Bill[]>([]);
+  const [loadingData, setLoadingData] = useState(false);
+
+  // Consumo Moderado
+  const [consumoValue, setConsumoValue] = useState(0);
+  const [consumoDescription, setConsumoDescription] = useState("");
+  const [consumoDate, setConsumoDate] = useState<Date>(new Date());
+  const [consumoPayment, setConsumoPayment] = useState<"cash" | "card">("cash");
+  const [consumoSelectedCardId, setConsumoSelectedCardId] =
+    useState<string>("");
+
+  // Gasto Acompanhado
+  const [trackedTitle, setTrackedTitle] = useState("");
+  const [trackedValue, setTrackedValue] = useState(0);
+  const [trackedDate, setTrackedDate] = useState<Date>(
     params?.prefillDate ? new Date(params.prefillDate) : new Date(),
   );
-  const [category, setCategory] = useState<string>("Alimentação");
-  const [paymentMethod, setPaymentMethod] = useState<
+  const [trackedPayment, setTrackedPayment] = useState<
     "cash" | "debit_card" | "credit_card" | "pix" | "other"
   >("cash");
-  const [selectedCardId, setSelectedCardId] = useState<string>("");
+  const [trackedSelectedCardId, setTrackedSelectedCardId] =
+    useState<string>("");
+
+  // Conta (Bill)
+  const [billId, setBillId] = useState("");
+  const [billAmount, setBillAmount] = useState(0);
+  const [billDueDate, setBillDueDate] = useState<Date>(new Date());
+  const [billPaymentMethod, setBillPaymentMethod] = useState<
+    "cash" | "debit_card" | "credit_card" | "pix"
+  >("cash");
+  const [billSelectedCardId, setBillSelectedCardId] = useState<string>("");
+
+  // Campos comuns
   const [cards, setCards] = useState<CreditCard[]>([]);
   const [loading, setLoading] = useState(false);
-  const [errors, setErrors] = useState({
-    value: "",
-    description: "",
-    date: "",
-    category: "",
-    general: "",
-  });
   const [successModalVisible, setSuccessModalVisible] = useState(false);
   const [savedValueForModal, setSavedValueForModal] = useState(0);
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
-  // Validações
-  const validateValue = (val: number): string => {
-    if (val <= 0) {
-      return "Valor deve ser maior que zero";
-    }
-    if (val > 1000000) {
-      return "Valor muito alto";
-    }
-    return "";
-  };
-
-  const validateDescription = (text: string): string => {
-    if (!text.trim()) {
-      return "Descrição é obrigatória";
-    }
-    if (text.trim().length < 3) {
-      return "Descrição deve ter pelo menos 3 caracteres";
-    }
-    if (text.trim().length > 100) {
-      return "Descrição muito longa (máximo 100 caracteres)";
-    }
-    return "";
-  };
-
-  const validateDate = (selectedDate: Date): string => {
-    if (selectedDate > new Date()) {
-      return "Data não pode ser no futuro";
-    }
-    const oneYearAgo = new Date();
-    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
-    if (selectedDate < oneYearAgo) {
-      return "Data muito antiga (máximo 1 ano atrás)";
-    }
-    return "";
-  };
-
-  const validateCategory = (cat: string): string => {
-    if (!cat || cat.trim().length === 0) {
-      return "Categoria é obrigatória";
-    }
-    return "";
-  };
-
-  // Handlers
-  const handleValueChange = (val: number) => {
-    setValue(val);
-    if (errors.value || val > 0) {
-      setErrors((prev) => ({ ...prev, value: validateValue(val) }));
-    }
-  };
-
-  // Se navegaram para cá com uma data predefinida, aplicar
-  React.useEffect(() => {
-    if (params?.prefillDate) {
-      try {
-        setDate(new Date(params.prefillDate));
-      } catch (e) {
-        // ignora se inválido
-      }
-    }
-  }, [params?.prefillDate]);
-
-  React.useEffect(() => {
-    if (params?.prefillCategory) {
-      setCategory(String(params.prefillCategory));
-    }
-  }, [params?.prefillCategory]);
-
-  React.useEffect(() => {
-    const loadCards = async () => {
+  // Carregar cards e dados de planejamento
+  useEffect(() => {
+    const loadData = async () => {
       if (!user?.id) return;
       try {
+        setLoadingData(true);
+
+        // Carregar cartões
         const loaded = await creditCardServices.getCreditCards(user.id);
         setCards(loaded.filter((card) => card.isActive !== false));
+
+        // Carregar planejamento
+        const planning = await planningServices.getPlanning(user.id);
+
+        // Extrair gastos acompanhados
+        if (planning) {
+          const tracked = [
+            ...(planning.bills || [])
+              .filter((b) => b.dailyTracking)
+              .map((b) => ({ id: b.id, name: b.name })),
+            ...(planning.expectedExpenses || [])
+              .filter((e) => e.dailyTracking)
+              .map((e) => ({ id: e.id, name: e.source })),
+          ];
+          setTrackedExpenses(tracked);
+
+          // Extrair contas a serem pagas
+          const unpaidBills = (planning.bills || []).filter(
+            (b) => !b.paid || b.paid === false,
+          );
+          setBills(unpaidBills);
+        }
       } catch (error) {
-        console.warn("Erro ao carregar cartões", error);
+        console.warn("Erro ao carregar dados:", error);
+      } finally {
+        setLoadingData(false);
       }
     };
 
-    loadCards();
+    loadData();
   }, [user?.id]);
 
-  const handleDescriptionChange = (text: string) => {
-    setDescription(text);
-    if (errors.description || text.trim()) {
-      setErrors((prev) => ({
-        ...prev,
-        description: validateDescription(text),
-      }));
-    }
-  };
-
-  const handleDateChange = (selectedDate: Date) => {
-    setDate(selectedDate);
-    setErrors((prev) => ({ ...prev, date: validateDate(selectedDate) }));
-  };
-
-  const handleCategoryChange = (cat: string) => {
-    setCategory(cat);
-    setErrors((prev) => ({ ...prev, category: validateCategory(cat) }));
-  };
-
-  const handleSave = async () => {
-    console.log("💸 Salvando gasto...");
-
-    // Limpar erros
-    setErrors({
-      value: "",
-      description: "",
-      date: "",
-      category: "",
-      general: "",
-    });
-
-    // Validar todos os campos
-    const valueError = validateValue(value);
-    const descriptionError = validateDescription(description);
-    const dateError = validateDate(date);
-    const categoryError = validateCategory(category);
-    const cardError =
-      paymentMethod === "credit_card" && !selectedCardId
-        ? "Selecione um cartão"
-        : "";
+  const normalizeBillPaymentMethod = (
+    raw?: string,
+  ): "cash" | "debit_card" | "credit_card" | "pix" => {
+    const normalized = String(raw || "")
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
 
     if (
-      valueError ||
-      descriptionError ||
-      dateError ||
-      categoryError ||
-      cardError
+      normalized.includes("card") ||
+      normalized.includes("cart") ||
+      normalized.includes("credito") ||
+      normalized.includes("credit") ||
+      normalized.includes("debito") ||
+      normalized.includes("debit")
     ) {
-      setErrors({
-        value: valueError,
-        description: descriptionError,
-        date: dateError,
-        category: categoryError,
-        general: cardError || "Por favor, corrija os erros antes de salvar",
-      });
+      return "credit_card";
+    }
+    if (normalized.includes("pix")) return "pix";
+    return "cash";
+  };
+
+  useEffect(() => {
+    const prefillExpenseType = String(params?.prefillExpenseType || "");
+    if (prefillExpenseType === "bill") {
+      setExpenseType("bill");
+    }
+  }, [params?.prefillExpenseType]);
+
+  useEffect(() => {
+    const prefillBillId = String(params?.prefillBillId || "");
+    if (!prefillBillId || bills.length === 0) {
+      return;
+    }
+
+    const selectedBill = bills.find((bill) => bill.id === prefillBillId);
+    if (!selectedBill) {
+      return;
+    }
+
+    setExpenseType("bill");
+    setBillId(selectedBill.id || "");
+    setBillAmount(Number(selectedBill.amount) || 0);
+    setBillDueDate(
+      selectedBill.dueDate ? new Date(selectedBill.dueDate) : new Date(),
+    );
+    setBillPaymentMethod(
+      normalizeBillPaymentMethod(selectedBill.paymentMethod as any),
+    );
+    setBillSelectedCardId((selectedBill as any).cardId || "");
+  }, [bills, params?.prefillBillId]);
+
+  // Validação para Consumo Moderado
+  const validateConsumoModerado = (): boolean => {
+    const newErrors: Record<string, string> = {};
+
+    if (consumoValue <= 0) {
+      newErrors.consumoValue = "Valor deve ser maior que zero";
+    }
+    if (!consumoDescription.trim()) {
+      newErrors.consumoDescription = "Descrição é obrigatória";
+    }
+    if (consumoPayment === "card" && !consumoSelectedCardId) {
+      newErrors.consumoCard = "Selecione um cartão";
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  // Validação para Gasto Acompanhado
+  const validateTrackedExpense = (): boolean => {
+    const newErrors: Record<string, string> = {};
+
+    if (!trackedTitle) {
+      newErrors.trackedTitle = "Selecione um gasto acompanhado";
+    }
+    if (trackedValue <= 0) {
+      newErrors.trackedValue = "Valor deve ser maior que zero";
+    }
+    if (trackedPayment === "credit_card" && !trackedSelectedCardId) {
+      newErrors.trackedCard = "Selecione um cartão";
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  // Validação para Conta
+  const validateBill = (): boolean => {
+    const newErrors: Record<string, string> = {};
+
+    if (!billId) {
+      newErrors.billId = "Selecione uma conta";
+    }
+    if (billAmount <= 0) {
+      newErrors.billAmount = "Valor deve ser maior que zero";
+    }
+    if (billPaymentMethod === "credit_card" && !billSelectedCardId) {
+      newErrors.billCard = "Selecione um cartão";
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  // Salvar
+  const handleSave = async () => {
+    setErrors({});
+
+    // Validar conforme tipo
+    let isValid = false;
+    if (expenseType === "consumption") {
+      isValid = validateConsumoModerado();
+    } else if (expenseType === "tracked") {
+      isValid = validateTrackedExpense();
+    } else if (expenseType === "bill") {
+      isValid = validateBill();
+    }
+
+    if (!isValid) {
       return;
     }
 
@@ -207,57 +264,83 @@ export const AddExpenseScreen = () => {
     try {
       setLoading(true);
 
-      const expenseData = {
-        value,
-        description: description.trim(),
-        date,
-        category,
-        paymentMethod,
-        ...(paymentMethod === "credit_card" && selectedCardId
-          ? { cardId: selectedCardId }
-          : {}),
-      };
+      if (expenseType === "consumption") {
+        // Criar expense como Consumo Moderado
+        const expenseData = {
+          value: consumoValue,
+          description: consumoDescription.trim(),
+          date: consumoDate,
+          category: "Consumo Moderado",
+          paymentMethod: consumoPayment === "card" ? "credit_card" : "cash",
+          ...(consumoPayment === "card" && consumoSelectedCardId
+            ? { cardId: consumoSelectedCardId }
+            : {}),
+          isConsumoModerado: true,
+        };
 
-      const newExpense = await expenseServices.createExpense(
-        user.id,
-        expenseData,
-      );
-      console.log("✅ Gasto criado:", newExpense);
+        await expenseServices.createExpense(user.id, expenseData);
+        setSavedValueForModal(consumoValue);
+      } else if (expenseType === "tracked") {
+        // Criar expense comum mas com descrição do tracked e dailyTracking flag
+        const expenseData = {
+          value: trackedValue,
+          description: trackedTitle,
+          date: trackedDate,
+          category: "Acompanhamento Diário",
+          paymentMethod: trackedPayment,
+          ...(trackedPayment === "credit_card" && trackedSelectedCardId
+            ? { cardId: trackedSelectedCardId }
+            : {}),
+        };
 
-      // Armazenar valor antes de limpar para usar na mensagem
-      const savedValue = value;
+        await expenseServices.createExpense(user.id, expenseData);
+        setSavedValueForModal(trackedValue);
+      } else if (expenseType === "bill") {
+        const selectedBill = bills.find((bill) => bill.id === billId);
+        if (!selectedBill) {
+          throw new Error("Conta selecionada não encontrada");
+        }
 
-      // Limpar formulário
-      setValue(0);
-      setDescription("");
-      setDate(new Date());
-      setCategory("Alimentação");
-      setPaymentMethod("cash");
-      setSelectedCardId("");
+        // Registrar pagamento de conta como gasto real
+        const expenseData = {
+          value: billAmount,
+          description: selectedBill.name,
+          date: billDueDate,
+          category: "Conta",
+          paymentMethod: billPaymentMethod,
+          sourceBillId: selectedBill.id,
+          ...(billPaymentMethod === "credit_card" && billSelectedCardId
+            ? { cardId: billSelectedCardId }
+            : {}),
+        };
 
-      // Parar loading antes de mostrar modal
+        await expenseServices.createExpense(user.id, expenseData);
+
+        // Marcar conta como paga (planning para clientes, bills collection para demais casos)
+        try {
+          await planningServices.markBillAsPaidByClient(user.id, billId);
+        } catch (planningError) {
+          await markBillAsPaid(billId);
+        }
+
+        setSavedValueForModal(billAmount);
+      }
+
       setLoading(false);
-
-      // Mostrar modal personalizado com identidade visual
-      setSavedValueForModal(savedValue);
       setSuccessModalVisible(true);
     } catch (error: any) {
-      console.error("❌ Erro ao salvar gasto:", error);
-      setErrors((prev) => ({
-        ...prev,
-        general: error.message || "Erro ao salvar gasto. Tente novamente.",
-      }));
+      console.error("Erro ao salvar:", error);
+      Alert.alert("Erro", error.message || "Erro ao salvar. Tente novamente.");
       setLoading(false);
     }
   };
 
   const handleCancel = () => {
-    // voltar para onde a tela foi aberta (se informado), senão Home
     navigateToReturnScreen();
   };
 
   return (
-    <Layout title="Novo Gasto" showBackButton={true} showSidebar={false}>
+    <Layout title="Adicionar Gasto" showBackButton={true} showSidebar={false}>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.container}
@@ -267,228 +350,675 @@ export const AddExpenseScreen = () => {
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.content}>
-            {/* Header visual */}
-            <View style={styles.header}>
-              <View style={styles.iconContainer}>
-                <Ionicons name="remove-circle" size={64} color="#ff4d6d" />
-              </View>
-              <Text style={styles.subtitle}>
-                Registre uma saída de dinheiro
-              </Text>
-            </View>
-
-            {/* Erro geral */}
-            {errors.general ? (
-              <View style={styles.errorContainer}>
-                <Ionicons name="alert-circle" size={20} color="#ff4d6d" />
-                <Text style={styles.errorText}>{errors.general}</Text>
-              </View>
-            ) : null}
-
-            {/* Form */}
-            <View style={styles.form}>
-              {/* Valor */}
-              <CurrencyInput
-                label="Valor"
-                value={value}
-                onChangeValue={handleValueChange}
-                error={errors.value}
-                icon="cash-outline"
-                editable={!loading}
-              />
-
-              {/* Descrição */}
-              <View style={styles.inputContainer}>
-                <Text style={styles.label}>
-                  <Ionicons name="document-text" size={16} color="#8c52ff" />{" "}
-                  Descrição
-                </Text>
-                <View
+            {/* Seletor de Tipo */}
+            <View style={styles.typeSelector}>
+              <TouchableOpacity
+                style={[
+                  styles.typeTab,
+                  expenseType === "consumption" && styles.typeTabActive,
+                ]}
+                onPress={() => setExpenseType("consumption")}
+              >
+                <Ionicons
+                  name="wallet"
+                  size={20}
+                  color={expenseType === "consumption" ? "#8c52ff" : "#999"}
+                />
+                <Text
                   style={[
-                    styles.inputWrapper,
-                    errors.description ? styles.inputWrapperError : null,
+                    styles.typeTabText,
+                    expenseType === "consumption" && styles.typeTabTextActive,
                   ]}
                 >
-                  <Ionicons
-                    name="document-text-outline"
-                    size={20}
-                    color={errors.description ? "#ff4d6d" : "#999"}
-                    style={styles.inputIcon}
-                  />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Ex: Mercado, Combustível, Almoço..."
-                    placeholderTextColor="#999"
-                    value={description}
-                    onChangeText={handleDescriptionChange}
-                    editable={!loading}
-                    maxLength={100}
-                  />
-                  {errors.description ? (
-                    <Ionicons
-                      name="close-circle"
-                      size={20}
-                      color="#ff4d6d"
-                      style={styles.icon}
-                    />
-                  ) : description.trim().length >= 3 ? (
-                    <Ionicons
-                      name="checkmark-circle"
-                      size={20}
-                      color="#8c52ff"
-                      style={styles.icon}
-                    />
-                  ) : null}
-                </View>
-                {errors.description ? (
-                  <Text style={styles.errorTextSmall}>
-                    {errors.description}
-                  </Text>
-                ) : null}
-                <Text style={styles.charCount}>
-                  {description.length}/100 caracteres
+                  Consumo Moderado
                 </Text>
-              </View>
+              </TouchableOpacity>
 
-              {/* Data */}
-              <View style={styles.inputContainer}>
-                <DatePicker
-                  label="Data"
-                  date={date}
-                  onChangeDate={handleDateChange}
-                  error={errors.date}
-                  maxDate={new Date()}
-                  editable={!loading}
+              <TouchableOpacity
+                style={[
+                  styles.typeTab,
+                  expenseType === "tracked" && styles.typeTabActive,
+                ]}
+                onPress={() => setExpenseType("tracked")}
+              >
+                <Ionicons
+                  name="analytics"
+                  size={20}
+                  color={expenseType === "tracked" ? "#8c52ff" : "#999"}
                 />
-                {errors.date ? (
-                  <Text style={styles.errorTextSmall}>{errors.date}</Text>
-                ) : null}
-              </View>
-
-              {/* Categoria - OBRIGATÓRIA */}
-              <View style={styles.inputContainer}>
-                <CategoryPicker
-                  label="Categoria *"
-                  type="expense"
-                  selectedCategory={category}
-                  onSelectCategory={handleCategoryChange}
-                  error={errors.category}
-                  editable={!loading}
-                />
-                {errors.category ? (
-                  <Text style={styles.errorTextSmall}>{errors.category}</Text>
-                ) : null}
-              </View>
-
-              <View style={styles.inputContainer}>
-                <Text style={styles.label}>
-                  <Ionicons name="card" size={16} color="#8c52ff" /> Forma de
-                  pagamento
+                <Text
+                  style={[
+                    styles.typeTabText,
+                    expenseType === "tracked" && styles.typeTabTextActive,
+                  ]}
+                >
+                  Gasto Acompanhado
                 </Text>
-                <View style={styles.paymentMethodsRow}>
-                  {[
-                    { id: "cash", label: "Dinheiro" },
-                    { id: "debit_card", label: "Débito" },
-                    { id: "credit_card", label: "Cartão" },
-                    { id: "pix", label: "PIX" },
-                  ].map((method) => {
-                    const active = paymentMethod === method.id;
-                    return (
-                      <TouchableOpacity
-                        key={method.id}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.typeTab,
+                  expenseType === "bill" && styles.typeTabActive,
+                ]}
+                onPress={() => setExpenseType("bill")}
+              >
+                <Ionicons
+                  name="document-text"
+                  size={20}
+                  color={expenseType === "bill" ? "#8c52ff" : "#999"}
+                />
+                <Text
+                  style={[
+                    styles.typeTabText,
+                    expenseType === "bill" && styles.typeTabTextActive,
+                  ]}
+                >
+                  Conta
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {loadingData ? (
+              <View style={styles.centerContainer}>
+                <ActivityIndicator color="#8c52ff" size="large" />
+              </View>
+            ) : (
+              <>
+                {/* Consumo Moderado */}
+                {expenseType === "consumption" && (
+                  <View style={styles.form}>
+                    <View style={styles.header}>
+                      <Ionicons name="wallet" size={48} color="#8c52ff" />
+                      <Text style={styles.headerSubtitle}>
+                        Registre o consumo moderado do ciclo
+                      </Text>
+                    </View>
+
+                    {errors.consumoValue ? (
+                      <View style={styles.errorContainer}>
+                        <Ionicons
+                          name="alert-circle"
+                          size={20}
+                          color="#ff4d6d"
+                        />
+                        <Text style={styles.errorText}>
+                          {errors.consumoValue}
+                        </Text>
+                      </View>
+                    ) : null}
+
+                    <View style={styles.inputGroup}>
+                      <Text style={styles.label}>Descrição *</Text>
+                      <View
                         style={[
-                          styles.paymentChip,
-                          active ? styles.paymentChipActive : null,
+                          styles.inputWrapper,
+                          errors.consumoDescription && styles.inputWrapperError,
                         ]}
-                        onPress={() => {
-                          setPaymentMethod(method.id as any);
-                          if (method.id !== "credit_card") {
-                            setSelectedCardId("");
-                          }
-                        }}
-                        disabled={loading}
                       >
-                        <Text
+                        <Ionicons
+                          name="document-text"
+                          size={20}
+                          color={errors.consumoDescription ? "#ff4d6d" : "#999"}
+                          style={{ marginRight: 12 }}
+                        />
+                        <TextInput
+                          style={styles.input}
+                          placeholder="Ex: Mercado, Combustível..."
+                          placeholderTextColor="#666"
+                          value={consumoDescription}
+                          onChangeText={setConsumoDescription}
+                          editable={!loading}
+                          maxLength={100}
+                        />
+                      </View>
+                      {errors.consumoDescription ? (
+                        <Text style={styles.errorTextSmall}>
+                          {errors.consumoDescription}
+                        </Text>
+                      ) : null}
+                    </View>
+
+                    <View style={styles.inputGroup}>
+                      <Text style={styles.label}>Data</Text>
+                      <DatePicker
+                        label=""
+                        date={consumoDate}
+                        onChangeDate={setConsumoDate}
+                        maxDate={new Date()}
+                        editable={!loading}
+                      />
+                    </View>
+
+                    <CurrencyInput
+                      label="Valor Total"
+                      value={consumoValue}
+                      onChangeValue={setConsumoValue}
+                      error={errors.consumoValue}
+                      icon="cash"
+                      editable={!loading}
+                    />
+
+                    <View style={styles.inputGroup}>
+                      <Text style={styles.label}>Forma de pagamento</Text>
+                      <View style={styles.paymentMethodsRow}>
+                        {[
+                          { id: "cash", label: "Dinheiro", icon: "wallet" },
+                          { id: "card", label: "Cartão", icon: "card" },
+                        ].map((method) => {
+                          const active = consumoPayment === method.id;
+                          return (
+                            <TouchableOpacity
+                              key={method.id}
+                              style={[
+                                styles.paymentChip,
+                                active && styles.paymentChipActive,
+                              ]}
+                              onPress={() =>
+                                setConsumoPayment(method.id as any)
+                              }
+                            >
+                              <Ionicons
+                                name={method.icon as any}
+                                size={16}
+                                color={active ? "#fff" : "#999"}
+                                style={{ marginRight: 4 }}
+                              />
+                              <Text
+                                style={[
+                                  styles.paymentChipText,
+                                  active && styles.paymentChipTextActive,
+                                ]}
+                              >
+                                {method.label}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    </View>
+
+                    {consumoPayment === "card" && (
+                      <View style={styles.inputGroup}>
+                        <Text style={styles.label}>Cartão específico</Text>
+                        {cards.length === 0 ? (
+                          <Text style={styles.errorTextSmall}>
+                            Sem cartões cadastrados
+                          </Text>
+                        ) : (
+                          <View style={styles.paymentMethodsRow}>
+                            {cards.map((card) => {
+                              const active = consumoSelectedCardId === card.id;
+                              return (
+                                <TouchableOpacity
+                                  key={card.id}
+                                  style={[
+                                    styles.paymentChip,
+                                    active && styles.paymentChipActive,
+                                  ]}
+                                  onPress={() =>
+                                    setConsumoSelectedCardId(card.id)
+                                  }
+                                >
+                                  <Text
+                                    style={[
+                                      styles.paymentChipText,
+                                      active && styles.paymentChipTextActive,
+                                    ]}
+                                  >
+                                    {card.bank} ••••{card.last4}
+                                  </Text>
+                                </TouchableOpacity>
+                              );
+                            })}
+                          </View>
+                        )}
+                        {errors.consumoCard ? (
+                          <Text style={styles.errorTextSmall}>
+                            {errors.consumoCard}
+                          </Text>
+                        ) : null}
+                      </View>
+                    )}
+                  </View>
+                )}
+
+                {/* Gasto Acompanhado */}
+                {expenseType === "tracked" && (
+                  <View style={styles.form}>
+                    <View style={styles.header}>
+                      <Ionicons name="analytics" size={48} color="#08c" />
+                      <Text style={styles.headerSubtitle}>
+                        Registre um gasto com acompanhamento diário
+                      </Text>
+                    </View>
+
+                    {errors.trackedTitle ? (
+                      <View style={styles.errorContainer}>
+                        <Ionicons
+                          name="alert-circle"
+                          size={20}
+                          color="#ff4d6d"
+                        />
+                        <Text style={styles.errorText}>
+                          {errors.trackedTitle}
+                        </Text>
+                      </View>
+                    ) : null}
+
+                    <View style={styles.inputGroup}>
+                      <Text style={styles.label}>
+                        Qual gasto acompanhado? *
+                      </Text>
+                      {trackedExpenses.length === 0 ? (
+                        <View
                           style={[
-                            styles.paymentChipText,
-                            active ? styles.paymentChipTextActive : null,
+                            styles.pickerPlaceholder,
+                            errors.trackedTitle &&
+                              styles.pickerPlaceholderError,
                           ]}
                         >
-                          {method.label}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              </View>
-
-              {paymentMethod === "credit_card" ? (
-                <View style={styles.inputContainer}>
-                  <Text style={styles.label}>Cartão específico</Text>
-                  {cards.length === 0 ? (
-                    <Text style={styles.errorTextSmall}>
-                      Você não tem cartões cadastrados. Cadastre na aba Cartões.
-                    </Text>
-                  ) : (
-                    <View style={styles.paymentMethodsRow}>
-                      {cards.map((card) => {
-                        const active = selectedCardId === card.id;
-                        return (
-                          <TouchableOpacity
-                            key={card.id}
-                            style={[
-                              styles.paymentChip,
-                              active ? styles.paymentChipActive : null,
-                            ]}
-                            onPress={() => setSelectedCardId(card.id)}
-                            disabled={loading}
-                          >
-                            <Text
-                              style={[
-                                styles.paymentChipText,
-                                active ? styles.paymentChipTextActive : null,
-                              ]}
-                            >
-                              {card.bank} ••••{card.last4}
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      })}
+                          <Text style={styles.pickerPlaceholderText}>
+                            Nenhum gasto acompanhado cadastrado
+                          </Text>
+                        </View>
+                      ) : (
+                        <View style={styles.pickerContainer}>
+                          {trackedExpenses.map((expense) => {
+                            const active = trackedTitle === expense.name;
+                            return (
+                              <TouchableOpacity
+                                key={expense.id || expense.name}
+                                style={[
+                                  styles.pickerOption,
+                                  active && styles.pickerOptionActive,
+                                ]}
+                                onPress={() => setTrackedTitle(expense.name)}
+                              >
+                                <Text
+                                  style={[
+                                    styles.pickerOptionText,
+                                    active && styles.pickerOptionTextActive,
+                                  ]}
+                                >
+                                  {expense.name}
+                                </Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+                      )}
                     </View>
-                  )}
+
+                    {errors.trackedValue ? (
+                      <View
+                        style={[styles.errorContainer, { marginBottom: 8 }]}
+                      >
+                        <Ionicons
+                          name="alert-circle"
+                          size={20}
+                          color="#ff4d6d"
+                        />
+                        <Text style={styles.errorText}>
+                          {errors.trackedValue}
+                        </Text>
+                      </View>
+                    ) : null}
+
+                    <CurrencyInput
+                      label="Valor"
+                      value={trackedValue}
+                      onChangeValue={setTrackedValue}
+                      error={errors.trackedValue}
+                      icon="cash"
+                      editable={!loading}
+                    />
+
+                    <View style={styles.inputGroup}>
+                      <Text style={styles.label}>Data</Text>
+                      <DatePicker
+                        label=""
+                        date={trackedDate}
+                        onChangeDate={setTrackedDate}
+                        maxDate={new Date()}
+                        editable={!loading}
+                      />
+                    </View>
+
+                    <View style={styles.inputGroup}>
+                      <Text style={styles.label}>Forma de pagamento</Text>
+                      <View style={styles.paymentMethodsRow}>
+                        {[
+                          {
+                            id: "cash",
+                            label: "Dinheiro",
+                            icon: "wallet",
+                          },
+                          {
+                            id: "debit_card",
+                            label: "Débito",
+                            icon: "card",
+                          },
+                          {
+                            id: "credit_card",
+                            label: "Crédito",
+                            icon: "card",
+                          },
+                          {
+                            id: "pix",
+                            label: "PIX",
+                            icon: "phone-portrait",
+                          },
+                        ].map((method) => {
+                          const active = trackedPayment === method.id;
+                          return (
+                            <TouchableOpacity
+                              key={method.id}
+                              style={[
+                                styles.paymentChip,
+                                active && styles.paymentChipActive,
+                              ]}
+                              onPress={() =>
+                                setTrackedPayment(method.id as any)
+                              }
+                            >
+                              <Ionicons
+                                name={method.icon as any}
+                                size={16}
+                                color={active ? "#fff" : "#999"}
+                                style={{ marginRight: 4 }}
+                              />
+                              <Text
+                                style={[
+                                  styles.paymentChipText,
+                                  active && styles.paymentChipTextActive,
+                                ]}
+                              >
+                                {method.label}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    </View>
+
+                    {trackedPayment === "credit_card" && (
+                      <View style={styles.inputGroup}>
+                        <Text style={styles.label}>Cartão específico</Text>
+                        {cards.length === 0 ? (
+                          <Text style={styles.errorTextSmall}>
+                            Sem cartões cadastrados
+                          </Text>
+                        ) : (
+                          <View style={styles.paymentMethodsRow}>
+                            {cards.map((card) => {
+                              const active = trackedSelectedCardId === card.id;
+                              return (
+                                <TouchableOpacity
+                                  key={card.id}
+                                  style={[
+                                    styles.paymentChip,
+                                    active && styles.paymentChipActive,
+                                  ]}
+                                  onPress={() =>
+                                    setTrackedSelectedCardId(card.id)
+                                  }
+                                >
+                                  <Text
+                                    style={[
+                                      styles.paymentChipText,
+                                      active && styles.paymentChipTextActive,
+                                    ]}
+                                  >
+                                    {card.bank} ••••{card.last4}
+                                  </Text>
+                                </TouchableOpacity>
+                              );
+                            })}
+                          </View>
+                        )}
+                      </View>
+                    )}
+                  </View>
+                )}
+
+                {/* Conta (Bill) */}
+                {expenseType === "bill" && (
+                  <View style={styles.form}>
+                    <View style={styles.header}>
+                      <Ionicons
+                        name="document-text"
+                        size={48}
+                        color="#ff9800"
+                      />
+                      <Text style={styles.headerSubtitle}>
+                        Registre o pagamento de uma conta
+                      </Text>
+                    </View>
+
+                    {errors.billId ? (
+                      <View style={styles.errorContainer}>
+                        <Ionicons
+                          name="alert-circle"
+                          size={20}
+                          color="#ff4d6d"
+                        />
+                        <Text style={styles.errorText}>{errors.billId}</Text>
+                      </View>
+                    ) : null}
+
+                    <View style={styles.inputGroup}>
+                      <Text style={styles.label}>Qual conta? *</Text>
+                      {bills.length === 0 ? (
+                        <View
+                          style={[
+                            styles.pickerPlaceholder,
+                            errors.billId && styles.pickerPlaceholderError,
+                          ]}
+                        >
+                          <Text style={styles.pickerPlaceholderText}>
+                            Nenhuma conta a ser paga
+                          </Text>
+                        </View>
+                      ) : (
+                        <View style={styles.pickerContainer}>
+                          {bills.map((bill) => {
+                            const active = billId === bill.id;
+                            return (
+                              <TouchableOpacity
+                                key={bill.id}
+                                style={[
+                                  styles.pickerOption,
+                                  active && styles.pickerOptionActive,
+                                ]}
+                                onPress={() => setBillId(bill.id || "")}
+                              >
+                                <View style={styles.billOptionContent}>
+                                  <Text
+                                    style={[
+                                      styles.pickerOptionText,
+                                      active && styles.pickerOptionTextActive,
+                                    ]}
+                                  >
+                                    {bill.name}
+                                  </Text>
+                                  <Text
+                                    style={[
+                                      styles.billOptionAmount,
+                                      active && styles.billOptionAmountActive,
+                                    ]}
+                                  >
+                                    {formatCurrency(bill.amount || 0)}
+                                  </Text>
+                                </View>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+                      )}
+                    </View>
+
+                    {errors.billAmount ? (
+                      <View
+                        style={[styles.errorContainer, { marginBottom: 8 }]}
+                      >
+                        <Ionicons
+                          name="alert-circle"
+                          size={20}
+                          color="#ff4d6d"
+                        />
+                        <Text style={styles.errorText}>
+                          {errors.billAmount}
+                        </Text>
+                      </View>
+                    ) : null}
+
+                    <CurrencyInput
+                      label="Valor Pago"
+                      value={billAmount}
+                      onChangeValue={setBillAmount}
+                      error={errors.billAmount}
+                      icon="cash"
+                      editable={!loading}
+                    />
+
+                    <View style={styles.inputGroup}>
+                      <Text style={styles.label}>Data do Pagamento</Text>
+                      <DatePicker
+                        label=""
+                        date={billDueDate}
+                        onChangeDate={setBillDueDate}
+                        maxDate={new Date()}
+                        editable={!loading}
+                      />
+                    </View>
+
+                    <View style={styles.inputGroup}>
+                      <Text style={styles.label}>Forma de pagamento</Text>
+                      <View style={styles.paymentMethodsRow}>
+                        {[
+                          {
+                            id: "cash",
+                            label: "Dinheiro",
+                            icon: "wallet",
+                          },
+                          {
+                            id: "debit_card",
+                            label: "Débito",
+                            icon: "card",
+                          },
+                          {
+                            id: "credit_card",
+                            label: "Crédito",
+                            icon: "card",
+                          },
+                          {
+                            id: "pix",
+                            label: "PIX",
+                            icon: "phone-portrait",
+                          },
+                        ].map((method) => {
+                          const active = billPaymentMethod === method.id;
+                          return (
+                            <TouchableOpacity
+                              key={method.id}
+                              style={[
+                                styles.paymentChip,
+                                active && styles.paymentChipActive,
+                              ]}
+                              onPress={() =>
+                                setBillPaymentMethod(method.id as any)
+                              }
+                            >
+                              <Ionicons
+                                name={method.icon as any}
+                                size={16}
+                                color={active ? "#fff" : "#999"}
+                                style={{ marginRight: 4 }}
+                              />
+                              <Text
+                                style={[
+                                  styles.paymentChipText,
+                                  active && styles.paymentChipTextActive,
+                                ]}
+                              >
+                                {method.label}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    </View>
+
+                    {billPaymentMethod === "credit_card" && (
+                      <View style={styles.inputGroup}>
+                        <Text style={styles.label}>Cartão específico</Text>
+                        {cards.length === 0 ? (
+                          <Text style={styles.errorTextSmall}>
+                            Sem cartões cadastrados
+                          </Text>
+                        ) : (
+                          <View style={styles.paymentMethodsRow}>
+                            {cards.map((card) => {
+                              const active = billSelectedCardId === card.id;
+                              return (
+                                <TouchableOpacity
+                                  key={card.id}
+                                  style={[
+                                    styles.paymentChip,
+                                    active && styles.paymentChipActive,
+                                  ]}
+                                  onPress={() => setBillSelectedCardId(card.id)}
+                                >
+                                  <Text
+                                    style={[
+                                      styles.paymentChipText,
+                                      active && styles.paymentChipTextActive,
+                                    ]}
+                                  >
+                                    {card.bank} ••••{card.last4}
+                                  </Text>
+                                </TouchableOpacity>
+                              );
+                            })}
+                          </View>
+                        )}
+                      </View>
+                    )}
+                  </View>
+                )}
+
+                {/* Botões */}
+                <View style={styles.buttonContainer}>
+                  <Button
+                    title="Cancelar"
+                    onPress={handleCancel}
+                    variant="secondary"
+                    icon="close"
+                    disabled={loading}
+                    style={styles.button}
+                  />
+
+                  <Button
+                    title="Salvar"
+                    onPress={handleSave}
+                    variant="success"
+                    icon="checkmark"
+                    loading={loading}
+                    disabled={loading}
+                    style={styles.button}
+                  />
                 </View>
-              ) : null}
-
-              {/* Botões */}
-              <View style={styles.buttonContainer}>
-                <Button
-                  title="Cancelar"
-                  onPress={handleCancel}
-                  variant="secondary"
-                  icon="close"
-                  disabled={loading}
-                  style={styles.button}
-                />
-
-                <Button
-                  title="Salvar"
-                  onPress={handleSave}
-                  variant="danger"
-                  icon="checkmark"
-                  loading={loading}
-                  disabled={loading}
-                  style={styles.button}
-                />
-              </View>
-            </View>
+              </>
+            )}
           </View>
         </ScrollView>
+
         <ExpenseCreatedModal
           visible={successModalVisible}
           amount={savedValueForModal}
           onClose={() => {
             setSuccessModalVisible(false);
-            // se a tela foi aberta a partir de outra (ex: ConsumoModerado), retornar pra lá
             navigateToReturnScreen();
           }}
           onViewList={() => {
@@ -497,7 +1027,6 @@ export const AddExpenseScreen = () => {
           }}
           onAddAnother={() => {
             setSuccessModalVisible(false);
-            // formulário já limpo anteriormente
           }}
         />
       </KeyboardAvoidingView>
@@ -516,30 +1045,79 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 24,
   },
+  centerContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  typeSelector: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 32,
+    backgroundColor: "#1a1a1a",
+    borderRadius: 16,
+    padding: 8,
+  },
+  typeTab: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#333",
+    backgroundColor: "transparent",
+    gap: 6,
+  },
+  typeTabActive: {
+    backgroundColor: "rgba(140, 82, 255, 0.1)",
+    borderColor: "#8c52ff",
+  },
+  typeTabText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#999",
+    textAlign: "center",
+  },
+  typeTabTextActive: {
+    color: "#8c52ff",
+  },
   header: {
     alignItems: "center",
-    marginBottom: 32,
-    marginTop: 20,
+    marginBottom: 24,
   },
-  iconContainer: {
-    marginBottom: 16,
-    padding: 20,
-    backgroundColor: "#FFEBEE",
-    borderRadius: 100,
-  },
-  subtitle: {
+  headerSubtitle: {
     fontSize: 16,
-    color: "#DDD",
+    color: "#bbb",
     textAlign: "center",
+    marginTop: 12,
+  },
+  form: {
+    width: "100%",
+  },
+  inputGroup: {
+    marginBottom: 20,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#fff",
+    marginBottom: 8,
+    flexDirection: "row",
+    alignItems: "center",
   },
   errorContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FFEBEE",
+    backgroundColor: "rgba(255, 77, 109, 0.1)",
     padding: 12,
-    borderRadius: 8,
+    borderRadius: 12,
     marginBottom: 16,
     gap: 8,
+    borderWidth: 1,
+    borderColor: "#ff4d6d",
   },
   errorText: {
     flex: 1,
@@ -547,62 +1125,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "500",
   },
-  form: {
-    width: "100%",
-  },
-  inputContainer: {
-    marginBottom: 16,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#fff",
-    marginBottom: 8,
-  },
-  inputWrapper: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#2b2b2b",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#444",
-    paddingHorizontal: 16,
-  },
-  inputWrapperError: {
-    borderColor: "#ff4d6d",
-    borderWidth: 2,
-  },
-  inputIcon: {
-    marginRight: 12,
-  },
-  input: {
-    flex: 1,
-    padding: 16,
-    fontSize: 16,
-    color: "#fff",
-  },
-  icon: {
-    marginLeft: 8,
-  },
   errorTextSmall: {
     color: "#ff4d6d",
     fontSize: 12,
     marginTop: 4,
-    marginLeft: 4,
-  },
-  charCount: {
-    fontSize: 12,
-    color: "#999",
-    marginTop: 4,
-    textAlign: "right",
-  },
-  buttonContainer: {
-    flexDirection: "row",
-    gap: 12,
-    marginTop: 24,
-  },
-  button: {
-    flex: 1,
   },
   paymentMethodsRow: {
     flexDirection: "row",
@@ -611,23 +1137,104 @@ const styles = StyleSheet.create({
   },
   paymentChip: {
     borderWidth: 1,
-    borderColor: "#444",
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    backgroundColor: "#2b2b2b",
+    borderColor: "#333",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: "#1a1a1a",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
   },
   paymentChipActive: {
     backgroundColor: "#8c52ff",
     borderColor: "#8c52ff",
   },
   paymentChipText: {
-    color: "#ddd",
-    fontSize: 12,
+    color: "#bbb",
+    fontSize: 13,
     fontWeight: "600",
   },
   paymentChipTextActive: {
     color: "#fff",
+  },
+  pickerContainer: {
+    gap: 8,
+  },
+  pickerOption: {
+    borderWidth: 1,
+    borderColor: "#333",
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    backgroundColor: "#1a1a1a",
+    justifyContent: "space-between",
+  },
+  pickerOptionActive: {
+    backgroundColor: "rgba(140, 82, 255, 0.15)",
+    borderColor: "#8c52ff",
+  },
+  pickerOptionText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#bbb",
+  },
+  pickerOptionTextActive: {
+    color: "#8c52ff",
+  },
+  billOptionContent: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    width: "100%",
+  },
+  billOptionAmount: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#999",
+  },
+  billOptionAmountActive: {
+    color: "#8c52ff",
+  },
+  pickerPlaceholder: {
+    borderWidth: 1,
+    borderColor: "#333",
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 16,
+    backgroundColor: "#1a1a1a",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  pickerPlaceholderError: {
+    borderColor: "#ff4d6d",
+  },
+  inputWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#1a1a1a",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#333",
+    paddingHorizontal: 12,
+  },
+  inputWrapperError: {
+    borderColor: "#ff4d6d",
+  },
+  input: {
+    flex: 1,
+    padding: 12,
+    fontSize: 14,
+    color: "#fff",
+  },
+  buttonContainer: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 24,
+    marginBottom: 40,
+  },
+  button: {
+    flex: 1,
   },
 });
 

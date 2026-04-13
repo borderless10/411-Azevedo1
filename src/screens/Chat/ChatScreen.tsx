@@ -12,6 +12,7 @@ import {
   Animated,
   Image,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../hooks/useAuth";
 import { useUserChats } from "../../hooks/useUserChats";
@@ -22,6 +23,7 @@ import { userService } from "../../services/userServices";
 
 export const ChatScreen: React.FC = () => {
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
   const { chats, isLoading } = useUserChats(
     user?.id || null,
     user?.role || null,
@@ -30,6 +32,7 @@ export const ChatScreen: React.FC = () => {
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
   const [inputText, setInputText] = useState("");
   const [globalChat, setGlobalChat] = useState<any>(null);
+  const [primaryAdminId, setPrimaryAdminId] = useState<string | null>(null);
 
   const { messages, sendMessage } = useChatMessages(
     selectedChatId || "",
@@ -38,9 +41,10 @@ export const ChatScreen: React.FC = () => {
   );
 
   const [userMap, setUserMap] = useState<Record<string, any>>({});
+  const [previewSenderMap, setPreviewSenderMap] = useState<Record<string, string>>({});
   const flatListRef = useRef<FlatList<any> | null>(null);
 
-  // Ensure global chat exists and direct chat with consultant
+  // Ensure global chat exists and direct chats with consultant/admin for clients
   useEffect(() => {
     if (!user?.id || !user?.role) return;
 
@@ -63,6 +67,23 @@ export const ChatScreen: React.FC = () => {
             consultantId,
             "direct",
           );
+        }
+
+        if (user.role === "user" || user.role === "cliente_premium") {
+          let admins = await userService.getUsersByRole("admin");
+          if (!admins.length) {
+            const allUsers = await userService.getAllUsers();
+            admins = allUsers.filter(
+              (candidate) =>
+                String(candidate.role || "").toLowerCase() === "admin" ||
+                candidate.isAdmin === true,
+            );
+          }
+          const targetAdmin = admins.find((admin) => admin.id !== user.id) || null;
+          if (targetAdmin?.id) {
+            setPrimaryAdminId(targetAdmin.id);
+            await chatService.createChatIfNotExists(user.id, targetAdmin.id, "direct");
+          }
         }
       } catch (error) {
         console.warn("Error initializing chats:", error);
@@ -93,6 +114,125 @@ export const ChatScreen: React.FC = () => {
       return bTime.getTime() - aTime.getTime();
     });
   }, [chats, globalChat]);
+
+  // Resolve participant profiles for chats shown in the list
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const participantIds = Array.from(
+      new Set(
+        (processedChats || [])
+          .flatMap((chat: any) => chat?.participants || [])
+          .filter((id: string) => id && id !== "system"),
+      ),
+    ) as string[];
+
+    const missingIds = participantIds.filter((id) => !userMap[id]);
+    if (!missingIds.length) return;
+
+    let mounted = true;
+    (async () => {
+      const updates: Record<string, any> = {};
+      for (const id of missingIds) {
+        try {
+          const userData = await userService.getUserById(id);
+          if (userData) updates[id] = userData;
+        } catch {
+          // ignore and keep fallback title
+        }
+      }
+
+      if (mounted && Object.keys(updates).length > 0) {
+        setUserMap((prev) => ({ ...prev, ...updates }));
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, [processedChats, user?.id, userMap]);
+
+  const getParticipantDisplayName = (id?: string | null): string => {
+    if (!id) return "Usuário";
+    if (id === user?.id) return "Você";
+    const profile = userMap[id];
+    return profile?.nickname || profile?.name || previewSenderMap[id] || id;
+  };
+
+  const getParticipantRole = (id?: string | null): string => {
+    if (!id) return "";
+    return String(userMap[id]?.role || "").toLowerCase();
+  };
+
+  const getDirectChatTitleForPrivileged = (chat: any): string => {
+    const participants = (chat?.participants || []).filter(
+      (id: string) => id !== "system",
+    );
+    const includesCurrentUser = participants.includes(user?.id);
+
+    if (userRole === "consultor") {
+      const otherId = participants.find((id: string) => id !== user?.id);
+      return getParticipantDisplayName(otherId);
+    }
+
+    if (userRole === "admin") {
+      if (includesCurrentUser) {
+        const otherId = participants.find((id: string) => id !== user?.id);
+        return `Direto: ${getParticipantDisplayName(otherId)}`;
+      }
+
+      const [firstId, secondId] = participants;
+      const firstRole = getParticipantRole(firstId);
+      const secondRole = getParticipantRole(secondId);
+      const firstName = getParticipantDisplayName(firstId);
+      const secondName = getParticipantDisplayName(secondId);
+
+      if (firstRole === "consultor" || secondRole === "consultor") {
+        const clientName = firstRole === "consultor" ? secondName : firstName;
+        return `Com consultor: ${clientName}`;
+      }
+
+      return `Direto externo: ${firstName} + ${secondName}`;
+    }
+
+    const otherId = participants.find((id: string) => id !== user?.id);
+    return getParticipantDisplayName(otherId);
+  };
+
+  // Resolve sender names used in chat list preview (last message)
+  useEffect(() => {
+    const senderIds = Array.from(
+      new Set(
+        (processedChats || [])
+          .map((chat: any) => chat?.lastMessage?.senderId)
+          .filter(Boolean),
+      ),
+    ) as string[];
+
+    const missing = senderIds.filter((id) => !previewSenderMap[id]);
+    if (!missing.length) return;
+
+    let mounted = true;
+    (async () => {
+      const updates: Record<string, string> = {};
+      for (const senderId of missing) {
+        try {
+          const sender = await userService.getUserById(senderId);
+          updates[senderId] =
+            sender?.nickname || sender?.name || (senderId === user?.id ? "Você" : "Usuário");
+        } catch {
+          updates[senderId] = senderId === user?.id ? "Você" : "Usuário";
+        }
+      }
+      if (mounted && Object.keys(updates).length > 0) {
+        setPreviewSenderMap((prev) => ({ ...prev, ...updates }));
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, [processedChats, previewSenderMap, user?.id]);
 
   // Fetch sender info (avatar/name) for messages shown in the conversation
   useEffect(() => {
@@ -129,6 +269,48 @@ export const ChatScreen: React.FC = () => {
   const selectedChat = processedChats.find((c) => c.id === selectedChatId);
   const chatMessages = messages;
 
+  const getMessageTimeMs = (value: any): number => {
+    if (!value) return 0;
+    if (value instanceof Date) return value.getTime();
+    if (typeof value?.toDate === "function") {
+      const date = value.toDate();
+      return date instanceof Date ? date.getTime() : 0;
+    }
+    if (typeof value?.seconds === "number") {
+      return value.seconds * 1000;
+    }
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? 0 : parsed.getTime();
+  };
+
+  const orderedMessages = useMemo(() => {
+    // With `inverted`, keep newest first in data so newest stays at the bottom in the UI.
+    return [...chatMessages].sort(
+      (a, b) => getMessageTimeMs(b.createdAt) - getMessageTimeMs(a.createdAt),
+    );
+  }, [chatMessages]);
+
+  const toJsDate = (value: any): Date | null => {
+    if (!value) return null;
+    if (value instanceof Date) return value;
+    if (typeof value?.toDate === "function") return value.toDate();
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  };
+
+  const isChatUnread = (chat: any): boolean => {
+    if (!user?.id) return false;
+    const senderId = chat?.lastMessage?.senderId;
+    if (!senderId || senderId === user.id) return false;
+
+    const lastMessageAt = toJsDate(chat?.lastMessageAt);
+    if (!lastMessageAt) return false;
+
+    const lastReadAt = toJsDate(chat?.lastReadBy?.[user.id]);
+    if (!lastReadAt) return true;
+    return lastMessageAt.getTime() > lastReadAt.getTime();
+  };
+
   // Auto-scroll to latest message when messages change
   useEffect(() => {
     try {
@@ -140,6 +322,22 @@ export const ChatScreen: React.FC = () => {
       // ignore
     }
   }, [chatMessages.length]);
+
+  // Mark selected chat as read when user enters it
+  useEffect(() => {
+    if (!selectedChatId || !user?.id) return;
+    chatService.markChatAsRead(selectedChatId, user.id).catch(() => {
+      // ignore read marker errors
+    });
+  }, [selectedChatId, user?.id]);
+
+  // Keep selected chat marked as read while conversation is open and messages update
+  useEffect(() => {
+    if (!selectedChatId || !user?.id || chatMessages.length === 0) return;
+    chatService.markChatAsRead(selectedChatId, user.id).catch(() => {
+      // ignore read marker errors
+    });
+  }, [selectedChatId, user?.id, chatMessages.length]);
 
   // For private/direct chats show header avatar/name (fetch if missing)
   const isPrivateChat =
@@ -172,8 +370,9 @@ export const ChatScreen: React.FC = () => {
     msg: any;
     isOwn: boolean;
     showAvatar?: boolean;
+    showSenderName?: boolean;
     sender?: any;
-  }> = ({ msg, isOwn, showAvatar = false, sender }) => {
+  }> = ({ msg, isOwn, showAvatar = false, showSenderName = false, sender }) => {
     const anim = useRef(new Animated.Value(0)).current;
 
     useEffect(() => {
@@ -235,9 +434,9 @@ export const ChatScreen: React.FC = () => {
               showAvatar && { marginLeft: 4 },
             ]}
           >
-            {showAvatar && !isOwn && (
+            {showSenderName && !isOwn && (
               <Text style={styles.senderName}>
-                {sender?.nickname || sender?.name}
+                {sender?.nickname || sender?.name || "Usuário"}
               </Text>
             )}
 
@@ -246,6 +445,8 @@ export const ChatScreen: React.FC = () => {
             </Text>
 
             <Text
+              numberOfLines={1}
+              allowFontScaling={false}
               style={[
                 styles.messageTime,
                 isOwn ? styles.ownMessageTime : styles.otherMessageTime,
@@ -268,22 +469,87 @@ export const ChatScreen: React.FC = () => {
     userRole,
   );
 
+  const isGroupChat = (chat: any): boolean => {
+    return (
+      chat?.id === "global" ||
+      chat?.type === "global" ||
+      chat?.type === "group" ||
+      (chat?.participants && chat.participants.length > 2)
+    );
+  };
+
   const getChatTitle = (chat: any): string => {
-    if (chat.type === "global") return "Grupo Geral";
-    if (chat.type === "direct") {
-      const isClient = ["user", "cliente_premium"].includes(userRole);
-      if (isClient) return "Consultor";
-      const otherUser = chat.participants.find((id: string) => id !== user?.id);
-      return otherUser || "Chat";
+    const isClient = ["user", "cliente_premium"].includes(userRole);
+    const isPrivileged = ["admin", "consultor"].includes(userRole);
+
+    if (isGroupChat(chat)) {
+      if (chat?.id === "global" || chat?.type === "global") return "Bate-Papo";
+      if (isPrivileged) return "Grupo: Cliente + Consultor";
+      return "Bate-Papo";
     }
+
+    if (chat.type === "direct") {
+      const participants = chat.participants || [];
+      const otherUser = participants.find((id: string) => id !== user?.id);
+      const otherUserData = otherUser ? userMap[otherUser] : null;
+      const otherDisplayName =
+        otherUserData?.nickname ||
+        otherUserData?.name ||
+        (otherUser ? previewSenderMap[otherUser] : null);
+
+      if (isClient) {
+        const consultantId = (user as any)?.consultantId;
+        if (consultantId && otherUser === consultantId) {
+          return "Seu consultor";
+        }
+
+        if (primaryAdminId && otherUser === primaryAdminId) {
+          return "Visão";
+        }
+
+        if (otherUser) {
+          return "Visão";
+        }
+      }
+
+      if (isPrivileged) {
+        return getDirectChatTitleForPrivileged(chat);
+      }
+
+      return otherDisplayName || otherUser || "Chat";
+    }
+
+    if (chat.participants && chat.participants.length > 2) {
+      return "Bate-Papo";
+    }
+
     return chat.id;
   };
 
-  const getChatPreview = (chatId: string): string => {
-    if (chatId === selectedChatId && messages.length > 0) {
-      const lastMsg = messages[messages.length - 1];
-      return lastMsg?.text?.substring(0, 50) || "Sem mensagens";
+  const getChatPreview = (chat: any): string => {
+    const fromList = chat?.lastMessage?.text;
+    const senderId = chat?.lastMessage?.senderId;
+    const senderLabel =
+      senderId === user?.id
+        ? "Você"
+        : previewSenderMap[senderId] || userMap[senderId]?.nickname || userMap[senderId]?.name || "Usuário";
+
+    if (typeof fromList === "string" && fromList.trim().length > 0) {
+      return `${senderLabel}: ${fromList.trim()}`.substring(0, 70);
     }
+
+    // Fallback: when current conversation is open, use the live message list
+    if (chat?.id === selectedChatId && messages.length > 0) {
+      const lastMsg = messages[messages.length - 1];
+      const text = String(lastMsg?.text || "").trim();
+      const liveSenderId = lastMsg?.senderId;
+      const liveSenderLabel =
+        liveSenderId === user?.id
+          ? "Você"
+          : userMap[liveSenderId]?.nickname || userMap[liveSenderId]?.name || "Usuário";
+      if (text.length > 0) return `${liveSenderLabel}: ${text}`.substring(0, 70);
+    }
+
     return "Sem mensagens";
   };
 
@@ -356,18 +622,23 @@ export const ChatScreen: React.FC = () => {
                 >
                   <View style={styles.avatarContainer}>
                     <Ionicons
-                      name={chat.type === "global" ? "people" : "person"}
+                      name={isGroupChat(chat) ? "people" : "person"}
                       size={32}
                       color="#8c52ff"
                     />
                   </View>
                   <View style={styles.chatInfo}>
-                    <Text style={styles.chatTitle}>{getChatTitle(chat)}</Text>
+                    <Text style={styles.chatTitle} numberOfLines={1}>
+                      {getChatTitle(chat) || "Chat"}
+                    </Text>
                     <Text style={styles.lastMessageText} numberOfLines={1}>
-                      {getChatPreview(chat.id)}
+                      {getChatPreview(chat)}
                     </Text>
                   </View>
-                  <Text style={styles.timestampText}>{getTimestamp(chat)}</Text>
+                  <View style={styles.chatRightInfo}>
+                    {isChatUnread(chat) ? <View style={styles.unreadDot} /> : null}
+                    <Text style={styles.timestampText}>{getTimestamp(chat)}</Text>
+                  </View>
                 </TouchableOpacity>
               )}
               scrollEnabled={true}
@@ -381,7 +652,10 @@ export const ChatScreen: React.FC = () => {
   return (
     <Layout>
       <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        behavior={Platform.OS === "ios" ? "padding" : "padding"}
+        keyboardVerticalOffset={
+          Platform.OS === "ios" ? insets.top + 56 : insets.bottom + 12
+        }
         style={styles.container}
       >
         {/* Header */}
@@ -437,10 +711,7 @@ export const ChatScreen: React.FC = () => {
         {/* Messages List */}
         <FlatList
           ref={flatListRef as any}
-          data={chatMessages.sort(
-            (a, b) =>
-              new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
-          )}
+          data={orderedMessages}
           keyExtractor={(item, idx) => item.id || `msg-${idx}`}
           renderItem={({ item: msg }) => {
             const isOwn = msg.senderId === user?.id;
@@ -455,6 +726,7 @@ export const ChatScreen: React.FC = () => {
                 msg={msg}
                 isOwn={isOwn}
                 showAvatar={isGroup}
+                showSenderName={true}
                 sender={sender}
               />
             );
@@ -464,7 +736,12 @@ export const ChatScreen: React.FC = () => {
         />
 
         {/* Input */}
-        <View style={styles.inputContainer}>
+        <View
+          style={[
+            styles.inputContainer,
+            { paddingBottom: Math.max(10, insets.bottom) },
+          ]}
+        >
           <TextInput
             style={styles.input}
             placeholder="Digite sua mensagem..."
@@ -505,22 +782,41 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#f0f0f0",
+    borderBottomColor: "#1f1f1f",
     alignItems: "center",
+    backgroundColor: "#000000",
   },
   avatarContainer: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: "#f0f0f0",
+    backgroundColor: "#1a1a1a",
     justifyContent: "center",
     alignItems: "center",
     marginRight: 12,
   },
-  chatInfo: { flex: 1 },
-  chatTitle: { fontSize: 16, fontWeight: "600", color: "#000" },
-  lastMessageText: { fontSize: 13, color: "#666", marginTop: 4 },
-  timestampText: { fontSize: 12, color: "#999", marginLeft: 8 },
+  chatInfo: { flex: 1, minWidth: 0 },
+  chatTitle: {
+    fontSize: 16,
+    lineHeight: 20,
+    fontWeight: "700",
+    color: "#ffffff",
+  },
+  lastMessageText: { fontSize: 13, color: "#b8b8b8", marginTop: 4 },
+  chatRightInfo: {
+    alignItems: "flex-end",
+    justifyContent: "center",
+    minWidth: 48,
+    marginLeft: 8,
+  },
+  unreadDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: "#8c52ff",
+    marginBottom: 6,
+  },
+  timestampText: { fontSize: 12, color: "#d0d0d0" },
   conversationHeader: {
     flexDirection: "row",
     alignItems: "center",
@@ -561,11 +857,14 @@ const styles = StyleSheet.create({
   ownMessageText: { color: "#fff" },
   messageTime: {
     fontSize: 10,
+    lineHeight: 10,
     color: "#666",
     position: "absolute",
     right: 8,
     bottom: 6,
+    minWidth: 36,
     textAlign: "right",
+    includeFontPadding: false,
   },
   ownMessageTime: { color: "rgba(255,255,255,0.85)" },
   otherMessageTime: { color: "#666" },
@@ -605,7 +904,9 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     borderWidth: 1,
-    borderColor: "#ddd",
+    borderColor: "#2f2f2f",
+    backgroundColor: "#121212",
+    color: "#ffffff",
     borderRadius: 20,
     paddingHorizontal: 16,
     paddingVertical: 10,

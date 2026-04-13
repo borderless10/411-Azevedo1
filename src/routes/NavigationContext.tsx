@@ -7,6 +7,7 @@ export type ScreenName =
   | "AddIncome"
   | "EditIncome"
   | "IncomeList"
+  | "TrackedIncome"
   | "AddExpense"
   | "EditExpense"
   | "ExpenseList"

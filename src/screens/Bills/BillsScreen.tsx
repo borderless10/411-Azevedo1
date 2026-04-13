@@ -28,14 +28,17 @@ import {
   getBills,
   updateBill,
   markBillAsPaid,
+  markBillAsUnpaid,
   deleteBill,
   updateOverdueBills,
 } from "../../services/billServices";
 import { planningServices } from "../../services/planningServices";
+import expenseServices from "../../services/expenseServices";
 import {
   scheduleBillNotification,
   cancelBillNotification,
   requestNotificationPermissions,
+  syncBillNotifications,
 } from "../../services/notificationServices";
 import { Bill } from "../../types/bill";
 import ConfirmDeleteModal from "../../components/ui/ConfirmDeleteModal";
@@ -43,7 +46,7 @@ import ConfirmDeleteModal from "../../components/ui/ConfirmDeleteModal";
 export const BillsScreen = () => {
   const { user } = useAuth();
   const { colors } = useTheme();
-  const { currentScreen } = useNavigation();
+  const { currentScreen, navigate } = useNavigation();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
 
@@ -64,6 +67,33 @@ export const BillsScreen = () => {
   const [amount, setAmount] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [saving, setSaving] = useState(false);
+
+  const normalizePaymentMethodForExpense = (
+    raw?: string,
+  ): "cash" | "debit_card" | "credit_card" | "pix" | "other" => {
+    const normalized = String(raw || "")
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+
+    if (
+      normalized.includes("card") ||
+      normalized.includes("cart") ||
+      normalized.includes("credito") ||
+      normalized.includes("debito") ||
+      normalized.includes("credit") ||
+      normalized.includes("debit")
+    ) {
+      // Mantemos como cartão sem exigir cardId para este fluxo.
+      return "debit_card";
+    }
+    if (normalized.includes("pix")) return "pix";
+    if (normalized.includes("cash") || normalized.includes("dinheiro")) {
+      return "cash";
+    }
+    return "cash";
+  };
 
   useEffect(() => {
     Animated.parallel([
@@ -289,6 +319,7 @@ export const BillsScreen = () => {
             title: b.name,
             description: b.notes,
             amount: b.amount,
+            paymentMethod: b.paymentMethod as any,
             dueDate,
             status,
             paidDate: b.paidDate,
@@ -317,6 +348,7 @@ export const BillsScreen = () => {
               description:
                 exp.notes || `${exp.paymentMethod || "Sem método definido"}`,
               amount: exp.amount,
+              paymentMethod: exp.paymentMethod as any,
               dueDate,
               status: "pending" as const,
               paidDate: undefined,
@@ -347,7 +379,11 @@ export const BillsScreen = () => {
             })),
           });
         }
-        setBills([...mapped, ...mappedExpectedExpenses]);
+        const mergedPlanningBills = [...mapped, ...mappedExpectedExpenses];
+        setBills(mergedPlanningBills);
+        void syncBillNotifications(mergedPlanningBills).catch((err) => {
+          console.log("[BILLS] erro ao sincronizar notificações:", err);
+        });
       } else {
         setIsPlanningSource(false);
         if (__DEV__) {
@@ -369,6 +405,9 @@ export const BillsScreen = () => {
           });
         }
         setBills(data);
+        void syncBillNotifications(data).catch((err) => {
+          console.log("[BILLS] erro ao sincronizar notificações:", err);
+        });
       }
     } catch (error) {
       console.error("Erro ao carregar contas:", error);
@@ -443,13 +482,30 @@ export const BillsScreen = () => {
         onPress: async () => {
           try {
             if (isPlanningSource) {
-              // mark planning bill as paid
-              await planningServices.markBillAsPaidByClient(user!.id, bill.id);
+              navigate("AddExpense", {
+                prefillExpenseType: "bill",
+                prefillBillId: bill.id,
+                prefillDate: new Date().toISOString(),
+                prefillDescription: bill.title,
+                returnTo: "Bills",
+              });
             } else {
+              const paymentMethod = normalizePaymentMethodForExpense(
+                (bill as any)?.paymentMethod,
+              );
+
+              // Registrar pagamento como gasto real (apenas quando não for planning)
+              await expenseServices.createExpense(user!.id, {
+                value: Number(bill.amount) || 0,
+                description: bill.title,
+                date: new Date(),
+                category: "Conta",
+                paymentMethod,
+                sourceBillId: bill.id,
+              });
+
               await markBillAsPaid(bill.id);
-              if (bill.notificationId) {
-                await cancelBillNotification(bill.id);
-              }
+              await cancelBillNotification(bill.id);
             }
             loadBills();
           } catch (error) {
@@ -487,9 +543,7 @@ export const BillsScreen = () => {
       if (isPlanningSource) {
         // shouldn't happen because delete button is disabled for planning source
       } else {
-        if (billToDelete.notificationId) {
-          await cancelBillNotification(billToDelete.id);
-        }
+        await cancelBillNotification(billToDelete.id);
         await deleteBill(billToDelete.id);
       }
       setIsDeleteModalVisible(false);
@@ -500,6 +554,52 @@ export const BillsScreen = () => {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleMarkAsUnpaid = async (bill: Bill) => {
+    Alert.alert("Confirmar ajuste", `Marcar "${bill.title}" como não paga?`, [
+      { text: "Cancelar", style: "cancel" },
+      {
+        text: "Confirmar",
+        onPress: async () => {
+          try {
+            if (isPlanningSource) {
+              await planningServices.markBillAsUnpaidByClient(
+                user!.id,
+                bill.id,
+              );
+            } else {
+              await markBillAsUnpaid(bill.id);
+              await scheduleBillNotification(
+                bill.id,
+                bill.title,
+                Number(bill.amount) || 0,
+                new Date(bill.dueDate),
+              );
+            }
+
+            const removedExpense =
+              await expenseServices.deleteExpenseBySourceBillId(
+                user!.id,
+                bill.id,
+              );
+
+            if (!removedExpense) {
+              console.log(
+                "[BILLS] nenhum gasto vinculado foi encontrado para remover",
+                {
+                  billId: bill.id,
+                },
+              );
+            }
+
+            loadBills();
+          } catch (error) {
+            Alert.alert("Erro", "Não foi possível marcar como não paga");
+          }
+        },
+      },
+    ]);
   };
 
   const cancelDelete = () => {
@@ -819,7 +919,7 @@ export const BillsScreen = () => {
                       onPress={() => handleMarkAsPaid(bill)}
                     >
                       <Ionicons name="checkmark" size={20} color="#fff" />
-                      <Text style={styles.actionButtonText}>Pagar</Text>
+                      <Text style={styles.actionButtonText}>Paga</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={[
@@ -837,12 +937,12 @@ export const BillsScreen = () => {
                     <TouchableOpacity
                       style={[
                         styles.actionButton,
-                        { backgroundColor: colors.danger, flex: 1 },
+                        { backgroundColor: colors.warning, flex: 1 },
                       ]}
-                      onPress={() => handleDeleteBill(bill)}
+                      onPress={() => handleMarkAsUnpaid(bill)}
                     >
-                      <Ionicons name="trash" size={20} color="#fff" />
-                      <Text style={styles.actionButtonText}>Excluir</Text>
+                      <Ionicons name="refresh-outline" size={20} color="#fff" />
+                      <Text style={styles.actionButtonText}>Não pago</Text>
                     </TouchableOpacity>
                   </View>
                 )}

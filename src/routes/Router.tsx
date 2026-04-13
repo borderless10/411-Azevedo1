@@ -5,6 +5,7 @@ import { HomeScreen } from "../screens/Home/HomeScreen";
 import { AddIncomeScreen } from "../screens/Income/AddIncomeScreen";
 import { EditIncomeScreen } from "../screens/Income/EditIncomeScreen";
 import { IncomeListScreen } from "../screens/Income/IncomeListScreen";
+import { TrackedIncomeScreen } from "../screens/Income/TrackedIncomeScreen";
 import { AddExpenseScreen } from "../screens/Expense/AddExpenseScreen";
 import { EditExpenseScreen } from "../screens/Expense/EditExpenseScreen";
 import { ExpenseListScreen } from "../screens/Expense/ExpenseListScreen";
@@ -116,6 +117,8 @@ export const Router = () => {
         return <EditIncomeScreen />;
       case "IncomeList":
         return <IncomeListScreen />;
+      case "TrackedIncome":
+        return <TrackedIncomeScreen />;
       case "AddExpense":
         return <AddExpenseScreen />;
       case "EditExpense":

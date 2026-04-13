@@ -31,6 +31,7 @@ export interface Chat {
   participants: string[];
   lastMessage?: { text: string; senderId: string };
   lastMessageAt?: any; // Firestore Timestamp
+  lastReadBy?: Record<string, any>;
   createdAt?: any;
 }
 
@@ -113,9 +114,24 @@ export async function sendMessage(
   batch.update(chatRef, {
     lastMessage: { text, senderId },
     lastMessageAt: serverTimestamp(),
+    [`lastReadBy.${senderId}`]: serverTimestamp(),
   });
 
   await batch.commit();
+}
+
+/**
+ * Mark a chat as read for a specific user.
+ */
+export async function markChatAsRead(
+  chatId: string,
+  userId: string,
+): Promise<void> {
+  if (!chatId || !userId) return;
+  const chatRef = doc(db, CHATS_COL, chatId);
+  await updateDoc(chatRef, {
+    [`lastReadBy.${userId}`]: serverTimestamp(),
+  });
 }
 
 /**
@@ -270,6 +286,7 @@ export async function getChatsForUserNoOrder(userId: string, role: string): Prom
 export default {
   createChatIfNotExists,
   sendMessage,
+  markChatAsRead,
   listenToMessages,
   loadMoreMessages,
   listenToUserChats,

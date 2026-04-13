@@ -11,6 +11,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
+  Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../hooks/useAuth";
@@ -33,6 +34,9 @@ export const ExpenseListScreen = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [total, setTotal] = useState(0);
+  const [deletingExpenseId, setDeletingExpenseId] = useState<string | null>(
+    null,
+  );
   const [paymentFilter, setPaymentFilter] = useState<
     "all" | "credit_card" | "debit_card" | "cash" | "pix" | "other"
   >("all");
@@ -69,6 +73,28 @@ export const ExpenseListScreen = () => {
   const handleRefresh = () => {
     setRefreshing(true);
     loadExpenses();
+  };
+
+  const handleDeleteExpense = (id: string, description: string) => {
+    Alert.alert("Excluir gasto", `Deseja excluir o gasto \"${description}\"?`, [
+      { text: "Cancelar", style: "cancel" },
+      {
+        text: "Excluir",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            setDeletingExpenseId(id);
+            await expenseServices.deleteExpense(id);
+            await loadExpenses();
+          } catch (error) {
+            console.error("❌ Erro ao excluir gasto:", error);
+            Alert.alert("Erro", "Não foi possível excluir o gasto.");
+          } finally {
+            setDeletingExpenseId(null);
+          }
+        },
+      },
+    ]);
   };
 
   // Agrupar por data
@@ -124,6 +150,17 @@ export const ExpenseListScreen = () => {
         <Text style={styles.expenseValue}>
           -{formatCurrency(expense.value)}
         </Text>
+        <TouchableOpacity
+          style={styles.deleteButton}
+          onPress={() => handleDeleteExpense(expense.id, expense.description)}
+          disabled={deletingExpenseId === expense.id}
+        >
+          {deletingExpenseId === expense.id ? (
+            <ActivityIndicator size="small" color="#ff4d6d" />
+          ) : (
+            <Ionicons name="trash-outline" size={18} color="#ff4d6d" />
+          )}
+        </TouchableOpacity>
       </View>
     </TouchableOpacity>
   );
@@ -134,12 +171,14 @@ export const ExpenseListScreen = () => {
       (sum, expense) => sum + expense.value,
       0,
     );
+    const [year, month, day] = date.split("-").map(Number);
+    const displayDate = new Date(year, month - 1, day);
 
     return (
       <View key={date} style={styles.dateGroup}>
         <View style={styles.dateHeader}>
           <Text style={styles.dateText}>
-            {formatDateForDisplay(new Date(date))}
+            {formatDateForDisplay(displayDate)}
           </Text>
           <Text style={styles.dateTotal}>-{formatCurrency(dayTotal)}</Text>
         </View>
@@ -418,7 +457,17 @@ const styles = StyleSheet.create({
     color: "#999",
   },
   expenseItemRight: {
+    alignItems: "flex-end",
+    gap: 8,
     marginLeft: 12,
+  },
+  deleteButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#2a1318",
   },
   expenseValue: {
     fontSize: 18,

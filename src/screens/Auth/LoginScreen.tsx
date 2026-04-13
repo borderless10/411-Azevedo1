@@ -1,4 +1,4 @@
-﻿import React, { useState } from "react";
+﻿import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -13,10 +13,18 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as LocalAuthentication from "expo-local-authentication";
+import * as SecureStore from "expo-secure-store";
 import { useAuth } from "../../hooks/useAuth";
 import { useNavigation } from "../../routes/NavigationContext";
 import { getErrorMessage } from "../../components/ui/ErrorMessage";
 import CustomModal from "../../components/ui/CustomModal";
+
+const REMEMBER_EMAIL_KEY = "@411:remember-email";
+const SAVED_EMAIL_KEY = "@411:saved-email";
+const BIOMETRIC_EMAIL_KEY = "@411:biometric-email";
+const BIOMETRIC_PASSWORD_KEY = "@411:biometric-password";
 
 export const LoginScreen = () => {
   const { navigate } = useNavigation();
@@ -32,6 +40,59 @@ export const LoginScreen = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [modalMessage, setModalMessage] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberEmail, setRememberEmail] = useState(false);
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const [hasBiometricCredentials, setHasBiometricCredentials] = useState(false);
+
+  useEffect(() => {
+    const loadLoginPreferences = async () => {
+      try {
+        const [rememberFlag, savedEmail] = await Promise.all([
+          AsyncStorage.getItem(REMEMBER_EMAIL_KEY),
+          AsyncStorage.getItem(SAVED_EMAIL_KEY),
+        ]);
+
+        if (rememberFlag === "true" && savedEmail) {
+          setRememberEmail(true);
+          setEmail(savedEmail);
+        }
+      } catch (error) {
+        console.log("Erro ao carregar preferências de login:", error);
+      }
+
+      if (Platform.OS === "web") {
+        setBiometricAvailable(false);
+        setHasBiometricCredentials(false);
+        return;
+      }
+
+      try {
+        const [
+          hasHardware,
+          isEnrolled,
+          savedBiometricEmail,
+          savedBiometricPass,
+        ] = await Promise.all([
+          LocalAuthentication.hasHardwareAsync(),
+          LocalAuthentication.isEnrolledAsync(),
+          SecureStore.getItemAsync(BIOMETRIC_EMAIL_KEY),
+          SecureStore.getItemAsync(BIOMETRIC_PASSWORD_KEY),
+        ]);
+
+        const canUseBiometry = hasHardware && isEnrolled;
+        setBiometricAvailable(canUseBiometry);
+        setHasBiometricCredentials(
+          Boolean(savedBiometricEmail && savedBiometricPass),
+        );
+      } catch (error) {
+        console.log("Erro ao verificar biometria:", error);
+        setBiometricAvailable(false);
+        setHasBiometricCredentials(false);
+      }
+    };
+
+    void loadLoginPreferences();
+  }, []);
 
   // Validar email em tempo real
   const validateEmail = (text: string): string => {
@@ -82,6 +143,80 @@ export const LoginScreen = () => {
     }
   };
 
+  const handleAuthError = (error: any) => {
+    console.log("❌ [LOGIN] Erro:", error);
+
+    const errorCode =
+      error && typeof error === "object" && "code" in error
+        ? (error as any).code
+        : "default";
+
+    const errorMessage = getErrorMessage(errorCode);
+
+    if (
+      errorCode === "auth/wrong-password" ||
+      errorCode === "auth/invalid-credential"
+    ) {
+      setModalMessage("Senha incorreta. Verifique e tente novamente.");
+      setModalVisible(true);
+    } else if (errorCode === "auth/user-not-found") {
+      Alert.alert(
+        "Erro no login",
+        "Usuário não encontrado. Confira o email ou crie uma conta.",
+      );
+    } else if (errorCode === "auth/invalid-email") {
+      Alert.alert(
+        "Erro no login",
+        "Email inválido. Verifique o formato (ex: usuario@dominio.com).",
+      );
+    } else {
+      Alert.alert("Erro no login", errorMessage);
+    }
+
+    if (
+      errorCode === "auth/invalid-email" ||
+      errorCode === "auth/user-not-found"
+    ) {
+      setErrors((prev) => ({ ...prev, email: errorMessage }));
+    } else if (
+      errorCode === "auth/wrong-password" ||
+      errorCode === "auth/invalid-credential"
+    ) {
+      setErrors((prev) => ({ ...prev, password: "Senha incorreta" }));
+    } else {
+      setErrors((prev) => ({ ...prev, general: errorMessage }));
+    }
+  };
+
+  const persistLoginPreferences = async (
+    loginEmail: string,
+    loginPassword: string,
+  ) => {
+    if (rememberEmail) {
+      await AsyncStorage.multiSet([
+        [REMEMBER_EMAIL_KEY, "true"],
+        [SAVED_EMAIL_KEY, loginEmail],
+      ]);
+
+      if (Platform.OS !== "web" && biometricAvailable) {
+        await SecureStore.setItemAsync(BIOMETRIC_EMAIL_KEY, loginEmail);
+        await SecureStore.setItemAsync(BIOMETRIC_PASSWORD_KEY, loginPassword);
+        setHasBiometricCredentials(true);
+      }
+      return;
+    }
+
+    await AsyncStorage.multiRemove([REMEMBER_EMAIL_KEY, SAVED_EMAIL_KEY]);
+
+    if (Platform.OS !== "web") {
+      await Promise.all([
+        SecureStore.deleteItemAsync(BIOMETRIC_EMAIL_KEY),
+        SecureStore.deleteItemAsync(BIOMETRIC_PASSWORD_KEY),
+      ]);
+      setHasBiometricCredentials(false);
+    }
+  };
+
   const handleLogin = async () => {
     console.log("🔵 [LOGIN] Iniciando processo de login...");
 
@@ -104,54 +239,65 @@ export const LoginScreen = () => {
     try {
       console.log("🔵 [LOGIN] Chamando signIn...");
       setLoading(true);
-      await signIn({ email: email.trim(), password });
+      const normalizedEmail = email.trim();
+
+      await signIn({ email: normalizedEmail, password });
+      await persistLoginPreferences(normalizedEmail, password);
+
       console.log("✅ [LOGIN] Login bem-sucedido!");
     } catch (error: any) {
-      console.log("❌ [LOGIN] Erro:", error);
+      handleAuthError(error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-      // Garante que não estoura erro se vier algo inesperado do Firebase
-      const errorCode =
-        error && typeof error === "object" && "code" in error
-          ? (error as any).code
-          : "default";
+  const handleBiometricLogin = async () => {
+    if (loading || !biometricAvailable) {
+      return;
+    }
 
-      const errorMessage = getErrorMessage(errorCode);
+    if (!hasBiometricCredentials) {
+      Alert.alert(
+        "Biometria indisponível",
+        "Faça um login com 'Salvar meu login' marcado para ativar o acesso por biometria.",
+      );
+      return;
+    }
 
-      // Exibe modal personalizado para senha incorreta; mantém alertas para outros erros
-      if (
-        errorCode === "auth/wrong-password" ||
-        errorCode === "auth/invalid-credential"
-      ) {
-        setModalMessage("Senha incorreta. Verifique e tente novamente.");
-        setModalVisible(true);
-      } else if (errorCode === "auth/user-not-found") {
+    try {
+      const [savedBiometricEmail, savedBiometricPassword] = await Promise.all([
+        SecureStore.getItemAsync(BIOMETRIC_EMAIL_KEY),
+        SecureStore.getItemAsync(BIOMETRIC_PASSWORD_KEY),
+      ]);
+
+      if (!savedBiometricEmail || !savedBiometricPassword) {
+        setHasBiometricCredentials(false);
         Alert.alert(
-          "Erro no login",
-          "Usuário não encontrado. Confira o email ou crie uma conta.",
+          "Biometria indisponível",
+          "Não encontramos credenciais salvas para biometria.",
         );
-      } else if (errorCode === "auth/invalid-email") {
-        Alert.alert(
-          "Erro no login",
-          "Email inválido. Verifique o formato (ex: usuario@dominio.com).",
-        );
-      } else {
-        Alert.alert("Erro no login", errorMessage);
+        return;
       }
 
-      // Mapear erros específicos para os campos (mantém feedback abaixo dos inputs)
-      if (
-        errorCode === "auth/invalid-email" ||
-        errorCode === "auth/user-not-found"
-      ) {
-        setErrors((prev) => ({ ...prev, email: errorMessage }));
-      } else if (
-        errorCode === "auth/wrong-password" ||
-        errorCode === "auth/invalid-credential"
-      ) {
-        setErrors((prev) => ({ ...prev, password: "Senha incorreta" }));
-      } else {
-        setErrors((prev) => ({ ...prev, general: errorMessage }));
+      const authResult = await LocalAuthentication.authenticateAsync({
+        promptMessage: "Entrar com biometria",
+        cancelLabel: "Cancelar",
+        fallbackLabel: "Usar senha",
+      });
+
+      if (!authResult.success) {
+        return;
       }
+
+      setLoading(true);
+      setEmail(savedBiometricEmail);
+      await signIn({
+        email: savedBiometricEmail,
+        password: savedBiometricPassword,
+      });
+    } catch (error) {
+      handleAuthError(error);
     } finally {
       setLoading(false);
     }
@@ -293,6 +439,20 @@ export const LoginScreen = () => {
             </View>
 
             <TouchableOpacity
+              style={styles.rememberContainer}
+              onPress={() => setRememberEmail((prev) => !prev)}
+              disabled={loading}
+              activeOpacity={0.8}
+            >
+              <Ionicons
+                name={rememberEmail ? "checkbox" : "square-outline"}
+                size={20}
+                color={rememberEmail ? "#8c52ff" : "#999"}
+              />
+              <Text style={styles.rememberText}>Salvar meu login</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
               style={[styles.button, loading && styles.buttonDisabled]}
               onPress={handleLogin}
               disabled={loading}
@@ -307,7 +467,29 @@ export const LoginScreen = () => {
               )}
             </TouchableOpacity>
 
+            {biometricAvailable ? (
+              <TouchableOpacity
+                style={[
+                  styles.biometricButton,
+                  (loading || !hasBiometricCredentials) &&
+                    styles.buttonDisabled,
+                ]}
+                onPress={handleBiometricLogin}
+                disabled={loading || !hasBiometricCredentials}
+              >
+                <View style={styles.buttonContent}>
+                  <Ionicons name="finger-print" size={20} color="#fff" />
+                  <Text style={styles.buttonText}>Entrar com biometria</Text>
+                </View>
+              </TouchableOpacity>
+            ) : null}
 
+            {biometricAvailable && !hasBiometricCredentials ? (
+              <Text style={styles.helperText}>
+                Marque "Salvar meu login" e entre uma vez para ativar a
+                biometria.
+              </Text>
+            ) : null}
           </View>
           <CustomModal
             visible={modalVisible}
@@ -414,6 +596,16 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#fff",
   },
+  rememberContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 12,
+    gap: 8,
+  },
+  rememberText: {
+    color: "#fff",
+    fontSize: 14,
+  },
   button: {
     backgroundColor: "#8c52ff",
     borderRadius: 12,
@@ -425,6 +617,18 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 4,
+  },
+  biometricButton: {
+    backgroundColor: "#4f46e5",
+    borderRadius: 12,
+    padding: 16,
+    alignItems: "center",
+    marginTop: 10,
+    shadowColor: "#4f46e5",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 3,
   },
   buttonDisabled: {
     backgroundColor: "#ccc",
@@ -476,6 +680,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 4,
     marginLeft: 4,
+  },
+  helperText: {
+    marginTop: 8,
+    color: "#999",
+    fontSize: 12,
+    textAlign: "center",
   },
 });
 

@@ -2,7 +2,7 @@
  * Tela de Listagem de Rendas
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -11,16 +11,20 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useAuth } from '../../hooks/useAuth';
-import { useNavigation } from '../../routes/NavigationContext';
-import { Layout } from '../../components/Layout/Layout';
-import { Button } from '../../components/ui/Button/Button';
-import incomeServices from '../../services/incomeServices';
-import { Income } from '../../types/income';
-import { formatCurrency } from '../../utils/currencyUtils';
-import { formatDateForDisplay, formatDateToString } from '../../utils/dateUtils';
+  Alert,
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { useAuth } from "../../hooks/useAuth";
+import { useNavigation } from "../../routes/NavigationContext";
+import { Layout } from "../../components/Layout/Layout";
+import { Button } from "../../components/ui/Button/Button";
+import incomeServices from "../../services/incomeServices";
+import { Income } from "../../types/income";
+import { formatCurrency } from "../../utils/currencyUtils";
+import {
+  formatDateForDisplay,
+  formatDateToString,
+} from "../../utils/dateUtils";
 
 export const IncomeListScreen = () => {
   const { user } = useAuth();
@@ -30,13 +34,14 @@ export const IncomeListScreen = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [total, setTotal] = useState(0);
+  const [deletingIncomeId, setDeletingIncomeId] = useState<string | null>(null);
 
   // Carregar rendas
   const loadIncomes = async () => {
     if (!user) return;
 
     try {
-      console.log('💰 Carregando rendas...');
+      console.log("💰 Carregando rendas...");
       const data = await incomeServices.getIncomes(user.id);
       setIncomes(data);
 
@@ -44,9 +49,9 @@ export const IncomeListScreen = () => {
       const sum = data.reduce((acc, income) => acc + income.value, 0);
       setTotal(sum);
 
-      console.log('✅ Rendas carregadas:', data.length, 'Total:', sum);
+      console.log("✅ Rendas carregadas:", data.length, "Total:", sum);
     } catch (error) {
-      console.error('❌ Erro ao carregar rendas:', error);
+      console.error("❌ Erro ao carregar rendas:", error);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -63,18 +68,43 @@ export const IncomeListScreen = () => {
     loadIncomes();
   };
 
+  const handleDeleteIncome = (id: string, description: string) => {
+    Alert.alert("Excluir renda", `Deseja excluir a renda "${description}"?`, [
+      { text: "Cancelar", style: "cancel" },
+      {
+        text: "Excluir",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            setDeletingIncomeId(id);
+            await incomeServices.deleteIncome(id);
+            await loadIncomes();
+          } catch (error) {
+            console.error("❌ Erro ao excluir renda:", error);
+            Alert.alert("Erro", "Não foi possível excluir a renda.");
+          } finally {
+            setDeletingIncomeId(null);
+          }
+        },
+      },
+    ]);
+  };
+
   // Agrupar por data
-  const groupedByDate = incomes.reduce((acc, income) => {
-    const dateKey = formatDateToString(income.date);
-    if (!acc[dateKey]) {
-      acc[dateKey] = [];
-    }
-    acc[dateKey].push(income);
-    return acc;
-  }, {} as Record<string, Income[]>);
+  const groupedByDate = incomes.reduce(
+    (acc, income) => {
+      const dateKey = formatDateToString(income.date);
+      if (!acc[dateKey]) {
+        acc[dateKey] = [];
+      }
+      acc[dateKey].push(income);
+      return acc;
+    },
+    {} as Record<string, Income[]>,
+  );
 
   const groupedEntries = Object.entries(groupedByDate).sort((a, b) =>
-    b[0].localeCompare(a[0])
+    b[0].localeCompare(a[0]),
   );
 
   // Renderizar item
@@ -84,7 +114,7 @@ export const IncomeListScreen = () => {
       style={styles.incomeItem}
       onPress={() => {
         // TODO: Navegar para edição
-        console.log('Editar renda:', income.id);
+        console.log("Editar renda:", income.id);
       }}
     >
       <View style={styles.incomeItemLeft}>
@@ -106,6 +136,17 @@ export const IncomeListScreen = () => {
       </View>
       <View style={styles.incomeItemRight}>
         <Text style={styles.incomeValue}>+{formatCurrency(income.value)}</Text>
+        <TouchableOpacity
+          style={styles.deleteButton}
+          onPress={() => handleDeleteIncome(income.id, income.description)}
+          disabled={deletingIncomeId === income.id}
+        >
+          {deletingIncomeId === income.id ? (
+            <ActivityIndicator size="small" color="#ff4d6d" />
+          ) : (
+            <Ionicons name="trash-outline" size={18} color="#ff4d6d" />
+          )}
+        </TouchableOpacity>
       </View>
     </TouchableOpacity>
   );
@@ -113,11 +154,15 @@ export const IncomeListScreen = () => {
   // Renderizar grupo de data
   const renderDateGroup = (date: string, dateIncomes: Income[]) => {
     const dayTotal = dateIncomes.reduce((sum, income) => sum + income.value, 0);
+    const [year, month, day] = date.split("-").map(Number);
+    const displayDate = new Date(year, month - 1, day);
 
     return (
       <View key={date} style={styles.dateGroup}>
         <View style={styles.dateHeader}>
-          <Text style={styles.dateText}>{formatDateForDisplay(new Date(date))}</Text>
+          <Text style={styles.dateText}>
+            {formatDateForDisplay(displayDate)}
+          </Text>
           <Text style={styles.dateTotal}>+{formatCurrency(dayTotal)}</Text>
         </View>
         <View style={styles.incomeList}>
@@ -146,16 +191,14 @@ export const IncomeListScreen = () => {
           <View style={styles.headerContent}>
             <View style={styles.totalContainer}>
               <Text style={styles.totalLabel}>Total Recebido</Text>
-              <Text style={styles.totalValue}>
-                {formatCurrency(total)}
-              </Text>
+              <Text style={styles.totalValue}>{formatCurrency(total)}</Text>
               <Text style={styles.totalSubtext}>
-                {incomes.length} {incomes.length === 1 ? 'renda' : 'rendas'}
+                {incomes.length} {incomes.length === 1 ? "renda" : "rendas"}
               </Text>
             </View>
             <TouchableOpacity
               style={styles.addButton}
-              onPress={() => navigate('AddIncome')}
+              onPress={() => navigate("AddIncome")}
             >
               <Ionicons name="add-circle" size={32} color="#8c52ff" />
             </TouchableOpacity>
@@ -172,7 +215,7 @@ export const IncomeListScreen = () => {
             </Text>
             <Button
               title="Adicionar Renda"
-              onPress={() => navigate('AddIncome')}
+              onPress={() => navigate("AddIncome")}
               variant="primary"
               icon="add"
               style={styles.emptyButton}
@@ -185,13 +228,13 @@ export const IncomeListScreen = () => {
               <RefreshControl
                 refreshing={refreshing}
                 onRefresh={handleRefresh}
-                colors={['#8c52ff']}
+                colors={["#8c52ff"]}
               />
             }
           >
             <View style={styles.content}>
               {groupedEntries.map(([date, dateIncomes]) =>
-                renderDateGroup(date, dateIncomes)
+                renderDateGroup(date, dateIncomes),
               )}
             </View>
           </ScrollView>
@@ -204,46 +247,46 @@ export const IncomeListScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: "#000",
   },
   loadingContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#000',
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#000",
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#ccc',
+    color: "#ccc",
   },
   header: {
-    backgroundColor: '#1a1a1a',
+    backgroundColor: "#1a1a1a",
     borderBottomWidth: 1,
-    borderBottomColor: '#333',
+    borderBottomColor: "#333",
     padding: 20,
   },
   headerContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   totalContainer: {
     flex: 1,
   },
   totalLabel: {
     fontSize: 14,
-    color: '#999',
+    color: "#999",
     marginBottom: 4,
   },
   totalValue: {
     fontSize: 32,
-    fontWeight: 'bold',
-    color: '#8c52ff',
+    fontWeight: "bold",
+    color: "#8c52ff",
   },
   totalSubtext: {
     fontSize: 12,
-    color: '#666',
+    color: "#666",
     marginTop: 4,
   },
   addButton: {
@@ -259,54 +302,54 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   dateHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 12,
     paddingHorizontal: 4,
   },
   dateText: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#fff',
+    fontWeight: "bold",
+    color: "#fff",
   },
   dateTotal: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#8c52ff',
+    fontWeight: "bold",
+    color: "#8c52ff",
   },
   incomeList: {
-    backgroundColor: '#1a1a1a',
+    backgroundColor: "#1a1a1a",
     borderRadius: 12,
-    overflow: 'hidden',
-    shadowColor: '#000',
+    overflow: "hidden",
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 4,
     elevation: 2,
   },
   incomeItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#333',
+    borderBottomColor: "#333",
   },
   incomeItemLeft: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   incomeIconContainer: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#1a3a1a',
+    backgroundColor: "#1a3a1a",
     borderWidth: 1,
-    borderColor: '#8c52ff40',
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderColor: "#8c52ff40",
+    alignItems: "center",
+    justifyContent: "center",
     marginRight: 12,
   },
   incomeInfo: {
@@ -314,48 +357,58 @@ const styles = StyleSheet.create({
   },
   incomeDescription: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
+    fontWeight: "600",
+    color: "#fff",
     marginBottom: 4,
   },
   incomeMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
   },
   incomeCategory: {
     fontSize: 12,
-    color: '#999',
+    color: "#999",
   },
   incomeTime: {
     fontSize: 12,
-    color: '#999',
+    color: "#999",
   },
   incomeItemRight: {
+    alignItems: "flex-end",
+    gap: 8,
     marginLeft: 12,
+  },
+  deleteButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#2a1318",
   },
   incomeValue: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#8c52ff',
+    fontWeight: "bold",
+    color: "#8c52ff",
   },
   emptyContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     padding: 40,
   },
   emptyText: {
     fontSize: 20,
-    fontWeight: 'bold',
-    color: '#ccc',
+    fontWeight: "bold",
+    color: "#ccc",
     marginTop: 24,
     marginBottom: 8,
   },
   emptySubtext: {
     fontSize: 16,
-    color: '#999',
-    textAlign: 'center',
+    color: "#999",
+    textAlign: "center",
     marginBottom: 32,
   },
   emptyButton: {

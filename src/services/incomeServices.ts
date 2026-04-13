@@ -13,14 +13,14 @@ import {
   orderBy,
   limit,
   Timestamp,
-} from 'firebase/firestore';
+} from "firebase/firestore";
 import {
   getIncomesCollection,
   getIncomeDoc,
   convertIncomeFromFirestore,
   convertIncomeToFirestore,
   getDocData,
-} from '../lib/firestore';
+} from "../lib/firestore";
 import {
   Income,
   CreateIncomeData,
@@ -28,10 +28,10 @@ import {
   IncomeFilters,
   IncomeSummary,
   IncomeByDate,
-} from '../types/income';
-import { formatDateToString } from '../utils/dateUtils';
-import { formatCurrency } from '../utils/currencyUtils';
-import { activityServices } from './activityServices';
+} from "../types/income";
+import { formatDateToString } from "../utils/dateUtils";
+import { formatCurrency } from "../utils/currencyUtils";
+import { activityServices } from "./activityServices";
 
 /**
  * Validar dados de criação de renda
@@ -40,23 +40,23 @@ const validateCreateIncomeData = (data: CreateIncomeData): string[] => {
   const errors: string[] = [];
 
   if (!data.value || data.value <= 0) {
-    errors.push('Valor deve ser maior que zero');
+    errors.push("Valor deve ser maior que zero");
   }
 
   if (!data.description || data.description.trim().length === 0) {
-    errors.push('Descrição é obrigatória');
+    errors.push("Descrição é obrigatória");
   }
 
   if (data.description && data.description.trim().length < 3) {
-    errors.push('Descrição deve ter pelo menos 3 caracteres');
+    errors.push("Descrição deve ter pelo menos 3 caracteres");
   }
 
   if (!data.date) {
-    errors.push('Data é obrigatória');
+    errors.push("Data é obrigatória");
   }
 
   if (data.date && data.date > new Date()) {
-    errors.push('Data não pode ser no futuro');
+    errors.push("Data não pode ser no futuro");
   }
 
   return errors;
@@ -69,15 +69,15 @@ const validateUpdateIncomeData = (data: UpdateIncomeData): string[] => {
   const errors: string[] = [];
 
   if (data.value !== undefined && data.value <= 0) {
-    errors.push('Valor deve ser maior que zero');
+    errors.push("Valor deve ser maior que zero");
   }
 
   if (data.description !== undefined && data.description.trim().length < 3) {
-    errors.push('Descrição deve ter pelo menos 3 caracteres');
+    errors.push("Descrição deve ter pelo menos 3 caracteres");
   }
 
   if (data.date && data.date > new Date()) {
-    errors.push('Data não pode ser no futuro');
+    errors.push("Data não pode ser no futuro");
   }
 
   return errors;
@@ -90,18 +90,15 @@ export const incomeServices = {
   /**
    * Criar uma nova renda
    */
-  async createIncome(
-    userId: string,
-    data: CreateIncomeData
-  ): Promise<Income> {
-    console.log('💰 [INCOME SERVICE] Criando renda...');
-    console.log('💰 [INCOME SERVICE] Dados:', data);
+  async createIncome(userId: string, data: CreateIncomeData): Promise<Income> {
+    console.log("💰 [INCOME SERVICE] Criando renda...");
+    console.log("💰 [INCOME SERVICE] Dados:", data);
 
     // Validar dados
     const errors = validateCreateIncomeData(data);
     if (errors.length > 0) {
-      console.error('❌ [INCOME SERVICE] Erros de validação:', errors);
-      throw new Error(errors.join(', '));
+      console.error("❌ [INCOME SERVICE] Erros de validação:", errors);
+      throw new Error(errors.join(", "));
     }
 
     try {
@@ -111,13 +108,14 @@ export const incomeServices = {
         value: data.value,
         description: data.description.trim(),
         date: Timestamp.fromDate(data.date),
-        category: data.category || 'Outros',
+        category: data.category || "Outros",
+        dailyTracking: Boolean(data.dailyTracking),
         createdAt: Timestamp.fromDate(now),
         updatedAt: Timestamp.fromDate(now),
       };
 
       const docRef = await addDoc(getIncomesCollection(), incomeData);
-      console.log('✅ [INCOME SERVICE] Renda criada com ID:', docRef.id);
+      console.log("✅ [INCOME SERVICE] Renda criada com ID:", docRef.id);
 
       const income: Income = {
         id: docRef.id,
@@ -126,13 +124,14 @@ export const incomeServices = {
         description: data.description.trim(),
         date: data.date,
         category: data.category,
+        dailyTracking: Boolean(data.dailyTracking),
         createdAt: now,
         updatedAt: now,
       };
 
       // Registrar atividade
       await activityServices.logActivity(userId, {
-        type: 'income_created',
+        type: "income_created",
         title: data.description.trim(),
         description: `Renda de ${formatCurrency(data.value)}`,
         metadata: {
@@ -143,7 +142,7 @@ export const incomeServices = {
 
       return income;
     } catch (error) {
-      console.error('❌ [INCOME SERVICE] Erro ao criar renda:', error);
+      console.error("❌ [INCOME SERVICE] Erro ao criar renda:", error);
       throw error;
     }
   },
@@ -151,26 +150,24 @@ export const incomeServices = {
   /**
    * Buscar rendas do usuário
    */
-  async getIncomes(
-    userId: string,
-    filters?: IncomeFilters
-  ): Promise<Income[]> {
-    console.log('💰 [INCOME SERVICE] Buscando rendas...');
-    console.log('💰 [INCOME SERVICE] Filtros:', filters);
+  async getIncomes(userId: string, filters?: IncomeFilters): Promise<Income[]> {
+    console.log("💰 [INCOME SERVICE] Buscando rendas...");
+    console.log("💰 [INCOME SERVICE] Filtros:", filters);
 
     try {
       // Buscar todas as rendas do usuário (evita problemas de índice)
-      let q = query(
-        getIncomesCollection(),
-        where('userId', '==', userId)
-      );
+      let q = query(getIncomesCollection(), where("userId", "==", userId));
 
       const snapshot = await getDocs(q);
-      console.log('💰 [INCOME SERVICE] Encontradas', snapshot.size, 'rendas no total');
+      console.log(
+        "💰 [INCOME SERVICE] Encontradas",
+        snapshot.size,
+        "rendas no total",
+      );
 
       // Converter todos os documentos
       let incomes = snapshot.docs.map((doc) =>
-        convertIncomeFromFirestore(getDocData(doc))
+        convertIncomeFromFirestore(getDocData(doc)),
       );
 
       // Aplicar filtros no cliente (mais confiável)
@@ -182,7 +179,11 @@ export const incomeServices = {
           incomeDate.setHours(0, 0, 0, 0);
           return incomeDate >= startDate;
         });
-        console.log('💰 [INCOME SERVICE] Após filtrar por data inicial:', incomes.length, 'rendas');
+        console.log(
+          "💰 [INCOME SERVICE] Após filtrar por data inicial:",
+          incomes.length,
+          "rendas",
+        );
       }
 
       if (filters?.endDate) {
@@ -192,12 +193,22 @@ export const incomeServices = {
           const incomeDate = new Date(income.date);
           return incomeDate <= endDate;
         });
-        console.log('💰 [INCOME SERVICE] Após filtrar por data final:', incomes.length, 'rendas');
+        console.log(
+          "💰 [INCOME SERVICE] Após filtrar por data final:",
+          incomes.length,
+          "rendas",
+        );
       }
 
       if (filters?.category) {
-        incomes = incomes.filter((income) => income.category === filters.category);
-        console.log('💰 [INCOME SERVICE] Após filtrar por categoria:', incomes.length, 'rendas');
+        incomes = incomes.filter(
+          (income) => income.category === filters.category,
+        );
+        console.log(
+          "💰 [INCOME SERVICE] Após filtrar por categoria:",
+          incomes.length,
+          "rendas",
+        );
       }
 
       if (filters?.minValue) {
@@ -211,17 +222,21 @@ export const incomeServices = {
       if (filters?.searchTerm) {
         const searchLower = filters.searchTerm.toLowerCase();
         incomes = incomes.filter((income) =>
-          income.description.toLowerCase().includes(searchLower)
+          income.description.toLowerCase().includes(searchLower),
         );
+      }
+
+      if (filters?.dailyTrackingOnly) {
+        incomes = incomes.filter((income) => Boolean(income.dailyTracking));
       }
 
       // Ordenar por data (mais recente primeiro)
       incomes.sort((a, b) => b.date.getTime() - a.date.getTime());
 
-      console.log('💰 [INCOME SERVICE] Total final de rendas:', incomes.length);
+      console.log("💰 [INCOME SERVICE] Total final de rendas:", incomes.length);
       return incomes;
     } catch (error) {
-      console.error('❌ [INCOME SERVICE] Erro ao buscar rendas:', error);
+      console.error("❌ [INCOME SERVICE] Erro ao buscar rendas:", error);
       throw error;
     }
   },
@@ -230,22 +245,22 @@ export const incomeServices = {
    * Buscar renda por ID
    */
   async getIncomeById(id: string): Promise<Income | null> {
-    console.log('💰 [INCOME SERVICE] Buscando renda por ID:', id);
+    console.log("💰 [INCOME SERVICE] Buscando renda por ID:", id);
 
     try {
       const docRef = getIncomeDoc(id);
       const docSnap = await getDoc(docRef);
 
       if (!docSnap.exists()) {
-        console.log('⚠️ [INCOME SERVICE] Renda não encontrada');
+        console.log("⚠️ [INCOME SERVICE] Renda não encontrada");
         return null;
       }
 
       const income = convertIncomeFromFirestore(getDocData(docSnap));
-      console.log('✅ [INCOME SERVICE] Renda encontrada:', income);
+      console.log("✅ [INCOME SERVICE] Renda encontrada:", income);
       return income;
     } catch (error) {
-      console.error('❌ [INCOME SERVICE] Erro ao buscar renda:', error);
+      console.error("❌ [INCOME SERVICE] Erro ao buscar renda:", error);
       throw error;
     }
   },
@@ -253,18 +268,15 @@ export const incomeServices = {
   /**
    * Atualizar renda
    */
-  async updateIncome(
-    id: string,
-    data: UpdateIncomeData
-  ): Promise<Income> {
-    console.log('💰 [INCOME SERVICE] Atualizando renda:', id);
-    console.log('💰 [INCOME SERVICE] Novos dados:', data);
+  async updateIncome(id: string, data: UpdateIncomeData): Promise<Income> {
+    console.log("💰 [INCOME SERVICE] Atualizando renda:", id);
+    console.log("💰 [INCOME SERVICE] Novos dados:", data);
 
     // Validar dados
     const errors = validateUpdateIncomeData(data);
     if (errors.length > 0) {
-      console.error('❌ [INCOME SERVICE] Erros de validação:', errors);
-      throw new Error(errors.join(', '));
+      console.error("❌ [INCOME SERVICE] Erros de validação:", errors);
+      throw new Error(errors.join(", "));
     }
 
     try {
@@ -275,17 +287,17 @@ export const incomeServices = {
       });
 
       await updateDoc(docRef, updateData as any);
-      console.log('✅ [INCOME SERVICE] Renda atualizada');
+      console.log("✅ [INCOME SERVICE] Renda atualizada");
 
       // Buscar renda atualizada
       const updated = await this.getIncomeById(id);
       if (!updated) {
-        throw new Error('Erro ao buscar renda atualizada');
+        throw new Error("Erro ao buscar renda atualizada");
       }
 
       return updated;
     } catch (error) {
-      console.error('❌ [INCOME SERVICE] Erro ao atualizar renda:', error);
+      console.error("❌ [INCOME SERVICE] Erro ao atualizar renda:", error);
       throw error;
     }
   },
@@ -294,20 +306,20 @@ export const incomeServices = {
    * Deletar renda
    */
   async deleteIncome(id: string): Promise<void> {
-    console.log('💰 [INCOME SERVICE] Deletando renda:', id);
+    console.log("💰 [INCOME SERVICE] Deletando renda:", id);
 
     try {
       // Buscar renda antes de deletar para registrar atividade
       const income = await this.getIncomeById(id);
-      
+
       const docRef = getIncomeDoc(id);
       await deleteDoc(docRef);
-      console.log('✅ [INCOME SERVICE] Renda deletada');
+      console.log("✅ [INCOME SERVICE] Renda deletada");
 
       // Registrar atividade
       if (income) {
         await activityServices.logActivity(income.userId, {
-          type: 'income_deleted',
+          type: "income_deleted",
           title: `Renda removida: ${income.description}`,
           description: formatCurrency(income.value),
           metadata: {
@@ -317,7 +329,7 @@ export const incomeServices = {
         });
       }
     } catch (error) {
-      console.error('❌ [INCOME SERVICE] Erro ao deletar renda:', error);
+      console.error("❌ [INCOME SERVICE] Erro ao deletar renda:", error);
       throw error;
     }
   },
@@ -326,7 +338,7 @@ export const incomeServices = {
    * Buscar rendas por data específica
    */
   async getIncomesByDate(userId: string, date: Date): Promise<Income[]> {
-    console.log('💰 [INCOME SERVICE] Buscando rendas do dia:', date);
+    console.log("💰 [INCOME SERVICE] Buscando rendas do dia:", date);
 
     try {
       // Criar range do dia (00:00 até 23:59)
@@ -338,21 +350,24 @@ export const incomeServices = {
 
       const q = query(
         getIncomesCollection(),
-        where('userId', '==', userId),
-        where('date', '>=', Timestamp.fromDate(startOfDay)),
-        where('date', '<=', Timestamp.fromDate(endOfDay)),
-        orderBy('date', 'desc')
+        where("userId", "==", userId),
+        where("date", ">=", Timestamp.fromDate(startOfDay)),
+        where("date", "<=", Timestamp.fromDate(endOfDay)),
+        orderBy("date", "desc"),
       );
 
       const snapshot = await getDocs(q);
       const incomes = snapshot.docs.map((doc) =>
-        convertIncomeFromFirestore(getDocData(doc))
+        convertIncomeFromFirestore(getDocData(doc)),
       );
 
-      console.log('💰 [INCOME SERVICE] Rendas do dia:', incomes.length);
+      console.log("💰 [INCOME SERVICE] Rendas do dia:", incomes.length);
       return incomes;
     } catch (error) {
-      console.error('❌ [INCOME SERVICE] Erro ao buscar rendas por data:', error);
+      console.error(
+        "❌ [INCOME SERVICE] Erro ao buscar rendas por data:",
+        error,
+      );
       throw error;
     }
   },
@@ -363,9 +378,9 @@ export const incomeServices = {
   async getIncomesTotal(
     userId: string,
     startDate?: Date,
-    endDate?: Date
+    endDate?: Date,
   ): Promise<number> {
-    console.log('💰 [INCOME SERVICE] Calculando total de rendas...');
+    console.log("💰 [INCOME SERVICE] Calculando total de rendas...");
 
     try {
       const incomes = await this.getIncomes(userId, {
@@ -374,11 +389,11 @@ export const incomeServices = {
       });
 
       const total = incomes.reduce((sum, income) => sum + income.value, 0);
-      console.log('💰 [INCOME SERVICE] Total calculado:', total);
+      console.log("💰 [INCOME SERVICE] Total calculado:", total);
 
       return total;
     } catch (error) {
-      console.error('❌ [INCOME SERVICE] Erro ao calcular total:', error);
+      console.error("❌ [INCOME SERVICE] Erro ao calcular total:", error);
       throw error;
     }
   },
@@ -389,9 +404,9 @@ export const incomeServices = {
   async getIncomesSummary(
     userId: string,
     startDate?: Date,
-    endDate?: Date
+    endDate?: Date,
   ): Promise<IncomeSummary> {
-    console.log('💰 [INCOME SERVICE] Gerando resumo de rendas...');
+    console.log("💰 [INCOME SERVICE] Gerando resumo de rendas...");
 
     try {
       const incomes = await this.getIncomes(userId, {
@@ -406,7 +421,7 @@ export const incomeServices = {
       // Agrupar por categoria
       const byCategory: Record<string, number> = {};
       incomes.forEach((income) => {
-        const category = income.category || 'Outros';
+        const category = income.category || "Outros";
         byCategory[category] = (byCategory[category] || 0) + income.value;
       });
 
@@ -417,10 +432,10 @@ export const incomeServices = {
         byCategory,
       };
 
-      console.log('💰 [INCOME SERVICE] Resumo gerado:', summary);
+      console.log("💰 [INCOME SERVICE] Resumo gerado:", summary);
       return summary;
     } catch (error) {
-      console.error('❌ [INCOME SERVICE] Erro ao gerar resumo:', error);
+      console.error("❌ [INCOME SERVICE] Erro ao gerar resumo:", error);
       throw error;
     }
   },
@@ -431,9 +446,9 @@ export const incomeServices = {
   async getIncomesGroupedByDate(
     userId: string,
     startDate?: Date,
-    endDate?: Date
+    endDate?: Date,
   ): Promise<IncomeByDate[]> {
-    console.log('💰 [INCOME SERVICE] Agrupando rendas por data...');
+    console.log("💰 [INCOME SERVICE] Agrupando rendas por data...");
 
     try {
       const incomes = await this.getIncomes(userId, {
@@ -457,16 +472,20 @@ export const incomeServices = {
           date,
           incomes,
           total: incomes.reduce((sum, income) => sum + income.value, 0),
-        })
+        }),
       );
 
       // Ordenar por data (mais recente primeiro)
       result.sort((a, b) => b.date.localeCompare(a.date));
 
-      console.log('💰 [INCOME SERVICE] Rendas agrupadas:', result.length, 'dias');
+      console.log(
+        "💰 [INCOME SERVICE] Rendas agrupadas:",
+        result.length,
+        "dias",
+      );
       return result;
     } catch (error) {
-      console.error('❌ [INCOME SERVICE] Erro ao agrupar rendas:', error);
+      console.error("❌ [INCOME SERVICE] Erro ao agrupar rendas:", error);
       throw error;
     }
   },
@@ -476,20 +495,17 @@ export const incomeServices = {
    */
   async getRecentIncomes(
     userId: string,
-    limitCount: number = 10
+    limitCount: number = 10,
   ): Promise<Income[]> {
-    console.log('💰 [INCOME SERVICE] Buscando últimas', limitCount, 'rendas');
+    console.log("💰 [INCOME SERVICE] Buscando últimas", limitCount, "rendas");
 
     try {
       // Buscar todas as rendas e ordenar no cliente (evita necessidade de índice composto)
-      const q = query(
-        getIncomesCollection(),
-        where('userId', '==', userId)
-      );
+      const q = query(getIncomesCollection(), where("userId", "==", userId));
 
       const snapshot = await getDocs(q);
       let incomes = snapshot.docs.map((doc) =>
-        convertIncomeFromFirestore(getDocData(doc))
+        convertIncomeFromFirestore(getDocData(doc)),
       );
 
       // Ordenar por data de criação (mais recente primeiro) e limitar
@@ -497,13 +513,18 @@ export const incomeServices = {
         .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
         .slice(0, limitCount);
 
-      console.log('💰 [INCOME SERVICE] Rendas recentes:', incomes.length);
+      console.log("💰 [INCOME SERVICE] Rendas recentes:", incomes.length);
       return incomes;
     } catch (error: any) {
-      console.error('❌ [INCOME SERVICE] Erro ao buscar rendas recentes:', error);
+      console.error(
+        "❌ [INCOME SERVICE] Erro ao buscar rendas recentes:",
+        error,
+      );
       // Se houver erro de índice, retornar array vazio
-      if (error?.code === 'failed-precondition') {
-        console.warn('⚠️ [INCOME SERVICE] Índice não encontrado, retornando array vazio');
+      if (error?.code === "failed-precondition") {
+        console.warn(
+          "⚠️ [INCOME SERVICE] Índice não encontrado, retornando array vazio",
+        );
         return [];
       }
       throw error;

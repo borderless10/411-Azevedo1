@@ -16,6 +16,8 @@ export interface Expense {
   cardId?: string;
   cardLast4?: string;
   invoiceYearMonth?: string;
+  isConsumoModerado?: boolean; // Marcado quando cadastrado como Consumo Moderado
+  sourceBillId?: string; // Vincula o gasto a uma conta paga
   createdAt: Date;
   updatedAt: Date;
 }
@@ -32,6 +34,8 @@ export interface CreateExpenseData {
   cardId?: string;
   cardLast4?: string;
   invoiceYearMonth?: string;
+  isConsumoModerado?: boolean; // Marcado quando cadastrado como Consumo Moderado
+  sourceBillId?: string;
 }
 
 /**
@@ -46,6 +50,8 @@ export interface UpdateExpenseData {
   cardId?: string;
   cardLast4?: string;
   invoiceYearMonth?: string;
+  isConsumoModerado?: boolean;
+  sourceBillId?: string;
 }
 
 /**
@@ -78,6 +84,8 @@ export interface ExpenseFirestore {
   cardId?: string;
   cardLast4?: string;
   invoiceYearMonth?: string;
+  isConsumoModerado?: boolean; // Marcado quando cadastrado como Consumo Moderado
+  sourceBillId?: string;
   createdAt: any; // Timestamp do Firestore
   updatedAt: any; // Timestamp do Firestore
 }

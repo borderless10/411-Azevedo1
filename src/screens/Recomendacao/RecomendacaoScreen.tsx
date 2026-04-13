@@ -566,12 +566,12 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: "700",
   },
   headerSubtitle: {
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 15,
+    lineHeight: 22,
   },
   createButton: {
     borderRadius: 12,
@@ -599,7 +599,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   emptyTitle: {
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: "700",
     marginTop: 10,
   },
@@ -641,7 +641,7 @@ const styles = StyleSheet.create({
   dateBadgeText: {
     color: "#fff",
     fontWeight: "700",
-    fontSize: 12,
+    fontSize: 13,
   },
   topicsWrap: {
     flexDirection: "column",
@@ -657,7 +657,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   topicChipText: {
-    fontSize: 13,
+    fontSize: 15,
     fontWeight: "600",
   },
   modalOverlay: {
@@ -682,11 +682,11 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   modalTitle: {
-    fontSize: 18,
+    fontSize: 19,
     fontWeight: "700",
   },
   fieldLabel: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "600",
     marginTop: 8,
   },
@@ -732,7 +732,7 @@ const styles = StyleSheet.create({
     paddingTop: 12,
   },
   helperText: {
-    fontSize: 12,
+    fontSize: 13,
     marginTop: 4,
   },
   saveButton: {

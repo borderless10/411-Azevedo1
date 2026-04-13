@@ -169,6 +169,7 @@ export const planningServices = {
         id: b.id,
         name: b.name,
         amount: b.amount,
+        dailyTracking: Boolean(b.dailyTracking),
         paymentMethod: b.paymentMethod,
         dueDay: b.dueDay,
         dueDate: b.dueDate ? b.dueDate.toDate() : undefined,
@@ -201,6 +202,7 @@ export const planningServices = {
         id: it.id,
         source: it.source,
         amount: it.amount,
+        dailyTracking: Boolean(it.dailyTracking),
         expectedMonth: it.expectedMonth,
         categoryId: it.categoryId,
         notes: it.notes,
@@ -214,6 +216,7 @@ export const planningServices = {
         id: it.id,
         source: it.source,
         amount: it.amount,
+        dailyTracking: Boolean(it.dailyTracking),
         expectedMonth: it.expectedMonth,
         paymentMethod: it.paymentMethod,
         categoryId: it.categoryId,
@@ -875,6 +878,7 @@ export const planningServices = {
         amount: bill.amount,
         paymentMethod: bill.paymentMethod || "cash",
         recurring: bill.recurring || false,
+        dailyTracking: Boolean(bill.dailyTracking),
         amountCard: bill.amountCard,
         amountCash: bill.amountCash,
         notes: bill.notes || "",
@@ -917,6 +921,7 @@ export const planningServices = {
         amount: bill.amount,
         amountCard: bill.amountCard,
         amountCash: bill.amountCash,
+        dailyTracking: Boolean(bill.dailyTracking),
         paymentMethod: bill.paymentMethod || "cash",
         dueDay: bill.dueDay,
         categoryId: bill.categoryId,
@@ -968,6 +973,7 @@ export const planningServices = {
         amount: updatedBill.amount,
         amountCard: updatedBill.amountCard,
         amountCash: updatedBill.amountCash,
+        dailyTracking: Boolean(updatedBill.dailyTracking),
         paymentMethod: updatedBill.paymentMethod,
         dueDay: updatedBill.dueDay,
         categoryId: updatedBill.categoryId,
@@ -1035,6 +1041,7 @@ export const planningServices = {
         id,
         source: item.source,
         amount: item.amount,
+        dailyTracking: Boolean(item.dailyTracking),
         paymentMethod: item.paymentMethod || null,
         notes: item.notes || "",
         amountCard: item.amountCard,
@@ -1063,6 +1070,7 @@ export const planningServices = {
         id,
         source: item.source,
         amount: item.amount,
+        dailyTracking: Boolean(item.dailyTracking),
         amountCard: item.amountCard,
         amountCash: item.amountCash,
         expectedMonth: item.expectedMonth,
@@ -1120,6 +1128,7 @@ export const planningServices = {
         amount: updated.amount,
         amountCard: updated.amountCard,
         amountCash: updated.amountCash,
+        dailyTracking: Boolean(updated.dailyTracking),
         expectedMonth: updated.expectedMonth,
         categoryId: updated.categoryId,
         notes: updated.notes,
@@ -1198,6 +1207,7 @@ export const planningServices = {
         id,
         source: item.source,
         amount: item.amount,
+        dailyTracking: Boolean(item.dailyTracking),
         paymentMethod: item.paymentMethod,
         notes: item.notes || "",
         amountCard: item.amountCard,
@@ -1228,6 +1238,7 @@ export const planningServices = {
         amount: item.amount,
         amountCard: item.amountCard,
         amountCash: item.amountCash,
+        dailyTracking: Boolean(item.dailyTracking),
         expectedMonth: item.expectedMonth,
         categoryId: item.categoryId,
         notes: item.notes,
@@ -1284,6 +1295,7 @@ export const planningServices = {
         amount: updated.amount,
         amountCard: updated.amountCard,
         amountCash: updated.amountCash,
+        dailyTracking: Boolean(updated.dailyTracking),
         expectedMonth: updated.expectedMonth,
         categoryId: updated.categoryId,
         notes: updated.notes,
@@ -1384,6 +1396,61 @@ export const planningServices = {
     } catch (error) {
       console.error(
         "❌ [PLANNING SERVICE] Erro ao marcar bill como paga:",
+        error,
+      );
+      throw error;
+    }
+  },
+
+  // Reverte uma bill do planning para não paga — pode ser chamado pelo cliente
+  async markBillAsUnpaidByClient(userId: string, billId: string) {
+    try {
+      const docRef = getUserPlanningDoc(userId);
+      const snap = await getDoc(docRef);
+      if (!snap.exists()) throw new Error("Planning não encontrado");
+
+      const now = Timestamp.now();
+      const data = snap.data() as any;
+      const bills: BillFirestore[] = data.bills || [];
+      const idx = bills.findIndex((b) => b.id === billId);
+      if (idx === -1) throw new Error("Bill não encontrada no planning");
+
+      const { paidDate: _paidDate, ...billWithoutPaidDate } = bills[idx] as any;
+      bills[idx] = {
+        ...billWithoutPaidDate,
+        status: "pending",
+        updatedAt: now,
+      } as BillFirestore;
+
+      await updateDoc(docRef, { bills, updatedAt: now });
+
+      try {
+        await activityServices.logActivity(userId, {
+          type: "plan_bill_unpaid",
+          title: "Conta marcada como não paga",
+          description: `O cliente marcou a conta ${bills[idx].name} como não paga.`,
+          metadata: { billId },
+        });
+      } catch (e) {
+        console.warn("⚠️ [PLANNING SERVICE] Falha ao registrar atividade:", e);
+      }
+
+      return {
+        id: bills[idx].id,
+        name: bills[idx].name,
+        amount: bills[idx].amount,
+        dueDay: bills[idx].dueDay,
+        categoryId: bills[idx].categoryId,
+        recurring: bills[idx].recurring,
+        notes: bills[idx].notes,
+        status: bills[idx].status,
+        paidDate: undefined,
+        createdAt: bills[idx].createdAt.toDate(),
+        updatedAt: bills[idx].updatedAt.toDate(),
+      } as Bill;
+    } catch (error) {
+      console.error(
+        "❌ [PLANNING SERVICE] Erro ao marcar bill como não paga:",
         error,
       );
       throw error;

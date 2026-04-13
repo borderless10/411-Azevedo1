@@ -94,6 +94,8 @@ export const BudgetScreen = () => {
 
   // Calcular total gasto e média real
   const totalSpent = dailyExpenses.reduce((sum, item) => sum + item.amount, 0);
+  const remainingToSpend = Math.max(0, budgetValue - totalSpent);
+  const overPlannedAmount = Math.max(0, totalSpent - budgetValue);
   // Contar apenas dias DENTRO DO CICLO com gasto (>0) ou que foram marcados como zero
   const countedDays = dailyExpenseDates.filter((date) => {
     const day = date.getDate();
@@ -161,6 +163,35 @@ export const BudgetScreen = () => {
   const isCardPayment = (raw?: any) => {
     const pm = String(raw || "").toLowerCase();
     return /card|cart|cartão|credit|debit|cr[eé]dito|d[eé]bito/.test(pm);
+  };
+
+  const isTrackedDailyExpense = (expense: any) => {
+    const normalizedCategory = String(expense?.category || "")
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+
+    return (
+      normalizedCategory === "acompanhamento diario" ||
+      normalizedCategory === "gasto acompanhado"
+    );
+  };
+
+  const isBillPaymentExpense = (expense: any) => {
+    const normalizedCategory = String(expense?.category || "")
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+
+    return (
+      normalizedCategory === "conta" ||
+      normalizedCategory === "contas" ||
+      normalizedCategory === "contas a pagar" ||
+      normalizedCategory === "pagamento de conta" ||
+      normalizedCategory === "pagamento conta"
+    );
   };
 
   const formatItemDateLabel = (item: any) => {
@@ -335,6 +366,11 @@ export const BudgetScreen = () => {
             startDate: start,
             endDate: end,
           });
+          const expensesForModerado = expenses.filter((expense) => {
+            if (isTrackedDailyExpense(expense)) return false;
+            if (isBillPaymentExpense(expense)) return false;
+            return true;
+          });
 
           const map = new Map<number, number>();
           let cursor = getStartOfDay(start);
@@ -343,7 +379,7 @@ export const BudgetScreen = () => {
             cursor = addDays(cursor, 1);
           }
 
-          expenses.forEach((exp) => {
+          expensesForModerado.forEach((exp) => {
             const dayNum = new Date(exp.date).getDate();
             const prev = map.get(dayNum) ?? 0;
             const val =
@@ -600,17 +636,20 @@ export const BudgetScreen = () => {
 
           {/* Meta Mensal */}
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>
-              💰 Gasto esperado do planejamento
-            </Text>
+            <Text style={styles.cardTitle}>💰 Quanto falta no ciclo</Text>
             <View style={styles.inputContainerReadOnly}>
               <Text style={styles.readOnlyBudgetValue}>
-                {formatCurrency(budgetValue)}
+                {formatCurrency(remainingToSpend)}
               </Text>
             </View>
+            {overPlannedAmount > 0 && (
+              <Text style={styles.overPlannedText}>
+                Você passou {formatCurrency(overPlannedAmount)} do planejado.
+              </Text>
+            )}
             <Text style={styles.helperText}>
               {planningLoaded
-                ? "Valor definido automaticamente com base no planejamento do consultor."
+                ? "Cálculo: gasto esperado do ciclo menos total gasto até agora."
                 : "Planejamento não encontrado. O valor ficará em R$ 0,00 até o consultor preencher o planejamento."}
             </Text>
             <View style={styles.infoContainer}>
@@ -620,7 +659,7 @@ export const BudgetScreen = () => {
                 color="#999"
               />
               <Text style={styles.infoText}>
-                Esse campo não é editável pelo cliente.
+                Quando ultrapassar o planejado, o valor exibido fica em R$ 0,00.
               </Text>
             </View>
             {budgetValue > 0 && (
@@ -996,6 +1035,13 @@ const styles = StyleSheet.create({
     color: "#999",
     marginTop: 10,
     lineHeight: 18,
+  },
+  overPlannedText: {
+    marginTop: 10,
+    color: "#ff4d6d",
+    fontSize: 15,
+    fontWeight: "700",
+    lineHeight: 20,
   },
   infoContainer: {
     flexDirection: "row",
