@@ -51,13 +51,6 @@ export const CategoryBudgetScreen = () => {
   const [zeroConfirmDayLabel, setZeroConfirmDayLabel] = useState("");
   const [confirmingZero, setConfirmingZero] = useState(false);
 
-  const isCreditCardExpense = (exp: any) => {
-    return (
-      exp.paymentMethod === "credit_card" ||
-      (exp.cardId && exp.cardId.length > 0)
-    );
-  };
-
   const normalizeTitle = (value?: string) =>
     String(value || "")
       .normalize("NFD")
@@ -138,8 +131,21 @@ export const CategoryBudgetScreen = () => {
         ? getEndOfDay(new Date(planning.consumoModeradoCycleEndedAt))
         : null;
 
-      const start = cycleStartDate || getStartOfDay(today);
-      const end = cycleEndDate || getEndOfDay(today);
+      // Sem ciclo definido no planejamento, a janela só era "hoje" e gastos passados
+      // (ou em cartão) pareciam não contar; usa o mês civil corrente como fallback.
+      let start: Date;
+      let end: Date;
+      if (!cycleStartDate && !cycleEndDate) {
+        start = getStartOfDay(
+          new Date(today.getFullYear(), today.getMonth(), 1),
+        );
+        end = getEndOfDay(
+          new Date(today.getFullYear(), today.getMonth() + 1, 0),
+        );
+      } else {
+        start = cycleStartDate || getStartOfDay(today);
+        end = cycleEndDate || getEndOfDay(today);
+      }
 
       const expenses = await expenseServices.getExpenses(user.id, {
         startDate: start,
@@ -147,7 +153,6 @@ export const CategoryBudgetScreen = () => {
       });
 
       const filteredExpenses = expenses.filter((exp) => {
-        if (isCreditCardExpense(exp)) return false;
         if (!isTrackedDailyCategory((exp as any)?.category)) return false;
         return normalizeTitle(exp.description) === targetTitleKey;
       });

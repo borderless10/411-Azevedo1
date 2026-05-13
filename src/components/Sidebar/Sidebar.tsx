@@ -182,7 +182,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           icon: "newspaper",
           color: "#8c52ff",
         },
-        { id: "Chat", label: "Chat", icon: "chatbubbles", color: "#a47aff" },
+        { id: "Chat", label: "Chats", icon: "chatbubbles", color: "#a47aff" },
         { id: "Ranking", label: "Ranking", icon: "trophy", color: "#c084fc" },
       ]
     : isAdminUser
@@ -201,7 +201,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           },
           {
             id: "Chat",
-            label: "Chat",
+            label: "Chats",
             icon: "chatbubbles",
             color: "#a47aff",
           },
@@ -233,7 +233,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             icon: "newspaper",
             color: "#8c52ff",
           },
-          { id: "Chat", label: "Chat", icon: "chatbubbles", color: "#a47aff" },
+          { id: "Chat", label: "Chats", icon: "chatbubbles", color: "#a47aff" },
           { id: "Ranking", label: "Ranking", icon: "trophy", color: "#c084fc" },
           {
             id: "Recomendacao",

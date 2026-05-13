@@ -347,8 +347,21 @@ export const BudgetScreen = () => {
             ? getEndOfDay(new Date(planning.consumoModeradoCycleEndedAt))
             : null;
 
-          const start = cycleStartDate || getStartOfDay(today);
-          const end = cycleEndDate || getEndOfDay(today);
+          // Sem ciclo cadastrado/iniciado no planejamento, antes só mostrávamos "hoje";
+          // o cliente deve ver os gastos do mês (fora de ciclo formal) em Gastos diários.
+          let start: Date;
+          let end: Date;
+          if (!cycleStartDate && !cycleEndDate) {
+            start = getStartOfDay(
+              new Date(today.getFullYear(), today.getMonth(), 1),
+            );
+            end = getEndOfDay(
+              new Date(today.getFullYear(), today.getMonth() + 1, 0),
+            );
+          } else {
+            start = cycleStartDate || getStartOfDay(today);
+            end = cycleEndDate || getEndOfDay(today);
+          }
 
           setCycleDateStart(start);
           setCycleDateEnd(end);

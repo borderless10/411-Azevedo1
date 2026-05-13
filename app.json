@@ -4,6 +4,7 @@
     "slug": "411-Azevedo",
     "version": "1.0.0",
     "orientation": "portrait",
+    "scheme": "plan411azevedo",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
@@ -13,9 +14,11 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.borderlesspc2.plan411azevedo"
     },
     "android": {
+      "package": "com.borderlesspc2.plan411azevedo",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -26,17 +29,17 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "extra": {
-      "eas": {
-        "projectId": "7243f186-1899-49e6-b77c-b45235fa67ff"
-      }
-    },
-    "owner": "samuelbit",
+    "owner": "borderlesspc2",
     "runtimeVersion": {
       "policy": "appVersion"
     },
+    "extra": {
+      "eas": {
+        "projectId": "be2008b3-c7c7-453f-af2c-2cf82fcfcd56"
+      }
+    },
     "updates": {
-      "url": "https://u.expo.dev/7243f186-1899-49e6-b77c-b45235fa67ff"
+      "url": "https://u.expo.dev/be2008b3-c7c7-453f-af2c-2cf82fcfcd56"
     }
   }
 }
