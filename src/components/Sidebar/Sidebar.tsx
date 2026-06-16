@@ -53,6 +53,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     [],
   );
   const [trackedIncomeTitles, setTrackedIncomeTitles] = useState<string[]>([]);
+  const [trackedExpensesExpanded, setTrackedExpensesExpanded] = useState(false);
 
   const normalizeTitle = (value?: string) =>
     String(value || "")
@@ -172,6 +173,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
     loadTrackedExpenses();
   }, [user?.id, isCommonUser]);
+
+  const activeTrackedExpenseTitle = String(
+    params?.trackedTitle || params?.categoryName || "",
+  );
+  const isTrackedExpenseScreenActive =
+    currentScreen === "CategoryBudget" &&
+    trackedExpenseTitles.some(
+      (title) =>
+        normalizeTitle(title) === normalizeTitle(activeTrackedExpenseTitle),
+    );
+
+  useEffect(() => {
+    if (isTrackedExpenseScreenActive) {
+      setTrackedExpensesExpanded(true);
+    }
+  }, [isTrackedExpenseScreenActive]);
 
   const menuItems: MenuItem[] = isConsultor
     ? [
@@ -327,6 +344,150 @@ export const Sidebar: React.FC<SidebarProps> = ({
     onClose();
   };
 
+  const homeMenuItem = menuItems.find((item) => item.id === "Home");
+  const menuItemsWithoutHome = menuItems.filter((item) => item.id !== "Home");
+  const showTrackedExpensesAsSecond =
+    isCommonUser && trackedExpenseTitles.length > 0 && !!homeMenuItem;
+
+  const renderMenuItem = (item: MenuItem) => {
+    if (item.id === "Ranking" && shouldHideRankingItem) {
+      return null;
+    }
+
+    const isActive = currentScreen === item.id;
+    return (
+      <TouchableOpacity
+        key={item.id}
+        style={[
+          styles.menuItem,
+          { borderBottomColor: colors.border },
+          isActive && [
+            styles.menuItemActive,
+            { backgroundColor: colors.background },
+          ],
+        ]}
+        onPress={() => handleNavigate(item.id)}
+      >
+        <View style={styles.menuItemLeft}>
+          <Ionicons
+            name={item.icon}
+            size={24}
+            color={
+              isActive ? item.color || "#8c52ff" : colors.textSecondary
+            }
+          />
+          <Text
+            style={[
+              styles.menuItemText,
+              { color: colors.textSecondary },
+              isActive && styles.menuItemTextActive,
+              item.color && isActive && { color: item.color },
+            ]}
+          >
+            {item.label}
+          </Text>
+          {item.id === "Chat" && hasUnreadChats ? (
+            <View style={styles.unreadDot} />
+          ) : null}
+        </View>
+        {isActive && (
+          <Ionicons
+            name="chevron-forward"
+            size={20}
+            color={item.color || "#8c52ff"}
+          />
+        )}
+      </TouchableOpacity>
+    );
+  };
+
+  const renderTrackedExpensesSection = () => {
+    const sectionActive =
+      trackedExpensesExpanded || isTrackedExpenseScreenActive;
+
+    return (
+      <View>
+        <TouchableOpacity
+          style={[
+            styles.menuItem,
+            { borderBottomColor: colors.border },
+            sectionActive && !trackedExpensesExpanded && [
+              styles.menuItemActive,
+              { backgroundColor: colors.background },
+            ],
+          ]}
+          onPress={() => setTrackedExpensesExpanded((previous) => !previous)}
+        >
+          <View style={styles.menuItemLeft}>
+            <Ionicons
+              name="analytics"
+              size={24}
+              color={sectionActive ? "#8c52ff" : colors.textSecondary}
+            />
+            <Text
+              style={[
+                styles.menuItemText,
+                { color: colors.textSecondary },
+                sectionActive && styles.menuItemTextActive,
+                sectionActive && { color: "#8c52ff" },
+              ]}
+            >
+              Gastos acompanhados
+            </Text>
+          </View>
+          <Ionicons
+            name={trackedExpensesExpanded ? "chevron-up" : "chevron-down"}
+            size={20}
+            color={sectionActive ? "#8c52ff" : colors.textSecondary}
+          />
+        </TouchableOpacity>
+
+        {trackedExpensesExpanded
+          ? trackedExpenseTitles.map((title) => {
+              const isActive =
+                currentScreen === "CategoryBudget" &&
+                normalizeTitle(activeTrackedExpenseTitle) ===
+                  normalizeTitle(title);
+
+              return (
+                <TouchableOpacity
+                  key={title}
+                  style={[
+                    styles.trackedExpenseSubItem,
+                    { borderBottomColor: colors.border },
+                    isActive && [
+                      styles.menuItemActive,
+                      { backgroundColor: colors.background },
+                    ],
+                  ]}
+                  onPress={() =>
+                    handleNavigateWithParams("CategoryBudget", {
+                      trackedTitle: title,
+                    })
+                  }
+                >
+                  <Text
+                    style={[
+                      styles.trackedExpenseSubItemText,
+                      { color: colors.textSecondary },
+                      isActive && styles.menuItemTextActive,
+                      isActive && { color: "#8c52ff" },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {title}
+                  </Text>
+                  {isActive ? (
+                    <Ionicons name="chevron-forward" size={20} color="#8c52ff" />
+                  ) : null}
+                </TouchableOpacity>
+              );
+            })
+          : null}
+      </View>
+    );
+  };
+
   if (!visible) {
     return null;
   }
@@ -377,127 +538,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
           style={styles.menu}
           contentContainerStyle={styles.menuContent}
         >
-          {menuItems.map((item) => {
-            if (item.id === "Ranking" && shouldHideRankingItem) {
-              return null;
-            }
-
-            const isActive = currentScreen === item.id;
-            return (
-              <TouchableOpacity
-                key={item.id}
-                style={[
-                  styles.menuItem,
-                  { borderBottomColor: colors.border },
-                  isActive && [
-                    styles.menuItemActive,
-                    { backgroundColor: colors.background },
-                  ],
-                ]}
-                onPress={() => handleNavigate(item.id)}
-              >
-                <View style={styles.menuItemLeft}>
-                  <Ionicons
-                    name={item.icon}
-                    size={24}
-                    color={
-                      isActive ? item.color || "#8c52ff" : colors.textSecondary
-                    }
-                  />
-                  <Text
-                    style={[
-                      styles.menuItemText,
-                      { color: colors.textSecondary },
-                      isActive && styles.menuItemTextActive,
-                      item.color && isActive && { color: item.color },
-                    ]}
-                  >
-                    {item.label}
-                  </Text>
-                  {item.id === "Chat" && hasUnreadChats ? (
-                    <View style={styles.unreadDot} />
-                  ) : null}
-                </View>
-                {isActive && (
-                  <Ionicons
-                    name="chevron-forward"
-                    size={20}
-                    color={item.color || "#8c52ff"}
-                  />
-                )}
-              </TouchableOpacity>
-            );
-          })}
-
-          {isCommonUser && trackedExpenseTitles.length > 0 ? (
-            <View
-              style={[
-                styles.categorySection,
-                { borderTopColor: colors.border },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.categorySectionTitle,
-                  { color: colors.textSecondary },
-                ]}
-              >
-                Gastos acompanhados
-              </Text>
-              {trackedExpenseTitles.map((title) => {
-                const activeParamTitle = String(
-                  params?.trackedTitle || params?.categoryName || "",
-                );
-                const isActive =
-                  currentScreen === "CategoryBudget" &&
-                  normalizeTitle(activeParamTitle) === normalizeTitle(title);
-
-                return (
-                  <TouchableOpacity
-                    key={title}
-                    style={[
-                      styles.menuItem,
-                      { borderBottomColor: colors.border },
-                      isActive && [
-                        styles.menuItemActive,
-                        { backgroundColor: colors.background },
-                      ],
-                    ]}
-                    onPress={() =>
-                      handleNavigateWithParams("CategoryBudget", {
-                        trackedTitle: title,
-                      })
-                    }
-                  >
-                    <View style={styles.menuItemLeft}>
-                      <Ionicons
-                        name="analytics"
-                        size={24}
-                        color={isActive ? "#8c52ff" : colors.textSecondary}
-                      />
-                      <Text
-                        style={[
-                          styles.menuItemText,
-                          { color: colors.textSecondary },
-                          isActive && styles.menuItemTextActive,
-                          isActive && { color: "#8c52ff" },
-                        ]}
-                      >
-                        {title}
-                      </Text>
-                    </View>
-                    {isActive && (
-                      <Ionicons
-                        name="chevron-forward"
-                        size={20}
-                        color="#8c52ff"
-                      />
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          ) : null}
+          {showTrackedExpensesAsSecond ? (
+            <>
+              {homeMenuItem ? renderMenuItem(homeMenuItem) : null}
+              {renderTrackedExpensesSection()}
+              {menuItemsWithoutHome.map((item) => renderMenuItem(item))}
+            </>
+          ) : (
+            menuItems.map((item) => renderMenuItem(item))
+          )}
 
           {isCommonUser && trackedIncomeTitles.length > 0 ? (
             <View
@@ -641,6 +690,21 @@ const styles = StyleSheet.create({
   },
   menuContent: {
     paddingTop: 8,
+  },
+  trackedExpenseSubItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingLeft: 56,
+    paddingRight: 20,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+  },
+  trackedExpenseSubItemText: {
+    fontSize: 15,
+    fontWeight: "500",
+    flex: 1,
+    paddingRight: 8,
   },
   categorySection: {
     borderTopWidth: 1,
