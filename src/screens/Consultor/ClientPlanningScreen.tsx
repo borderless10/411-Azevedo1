@@ -26,10 +26,13 @@ import {
   getPlanningCycleLabel,
   planningServices,
 } from "../../services/planningServices";
+import { creditCardServices } from "../../services/creditCardServices";
 import { budgetServices } from "../../services/budgetServices";
 import { userService } from "../../services/userServices";
 import type { Bill, ExpectedItem } from "../../types/planning";
+import { CreditCard } from "../../types/creditCard";
 import { formatCurrency } from "../../utils/currencyUtils";
+import { toInvoiceKey } from "../../utils/creditCardUtils";
 import { CurrencyInput } from "../../components/CurrencyInput";
 import DatePicker from "../../components/DatePicker";
 
@@ -81,7 +84,24 @@ export const ClientPlanningScreen = () => {
   const [incomeMonth, setIncomeMonth] = useState("");
   const [incomeDailyTracking, setIncomeDailyTracking] = useState(false);
   const [savingIncome, setSavingIncome] = useState(false);
-  const [activeTab, setActiveTab] = useState<"gastos" | "rendas">("rendas");
+  const [activeTab, setActiveTab] = useState<"gastos" | "rendas" | "cartoes">(
+    "rendas",
+  );
+  const [clientCards, setClientCards] = useState<CreditCard[]>([]);
+  const [cardExpenseTotals, setCardExpenseTotals] = useState<
+    Record<string, number>
+  >({});
+  const [cardInvoiceInputs, setCardInvoiceInputs] = useState<
+    Record<string, number>
+  >({});
+  const [cardExpectedInvoiceInputs, setCardExpectedInvoiceInputs] = useState<
+    Record<string, number>
+  >({});
+  const [savingCardInvoiceId, setSavingCardInvoiceId] = useState<string | null>(
+    null,
+  );
+  const [loadingCardsTab, setLoadingCardsTab] = useState(false);
+  const currentInvoiceKey = toInvoiceKey(new Date());
 
   // Expense modal state (gastos gerais)
   const [isExpenseModalVisible, setIsExpenseModalVisible] = useState(false);
@@ -245,6 +265,77 @@ export const ClientPlanningScreen = () => {
 
     loadPlanning();
   }, [selectedClient]);
+
+  useEffect(() => {
+    async function loadCardsTab() {
+      if (!selectedClient || activeTab !== "cartoes") return;
+
+      setLoadingCardsTab(true);
+      try {
+        const [cards, planning, invoiceSummaries] = await Promise.all([
+          creditCardServices.getCreditCards(selectedClient.id),
+          planningServices.getPlanning(selectedClient.id),
+          creditCardServices.getInvoiceSummaries(selectedClient.id),
+        ]);
+
+        setClientCards(cards.filter((card) => card.isActive !== false));
+
+        const totals: Record<string, number> = {};
+        invoiceSummaries.forEach((invoice) => {
+          if (
+            invoice.invoiceKey === currentInvoiceKey &&
+            invoice.cardId
+          ) {
+            totals[invoice.cardId] = invoice.total;
+          }
+        });
+        setCardExpenseTotals(totals);
+
+        const inputs: Record<string, number> = {};
+        const expectedInputs: Record<string, number> = {};
+        (planning?.consultantCardInvoices || []).forEach((entry) => {
+          if (entry.invoiceKey === currentInvoiceKey) {
+            inputs[entry.cardId] = entry.amount;
+            if (entry.expectedAmount !== undefined) {
+              expectedInputs[entry.cardId] = entry.expectedAmount;
+            }
+          }
+        });
+        setCardInvoiceInputs(inputs);
+        setCardExpectedInvoiceInputs(expectedInputs);
+      } catch (error) {
+        console.warn("Erro ao carregar cartões do cliente", error);
+      } finally {
+        setLoadingCardsTab(false);
+      }
+    }
+
+    loadCardsTab();
+  }, [selectedClient, activeTab, currentInvoiceKey]);
+
+  const handleSaveCardInvoice = async (cardId: string) => {
+    if (!user?.id || !selectedClient) return;
+
+    try {
+      setSavingCardInvoiceId(cardId);
+      await planningServices.upsertConsultantCardInvoice(
+        user.id,
+        selectedClient.id,
+        {
+          cardId,
+          invoiceKey: currentInvoiceKey,
+          amount: cardInvoiceInputs[cardId] ?? 0,
+          expectedAmount: cardExpectedInvoiceInputs[cardId] ?? 0,
+        },
+      );
+      Alert.alert("Sucesso", "Valores da fatura registrados.");
+    } catch (error) {
+      console.error("Erro ao salvar fatura do cartão:", error);
+      Alert.alert("Erro", "Não foi possível salvar o valor da fatura.");
+    } finally {
+      setSavingCardInvoiceId(null);
+    }
+  };
 
   const isCardPayment = (raw?: any) => {
     const pm = String(raw || "").toLowerCase();
@@ -1077,6 +1168,19 @@ export const ClientPlanningScreen = () => {
               Gastos
             </Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === "cartoes" && styles.tabActive]}
+            onPress={() => setActiveTab("cartoes")}
+          >
+            <Text
+              style={[
+                styles.tabText,
+                activeTab === "cartoes" && styles.tabTextActive,
+              ]}
+            >
+              Cartões
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {activeTab === "gastos" && (
@@ -1327,6 +1431,95 @@ export const ClientPlanningScreen = () => {
               placeholderTextColor="#777"
               multiline
             />
+          </View>
+        )}
+
+        {activeTab === "cartoes" && (
+          <View style={styles.tabPanel}>
+            <View style={styles.highlightCardFull}>
+              <Text style={styles.highlightLabel}>Faturas atuais dos cartões</Text>
+              <Text style={styles.highlightValueSmall}>
+                Registre o valor real e a fatura esperada de cada cartão na
+                consultoria.
+              </Text>
+            </View>
+
+            {loadingCardsTab ? (
+              <View style={styles.loadingCardsRow}>
+                <ActivityIndicator color="#8c52ff" />
+                <Text style={styles.emptyListText}>Carregando cartões...</Text>
+              </View>
+            ) : clientCards.length === 0 ? (
+              <Text style={styles.emptyListText}>
+                Nenhum cartão cadastrado para este cliente.
+              </Text>
+            ) : (
+              clientCards.map((card) => (
+                <View
+                  key={card.id}
+                  style={[
+                    styles.billCard,
+                    { backgroundColor: "#0f0f11", borderColor: "#222" },
+                  ]}
+                >
+                  <Text style={styles.billTitle}>
+                    {card.bank} ••••{card.last4}
+                  </Text>
+                  <Text style={styles.billDescription}>
+                    Fatura atual ({currentInvoiceKey.replace("-", "/")})
+                  </Text>
+                  <Text style={styles.cardExpenseRegistered}>
+                    Gastos registrados no app:{" "}
+                    {formatCurrency(cardExpenseTotals[card.id] || 0)}
+                  </Text>
+
+                  <Text style={[styles.label, { marginTop: 12 }]}>
+                    Valor atual da fatura (do mês seguinte)
+                  </Text>
+                  <CurrencyInput
+                    label=""
+                    value={cardInvoiceInputs[card.id] ?? 0}
+                    onChangeValue={(value) =>
+                      setCardInvoiceInputs((previous) => ({
+                        ...previous,
+                        [card.id]: value,
+                      }))
+                    }
+                    icon="card"
+                  />
+
+                  <Text style={[styles.label, { marginTop: 12 }]}>
+                    Fatura esperada (do mês seguinte)
+                  </Text>
+                  <CurrencyInput
+                    label=""
+                    value={cardExpectedInvoiceInputs[card.id] ?? 0}
+                    onChangeValue={(value) =>
+                      setCardExpectedInvoiceInputs((previous) => ({
+                        ...previous,
+                        [card.id]: value,
+                      }))
+                    }
+                    icon="trending-up"
+                  />
+
+                  <TouchableOpacity
+                    style={[
+                      styles.saveButton,
+                      { marginTop: 12, alignSelf: "flex-start" },
+                    ]}
+                    onPress={() => handleSaveCardInvoice(card.id)}
+                    disabled={savingCardInvoiceId === card.id}
+                  >
+                    {savingCardInvoiceId === card.id ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <Text style={styles.saveButtonText}>Salvar faturas</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              ))
+            )}
           </View>
         )}
 
@@ -2358,6 +2551,17 @@ const styles = StyleSheet.create({
     color: "#9a9a9a",
     fontSize: 13,
     marginBottom: 12,
+  },
+  loadingCardsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 16,
+  },
+  cardExpenseRegistered: {
+    color: "#b7b7b7",
+    fontSize: 13,
+    marginTop: 8,
   },
   sectionBlock: {
     marginTop: 12,

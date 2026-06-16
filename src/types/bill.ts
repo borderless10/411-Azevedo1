@@ -4,6 +4,20 @@
 
 export type BillStatus = "pending" | "paid" | "overdue";
 
+export const isBillUnpaid = (bill: {
+  status?: string;
+  paidDate?: Date | null;
+  paid?: boolean;
+}): boolean => {
+  const status = String(bill?.status || "")
+    .trim()
+    .toLowerCase();
+  if (status === "paid" || status === "paga") return false;
+  if (bill?.paidDate) return false;
+  if (bill?.paid === true) return false;
+  return true;
+};
+
 export interface Bill {
   id: string;
   userId: string;

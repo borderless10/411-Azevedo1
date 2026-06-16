@@ -29,10 +29,8 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "owner": "borderlesspc2",
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
+    "owner": "visao",
+    "runtimeVersion": "1.0.0",
     "extra": {
       "eas": {
         "projectId": "be2008b3-c7c7-453f-af2c-2cf82fcfcd56"

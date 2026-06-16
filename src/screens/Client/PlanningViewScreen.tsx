@@ -18,16 +18,21 @@ import SummaryCard from "../../components/ui/SummaryCard";
 import DetailCard from "../../components/ui/DetailCard";
 import { useAuth } from "../../hooks/useAuth";
 import { planningServices } from "../../services/planningServices";
+import { creditCardServices } from "../../services/creditCardServices";
 import { activityServices } from "../../services/activityServices";
 import { formatCurrency } from "../../utils/currencyUtils";
+import { toInvoiceKey } from "../../utils/creditCardUtils";
+import { CreditCard } from "../../types/creditCard";
 import { useTheme } from "../../contexts/ThemeContext";
 
 export const PlanningViewScreen = () => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [planning, setPlanning] = useState<any | null>(null);
+  const [clientCards, setClientCards] = useState<CreditCard[]>([]);
   const [comment, setComment] = useState("");
   const [sending, setSending] = useState(false);
+  const currentInvoiceKey = toInvoiceKey(new Date());
 
   const totals = useMemo(() => {
     const sum = (arr?: any[]) =>
@@ -134,6 +139,49 @@ export const PlanningViewScreen = () => {
     };
     load();
   }, [user]);
+
+  const cardInvoiceEntries = useMemo(() => {
+    const entries = planning?.consultantCardInvoices || [];
+    return entries
+      .filter((entry: any) => entry.invoiceKey === currentInvoiceKey)
+      .map((entry: any) => {
+        const card = clientCards.find((item) => item.id === entry.cardId);
+        const label = card
+          ? `${card.bank} ••••${card.last4}`
+          : "Cartão";
+        const noteParts: string[] = [];
+        if (Number(entry.amount) > 0) {
+          noteParts.push(
+            `Valor da fatura: ${formatCurrency(Number(entry.amount))}`,
+          );
+        }
+        if (entry.expectedAmount !== undefined && Number(entry.expectedAmount) > 0) {
+          noteParts.push(
+            `Fatura esperada: ${formatCurrency(Number(entry.expectedAmount))}`,
+          );
+        }
+        return {
+          id: `${entry.cardId}-${entry.invoiceKey}`,
+          label,
+          note: noteParts.join("\n"),
+          hasData: noteParts.length > 0,
+        };
+      })
+      .filter((entry: { hasData: boolean }) => entry.hasData);
+  }, [planning, clientCards, currentInvoiceKey]);
+
+  useEffect(() => {
+    const loadCards = async () => {
+      if (!user?.id) return;
+      try {
+        const cards = await creditCardServices.getCreditCards(user.id);
+        setClientCards(cards.filter((card) => card.isActive !== false));
+      } catch (error) {
+        console.warn("Erro ao carregar cartões do planejamento:", error);
+      }
+    };
+    loadCards();
+  }, [user?.id]);
 
   const handleSendComment = async () => {
     if (!user) return;
@@ -328,6 +376,19 @@ export const PlanningViewScreen = () => {
                       </View>
                     )}
                 </View>
+
+                {cardInvoiceEntries.length > 0 ? (
+                  <View style={{ marginTop: 12 }}>
+                    <Text style={styles.sectionTitle}>Cartões — Faturas</Text>
+                    {cardInvoiceEntries.map((entry: any) => (
+                      <DetailCard
+                        key={entry.id}
+                        title={entry.label}
+                        note={entry.note}
+                      />
+                    ))}
+                  </View>
+                ) : null}
 
                 {/* Detailed Rendas */}
                 {planning.expectedIncomes &&

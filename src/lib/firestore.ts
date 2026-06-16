@@ -246,6 +246,8 @@ export const convertBudgetFromFirestore = (data: BudgetFirestore): Budget => {
     ...data,
     zeroConfirmedDays: data.zeroConfirmedDays || [],
     zeroConfirmedDaysNoRanking: data.zeroConfirmedDaysNoRanking || [],
+    zeroPromptDismissedDays: data.zeroPromptDismissedDays || [],
+    rankingPlanilhaEntries: data.rankingPlanilhaEntries || [],
     createdAt: timestampToDate(data.createdAt),
     updatedAt: timestampToDate(data.updatedAt),
   };
@@ -523,7 +525,7 @@ export const docExists = (snapshot: any): boolean => {
  * Obter dados de um snapshot
  */
 export const getDocData = (snapshot: any): any => {
-  return { id: snapshot.id, ...snapshot.data() };
+  return { ...snapshot.data(), id: snapshot.id };
 };
 
 export default {

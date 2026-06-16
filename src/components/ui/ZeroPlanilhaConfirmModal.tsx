@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
   Modal,
   View,
@@ -6,6 +6,9 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -13,54 +16,150 @@ type Props = {
   visible: boolean;
   dayLabel: string;
   loading?: boolean;
-  onConfirm: () => void;
+  onConfirmZero: () => void;
+  onConfirmExpense: (amount: number) => void;
   onCancel: () => void;
+};
+
+const parseAmount = (raw: string): number => {
+  const normalized = raw.replace(/[^0-9.,]/g, "").replace(",", ".");
+  const parsed = parseFloat(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
 };
 
 const ZeroPlanilhaConfirmModal: React.FC<Props> = ({
   visible,
   dayLabel,
   loading = false,
-  onConfirm,
+  onConfirmZero,
+  onConfirmExpense,
   onCancel,
 }) => {
+  const [step, setStep] = useState<"question" | "amount">("question");
+  const [amountText, setAmountText] = useState("");
+  const [amountError, setAmountError] = useState("");
+
+  useEffect(() => {
+    if (visible) {
+      setStep("question");
+      setAmountText("");
+      setAmountError("");
+    }
+  }, [visible, dayLabel]);
+
+  const handleSaveExpense = () => {
+    const amount = parseAmount(amountText);
+    if (amount <= 0) {
+      setAmountError("Informe um valor maior que zero");
+      return;
+    }
+    setAmountError("");
+    onConfirmExpense(amount);
+  };
+
   return (
     <Modal animationType="fade" transparent visible={visible}>
-      <View style={styles.backdrop}>
+      <KeyboardAvoidingView
+        style={styles.backdrop}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
         <View style={styles.container}>
           <View style={styles.iconWrap}>
-            <Ionicons name="leaf" size={56} color="#8c52ff" />
+            <Ionicons
+              name={step === "question" ? "help-circle" : "cash"}
+              size={56}
+              color="#8c52ff"
+            />
           </View>
 
-          <Text style={styles.title}>Dia sem gasto?</Text>
-          <Text style={styles.message}>
-            Ontem ({dayLabel}) você não registrou gastos. Deseja confirmar zero
-            na planilha?
-          </Text>
+          {step === "question" ? (
+            <>
+              <Text style={styles.title}>Houve gasto?</Text>
+              <Text style={styles.message}>
+                No dia {dayLabel} você não registrou gastos na planilha.
+              </Text>
 
-          <View style={styles.actionsRow}>
-            <TouchableOpacity
-              style={[styles.cancelButton, loading && styles.buttonDisabled]}
-              onPress={onCancel}
-              disabled={loading}
-            >
-              <Text style={styles.cancelLabel}>Ainda não</Text>
-            </TouchableOpacity>
+              <View style={styles.actionsRow}>
+                <TouchableOpacity
+                  style={[styles.noButton, loading && styles.buttonDisabled]}
+                  onPress={onConfirmZero}
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <Text style={styles.noLabel}>Não</Text>
+                  )}
+                </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.confirmButton, loading && styles.buttonDisabled]}
-              onPress={onConfirm}
-              disabled={loading}
-            >
-              {loading ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Text style={styles.confirmLabel}>Confirmar zero</Text>
-              )}
-            </TouchableOpacity>
-          </View>
+                <TouchableOpacity
+                  style={[styles.yesButton, loading && styles.buttonDisabled]}
+                  onPress={() => setStep("amount")}
+                  disabled={loading}
+                >
+                  <Text style={styles.yesLabel}>Sim</Text>
+                </TouchableOpacity>
+              </View>
+
+              <TouchableOpacity
+                style={styles.dismissButton}
+                onPress={onCancel}
+                disabled={loading}
+              >
+                <Text style={styles.dismissLabel}>Agora não</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <Text style={styles.title}>Qual foi o gasto?</Text>
+              <Text style={styles.message}>
+                Informe o valor gasto no dia {dayLabel}.
+              </Text>
+
+              <TextInput
+                style={[styles.input, amountError ? styles.inputError : null]}
+                value={amountText}
+                onChangeText={(text) => {
+                  setAmountText(text);
+                  if (amountError) setAmountError("");
+                }}
+                placeholder="0,00"
+                placeholderTextColor="#6b6480"
+                keyboardType="decimal-pad"
+                autoFocus
+              />
+              {amountError ? (
+                <Text style={styles.errorText}>{amountError}</Text>
+              ) : null}
+
+              <View style={styles.actionsRow}>
+                <TouchableOpacity
+                  style={[styles.noButton, loading && styles.buttonDisabled]}
+                  onPress={() => {
+                    setStep("question");
+                    setAmountError("");
+                  }}
+                  disabled={loading}
+                >
+                  <Text style={styles.noLabel}>Voltar</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.yesButton, loading && styles.buttonDisabled]}
+                  onPress={handleSaveExpense}
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <Text style={styles.yesLabel}>Salvar</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 };
@@ -96,6 +195,7 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: "700",
     marginBottom: 10,
+    textAlign: "center",
   },
   message: {
     color: "#a89fc0",
@@ -104,12 +204,35 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     marginBottom: 20,
   },
+  input: {
+    width: "100%",
+    backgroundColor: "#1a1528",
+    borderWidth: 1,
+    borderColor: "#2a2040",
+    borderRadius: 10,
+    color: "#fff",
+    fontSize: 22,
+    fontWeight: "700",
+    textAlign: "center",
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    marginBottom: 8,
+  },
+  inputError: {
+    borderColor: "#ff4d6d",
+  },
+  errorText: {
+    color: "#ff4d6d",
+    fontSize: 13,
+    marginBottom: 12,
+    alignSelf: "flex-start",
+  },
   actionsRow: {
     width: "100%",
     flexDirection: "row",
     gap: 12,
   },
-  cancelButton: {
+  noButton: {
     flex: 1,
     backgroundColor: "transparent",
     borderWidth: 1,
@@ -119,12 +242,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  cancelLabel: {
+  noLabel: {
     color: "#a89fc0",
     fontSize: 15,
     fontWeight: "700",
   },
-  confirmButton: {
+  yesButton: {
     flex: 1,
     backgroundColor: "#8c52ff",
     borderRadius: 10,
@@ -132,10 +255,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  confirmLabel: {
+  yesLabel: {
     color: "#fff",
     fontSize: 15,
     fontWeight: "700",
+  },
+  dismissButton: {
+    marginTop: 14,
+    paddingVertical: 8,
+  },
+  dismissLabel: {
+    color: "#6b6480",
+    fontSize: 14,
+    fontWeight: "600",
   },
   buttonDisabled: {
     opacity: 0.7,

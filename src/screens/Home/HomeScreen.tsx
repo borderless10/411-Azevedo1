@@ -24,7 +24,7 @@ import { Layout } from "../../components/Layout/Layout";
 import { useAuth } from "../../hooks/useAuth";
 import incomeServices from "../../services/incomeServices";
 import expenseServices from "../../services/expenseServices";
-import { budgetServices } from "../../services/budgetServices";
+import { budgetServices, getMonthYearFromDate } from "../../services/budgetServices";
 import { planningServices } from "../../services/planningServices";
 import { activityServices } from "../../services/activityServices";
 import {
@@ -39,8 +39,13 @@ import {
   subtractDays,
   getStartOfDay,
   getEndOfDay,
+  getFirstDayOfMonth,
 } from "../../utils/dateUtils";
-import { getFirstDayOfMonth } from "../../utils/dateUtils";
+import {
+  getZeroPromptSessionKey,
+  isZeroPromptResolvedForSession,
+  markZeroPromptResolvedForSession,
+} from "../../utils/zeroPromptSessionCache";
 import { Income } from "../../types/income";
 import { Expense } from "../../types/expense";
 import {
@@ -51,6 +56,7 @@ import {
 } from "../../components/Charts";
 import { DEFAULT_EXPENSE_CATEGORIES } from "../../types/category";
 import ZeroPlanilhaConfirmModal from "../../components/ui/ZeroPlanilhaConfirmModal";
+import ConfirmDeleteModal from "../../components/ui/ConfirmDeleteModal";
 import ExpectedDetails from "../../components/ui/ExpectedDetails";
 
 export const HomeScreen = () => {
@@ -88,11 +94,20 @@ export const HomeScreen = () => {
   // Animações
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
-  const lastZeroCheckKeyRef = useRef<string | null>(null);
+  const zeroPromptCheckInFlightRef = useRef(false);
+  const loadInProgressRef = useRef(false);
+  const loadRequestIdRef = useRef(0);
   const [zeroConfirmVisible, setZeroConfirmVisible] = useState(false);
   const [zeroConfirmDayLabel, setZeroConfirmDayLabel] = useState("");
   const [zeroConfirmDate, setZeroConfirmDate] = useState<Date | null>(null);
   const [confirmingZero, setConfirmingZero] = useState(false);
+  const [transactionToDelete, setTransactionToDelete] = useState<{
+    id: string;
+    type: "income" | "expense";
+    description: string;
+    value: number;
+  } | null>(null);
+  const [deletingTransaction, setDeletingTransaction] = useState(false);
   const [expanded, setExpanded] = useState<"income" | "expense" | null>(null);
 
   useEffect(() => {
@@ -155,24 +170,29 @@ export const HomeScreen = () => {
   };
 
   // Carregar dados do mês atual
-  const loadData = async () => {
+  const loadData = async (force = false) => {
     if (!user?.id) {
       console.log("⚠️ [HOME] Usuário não disponível, pulando carregamento");
       setLoading(false);
       return;
     }
 
-    // Evitar múltiplas chamadas simultâneas - usar flag separada
-    if (loading) {
-      console.log("⚠️ [HOME] Já está carregando, pulando...");
+    if (loadInProgressRef.current && !force) {
+      console.log("⚠️ [HOME] Carregamento em andamento, pulando...");
       return;
     }
+
+    const requestId = ++loadRequestIdRef.current;
+    loadInProgressRef.current = true;
 
     try {
       console.log("🏠 [HOME] Iniciando carregamento de dados...", {
         userId: user.id,
+        force,
       });
-      setLoading(true);
+      if (!hasLoaded) {
+        setLoading(true);
+      }
 
       const today = new Date();
       const startOfMonth = getFirstDayOfMonth(today);
@@ -466,6 +486,10 @@ export const HomeScreen = () => {
       setLineChartData(daysData);
 
       // Atualizar estados
+      if (requestId !== loadRequestIdRef.current) {
+        return;
+      }
+
       setTotalIncome(incomeTotal);
       setTotalExpense(expenseTotal);
       const realizedExpenseAll = allExpenses.reduce(
@@ -517,7 +541,9 @@ export const HomeScreen = () => {
         code: error?.code,
         stack: error?.stack,
       });
-      // Em caso de erro, definir valores padrão
+      if (requestId !== loadRequestIdRef.current) {
+        return;
+      }
       setTotalIncome(0);
       setTotalExpense(0);
       setRealizedExpenseTotal(0);
@@ -526,9 +552,12 @@ export const HomeScreen = () => {
       setAllTransactions([]);
       setHasLoaded(true); // Marcar como carregado mesmo com erro para mostrar estado vazio
     } finally {
-      console.log("🏠 [HOME] Finalizando carregamento...");
-      setLoading(false);
-      setRefreshing(false);
+      if (loadRequestIdRef.current === requestId) {
+        console.log("🏠 [HOME] Finalizando carregamento...");
+        loadInProgressRef.current = false;
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   };
 
@@ -654,35 +683,28 @@ export const HomeScreen = () => {
     }
 
     const yesterday = getStartOfDay(subtractDays(new Date(), 1));
-    const checkKey = `${user.id}-${formatDateToString(yesterday)}`;
+    const sessionKey = getZeroPromptSessionKey(user.id, yesterday);
 
-    if (lastZeroCheckKeyRef.current === checkKey) {
+    if (isZeroPromptResolvedForSession(sessionKey)) {
       return;
     }
 
-    lastZeroCheckKeyRef.current = checkKey;
+    if (zeroPromptCheckInFlightRef.current) {
+      return;
+    }
+
+    zeroPromptCheckInFlightRef.current = true;
 
     try {
-      const expensesYesterday = await expenseServices.getExpenses(user.id, {
-        startDate: getStartOfDay(yesterday),
-        endDate: getEndOfDay(yesterday),
-      });
+      await budgetServices.syncRankingPenalties(user.id);
 
-      const totalYesterday = expensesYesterday.reduce(
-        (sum, item) => sum + item.value,
-        0,
-      );
-
-      if (totalYesterday > 0) {
-        return;
-      }
-
-      const alreadyConfirmed = await budgetServices.isZeroExpenseDayConfirmed(
+      const alreadyResolved = await budgetServices.isDayExpensePromptResolved(
         user.id,
         yesterday,
       );
 
-      if (alreadyConfirmed) {
+      if (alreadyResolved) {
+        markZeroPromptResolvedForSession(sessionKey);
         return;
       }
 
@@ -692,7 +714,16 @@ export const HomeScreen = () => {
       setZeroConfirmVisible(true);
     } catch (error) {
       console.error("❌ [HOME] Erro ao verificar dia sem gasto:", error);
+    } finally {
+      zeroPromptCheckInFlightRef.current = false;
     }
+  };
+
+  const markYesterdayPromptResolved = () => {
+    if (!user?.id || !zeroConfirmDate) return;
+    markZeroPromptResolvedForSession(
+      getZeroPromptSessionKey(user.id, zeroConfirmDate),
+    );
   };
 
   const handleConfirmZeroPlanilha = async () => {
@@ -704,6 +735,7 @@ export const HomeScreen = () => {
     try {
       setConfirmingZero(true);
       await budgetServices.confirmZeroExpenseDay(user.id, zeroConfirmDate);
+      markYesterdayPromptResolved();
 
       await activityServices.logActivity(user.id, {
         type: "budget_updated",
@@ -715,7 +747,7 @@ export const HomeScreen = () => {
       setZeroConfirmDate(null);
       Alert.alert(
         "Parabéns! 🎉",
-        "Seu dia com zero na planilha foi contabilizado.",
+        "Zero na planilha confirmado. Você ganhou 2 pontos no ranking!",
       );
     } catch (error) {
       console.error("❌ [HOME] Erro ao confirmar zero na planilha:", error);
@@ -728,10 +760,65 @@ export const HomeScreen = () => {
     }
   };
 
-  const handleCancelZeroPlanilha = () => {
-    if (confirmingZero) return;
-    setZeroConfirmVisible(false);
-    setZeroConfirmDate(null);
+  const handleRegisterExpensePlanilha = async (amount: number) => {
+    if (!user?.id || !zeroConfirmDate) {
+      setZeroConfirmVisible(false);
+      return;
+    }
+
+    try {
+      setConfirmingZero(true);
+      const day = zeroConfirmDate.getDate();
+      const monthYear = getMonthYearFromDate(zeroConfirmDate);
+
+      await expenseServices.createExpense(user.id, {
+        value: amount,
+        description: "Gasto do dia",
+        date: zeroConfirmDate,
+        category: "Outros",
+        paymentMethod: "other",
+      });
+
+      await budgetServices.updateDailyExpense(
+        user.id,
+        monthYear,
+        day,
+        amount,
+      );
+      markYesterdayPromptResolved();
+
+      await activityServices.logActivity(user.id, {
+        type: "expense_created",
+        title: "Gasto registrado",
+        description: `Gasto de ${formatCurrency(amount)} no dia ${zeroConfirmDayLabel}.`,
+      });
+
+      setZeroConfirmVisible(false);
+      setZeroConfirmDate(null);
+      await loadData();
+      Alert.alert("Sucesso", "Gasto registrado com sucesso.");
+    } catch (error) {
+      console.error("❌ [HOME] Erro ao registrar gasto do dia:", error);
+      Alert.alert("Erro", "Não foi possível registrar o gasto agora.");
+    } finally {
+      setConfirmingZero(false);
+    }
+  };
+
+  const handleCancelZeroPlanilha = async () => {
+    if (confirmingZero || !user?.id || !zeroConfirmDate) return;
+
+    try {
+      setConfirmingZero(true);
+      await budgetServices.dismissExpensePromptForDay(user.id, zeroConfirmDate);
+      markYesterdayPromptResolved();
+    } catch (error) {
+      console.error("❌ [HOME] Erro ao adiar confirmação de gasto:", error);
+    } finally {
+      setConfirmingZero(false);
+      setZeroConfirmVisible(false);
+      setZeroConfirmDate(null);
+    }
   };
 
   // Carregar dados quando montar ou voltar ao foco
@@ -790,45 +877,59 @@ export const HomeScreen = () => {
     description: string,
     value: number,
   ) => {
-    Alert.alert(
-      "Confirmar Exclusão",
-      `Deseja realmente excluir ${type === "income" ? "a renda" : "o gasto"} "${description}" de ${formatCurrency(value)}?`,
-      [
-        {
-          text: "Cancelar",
-          style: "cancel",
-        },
-        {
-          text: "Excluir",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              console.log(`🗑️ Deletando ${type}:`, id);
-              if (type === "income") {
-                await incomeServices.deleteIncome(id);
-              } else {
-                await expenseServices.deleteExpense(id);
-              }
-              console.log(
-                `✅ ${type === "income" ? "Renda" : "Gasto"} deletado com sucesso`,
-              );
-              // Recarregar dados
-              await loadData();
-              Alert.alert(
-                "Sucesso! ✅",
-                `${type === "income" ? "Renda" : "Gasto"} excluído com sucesso!`,
-              );
-            } catch (error: any) {
-              console.error(`❌ Erro ao deletar ${type}:`, error);
-              Alert.alert(
-                "Erro",
-                `Erro ao excluir ${type === "income" ? "a renda" : "o gasto"}. Tente novamente.`,
-              );
-            }
-          },
-        },
-      ],
-    );
+    if (!id) {
+      Alert.alert("Erro", "Não foi possível identificar a transação.");
+      return;
+    }
+
+    setTransactionToDelete({
+      id,
+      type,
+      description: description || "Sem descrição",
+      value,
+    });
+  };
+
+  const confirmDeleteTransaction = async () => {
+    if (!transactionToDelete || !user?.id) return;
+
+    const { id, type, description, value } = transactionToDelete;
+
+    try {
+      setDeletingTransaction(true);
+
+      if (type === "income") {
+        await incomeServices.deleteIncome(id);
+      } else {
+        await expenseServices.deleteExpense(id);
+      }
+
+      setAllTransactions((previous) =>
+        previous.filter((transaction) => (transaction.item as any).id !== id),
+      );
+
+      if (type === "income") {
+        setTotalIncome((previous) => Math.max(0, previous - value));
+        setBalance((previous) => previous - value);
+        setRealizedBalance((previous) => previous - value);
+      } else {
+        setTotalExpense((previous) => Math.max(0, previous - value));
+        setRealizedExpenseTotal((previous) => Math.max(0, previous - value));
+        setBalance((previous) => previous + value);
+        setRealizedBalance((previous) => previous + value);
+      }
+
+      setTransactionToDelete(null);
+      await loadData(true);
+    } catch (error: any) {
+      console.error(`❌ Erro ao deletar ${type}:`, error);
+      Alert.alert(
+        "Erro",
+        `Erro ao excluir ${type === "income" ? "a renda" : "o gasto"}. Tente novamente.`,
+      );
+    } finally {
+      setDeletingTransaction(false);
+    }
   };
 
   // Handler para editar transação
@@ -1124,6 +1225,7 @@ export const HomeScreen = () => {
     <Layout showHeader={true} showSidebar={true}>
       <ScrollView
         style={styles.container}
+        keyboardShouldPersistTaps="handled"
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -1784,7 +1886,27 @@ export const HomeScreen = () => {
         dayLabel={zeroConfirmDayLabel}
         loading={confirmingZero}
         onCancel={handleCancelZeroPlanilha}
-        onConfirm={handleConfirmZeroPlanilha}
+        onConfirmZero={handleConfirmZeroPlanilha}
+        onConfirmExpense={handleRegisterExpensePlanilha}
+      />
+
+      <ConfirmDeleteModal
+        visible={!!transactionToDelete}
+        title="Confirmar exclusão"
+        message={
+          transactionToDelete
+            ? `Deseja excluir ${transactionToDelete.type === "income" ? "a renda" : "o gasto"} "${transactionToDelete.description}" de ${formatCurrency(transactionToDelete.value)}?`
+            : undefined
+        }
+        confirmLabel={deletingTransaction ? "Excluindo..." : "Excluir"}
+        onCancel={() => {
+          if (deletingTransaction) return;
+          setTransactionToDelete(null);
+        }}
+        onConfirm={() => {
+          if (deletingTransaction) return;
+          void confirmDeleteTransaction();
+        }}
       />
     </Layout>
   );

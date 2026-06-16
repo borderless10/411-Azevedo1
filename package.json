@@ -5,17 +5,22 @@
   "scripts": {
     "start": "expo start",
     "dev": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
     "web": "expo start --web",
     "clear": "expo start -c",
     "clear-web": "expo start -c --web",
     "build:web": "expo export --platform web",
+    "build:apk": "cd android && ./gradlew assembleRelease",
+    "build:apk:clean": "cd android && ./gradlew clean assembleRelease",
     "lint": "tsc --noEmit",
     "eas:build:dev": "eas build --profile development --platform android",
     "eas:build:preview": "eas build --profile preview --platform android",
+    "eas:build:production": "eas build --profile production --platform android",
     "eas:update:dev": "eas update --channel development",
-    "eas:update:preview": "eas update --channel preview"
+    "eas:update:preview": "CI=1 eas update --branch preview --non-interactive",
+    "eas:publish:expo-go": "CI=1 eas update --branch preview --message \"Preview cliente Expo Go\" --non-interactive",
+    "eas:apk-url": "eas build:list --platform android --profile preview --limit 1 --json --non-interactive | node -e \"let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{const j=JSON.parse(d);const u=j[0]?.artifacts?.applicationArchiveUrl;if(u)console.log(u);else{console.error('Nenhum build preview encontrado');process.exit(1)}});\""
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",

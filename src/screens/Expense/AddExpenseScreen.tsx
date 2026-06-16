@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Tela de Cadastro de Gasto
  * Suporta 3 tipos: Consumo Moderado, Gasto Acompanhado e Conta
  */
@@ -29,7 +29,8 @@ import { planningServices } from "../../services/planningServices";
 import { formatCurrency } from "../../utils/currencyUtils";
 import ExpenseCreatedModal from "../../components/ui/ExpenseCreatedModal";
 import { creditCardServices } from "../../services/creditCardServices";
-import { markBillAsPaid } from "../../services/billServices";
+import { markBillAsPaid, createBill } from "../../services/billServices";
+import { isBillUnpaid } from "../../types/bill";
 import { CreditCard } from "../../types/creditCard";
 import { Bill } from "../../types/planning";
 
@@ -74,7 +75,11 @@ export const AddExpenseScreen = () => {
     useState<string>("");
 
   // Conta (Bill)
+  const [billSourceMode, setBillSourceMode] = useState<"planned" | "custom">(
+    "planned",
+  );
   const [billId, setBillId] = useState("");
+  const [billCustomTitle, setBillCustomTitle] = useState("");
   const [billAmount, setBillAmount] = useState(0);
   const [billDueDate, setBillDueDate] = useState<Date>(new Date());
   const [billPaymentMethod, setBillPaymentMethod] = useState<
@@ -116,10 +121,13 @@ export const AddExpenseScreen = () => {
           setTrackedExpenses(tracked);
 
           // Extrair contas a serem pagas
-          const unpaidBills = (planning.bills || []).filter(
-            (b) => !b.paid || b.paid === false,
-          );
+          const unpaidBills = (planning.bills || []).filter(isBillUnpaid);
           setBills(unpaidBills);
+          if (unpaidBills.length === 0) {
+            setBillSourceMode("custom");
+          }
+        } else {
+          setBillSourceMode("custom");
         }
       } catch (error) {
         console.warn("Erro ao carregar dados:", error);
@@ -173,15 +181,7 @@ export const AddExpenseScreen = () => {
     }
 
     setExpenseType("bill");
-    setBillId(selectedBill.id || "");
-    setBillAmount(Number(selectedBill.amount) || 0);
-    setBillDueDate(
-      selectedBill.dueDate ? new Date(selectedBill.dueDate) : new Date(),
-    );
-    setBillPaymentMethod(
-      normalizeBillPaymentMethod(selectedBill.paymentMethod as any),
-    );
-    setBillSelectedCardId((selectedBill as any).cardId || "");
+    selectPlannedBill(selectedBill);
   }, [bills, params?.prefillBillId]);
 
   // Validação para Consumo Moderado
@@ -220,12 +220,44 @@ export const AddExpenseScreen = () => {
     return Object.keys(newErrors).length === 0;
   };
 
+  const isPlanningUser =
+    user?.role === "user" || user?.role === "cliente_premium";
+
+  const selectPlannedBill = (bill: Bill) => {
+    setBillSourceMode("planned");
+    setBillCustomTitle("");
+    setBillId(bill.id || "");
+    setBillAmount(Number(bill.amount) || 0);
+    setBillDueDate(
+      bill.dueDate ? new Date(bill.dueDate) : new Date(),
+    );
+    setBillPaymentMethod(
+      normalizeBillPaymentMethod(bill.paymentMethod as any),
+    );
+    setBillSelectedCardId((bill as any).cardId || "");
+  };
+
+  const switchToCustomBill = () => {
+    setBillSourceMode("custom");
+    setBillId("");
+  };
+
+  const switchToPlannedBill = () => {
+    setBillSourceMode("planned");
+    setBillCustomTitle("");
+    setBillId("");
+  };
+
   // Validação para Conta
   const validateBill = (): boolean => {
     const newErrors: Record<string, string> = {};
 
-    if (!billId) {
-      newErrors.billId = "Selecione uma conta";
+    if (billSourceMode === "planned") {
+      if (!billId) {
+        newErrors.billId = "Selecione uma conta planejada";
+      }
+    } else if (!billCustomTitle.trim()) {
+      newErrors.billCustomTitle = "Informe o título da conta";
     }
     if (billAmount <= 0) {
       newErrors.billAmount = "Valor deve ser maior que zero";
@@ -296,31 +328,67 @@ export const AddExpenseScreen = () => {
         await expenseServices.createExpense(user.id, expenseData);
         setSavedValueForModal(trackedValue);
       } else if (expenseType === "bill") {
-        const selectedBill = bills.find((bill) => bill.id === billId);
-        if (!selectedBill) {
-          throw new Error("Conta selecionada não encontrada");
-        }
+        if (billSourceMode === "custom") {
+          const title = billCustomTitle.trim();
+          let newBillId: string;
+          let billDescription = title;
 
-        // Registrar pagamento de conta como gasto real
-        const expenseData = {
-          value: billAmount,
-          description: selectedBill.name,
-          date: billDueDate,
-          category: "Conta",
-          paymentMethod: billPaymentMethod,
-          sourceBillId: selectedBill.id,
-          ...(billPaymentMethod === "credit_card" && billSelectedCardId
-            ? { cardId: billSelectedCardId }
-            : {}),
-        };
+          if (isPlanningUser) {
+            const created = await planningServices.addBillByClient(user.id, {
+              name: title,
+              amount: billAmount,
+              dueDate: billDueDate,
+              dueDay: billDueDate.getDate(),
+              paymentMethod: billPaymentMethod,
+            });
+            newBillId = created.id!;
+            billDescription = created.name;
+            await planningServices.markBillAsPaidByClient(user.id, newBillId);
+          } else {
+            const created = await createBill(user.id, {
+              title,
+              amount: billAmount,
+              dueDate: billDueDate,
+            });
+            newBillId = created.id;
+            billDescription = created.title;
+            await markBillAsPaid(newBillId);
+          }
 
-        await expenseServices.createExpense(user.id, expenseData);
+          await expenseServices.createExpense(user.id, {
+            value: billAmount,
+            description: billDescription,
+            date: billDueDate,
+            category: "Conta",
+            paymentMethod: billPaymentMethod,
+            sourceBillId: newBillId,
+            ...(billPaymentMethod === "credit_card" && billSelectedCardId
+              ? { cardId: billSelectedCardId }
+              : {}),
+          });
+        } else {
+          const selectedBill = bills.find((bill) => bill.id === billId);
+          if (!selectedBill) {
+            throw new Error("Conta selecionada não encontrada");
+          }
 
-        // Marcar conta como paga (planning para clientes, bills collection para demais casos)
-        try {
-          await planningServices.markBillAsPaidByClient(user.id, billId);
-        } catch (planningError) {
-          await markBillAsPaid(billId);
+          await expenseServices.createExpense(user.id, {
+            value: billAmount,
+            description: selectedBill.name,
+            date: billDueDate,
+            category: "Conta",
+            paymentMethod: billPaymentMethod,
+            sourceBillId: selectedBill.id,
+            ...(billPaymentMethod === "credit_card" && billSelectedCardId
+              ? { cardId: billSelectedCardId }
+              : {}),
+          });
+
+          try {
+            await planningServices.markBillAsPaidByClient(user.id, billId);
+          } catch {
+            await markBillAsPaid(billId);
+          }
         }
 
         setSavedValueForModal(billAmount);
@@ -618,7 +686,7 @@ export const AddExpenseScreen = () => {
                               styles.pickerPlaceholderError,
                           ]}
                         >
-                          <Text style={styles.pickerPlaceholderText}>
+                          <Text style={styles.pickerPlaceholderLabel}>
                             Nenhum gasto acompanhado cadastrado
                           </Text>
                         </View>
@@ -796,67 +864,147 @@ export const AddExpenseScreen = () => {
                       </Text>
                     </View>
 
-                    {errors.billId ? (
+                    {errors.billId || errors.billCustomTitle ? (
                       <View style={styles.errorContainer}>
                         <Ionicons
                           name="alert-circle"
                           size={20}
                           color="#ff4d6d"
                         />
-                        <Text style={styles.errorText}>{errors.billId}</Text>
+                        <Text style={styles.errorText}>
+                          {errors.billId || errors.billCustomTitle}
+                        </Text>
                       </View>
                     ) : null}
 
                     <View style={styles.inputGroup}>
-                      <Text style={styles.label}>Qual conta? *</Text>
-                      {bills.length === 0 ? (
+                      <Text style={styles.label}>Tipo de conta</Text>
+                      <View style={styles.paymentMethodsRow}>
+                        <TouchableOpacity
+                          style={[
+                            styles.paymentChip,
+                            billSourceMode === "planned" &&
+                              styles.paymentChipActive,
+                          ]}
+                          onPress={switchToPlannedBill}
+                        >
+                          <Text
+                            style={[
+                              styles.paymentChipText,
+                              billSourceMode === "planned" &&
+                                styles.paymentChipTextActive,
+                            ]}
+                          >
+                            Planejada
+                          </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[
+                            styles.paymentChip,
+                            billSourceMode === "custom" &&
+                              styles.paymentChipActive,
+                          ]}
+                          onPress={switchToCustomBill}
+                        >
+                          <Text
+                            style={[
+                              styles.paymentChipText,
+                              billSourceMode === "custom" &&
+                                styles.paymentChipTextActive,
+                            ]}
+                          >
+                            Outra conta
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+
+                    {billSourceMode === "planned" ? (
+                      <View style={styles.inputGroup}>
+                        <Text style={styles.label}>Qual conta? *</Text>
+                        {bills.length === 0 ? (
+                          <View
+                            style={[
+                              styles.pickerPlaceholder,
+                              errors.billId && styles.pickerPlaceholderError,
+                            ]}
+                          >
+                            <Text style={styles.pickerPlaceholderLabel}>
+                              Nenhuma conta planejada pendente. Use &quot;Outra
+                              conta&quot; para cadastrar na hora.
+                            </Text>
+                          </View>
+                        ) : (
+                          <View style={styles.pickerContainer}>
+                            {bills.map((bill) => {
+                              const active = billId === bill.id;
+                              return (
+                                <TouchableOpacity
+                                  key={bill.id}
+                                  style={[
+                                    styles.pickerOption,
+                                    active && styles.pickerOptionActive,
+                                  ]}
+                                  onPress={() => selectPlannedBill(bill)}
+                                >
+                                  <View style={styles.billOptionContent}>
+                                    <Text
+                                      style={[
+                                        styles.pickerOptionText,
+                                        active && styles.pickerOptionTextActive,
+                                      ]}
+                                    >
+                                      {bill.name}
+                                    </Text>
+                                    <Text
+                                      style={[
+                                        styles.billOptionAmount,
+                                        active && styles.billOptionAmountActive,
+                                      ]}
+                                    >
+                                      {formatCurrency(bill.amount || 0)}
+                                    </Text>
+                                  </View>
+                                </TouchableOpacity>
+                              );
+                            })}
+                          </View>
+                        )}
+                      </View>
+                    ) : (
+                      <View style={styles.inputGroup}>
+                        <Text style={styles.label}>Título da conta *</Text>
                         <View
                           style={[
-                            styles.pickerPlaceholder,
-                            errors.billId && styles.pickerPlaceholderError,
+                            styles.inputWrapper,
+                            errors.billCustomTitle && styles.inputWrapperError,
                           ]}
                         >
-                          <Text style={styles.pickerPlaceholderText}>
-                            Nenhuma conta a ser paga
+                          <Ionicons
+                            name="create-outline"
+                            size={20}
+                            color={
+                              errors.billCustomTitle ? "#ff4d6d" : "#999"
+                            }
+                            style={{ marginRight: 12 }}
+                          />
+                          <TextInput
+                            style={styles.input}
+                            placeholder="Ex: Internet, Academia, Condomínio..."
+                            placeholderTextColor="#666"
+                            value={billCustomTitle}
+                            onChangeText={setBillCustomTitle}
+                            editable={!loading}
+                            maxLength={100}
+                          />
+                        </View>
+                        {errors.billCustomTitle ? (
+                          <Text style={styles.errorTextSmall}>
+                            {errors.billCustomTitle}
                           </Text>
-                        </View>
-                      ) : (
-                        <View style={styles.pickerContainer}>
-                          {bills.map((bill) => {
-                            const active = billId === bill.id;
-                            return (
-                              <TouchableOpacity
-                                key={bill.id}
-                                style={[
-                                  styles.pickerOption,
-                                  active && styles.pickerOptionActive,
-                                ]}
-                                onPress={() => setBillId(bill.id || "")}
-                              >
-                                <View style={styles.billOptionContent}>
-                                  <Text
-                                    style={[
-                                      styles.pickerOptionText,
-                                      active && styles.pickerOptionTextActive,
-                                    ]}
-                                  >
-                                    {bill.name}
-                                  </Text>
-                                  <Text
-                                    style={[
-                                      styles.billOptionAmount,
-                                      active && styles.billOptionAmountActive,
-                                    ]}
-                                  >
-                                    {formatCurrency(bill.amount || 0)}
-                                  </Text>
-                                </View>
-                              </TouchableOpacity>
-                            );
-                          })}
-                        </View>
-                      )}
-                    </View>
+                        ) : null}
+                      </View>
+                    )}
 
                     {errors.billAmount ? (
                       <View
@@ -1208,6 +1356,11 @@ const styles = StyleSheet.create({
   },
   pickerPlaceholderError: {
     borderColor: "#ff4d6d",
+  },
+  pickerPlaceholderLabel: {
+    color: "#666",
+    fontSize: 14,
+    textAlign: "center",
   },
   inputWrapper: {
     flexDirection: "row",

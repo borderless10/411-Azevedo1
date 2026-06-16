@@ -46,7 +46,16 @@ import ConfirmDeleteModal from "../../components/ui/ConfirmDeleteModal";
 export const BillsScreen = () => {
   const { user } = useAuth();
   const { colors } = useTheme();
-  const { currentScreen, navigate } = useNavigation();
+  const { currentScreen, navigate, params } = useNavigation() as any;
+  const clientId = String(params?.clientId || "");
+  const isConsultorManagingClient =
+    !!clientId &&
+    (user?.role === "consultor" || user?.role === "admin" || user?.isAdmin);
+  const billsOwnerId = isConsultorManagingClient ? clientId : user?.id || "";
+  const usePlanningBills =
+    user?.role === "user" ||
+    user?.role === "cliente_premium" ||
+    isConsultorManagingClient;
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
 
@@ -112,11 +121,13 @@ export const BillsScreen = () => {
   }, []);
 
   useEffect(() => {
-    if (currentScreen === "Bills" && user) {
+    if (currentScreen === "Bills" && user && billsOwnerId) {
       loadBills();
-      requestNotificationPermissions();
+      if (!isConsultorManagingClient) {
+        requestNotificationPermissions();
+      }
     }
-  }, [currentScreen, user]);
+  }, [currentScreen, user, billsOwnerId, isConsultorManagingClient]);
 
   const getPlanningBillStatus = (bill: any): Bill["status"] => {
     const normalized = String(bill?.status || "")
@@ -229,35 +240,33 @@ export const BillsScreen = () => {
   };
 
   const loadBills = async () => {
-    if (!user) return;
+    if (!user || !billsOwnerId) return;
 
     try {
       setLoading(true);
-      // Clients (regular or premium) load consultant-managed planning bills
-      if (user.role === "user" || user.role === "cliente_premium") {
-        // mark source so actions use planningServices
+      if (usePlanningBills) {
         setIsPlanningSource(true);
 
-        // Sincroniza status overdue no documento de planning (inclui fallback legado)
-        await planningServices.syncOverduePlanningBills(user.id);
+        await planningServices.syncOverduePlanningBills(billsOwnerId);
 
-        let planning = await planningServices.getPlanning(user.id);
+        let planning = await planningServices.getPlanning(billsOwnerId);
 
-        // Se planning não existe, cria um vazio (pode ser preenchido pelo consultor depois)
-        if (!planning && user.consultantId) {
+        if (
+          !planning &&
+          user.consultantId &&
+          !isConsultorManagingClient
+        ) {
           if (__DEV__) {
             console.log("[BILLS] planning não existe, criando um vazio", {
-              userId: user.id,
+              userId: billsOwnerId,
               consultantId: user.consultantId,
             });
           }
-          // Cria um planning básico
           try {
-            await planningServices.savePlanning(user.consultantId, user.id, {
+            await planningServices.savePlanning(user.consultantId, billsOwnerId, {
               consultantId: user.consultantId,
             } as any);
-            // Busca novamente após criar
-            planning = await planningServices.getPlanning(user.id);
+            planning = await planningServices.getPlanning(billsOwnerId);
           } catch (e) {
             console.warn("[BILLS] erro ao criar planning básico", e);
           }
@@ -265,8 +274,9 @@ export const BillsScreen = () => {
 
         if (__DEV__) {
           console.log("[BILLS] loadBills planning-source", {
-            userId: user.id,
+            userId: billsOwnerId,
             role: user.role,
+            isConsultorManagingClient,
             planningExists: !!planning,
             billsCount: planning?.bills?.length || 0,
             expectedExpensesCount: planning?.expectedExpenses?.length || 0,
@@ -315,7 +325,7 @@ export const BillsScreen = () => {
           }
           return {
             id: b.id!,
-            userId: user.id,
+            userId: billsOwnerId,
             title: b.name,
             description: b.notes,
             amount: b.amount,
@@ -343,7 +353,7 @@ export const BillsScreen = () => {
             }
             return {
               id: exp.id!,
-              userId: user.id,
+              userId: billsOwnerId,
               title: exp.source || "Gasto Esperado",
               description:
                 exp.notes || `${exp.paymentMethod || "Sem método definido"}`,
@@ -380,15 +390,35 @@ export const BillsScreen = () => {
           });
         }
         const mergedPlanningBills = [...mapped, ...mappedExpectedExpenses];
+
+        // Contas criadas diretamente na coleção `bills` (legado / antes do fix)
+        try {
+          const directBills = await getBills(billsOwnerId);
+          const planningIds = new Set(
+            mergedPlanningBills.map((billItem) => billItem.id),
+          );
+          for (const directBill of directBills) {
+            if (planningIds.has(directBill.id)) continue;
+            mergedPlanningBills.push({
+              ...directBill,
+              _fromDirectCollection: true,
+            } as Bill);
+          }
+        } catch (directErr) {
+          console.warn("[BILLS] erro ao mesclar contas diretas:", directErr);
+        }
+
         setBills(mergedPlanningBills);
-        void syncBillNotifications(mergedPlanningBills).catch((err) => {
-          console.log("[BILLS] erro ao sincronizar notificações:", err);
-        });
+        if (!isConsultorManagingClient) {
+          void syncBillNotifications(mergedPlanningBills).catch((err) => {
+            console.log("[BILLS] erro ao sincronizar notificações:", err);
+          });
+        }
       } else {
         setIsPlanningSource(false);
         if (__DEV__) {
           console.log("[BILLS] loadBills direct bills source", {
-            userId: user.id,
+            userId: billsOwnerId,
             role: user.role,
           });
         }
@@ -443,23 +473,55 @@ export const BillsScreen = () => {
         amount.replace(/[^0-9.,]/g, "").replace(",", "."),
       );
 
-      const newBill = await createBill(user.id, {
-        title,
-        description: description || undefined,
-        amount: amountValue,
-        dueDate: dueDateObj,
-      });
+      const newBill = isPlanningSource
+        ? await (async () => {
+            const created = isConsultorManagingClient
+              ? await planningServices.addBill(user.id, billsOwnerId, {
+                  name: title,
+                  amount: amountValue,
+                  notes: description || undefined,
+                  dueDay: dueDateObj.getDate(),
+                  paymentMethod: "cash",
+                } as any)
+              : await planningServices.addBillByClient(billsOwnerId, {
+                  name: title,
+                  amount: amountValue,
+                  notes: description || undefined,
+                  dueDay: dueDateObj.getDate(),
+                  dueDate: dueDateObj,
+                  paymentMethod: "cash",
+                });
+            return {
+              id: created.id!,
+              userId: billsOwnerId,
+              title: created.name,
+              description: created.notes,
+              amount: created.amount,
+              dueDate: dueDateObj,
+              status: "pending" as const,
+              createdAt: created.createdAt || new Date(),
+              updatedAt: created.updatedAt || new Date(),
+            } as Bill;
+          })()
+        : await createBill(billsOwnerId, {
+            title,
+            description: description || undefined,
+            amount: amountValue,
+            dueDate: dueDateObj,
+          });
 
-      // Agendar notificação
-      const notificationId = await scheduleBillNotification(
-        newBill.id,
-        title,
-        amountValue,
-        dueDateObj,
-      );
+      // Agendar notificação (somente contas da coleção bills)
+      if (!isPlanningSource) {
+        const notificationId = await scheduleBillNotification(
+          newBill.id,
+          title,
+          amountValue,
+          dueDateObj,
+        );
 
-      if (notificationId) {
-        await updateBill(newBill.id, { notificationId });
+        if (notificationId) {
+          await updateBill(newBill.id, { notificationId });
+        }
       }
 
       Alert.alert("Sucesso", "Conta cadastrada com sucesso!");
@@ -474,41 +536,76 @@ export const BillsScreen = () => {
     }
   };
 
+  const markBillPaidAfterExpense = async (bill: Bill) => {
+    if ((bill as any)._isExpectedExpense) {
+      return;
+    }
+
+    try {
+      if (isConsultorManagingClient) {
+        await planningServices.markBillAsPaidByConsultor(
+          user!.id,
+          billsOwnerId,
+          bill.id,
+        );
+        return;
+      }
+
+      await planningServices.markBillAsPaidByClient(billsOwnerId, bill.id);
+    } catch {
+      await markBillAsPaid(bill.id);
+      if (!isPlanningSource) {
+        await cancelBillNotification(bill.id);
+      }
+    }
+  };
+
   const handleMarkAsPaid = async (bill: Bill) => {
-    Alert.alert("Confirmar Pagamento", `Marcar "${bill.title}" como paga?`, [
-      { text: "Cancelar", style: "cancel" },
-      {
-        text: "Confirmar",
-        onPress: async () => {
-          try {
-            if (isPlanningSource) {
+    if ((bill as any)._isExpectedExpense) {
+      Alert.alert(
+        "Gasto esperado",
+        "Este item é um gasto esperado do planejamento. Registre o pagamento em Adicionar Gasto > Conta.",
+        [
+          { text: "Cancelar", style: "cancel" },
+          {
+            text: "Ir para pagamento",
+            onPress: () =>
               navigate("AddExpense", {
                 prefillExpenseType: "bill",
                 prefillBillId: bill.id,
                 prefillDate: new Date().toISOString(),
                 prefillDescription: bill.title,
                 returnTo: "Bills",
-              });
-            } else {
-              const paymentMethod = normalizePaymentMethodForExpense(
-                (bill as any)?.paymentMethod,
-              );
+              }),
+          },
+        ],
+      );
+      return;
+    }
 
-              // Registrar pagamento como gasto real (apenas quando não for planning)
-              await expenseServices.createExpense(user!.id, {
-                value: Number(bill.amount) || 0,
-                description: bill.title,
-                date: new Date(),
-                category: "Conta",
-                paymentMethod,
-                sourceBillId: bill.id,
-              });
+    Alert.alert("Confirmar Pagamento", `Marcar "${bill.title}" como paga?`, [
+      { text: "Cancelar", style: "cancel" },
+      {
+        text: "Confirmar",
+        onPress: async () => {
+          try {
+            const paymentMethod = normalizePaymentMethodForExpense(
+              (bill as any)?.paymentMethod,
+            );
 
-              await markBillAsPaid(bill.id);
-              await cancelBillNotification(bill.id);
-            }
+            await expenseServices.createExpense(billsOwnerId, {
+              value: Number(bill.amount) || 0,
+              description: bill.title,
+              date: new Date(),
+              category: "Conta",
+              paymentMethod,
+              sourceBillId: bill.id,
+            });
+
+            await markBillPaidAfterExpense(bill);
             loadBills();
           } catch (error) {
+            console.error("[BILLS] Erro ao marcar conta como paga:", error);
             Alert.alert("Erro", "Não foi possível marcar como paga");
           }
         },
@@ -517,15 +614,7 @@ export const BillsScreen = () => {
   };
 
   const handleDeleteBill = async (bill: Bill) => {
-    // Only allow delete when not viewing planning bills (consultant handles planning deletion)
-    if (isPlanningSource)
-      return Alert.alert(
-        "Ação não permitida",
-        "Você não pode excluir contas do planejamento.",
-      );
-
-    // Prevent deletion of expected expenses (consultant-managed)
-    if ((bill as any)._isExpectedExpense) {
+    if ((bill as any)._isExpectedExpense && !isConsultorManagingClient) {
       return Alert.alert(
         "Ação não permitida",
         "Gastos esperados são gerenciados pelo consultor e não podem ser excluídos. Solicite ao consultor para remover esta conta.",
@@ -537,19 +626,37 @@ export const BillsScreen = () => {
   };
 
   const confirmDelete = async () => {
-    if (!billToDelete) return;
+    if (!billToDelete || !user) return;
     try {
       setSaving(true);
-      if (isPlanningSource) {
-        // shouldn't happen because delete button is disabled for planning source
+
+      if ((billToDelete as any)._isExpectedExpense) {
+        await planningServices.deleteExpectedExpense(
+          user.id,
+          billsOwnerId,
+          billToDelete.id,
+        );
+      } else if ((billToDelete as any)._fromDirectCollection) {
+        await cancelBillNotification(billToDelete.id);
+        await deleteBill(billToDelete.id);
+      } else if (isConsultorManagingClient) {
+        await planningServices.deleteBill(
+          user.id,
+          billsOwnerId,
+          billToDelete.id,
+        );
+      } else if (isPlanningSource) {
+        await planningServices.deleteBillByClient(billsOwnerId, billToDelete.id);
       } else {
         await cancelBillNotification(billToDelete.id);
         await deleteBill(billToDelete.id);
       }
+
       setIsDeleteModalVisible(false);
       setBillToDelete(null);
       loadBills();
     } catch (error) {
+      console.error("[BILLS] Erro ao excluir conta:", error);
       Alert.alert("Erro", "Não foi possível excluir a conta");
     } finally {
       setSaving(false);
@@ -565,7 +672,7 @@ export const BillsScreen = () => {
           try {
             if (isPlanningSource) {
               await planningServices.markBillAsUnpaidByClient(
-                user!.id,
+                billsOwnerId,
                 bill.id,
               );
             } else {
@@ -580,7 +687,7 @@ export const BillsScreen = () => {
 
             const removedExpense =
               await expenseServices.deleteExpenseBySourceBillId(
-                user!.id,
+                billsOwnerId,
                 bill.id,
               );
 
@@ -686,9 +793,19 @@ export const BillsScreen = () => {
     .filter((b) => b.status === "overdue")
     .reduce((sum, b) => sum + b.amount, 0);
 
+  const screenTitle = isConsultorManagingClient
+    ? "Contas do Cliente"
+    : "Contas";
+  const showBackButton = isConsultorManagingClient;
+  const showSidebar = !isConsultorManagingClient;
+
   if (loading) {
     return (
-      <Layout title="Contas" showBackButton={false} showSidebar={true}>
+      <Layout
+        title={screenTitle}
+        showBackButton={showBackButton}
+        showSidebar={showSidebar}
+      >
         <View
           style={[
             styles.loadingContainer,
@@ -705,7 +822,11 @@ export const BillsScreen = () => {
   }
 
   return (
-    <Layout title="Contas" showBackButton={false} showSidebar={true}>
+    <Layout
+      title={screenTitle}
+      showBackButton={showBackButton}
+      showSidebar={showSidebar}
+    >
       <ScrollView
         style={[styles.container, { backgroundColor: colors.background }]}
       >
@@ -952,15 +1073,13 @@ export const BillsScreen = () => {
         </Animated.View>
       </ScrollView>
 
-      {/* Botão Adicionar (somente para consultores/admin) */}
-      {!isPlanningSource && (
-        <TouchableOpacity
-          style={[styles.fab, { backgroundColor: colors.primary }]}
-          onPress={() => setIsModalVisible(true)}
-        >
-          <Ionicons name="add" size={28} color="#fff" />
-        </TouchableOpacity>
-      )}
+      {/* Botão Adicionar */}
+      <TouchableOpacity
+        style={[styles.fab, { backgroundColor: colors.primary }]}
+        onPress={() => setIsModalVisible(true)}
+      >
+        <Ionicons name="add" size={28} color="#fff" />
+      </TouchableOpacity>
 
       {/* Modal Adicionar Conta */}
       <Modal

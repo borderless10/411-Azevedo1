@@ -24,8 +24,11 @@ import DatePicker from "../../components/DatePicker";
 import { CategoryPicker } from "../../components/CategoryPicker";
 import incomeServices from "../../services/incomeServices";
 import { planningServices } from "../../services/planningServices";
+import { ExpectedItem } from "../../types/planning";
 import { formatCurrency } from "../../utils/currencyUtils";
 import IncomeCreatedModal from "../../components/ui/IncomeCreatedModal";
+
+const MONTHLY_INCOME_ID = "__monthly_income__";
 
 export const AddIncomeScreen = () => {
   const { user } = useAuth();
@@ -40,6 +43,12 @@ export const AddIncomeScreen = () => {
   const [trackedIncomeOptions, setTrackedIncomeOptions] = useState<string[]>(
     [],
   );
+  const [plannedIncomes, setPlannedIncomes] = useState<ExpectedItem[]>([]);
+  const [incomeSourceMode, setIncomeSourceMode] = useState<"planned" | "custom">(
+    "planned",
+  );
+  const [selectedPlannedIncomeId, setSelectedPlannedIncomeId] = useState("");
+  const [customIncomeTitle, setCustomIncomeTitle] = useState("");
   const [date, setDate] = useState(new Date());
   const [category, setCategory] = useState<string>("Outros");
   const [loading, setLoading] = useState(false);
@@ -47,6 +56,8 @@ export const AddIncomeScreen = () => {
     value: "",
     description: "",
     trackedIncomeTitle: "",
+    plannedIncomeId: "",
+    customIncomeTitle: "",
     date: "",
     general: "",
   });
@@ -83,27 +94,73 @@ export const AddIncomeScreen = () => {
   }, [params?.trackedMode]);
 
   useEffect(() => {
-    const loadTrackedIncomeOptions = async () => {
+    const loadPlanningIncomes = async () => {
       if (!user?.id) return;
       try {
         const planning = await planningServices.getPlanning(user.id);
-        const options = (planning?.expectedIncomes || [])
+
+        const trackedOptions = (planning?.expectedIncomes || [])
           .filter((item) => item.dailyTracking)
           .map((item) => String(item.source || "").trim())
           .filter(Boolean);
 
-        const unique = Array.from(new Set(options)).sort((a, b) =>
-          a.localeCompare(b, "pt-BR"),
+        setTrackedIncomeOptions(
+          Array.from(new Set(trackedOptions)).sort((a, b) =>
+            a.localeCompare(b, "pt-BR"),
+          ),
         );
 
-        setTrackedIncomeOptions(unique);
+        const items: ExpectedItem[] = [...(planning?.expectedIncomes || [])];
+        if (planning?.monthlyIncome && Number(planning.monthlyIncome) > 0) {
+          items.unshift({
+            id: MONTHLY_INCOME_ID,
+            source: "Salário / Renda mensal",
+            amount: Number(planning.monthlyIncome),
+          });
+        }
+
+        setPlannedIncomes(items);
+        if (items.length === 0) {
+          setIncomeSourceMode("custom");
+        }
       } catch (error) {
-        console.warn("Erro ao carregar rendas acompanhadas", error);
+        console.warn("Erro ao carregar rendas do planejamento", error);
+        setIncomeSourceMode("custom");
       }
     };
 
-    loadTrackedIncomeOptions();
+    loadPlanningIncomes();
   }, [user?.id]);
+
+  const selectPlannedIncome = (item: ExpectedItem) => {
+    const itemId = String(item.id || item.source || "");
+    setIncomeSourceMode("planned");
+    setCustomIncomeTitle("");
+    setSelectedPlannedIncomeId(itemId);
+    setDescription(String(item.source || "").trim());
+    if (Number(item.amount) > 0) {
+      setValue(Number(item.amount));
+    }
+    setErrors((prev) => ({
+      ...prev,
+      plannedIncomeId: "",
+      customIncomeTitle: "",
+      description: "",
+    }));
+  };
+
+  const switchToPlannedIncome = () => {
+    setIncomeSourceMode("planned");
+    setCustomIncomeTitle("");
+    setSelectedPlannedIncomeId("");
+    setDescription("");
+  };
+
+  const switchToCustomIncome = () => {
+    setIncomeSourceMode("custom");
+    setSelectedPlannedIncomeId("");
+    setDescription("");
+  };
 
   // Validações
   const validateValue = (val: number): string => {
@@ -172,14 +229,23 @@ export const AddIncomeScreen = () => {
       value: "",
       description: "",
       trackedIncomeTitle: "",
+      plannedIncomeId: "",
+      customIncomeTitle: "",
       date: "",
       general: "",
     });
 
-    // Validar todos os campos
     const valueError = validateValue(value);
     const descriptionError =
-      incomeType === "general" ? validateDescription(description) : "";
+      incomeType === "general" && incomeSourceMode === "custom"
+        ? validateDescription(customIncomeTitle)
+        : "";
+    const plannedIncomeIdError =
+      incomeType === "general" &&
+      incomeSourceMode === "planned" &&
+      !selectedPlannedIncomeId
+        ? "Selecione uma renda planejada"
+        : "";
     const trackedIncomeTitleError =
       incomeType === "tracked" && !trackedIncomeTitle.trim()
         ? "Selecione a renda acompanhada"
@@ -189,12 +255,15 @@ export const AddIncomeScreen = () => {
     if (
       valueError ||
       descriptionError ||
+      plannedIncomeIdError ||
       trackedIncomeTitleError ||
       dateError
     ) {
       setErrors({
         value: valueError,
         description: descriptionError,
+        plannedIncomeId: plannedIncomeIdError,
+        customIncomeTitle: descriptionError,
         trackedIncomeTitle: trackedIncomeTitleError,
         date: dateError,
         general: "Por favor, corrija os erros antes de salvar",
@@ -213,7 +282,9 @@ export const AddIncomeScreen = () => {
       const isTracked = incomeType === "tracked";
       const finalDescription = isTracked
         ? trackedIncomeTitle.trim()
-        : description.trim();
+        : incomeSourceMode === "planned"
+          ? description.trim()
+          : customIncomeTitle.trim();
 
       const incomeData = {
         value,
@@ -233,6 +304,9 @@ export const AddIncomeScreen = () => {
       setValue(0);
       setDescription("");
       setTrackedIncomeTitle("");
+      setSelectedPlannedIncomeId("");
+      setCustomIncomeTitle("");
+      setIncomeSourceMode(plannedIncomes.length > 0 ? "planned" : "custom");
       setIncomeType("general");
       setDate(new Date());
       setCategory("Outros");
@@ -336,16 +410,6 @@ export const AddIncomeScreen = () => {
                 </TouchableOpacity>
               </View>
 
-              {/* Valor */}
-              <CurrencyInput
-                label="Valor"
-                value={value}
-                onChangeValue={handleValueChange}
-                error={errors.value}
-                icon="cash"
-                editable={!loading}
-              />
-
               {incomeType === "tracked" ? (
                 <View style={styles.inputContainer}>
                   <Text style={styles.label}>
@@ -394,58 +458,160 @@ export const AddIncomeScreen = () => {
                   ) : null}
                 </View>
               ) : (
-                <View style={styles.inputContainer}>
-                  <Text style={styles.label}>
-                    <Ionicons name="document-text" size={16} color="#8c52ff" />{" "}
-                    Descrição
-                  </Text>
-                  <View
-                    style={[
-                      styles.inputWrapper,
-                      errors.description ? styles.inputWrapperError : null,
-                    ]}
-                  >
-                    <Ionicons
-                      name="document-text-outline"
-                      size={20}
-                      color={errors.description ? "#ff4d6d" : "#999"}
-                      style={styles.inputIcon}
-                    />
-                    <TextInput
-                      style={styles.input}
-                      placeholder="Ex: Salário, Freelance, Presente..."
-                      placeholderTextColor="#999"
-                      value={description}
-                      onChangeText={handleDescriptionChange}
-                      editable={!loading}
-                      maxLength={100}
-                    />
-                    {errors.description ? (
-                      <Ionicons
-                        name="close-circle"
-                        size={20}
-                        color="#ff4d6d"
-                        style={styles.icon}
-                      />
-                    ) : description.trim().length >= 3 ? (
-                      <Ionicons
-                        name="checkmark-circle"
-                        size={20}
-                        color="#8c52ff"
-                        style={styles.icon}
-                      />
-                    ) : null}
+                <>
+                  <View style={styles.inputContainer}>
+                    <Text style={styles.label}>Tipo de renda</Text>
+                    <View style={styles.sourceModeRow}>
+                      <TouchableOpacity
+                        style={[
+                          styles.sourceModeChip,
+                          incomeSourceMode === "planned" &&
+                            styles.sourceModeChipActive,
+                        ]}
+                        onPress={switchToPlannedIncome}
+                        disabled={loading}
+                      >
+                        <Text
+                          style={[
+                            styles.sourceModeChipText,
+                            incomeSourceMode === "planned" &&
+                              styles.sourceModeChipTextActive,
+                          ]}
+                        >
+                          Planejada
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[
+                          styles.sourceModeChip,
+                          incomeSourceMode === "custom" &&
+                            styles.sourceModeChipActive,
+                        ]}
+                        onPress={switchToCustomIncome}
+                        disabled={loading}
+                      >
+                        <Text
+                          style={[
+                            styles.sourceModeChipText,
+                            incomeSourceMode === "custom" &&
+                              styles.sourceModeChipTextActive,
+                          ]}
+                        >
+                          Outra renda
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
-                  {errors.description ? (
-                    <Text style={styles.errorTextSmall}>
-                      {errors.description}
-                    </Text>
-                  ) : null}
-                  <Text style={styles.charCount}>
-                    {description.length}/100 caracteres
-                  </Text>
-                </View>
+
+                  {incomeSourceMode === "planned" ? (
+                    <View style={styles.inputContainer}>
+                      <Text style={styles.label}>Qual renda? *</Text>
+                      {plannedIncomes.length === 0 ? (
+                        <View style={styles.emptyTrackedContainer}>
+                          <Text style={styles.emptyTrackedText}>
+                            Nenhuma renda planejada. Use &quot;Outra renda&quot;
+                            para cadastrar na hora.
+                          </Text>
+                        </View>
+                      ) : (
+                        <View style={styles.trackedOptionsContainer}>
+                          {plannedIncomes.map((item) => {
+                            const itemId = String(item.id || item.source || "");
+                            const active = selectedPlannedIncomeId === itemId;
+                            return (
+                              <TouchableOpacity
+                                key={itemId}
+                                style={[
+                                  styles.plannedIncomeOption,
+                                  active && styles.trackedOptionActive,
+                                ]}
+                                onPress={() => selectPlannedIncome(item)}
+                                disabled={loading}
+                              >
+                                <View style={styles.plannedIncomeContent}>
+                                  <Text
+                                    style={[
+                                      styles.trackedOptionText,
+                                      active && styles.trackedOptionTextActive,
+                                    ]}
+                                  >
+                                    {item.source || "Renda"}
+                                  </Text>
+                                  <Text
+                                    style={[
+                                      styles.plannedIncomeAmount,
+                                      active && styles.plannedIncomeAmountActive,
+                                    ]}
+                                  >
+                                    {formatCurrency(Number(item.amount) || 0)}
+                                  </Text>
+                                </View>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+                      )}
+                      {errors.plannedIncomeId ? (
+                        <Text style={styles.errorTextSmall}>
+                          {errors.plannedIncomeId}
+                        </Text>
+                      ) : null}
+                    </View>
+                  ) : (
+                    <View style={styles.inputContainer}>
+                      <Text style={styles.label}>Título da renda *</Text>
+                      <View
+                        style={[
+                          styles.inputWrapper,
+                          errors.customIncomeTitle
+                            ? styles.inputWrapperError
+                            : null,
+                        ]}
+                      >
+                        <Ionicons
+                          name="create-outline"
+                          size={20}
+                          color={
+                            errors.customIncomeTitle ? "#ff4d6d" : "#999"
+                          }
+                          style={styles.inputIcon}
+                        />
+                        <TextInput
+                          style={styles.input}
+                          placeholder="Ex: Freelancer, Presente, Bônus..."
+                          placeholderTextColor="#999"
+                          value={customIncomeTitle}
+                          onChangeText={(text) => {
+                            setCustomIncomeTitle(text);
+                            if (errors.customIncomeTitle || text.trim()) {
+                              setErrors((prev) => ({
+                                ...prev,
+                                customIncomeTitle: validateDescription(text),
+                              }));
+                            }
+                          }}
+                          editable={!loading}
+                          maxLength={100}
+                        />
+                      </View>
+                      {errors.customIncomeTitle ? (
+                        <Text style={styles.errorTextSmall}>
+                          {errors.customIncomeTitle}
+                        </Text>
+                      ) : null}
+                    </View>
+                  )}
+                </>
               )}
+
+              <CurrencyInput
+                label="Valor"
+                value={value}
+                onChangeValue={handleValueChange}
+                error={errors.value}
+                icon="cash"
+                editable={!loading}
+              />
 
               {/* Data */}
               <DatePicker
@@ -666,6 +832,53 @@ const styles = StyleSheet.create({
   },
   trackedOptionTextActive: {
     color: "#fff",
+  },
+  sourceModeRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  sourceModeChip: {
+    borderWidth: 1,
+    borderColor: "#444",
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    backgroundColor: "#2b2b2b",
+  },
+  sourceModeChipActive: {
+    backgroundColor: "#8c52ff",
+    borderColor: "#8c52ff",
+  },
+  sourceModeChipText: {
+    color: "#bbb",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  sourceModeChipTextActive: {
+    color: "#fff",
+  },
+  plannedIncomeOption: {
+    borderWidth: 1,
+    borderColor: "#444",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    backgroundColor: "#2b2b2b",
+  },
+  plannedIncomeContent: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+  },
+  plannedIncomeAmount: {
+    color: "#999",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  plannedIncomeAmountActive: {
+    color: "#8c52ff",
   },
   buttonContainer: {
     flexDirection: "row",

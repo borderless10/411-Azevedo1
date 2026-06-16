@@ -2,7 +2,7 @@
  * Tela de Listagem de Rendas
  */
 
-import React, { useState, useEffect } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -12,19 +12,93 @@ import {
   ActivityIndicator,
   RefreshControl,
   Alert,
+  Modal,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../hooks/useAuth";
 import { useNavigation } from "../../routes/NavigationContext";
 import { Layout } from "../../components/Layout/Layout";
 import { Button } from "../../components/ui/Button/Button";
+import { DatePicker } from "../../components/DatePicker";
 import incomeServices from "../../services/incomeServices";
+import {
+  getPlanningCycleLabel,
+  planningServices,
+} from "../../services/planningServices";
 import { Income } from "../../types/income";
+import { Planning } from "../../types/planning";
 import { formatCurrency } from "../../utils/currencyUtils";
 import {
   formatDateForDisplay,
   formatDateToString,
+  getEndOfDay,
+  getPredefinedPeriodDates,
+  getStartOfDay,
 } from "../../utils/dateUtils";
+
+type IncomePeriodFilter =
+  | "all"
+  | "cycle"
+  | "this_month"
+  | "last_month"
+  | "custom";
+
+const resolveFilterDates = (
+  filter: IncomePeriodFilter,
+  planning: Planning | null,
+  customStart: Date,
+  customEnd: Date,
+): { startDate?: Date; endDate?: Date; label: string } => {
+  if (filter === "all") {
+    return { label: "Todos os períodos" };
+  }
+
+  if (filter === "cycle") {
+    const today = new Date();
+    const cycleStartDate = planning?.consumoModeradoCycleStartedAt
+      ? getStartOfDay(new Date(planning.consumoModeradoCycleStartedAt))
+      : null;
+    const cycleEndDate = planning?.consumoModeradoCycleEndedAt
+      ? getEndOfDay(new Date(planning.consumoModeradoCycleEndedAt))
+      : null;
+
+    const startDate = cycleStartDate || getStartOfDay(today);
+    const endDate = cycleEndDate || getEndOfDay(today);
+    const cycleLabel = getPlanningCycleLabel(planning);
+
+    return {
+      startDate,
+      endDate,
+      label: cycleLabel ? `Ciclo: ${cycleLabel}` : "Ciclo atual",
+    };
+  }
+
+  if (filter === "this_month") {
+    const period = getPredefinedPeriodDates("this_month");
+    return {
+      startDate: period.startDate,
+      endDate: period.endDate,
+      label: period.label,
+    };
+  }
+
+  if (filter === "last_month") {
+    const period = getPredefinedPeriodDates("last_month");
+    return {
+      startDate: period.startDate,
+      endDate: period.endDate,
+      label: period.label,
+    };
+  }
+
+  const startDate = getStartOfDay(customStart);
+  const endDate = getEndOfDay(customEnd);
+  return {
+    startDate,
+    endDate,
+    label: `${formatDateForDisplay(startDate)} - ${formatDateForDisplay(endDate)}`,
+  };
+};
 
 export const IncomeListScreen = () => {
   const { user } = useAuth();
@@ -35,37 +109,110 @@ export const IncomeListScreen = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [total, setTotal] = useState(0);
   const [deletingIncomeId, setDeletingIncomeId] = useState<string | null>(null);
+  const [planning, setPlanning] = useState<Planning | null>(null);
+  const [periodFilter, setPeriodFilter] = useState<IncomePeriodFilter>("all");
+  const [customModalVisible, setCustomModalVisible] = useState(false);
+  const [customStartDate, setCustomStartDate] = useState<Date>(() => {
+    const date = new Date();
+    date.setDate(1);
+    return date;
+  });
+  const [customEndDate, setCustomEndDate] = useState<Date>(() => new Date());
+  const [appliedCustomStart, setAppliedCustomStart] = useState<Date>(() => {
+    const date = new Date();
+    date.setDate(1);
+    return date;
+  });
+  const [appliedCustomEnd, setAppliedCustomEnd] = useState<Date>(
+    () => new Date(),
+  );
 
-  // Carregar rendas
-  const loadIncomes = async () => {
+  const hasActiveCycle = Boolean(planning?.consumoModeradoCycleStartedAt);
+
+  const activePeriod = useMemo(
+    () =>
+      resolveFilterDates(
+        periodFilter,
+        planning,
+        appliedCustomStart,
+        appliedCustomEnd,
+      ),
+    [periodFilter, planning, appliedCustomStart, appliedCustomEnd],
+  );
+
+  const loadPlanning = useCallback(async () => {
+    if (!user?.id) return;
+    try {
+      const data = await planningServices.getPlanning(user.id);
+      setPlanning(data);
+    } catch (error) {
+      console.warn("Erro ao carregar planejamento para filtro de ciclo:", error);
+      setPlanning(null);
+    }
+  }, [user?.id]);
+
+  const loadIncomes = useCallback(async () => {
     if (!user) return;
 
     try {
-      console.log("💰 Carregando rendas...");
-      const data = await incomeServices.getIncomes(user.id);
+      const data = await incomeServices.getIncomes(user.id, {
+        startDate: activePeriod.startDate,
+        endDate: activePeriod.endDate,
+      });
       setIncomes(data);
-
-      // Calcular total
-      const sum = data.reduce((acc, income) => acc + income.value, 0);
-      setTotal(sum);
-
-      console.log("✅ Rendas carregadas:", data.length, "Total:", sum);
+      setTotal(data.reduce((acc, income) => acc + income.value, 0));
     } catch (error) {
       console.error("❌ Erro ao carregar rendas:", error);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [user, activePeriod.startDate, activePeriod.endDate]);
 
   useEffect(() => {
-    loadIncomes();
-  }, [user]);
+    loadPlanning();
+  }, [loadPlanning]);
 
-  // Refresh
+  useEffect(() => {
+    setLoading(true);
+    loadIncomes();
+  }, [loadIncomes]);
+
   const handleRefresh = () => {
     setRefreshing(true);
+    loadPlanning();
     loadIncomes();
+  };
+
+  const handlePeriodFilterChange = (filter: IncomePeriodFilter) => {
+    if (filter === "cycle" && !hasActiveCycle) {
+      Alert.alert(
+        "Ciclo não iniciado",
+        "Seu consultor ainda não iniciou um ciclo de consumo moderado.",
+      );
+      return;
+    }
+
+    if (filter === "custom") {
+      setCustomStartDate(appliedCustomStart);
+      setCustomEndDate(appliedCustomEnd);
+      setCustomModalVisible(true);
+      return;
+    }
+
+    setPeriodFilter(filter);
+  };
+
+  const handleApplyCustomDates = () => {
+    if (customStartDate > customEndDate) {
+      Alert.alert("Datas inválidas", "A data inicial deve ser anterior à final.");
+      return;
+    }
+
+    setAppliedCustomStart(customStartDate);
+    setAppliedCustomEnd(customEndDate);
+    setPeriodFilter("custom");
+    setCustomModalVisible(false);
   };
 
   const handleDeleteIncome = (id: string, description: string) => {
@@ -90,7 +237,6 @@ export const IncomeListScreen = () => {
     ]);
   };
 
-  // Agrupar por data
   const groupedByDate = incomes.reduce(
     (acc, income) => {
       const dateKey = formatDateToString(income.date);
@@ -107,15 +253,19 @@ export const IncomeListScreen = () => {
     b[0].localeCompare(a[0]),
   );
 
-  // Renderizar item
+  const filterOptions: { id: IncomePeriodFilter; label: string }[] = [
+    { id: "all", label: "Todos" },
+    ...(hasActiveCycle ? [{ id: "cycle" as const, label: "Ciclo" }] : []),
+    { id: "this_month", label: "Este mês" },
+    { id: "last_month", label: "Mês passado" },
+    { id: "custom", label: "Por data" },
+  ];
+
   const renderIncomeItem = (income: Income) => (
     <TouchableOpacity
       key={income.id}
       style={styles.incomeItem}
-      onPress={() => {
-        // TODO: Navegar para edição
-        console.log("Editar renda:", income.id);
-      }}
+      onPress={() => navigate("EditIncome", { id: income.id })}
     >
       <View style={styles.incomeItemLeft}>
         <View style={styles.incomeIconContainer}>
@@ -151,7 +301,6 @@ export const IncomeListScreen = () => {
     </TouchableOpacity>
   );
 
-  // Renderizar grupo de data
   const renderDateGroup = (date: string, dateIncomes: Income[]) => {
     const dayTotal = dateIncomes.reduce((sum, income) => sum + income.value, 0);
     const [year, month, day] = date.split("-").map(Number);
@@ -172,9 +321,15 @@ export const IncomeListScreen = () => {
     );
   };
 
+  const layoutProps = {
+    title: "Minhas Rendas",
+    showBackButton: false,
+    showSidebar: true,
+  };
+
   if (loading) {
     return (
-      <Layout title="Minhas Rendas" showBackButton={true} showSidebar={false}>
+      <Layout {...layoutProps}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#8c52ff" />
           <Text style={styles.loadingText}>Carregando rendas...</Text>
@@ -184,9 +339,8 @@ export const IncomeListScreen = () => {
   }
 
   return (
-    <Layout title="Minhas Rendas" showBackButton={true} showSidebar={false}>
+    <Layout {...layoutProps}>
       <View style={styles.container}>
-        {/* Header com total */}
         <View style={styles.header}>
           <View style={styles.headerContent}>
             <View style={styles.totalContainer}>
@@ -195,6 +349,7 @@ export const IncomeListScreen = () => {
               <Text style={styles.totalSubtext}>
                 {incomes.length} {incomes.length === 1 ? "renda" : "rendas"}
               </Text>
+              <Text style={styles.periodLabel}>{activePeriod.label}</Text>
             </View>
             <TouchableOpacity
               style={styles.addButton}
@@ -203,15 +358,49 @@ export const IncomeListScreen = () => {
               <Ionicons name="add-circle" size={32} color="#8c52ff" />
             </TouchableOpacity>
           </View>
+
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filterRow}
+          >
+            {filterOptions.map((item) => {
+              const active = periodFilter === item.id;
+              return (
+                <TouchableOpacity
+                  key={item.id}
+                  style={[
+                    styles.filterChip,
+                    active ? styles.filterChipActive : null,
+                  ]}
+                  onPress={() => handlePeriodFilterChange(item.id)}
+                >
+                  <Text
+                    style={[
+                      styles.filterChipText,
+                      active ? styles.filterChipTextActive : null,
+                    ]}
+                  >
+                    {item.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
         </View>
 
-        {/* Lista de rendas */}
         {incomes.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Ionicons name="cash-outline" size={64} color="#ccc" />
-            <Text style={styles.emptyText}>Nenhuma renda ainda</Text>
+            <Text style={styles.emptyText}>
+              {periodFilter === "all"
+                ? "Nenhuma renda ainda"
+                : "Nenhuma renda neste período"}
+            </Text>
             <Text style={styles.emptySubtext}>
-              Comece adicionando sua primeira renda
+              {periodFilter === "all"
+                ? "Comece adicionando sua primeira renda"
+                : "Tente outro filtro ou adicione uma nova renda"}
             </Text>
             <Button
               title="Adicionar Renda"
@@ -240,6 +429,53 @@ export const IncomeListScreen = () => {
           </ScrollView>
         )}
       </View>
+
+      <Modal
+        visible={customModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setCustomModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Filtrar por data</Text>
+            <Text style={styles.modalSubtitle}>
+              Escolha o intervalo para exibir as rendas
+            </Text>
+
+            <DatePicker
+              label="Data inicial"
+              date={customStartDate}
+              onChangeDate={setCustomStartDate}
+              maxDate={customEndDate}
+            />
+            <DatePicker
+              label="Data final"
+              date={customEndDate}
+              onChangeDate={setCustomEndDate}
+              minDate={customStartDate}
+              maxDate={new Date()}
+            />
+
+            <View style={styles.modalActions}>
+              <Button
+                title="Cancelar"
+                onPress={() => setCustomModalVisible(false)}
+                variant="secondary"
+                icon="close"
+                style={styles.modalButton}
+              />
+              <Button
+                title="Aplicar"
+                onPress={handleApplyCustomDates}
+                variant="primary"
+                icon="checkmark"
+                style={styles.modalButton}
+              />
+            </View>
+          </View>
+        </View>
+      </Modal>
     </Layout>
   );
 };
@@ -289,8 +525,40 @@ const styles = StyleSheet.create({
     color: "#666",
     marginTop: 4,
   },
+  periodLabel: {
+    fontSize: 12,
+    color: "#a47aff",
+    marginTop: 6,
+    fontWeight: "600",
+  },
   addButton: {
     marginLeft: 16,
+  },
+  filterRow: {
+    marginTop: 12,
+    flexDirection: "row",
+    gap: 8,
+    paddingRight: 8,
+  },
+  filterChip: {
+    borderWidth: 1,
+    borderColor: "#444",
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: "#2b2b2b",
+  },
+  filterChipActive: {
+    backgroundColor: "#8c52ff",
+    borderColor: "#8c52ff",
+  },
+  filterChipText: {
+    color: "#ddd",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  filterChipTextActive: {
+    color: "#fff",
   },
   scrollView: {
     flex: 1,
@@ -413,6 +681,41 @@ const styles = StyleSheet.create({
   },
   emptyButton: {
     minWidth: 200,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.7)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  modalContent: {
+    width: "100%",
+    maxWidth: 420,
+    backgroundColor: "#1a1a1a",
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: "#333",
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#fff",
+    marginBottom: 6,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: "#999",
+    marginBottom: 16,
+  },
+  modalActions: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 8,
+  },
+  modalButton: {
+    flex: 1,
   },
 });
 

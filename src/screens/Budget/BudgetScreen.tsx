@@ -256,6 +256,7 @@ export const BudgetScreen = () => {
 
     try {
       setLoading(true);
+      await budgetServices.syncRankingPenalties(user.id);
 
       // 1) Buscar valor mensal esperado do planejamento do consultor
       const planning = await planningServices.getPlanning(user.id);

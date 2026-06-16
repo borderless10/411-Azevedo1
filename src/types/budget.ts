@@ -12,6 +12,19 @@ export interface DailyExpense {
   amount: number;
 }
 
+export type RankingPlanilhaType =
+  | "zero_next_day"
+  | "expense_same_day"
+  | "expense_next_day"
+  | "missed";
+
+export interface RankingPlanilhaEntry {
+  dateKey: string;
+  points: number;
+  type: RankingPlanilhaType;
+  registeredAt: string;
+}
+
 /**
  * Orçamento Mensal
  */
@@ -23,6 +36,8 @@ export interface Budget {
   dailyExpenses: DailyExpense[];
   zeroConfirmedDays: number[];
   zeroConfirmedDaysNoRanking?: number[];
+  zeroPromptDismissedDays?: number[];
+  rankingPlanilhaEntries?: RankingPlanilhaEntry[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -38,6 +53,8 @@ export interface BudgetFirestore {
   dailyExpenses: DailyExpense[];
   zeroConfirmedDays?: number[];
   zeroConfirmedDaysNoRanking?: number[];
+  zeroPromptDismissedDays?: number[];
+  rankingPlanilhaEntries?: RankingPlanilhaEntry[];
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
@@ -50,6 +67,8 @@ export interface CreateBudgetData {
   dailyExpenses?: DailyExpense[];
   zeroConfirmedDays?: number[];
   zeroConfirmedDaysNoRanking?: number[];
+  zeroPromptDismissedDays?: number[];
+  rankingPlanilhaEntries?: RankingPlanilhaEntry[];
 }
 
 /**
@@ -60,4 +79,6 @@ export interface UpdateBudgetData {
   dailyExpenses?: DailyExpense[];
   zeroConfirmedDays?: number[];
   zeroConfirmedDaysNoRanking?: number[];
+  zeroPromptDismissedDays?: number[];
+  rankingPlanilhaEntries?: RankingPlanilhaEntry[];
 }

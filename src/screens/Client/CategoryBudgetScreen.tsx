@@ -256,31 +256,9 @@ export const CategoryBudgetScreen = () => {
       month: "2-digit",
     });
 
-    Alert.alert("Dia sem registro", `Dia ${label} sem gastos registrados.`, [
-      {
-        text: "Cancelar",
-        style: "cancel",
-      },
-      {
-        text: "Registrar gasto",
-        onPress: () => {
-          navigate("AddExpense", {
-            prefillDate: date.toISOString(),
-            prefillDescription: trackedTitle,
-            returnTo: "CategoryBudget",
-            returnParams: { trackedTitle },
-          });
-        },
-      },
-      {
-        text: "Marcar zero na planilha",
-        onPress: () => {
-          setZeroConfirmDayLabel(label);
-          setZeroConfirmDate(date);
-          setZeroConfirmVisible(true);
-        },
-      },
-    ]);
+    setZeroConfirmDayLabel(label);
+    setZeroConfirmDate(date);
+    setZeroConfirmVisible(true);
   };
 
   const handleConfirmZero = async () => {
@@ -305,6 +283,34 @@ export const CategoryBudgetScreen = () => {
     } catch (error) {
       console.error("❌ [CATEGORY BUDGET] Erro ao confirmar zero:", error);
       Alert.alert("Erro", "Não foi possível confirmar o zero agora.");
+    } finally {
+      setConfirmingZero(false);
+    }
+  };
+
+  const handleConfirmExpense = async (amount: number) => {
+    if (!user?.id || !zeroConfirmDate || !trackedTitle) {
+      setZeroConfirmVisible(false);
+      return;
+    }
+
+    try {
+      setConfirmingZero(true);
+      await expenseServices.createExpense(user.id, {
+        value: amount,
+        description: trackedTitle,
+        date: zeroConfirmDate,
+        category: "Acompanhamento Diário",
+        paymentMethod: "other",
+      });
+
+      setZeroConfirmVisible(false);
+      setZeroConfirmDate(null);
+      await loadData();
+      Alert.alert("Sucesso", "Gasto registrado com sucesso.");
+    } catch (error) {
+      console.error("❌ [CATEGORY BUDGET] Erro ao registrar gasto:", error);
+      Alert.alert("Erro", "Não foi possível registrar o gasto agora.");
     } finally {
       setConfirmingZero(false);
     }
@@ -506,7 +512,8 @@ export const CategoryBudgetScreen = () => {
         visible={zeroConfirmVisible}
         dayLabel={zeroConfirmDayLabel}
         loading={confirmingZero}
-        onConfirm={handleConfirmZero}
+        onConfirmZero={handleConfirmZero}
+        onConfirmExpense={handleConfirmExpense}
         onCancel={() => {
           if (confirmingZero) return;
           setZeroConfirmVisible(false);

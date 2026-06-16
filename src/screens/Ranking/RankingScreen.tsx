@@ -118,7 +118,7 @@ export const RankingScreen = () => {
             position: i + 1,
             userId: r.userId,
             displayName: display,
-            zeroDays: r.zeroDays,
+            zeroDays: r.rankingPoints,
             photoBase64: photo,
             nickname,
             role,
@@ -168,12 +168,42 @@ export const RankingScreen = () => {
   };
 
   return (
-    <Layout title="Ranking" showBackButton={false} showSidebar={true}>
+    <Layout title="Ranking — Consumo moderado" showBackButton={false} showSidebar={true}>
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.content}
       >
-        <Text style={styles.header}>Ranking — Zeros na planilha</Text>
+        <Text style={styles.header}>Ranking — Consumo moderado</Text>
+
+        <View style={styles.infoCard}>
+          <Text style={styles.infoTitle}>Como funciona</Text>
+          <Text style={styles.infoText}>
+            O ranking mostra quem mais registra a planilha de consumo moderado.
+            Quanto mais pontos, melhor a posição. Cada dia vale no máximo uma
+            pontuação — registrar vários gastos no mesmo dia não soma pontos
+            extras.
+          </Text>
+
+          <Text style={styles.infoSubtitle}>Como pontuar</Text>
+          <Text style={styles.infoBullet}>• Gasto na planilha no mesmo dia: 1 pt</Text>
+          <Text style={styles.infoBullet}>
+            • Gasto do dia anterior registrado no dia seguinte: 1 pt
+          </Text>
+          <Text style={styles.infoBullet}>
+            • Ao abrir o app, confirmar que não houve gasto ontem: 2 pts (zero
+            só pode ser registrado no dia seguinte)
+          </Text>
+
+          <Text style={styles.infoSubtitle}>Atenção</Text>
+          <Text style={styles.infoText}>
+            Se passar 2 dias seguidos sem registrar na planilha, esses 2 dias
+            ficam com 0 pts. Depois disso, você volta a pontuar normalmente ao
+            registrar gastos ou confirmar zero no popup do Início ou na tela
+            Consumo Moderado.
+          </Text>
+        </View>
+
+        <Text style={styles.sectionTitle}>Classificação</Text>
         {loading ? (
           <View style={styles.loadingRow}>
             <ActivityIndicator size="large" color="#8c52ff" />
@@ -237,7 +267,7 @@ export const RankingScreen = () => {
                 >
                   {r.displayName}
                 </Text>
-                <Text style={styles.detail}>{r.zeroDays} dias com zero</Text>
+                <Text style={styles.detail}>{r.zeroDays} pts</Text>
               </View>
             </View>
           ))
@@ -332,6 +362,44 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#000" },
   content: { padding: 16 },
   header: { color: "#fff", fontSize: 20, fontWeight: "700", marginBottom: 12 },
+  infoCard: {
+    backgroundColor: "#1a1a1a",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#333",
+    padding: 14,
+    marginBottom: 16,
+    gap: 6,
+  },
+  infoTitle: {
+    color: "#8c52ff",
+    fontSize: 15,
+    fontWeight: "700",
+    marginBottom: 4,
+  },
+  infoSubtitle: {
+    color: "#c084fc",
+    fontSize: 13,
+    fontWeight: "700",
+    marginTop: 8,
+  },
+  infoText: {
+    color: "#bbb",
+    fontSize: 13,
+    lineHeight: 20,
+  },
+  infoBullet: {
+    color: "#bbb",
+    fontSize: 13,
+    lineHeight: 20,
+    paddingLeft: 4,
+  },
+  sectionTitle: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "700",
+    marginBottom: 10,
+  },
   loadingRow: { padding: 40, alignItems: "center" },
   emptyText: { color: "#999", fontSize: 14 },
   row: {

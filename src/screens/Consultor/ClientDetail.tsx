@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -171,6 +171,18 @@ export const ClientDetail: React.FC = () => {
           >
             <Text style={styles.actionButtonText}>Abrir Planejamento</Text>
           </TouchableOpacity>
+
+          {clientDoc && (
+            <TouchableOpacity
+              style={[
+                styles.actionButtonFull,
+                { backgroundColor: colors.primary },
+              ]}
+              onPress={() => navigate("Bills", { clientId })}
+            >
+              <Text style={styles.actionButtonText}>Contas a Pagar</Text>
+            </TouchableOpacity>
+          )}
 
           {clientDoc?.role === "cliente_premium" && (
             <TouchableOpacity

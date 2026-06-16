@@ -62,7 +62,9 @@ export const DEFAULT_INCOME_CATEGORIES: Omit<
   "id" | "userId" | "createdAt" | "isDefault"
 >[] = [
   { name: "Salário", icon: "cash", color: "#8c52ff", type: "income" },
-  { name: "Freelance", icon: "briefcase", color: "#a47aff", type: "income" },
+  { name: "Freelancer", icon: "briefcase", color: "#a47aff", type: "income" },
+  { name: "Show", icon: "musical-notes", color: "#c084fc", type: "income" },
+  { name: "Produção", icon: "film", color: "#8c52ff", type: "income" },
   {
     name: "Investimentos",
     icon: "trending-up",

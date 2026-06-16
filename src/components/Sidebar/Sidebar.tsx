@@ -226,6 +226,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
             icon: "receipt",
             color: "#ff4d6d",
           },
+          {
+            id: "IncomeList",
+            label: "Minhas Rendas",
+            icon: "cash",
+            color: "#8c52ff",
+          },
           { id: "Cartoes", label: "Cartões", icon: "card", color: "#8c52ff" },
           {
             id: "Feed",

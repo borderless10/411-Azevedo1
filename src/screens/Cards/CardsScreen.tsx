@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Keyboard,
   KeyboardAvoidingView,
@@ -12,16 +13,25 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { Layout } from "../../components/Layout/Layout";
 import { useAuth } from "../../hooks/useAuth";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useNavigation } from "../../routes/NavigationContext";
 import { creditCardServices } from "../../services/creditCardServices";
+import expenseServices from "../../services/expenseServices";
+import {
+  getConsultantCardInvoiceAmount,
+  getConsultantCardInvoiceExpectedAmount,
+  getConsultantCardInvoiceDisplayTotal,
+  planningServices,
+} from "../../services/planningServices";
 import {
   CreditCard,
   CreditCardInvoiceSummary,
   CreateCreditCardData,
 } from "../../types/creditCard";
+import { ConsultantCardInvoice } from "../../types/planning";
 import { addMonths } from "../../utils/dateUtils";
 import { toInvoiceKey } from "../../utils/creditCardUtils";
 import {
@@ -63,6 +73,9 @@ export const CardsScreen: React.FC = () => {
 
   const [cards, setCards] = useState<CreditCard[]>([]);
   const [invoices, setInvoices] = useState<CreditCardInvoiceSummary[]>([]);
+  const [consultantCardInvoices, setConsultantCardInvoices] = useState<
+    ConsultantCardInvoice[]
+  >([]);
   const [loading, setLoading] = useState<boolean>(true);
 
   const [selectedCardId, setSelectedCardId] = useState<string>("all");
@@ -72,6 +85,7 @@ export const CardsScreen: React.FC = () => {
 
   const [modalVisible, setModalVisible] = useState<boolean>(false);
   const [editingCard, setEditingCard] = useState<CreditCard | null>(null);
+  const [deletingExpenseId, setDeletingExpenseId] = useState<string | null>(null);
 
   const [bank, setBank] = useState<string>("");
   const [last4, setLast4] = useState<string>("");
@@ -88,12 +102,14 @@ export const CardsScreen: React.FC = () => {
 
     try {
       setLoading(true);
-      const [loadedCards, loadedInvoices] = await Promise.all([
+      const [loadedCards, loadedInvoices, planning] = await Promise.all([
         creditCardServices.getCreditCards(targetUserId),
         creditCardServices.getInvoiceSummaries(targetUserId),
+        planningServices.getPlanning(targetUserId),
       ]);
       setCards(loadedCards);
       setInvoices(loadedInvoices);
+      setConsultantCardInvoices(planning?.consultantCardInvoices || []);
     } catch (error) {
       console.error("Erro ao carregar cartões/faturas", error);
       Alert.alert("Erro", "Não foi possível carregar os cartões");
@@ -225,6 +241,36 @@ export const CardsScreen: React.FC = () => {
               await loadData();
             } catch (error) {
               Alert.alert("Erro", "Não foi possível excluir o cartão");
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const handleDeleteExpense = (
+    expenseId: string,
+    description: string,
+    amount: number,
+  ) => {
+    Alert.alert(
+      "Excluir gasto",
+      `Deseja excluir o gasto "${description}" (${formatCurrency(amount)}) do cliente?`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Excluir",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setDeletingExpenseId(expenseId);
+              await expenseServices.deleteExpense(expenseId);
+              await loadData();
+            } catch (error) {
+              console.error("Erro ao excluir gasto do cartão:", error);
+              Alert.alert("Erro", "Não foi possível excluir o gasto.");
+            } finally {
+              setDeletingExpenseId(null);
             }
           },
         },
@@ -409,7 +455,12 @@ export const CardsScreen: React.FC = () => {
               </TouchableOpacity>
             </View>
 
-            <View style={styles.chipsRow}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.chipsScroll}
+              contentContainerStyle={styles.chipsScrollContent}
+            >
               <TouchableOpacity
                 style={[
                   styles.chip,
@@ -449,7 +500,7 @@ export const CardsScreen: React.FC = () => {
                   </Text>
                 </TouchableOpacity>
               ))}
-            </View>
+            </ScrollView>
 
             {loading ? (
               <Text style={{ color: colors.textSecondary }}>
@@ -460,7 +511,26 @@ export const CardsScreen: React.FC = () => {
                 Nenhuma fatura para o filtro selecionado.
               </Text>
             ) : (
-              filteredInvoices.map((invoice) => (
+              filteredInvoices.map((invoice) => {
+                const consultantInvoiceAmount = getConsultantCardInvoiceAmount(
+                  consultantCardInvoices,
+                  invoice.cardId,
+                  invoice.invoiceKey,
+                );
+                const consultantExpectedAmount =
+                  getConsultantCardInvoiceExpectedAmount(
+                    consultantCardInvoices,
+                    invoice.cardId,
+                    invoice.invoiceKey,
+                  );
+                const invoiceValueTotal = getConsultantCardInvoiceDisplayTotal(
+                  invoice.total,
+                  consultantCardInvoices,
+                  invoice.cardId,
+                  invoice.invoiceKey,
+                );
+
+                return (
                 <View
                   key={`${invoice.cardId}-${invoice.invoiceKey}`}
                   style={[styles.invoiceCard, { borderColor: colors.border }]}
@@ -483,6 +553,28 @@ export const CardsScreen: React.FC = () => {
                     {invoice.expenseCount} gasto
                     {invoice.expenseCount === 1 ? "" : "s"})
                   </Text>
+                  {consultantInvoiceAmount != null ? (
+                    <Text
+                      style={{
+                        color: colors.textSecondary,
+                        fontStyle: "italic",
+                        marginTop: 4,
+                      }}
+                    >
+                      Valor da fatura: {formatCurrency(invoiceValueTotal)}
+                    </Text>
+                  ) : null}
+                  {consultantExpectedAmount != null ? (
+                    <Text
+                      style={{
+                        color: colors.textSecondary,
+                        fontStyle: "italic",
+                        marginTop: 4,
+                      }}
+                    >
+                      Fatura esperada: {formatCurrency(consultantExpectedAmount)}
+                    </Text>
+                  ) : null}
 
                   <View style={{ marginTop: 8 }}>
                     {invoice.expenses.map((expense) => (
@@ -504,11 +596,35 @@ export const CardsScreen: React.FC = () => {
                         <Text style={{ color: colors.text }}>
                           {formatCurrency(expense.amount)}
                         </Text>
+                        {isConsultorManaging ? (
+                          <TouchableOpacity
+                            style={styles.deleteExpenseButton}
+                            onPress={() =>
+                              handleDeleteExpense(
+                                expense.id,
+                                expense.description,
+                                expense.amount,
+                              )
+                            }
+                            disabled={deletingExpenseId === expense.id}
+                          >
+                            {deletingExpenseId === expense.id ? (
+                              <ActivityIndicator size="small" color="#ff4d6d" />
+                            ) : (
+                              <Ionicons
+                                name="trash-outline"
+                                size={18}
+                                color="#ff4d6d"
+                              />
+                            )}
+                          </TouchableOpacity>
+                        ) : null}
                       </View>
                     ))}
                   </View>
                 </View>
-              ))
+                );
+              })
             )}
           </View>
         </ScrollView>
@@ -716,11 +832,19 @@ const styles = StyleSheet.create({
     minWidth: 62,
   },
   chipsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 },
+  chipsScroll: { marginTop: 10 },
+  chipsScrollContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingRight: 4,
+  },
   chip: {
     borderWidth: 1,
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 6,
+    flexShrink: 0,
   },
   invoiceCard: {
     borderWidth: 1,
@@ -733,6 +857,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     marginTop: 4,
+  },
+  deleteExpenseButton: {
+    marginLeft: 8,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#2a1318",
   },
   modalOverlay: {
     flex: 1,

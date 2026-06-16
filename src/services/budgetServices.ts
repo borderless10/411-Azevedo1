@@ -23,6 +23,9 @@ import {
   UpdateBudgetData,
   DailyExpense,
 } from "../types/budget";
+import expenseServices from "./expenseServices";
+import { getEndOfDay, getStartOfDay } from "../utils/dateUtils";
+import rankingPlanilhaService from "./rankingPlanilhaService";
 
 /**
  * Gerar ID único para o orçamento (userId_YYYY-MM)
@@ -84,6 +87,14 @@ export const budgetServices = {
             data.zeroConfirmedDaysNoRanking ??
             existing.zeroConfirmedDaysNoRanking ??
             [],
+          zeroPromptDismissedDays:
+            data.zeroPromptDismissedDays ??
+            existing.zeroPromptDismissedDays ??
+            [],
+          rankingPlanilhaEntries:
+            data.rankingPlanilhaEntries ??
+            existing.rankingPlanilhaEntries ??
+            [],
           createdAt: Timestamp.fromDate(existing.createdAt),
           updatedAt: Timestamp.fromDate(now),
         };
@@ -96,6 +107,8 @@ export const budgetServices = {
           dailyExpenses: data.dailyExpenses || [],
           zeroConfirmedDays: data.zeroConfirmedDays || [],
           zeroConfirmedDaysNoRanking: data.zeroConfirmedDaysNoRanking || [],
+          zeroPromptDismissedDays: data.zeroPromptDismissedDays || [],
+          rankingPlanilhaEntries: data.rankingPlanilhaEntries || [],
           createdAt: Timestamp.fromDate(now),
           updatedAt: Timestamp.fromDate(now),
         };
@@ -112,6 +125,8 @@ export const budgetServices = {
         dailyExpenses: budgetData.dailyExpenses,
         zeroConfirmedDays: budgetData.zeroConfirmedDays || [],
         zeroConfirmedDaysNoRanking: budgetData.zeroConfirmedDaysNoRanking || [],
+        zeroPromptDismissedDays: budgetData.zeroPromptDismissedDays || [],
+        rankingPlanilhaEntries: budgetData.rankingPlanilhaEntries || [],
         createdAt: budgetData.createdAt.toDate(),
         updatedAt: budgetData.updatedAt.toDate(),
       };
@@ -138,6 +153,8 @@ export const budgetServices = {
       dailyExpenses: [],
       zeroConfirmedDays: [],
       zeroConfirmedDaysNoRanking: [],
+      zeroPromptDismissedDays: [],
+      rankingPlanilhaEntries: [],
     });
   },
 
@@ -203,11 +220,23 @@ export const budgetServices = {
       const budget = await this.getBudget(userId, monthYear);
 
       if (!budget) {
-        // Se não existe, criar novo com o gasto
-        return this.saveBudget(userId, monthYear, {
+        const saved = await this.saveBudget(userId, monthYear, {
           monthlyBudget: 0,
           dailyExpenses: [{ day, amount }],
         });
+
+        if (amount > 0) {
+          const [year, month] = monthYear.split("-").map(Number);
+          const targetDate = new Date(year, month - 1, day);
+          await rankingPlanilhaService.recordPlanilhaRegistration(
+            userId,
+            targetDate,
+            new Date(),
+            "expense",
+          );
+        }
+
+        return saved;
       }
 
       // Atualizar array de gastos diários
@@ -230,12 +259,25 @@ export const budgetServices = {
       // Ordenar por dia
       updatedExpenses.sort((a, b) => a.day - b.day);
 
-      return this.saveBudget(userId, monthYear, {
+      const saved = await this.saveBudget(userId, monthYear, {
         monthlyBudget: budget.monthlyBudget,
         dailyExpenses: updatedExpenses,
         zeroConfirmedDays: updatedZeroConfirmedDays,
         zeroConfirmedDaysNoRanking: updatedZeroNoRankingDays,
       });
+
+      if (amount > 0) {
+        const [year, month] = monthYear.split("-").map(Number);
+        const targetDate = new Date(year, month - 1, day);
+        await rankingPlanilhaService.recordPlanilhaRegistration(
+          userId,
+          targetDate,
+          new Date(),
+          "expense",
+        );
+      }
+
+      return saved;
     } catch (error) {
       console.error(
         "❌ [BUDGET SERVICE] Erro ao atualizar gasto diário:",
@@ -252,11 +294,18 @@ export const budgetServices = {
     const budget = await this.getBudget(userId, monthYear);
 
     if (!budget) {
-      return this.saveBudget(userId, monthYear, {
+      const saved = await this.saveBudget(userId, monthYear, {
         monthlyBudget: 0,
         dailyExpenses: [{ day, amount: 0 }],
         zeroConfirmedDays: [day],
       });
+      await rankingPlanilhaService.recordPlanilhaRegistration(
+        userId,
+        date,
+        new Date(),
+        "zero",
+      );
+      return saved;
     }
 
     const dailyExpenses = [...(budget.dailyExpenses || [])];
@@ -277,7 +326,7 @@ export const budgetServices = {
     );
     zeroNoRankingSet.delete(day);
 
-    return this.saveBudget(userId, monthYear, {
+    const saved = await this.saveBudget(userId, monthYear, {
       monthlyBudget: budget.monthlyBudget,
       dailyExpenses,
       zeroConfirmedDays: Array.from(zeroConfirmedSet).sort((a, b) => a - b),
@@ -285,6 +334,15 @@ export const budgetServices = {
         (a, b) => a - b,
       ),
     });
+
+    await rankingPlanilhaService.recordPlanilhaRegistration(
+      userId,
+      date,
+      new Date(),
+      "zero",
+    );
+
+    return saved;
   },
 
   async confirmZeroExpenseDayNoRanking(
@@ -334,20 +392,71 @@ export const budgetServices = {
     });
   },
 
-  async isZeroExpenseDayConfirmed(
+  async isDayExpensePromptResolved(
     userId: string,
     date: Date,
   ): Promise<boolean> {
     const monthYear = getMonthYearFromDate(date);
     const day = date.getDate();
     const budget = await this.getBudget(userId, monthYear);
-    if (!budget) return false;
-    return (budget.zeroConfirmedDays || []).includes(day);
+
+    if (budget) {
+      if ((budget.zeroConfirmedDays || []).includes(day)) return true;
+      if ((budget.zeroConfirmedDaysNoRanking || []).includes(day)) return true;
+      if ((budget.zeroPromptDismissedDays || []).includes(day)) return true;
+
+      const dailyEntry = (budget.dailyExpenses || []).find(
+        (item) => item.day === day,
+      );
+      if (dailyEntry && dailyEntry.amount > 0) return true;
+    }
+
+    const expenses = await expenseServices.getExpenses(userId, {
+      startDate: getStartOfDay(date),
+      endDate: getEndOfDay(date),
+    });
+
+    const total = expenses.reduce((sum, item) => sum + item.value, 0);
+    return total > 0;
   },
 
-  /**
-   * Buscar todos os orçamentos do usuário
-   */
+  async dismissExpensePromptForDay(
+    userId: string,
+    date: Date,
+  ): Promise<Budget> {
+    const monthYear = getMonthYearFromDate(date);
+    const day = date.getDate();
+    const budget = await this.getBudget(userId, monthYear);
+
+    if (!budget) {
+      return this.saveBudget(userId, monthYear, {
+        monthlyBudget: 0,
+        dailyExpenses: [],
+        zeroConfirmedDays: [],
+        zeroConfirmedDaysNoRanking: [],
+        zeroPromptDismissedDays: [day],
+      });
+    }
+
+    const dismissedSet = new Set<number>(budget.zeroPromptDismissedDays || []);
+    dismissedSet.add(day);
+
+    return this.saveBudget(userId, monthYear, {
+      monthlyBudget: budget.monthlyBudget,
+      dailyExpenses: budget.dailyExpenses,
+      zeroConfirmedDays: budget.zeroConfirmedDays,
+      zeroConfirmedDaysNoRanking: budget.zeroConfirmedDaysNoRanking,
+      zeroPromptDismissedDays: Array.from(dismissedSet).sort((a, b) => a - b),
+    });
+  },
+
+  async syncRankingPenalties(
+    userId: string,
+    asOfDate: Date = new Date(),
+  ): Promise<void> {
+    await rankingPlanilhaService.applyMissedPenalties(userId, asOfDate);
+  },
+
   async getAllBudgets(userId: string): Promise<Budget[]> {
     console.log("💰 [BUDGET SERVICE] Buscando todos os orçamentos...");
 

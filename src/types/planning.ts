@@ -61,6 +61,7 @@ export interface Planning {
   bills?: Bill[]; // contas fixas/recorrentes cadastradas pelo consultor
   expectedIncomes?: ExpectedItem[]; // rendas esperadas
   expectedExpenses?: ExpectedItem[]; // gastos esperados
+  consultantCardInvoices?: ConsultantCardInvoice[];
   notes?: string; // observações do consultor
   createdAt: Date;
   updatedAt: Date;
@@ -82,6 +83,7 @@ export interface PlanningFirestore {
   bills?: BillFirestore[];
   expectedIncomes?: ExpectedItemFirestore[];
   expectedExpenses?: ExpectedItemFirestore[];
+  consultantCardInvoices?: ConsultantCardInvoiceFirestore[];
   notes?: string;
   createdAt: Timestamp;
   updatedAt: Timestamp;
@@ -101,6 +103,7 @@ export interface CreatePlanningData {
   plannedByCategory?: PlannedByCategory;
   modules?: ModuleConfig[];
   notes?: string;
+  consultantCardInvoices?: ConsultantCardInvoice[];
 }
 
 export interface UpdatePlanningData {
@@ -116,9 +119,26 @@ export interface UpdatePlanningData {
   plannedByCategory?: PlannedByCategory;
   modules?: ModuleConfig[];
   notes?: string;
+  consultantCardInvoices?: ConsultantCardInvoice[];
 }
 
 // ---- New types for consultant-managed items ----
+export interface ConsultantCardInvoice {
+  cardId: string;
+  invoiceKey: string;
+  amount: number;
+  expectedAmount?: number;
+  updatedAt?: Date;
+}
+
+export interface ConsultantCardInvoiceFirestore {
+  cardId: string;
+  invoiceKey: string;
+  amount: number;
+  expectedAmount?: number;
+  updatedAt?: Timestamp;
+}
+
 export interface Bill {
   id?: string;
   name: string;

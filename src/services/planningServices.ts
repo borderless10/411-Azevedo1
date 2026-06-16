@@ -15,6 +15,8 @@ import {
   BillFirestore,
   ExpectedItem,
   ExpectedItemFirestore,
+  ConsultantCardInvoice,
+  ConsultantCardInvoiceFirestore,
 } from "../types/planning";
 import { userService } from "./userServices";
 import { activityServices } from "./activityServices";
@@ -227,6 +229,19 @@ export const planningServices = {
         updatedAt: it.updatedAt ? it.updatedAt.toDate() : undefined,
       }));
 
+      const consultantCardInvoices = (data.consultantCardInvoices || []).map(
+        (item) => ({
+          cardId: item.cardId,
+          invoiceKey: item.invoiceKey,
+          amount: Number(item.amount || 0),
+          expectedAmount:
+            item.expectedAmount !== undefined && item.expectedAmount !== null
+              ? Number(item.expectedAmount)
+              : undefined,
+          updatedAt: item.updatedAt ? item.updatedAt.toDate() : undefined,
+        }),
+      );
+
       return {
         id: snap.id,
         consultantId: data.consultantId,
@@ -251,6 +266,7 @@ export const planningServices = {
         bills,
         expectedIncomes,
         expectedExpenses,
+        consultantCardInvoices,
         createdAt: data.createdAt.toDate(),
         updatedAt: data.updatedAt.toDate(),
       } as Planning;
@@ -882,6 +898,7 @@ export const planningServices = {
         amountCard: bill.amountCard,
         amountCash: bill.amountCash,
         notes: bill.notes || "",
+        status: "pending" as const,
         createdAt: now,
         updatedAt: now,
       };
@@ -932,6 +949,85 @@ export const planningServices = {
       } as Bill;
     } catch (error) {
       console.error("❌ [PLANNING SERVICE] Erro ao adicionar bill:", error);
+      throw error;
+    }
+  },
+
+  /** Cliente adiciona conta ao próprio planejamento (sem consultor). */
+  async addBillByClient(
+    userId: string,
+    bill: Pick<Bill, "name" | "amount"> & {
+      notes?: string;
+      dueDay?: number;
+      dueDate?: Date;
+      paymentMethod?: string;
+    },
+  ): Promise<Bill> {
+    try {
+      const docRef = getUserPlanningDoc(userId);
+      const snap = await getDoc(docRef);
+      const now = Timestamp.now();
+
+      if (!snap.exists()) {
+        const targetUser = await userService.getUserById(userId);
+        await setDoc(docRef, {
+          consultantId: (targetUser as any)?.consultantId || userId,
+          createdAt: now,
+          updatedAt: now,
+          bills: [],
+          expectedIncomes: [],
+          expectedExpenses: [],
+        });
+      }
+
+      const id = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+      const billFs: any = {
+        id,
+        name: bill.name,
+        amount: bill.amount,
+        paymentMethod: bill.paymentMethod || "cash",
+        recurring: false,
+        dailyTracking: false,
+        notes: bill.notes || "",
+        status: "pending",
+        createdAt: now,
+        updatedAt: now,
+      };
+      if (bill.dueDay !== undefined && bill.dueDay !== null) {
+        billFs.dueDay = bill.dueDay;
+      }
+      if (bill.dueDate) {
+        billFs.dueDate = Timestamp.fromDate(bill.dueDate);
+      }
+
+      const currentSnap = await getDoc(docRef);
+      const current = currentSnap.exists() ? (currentSnap.data() as any) : {};
+      const existing: BillFirestore[] = current.bills || [];
+      const updated = [...existing, billFs];
+
+      await updateDoc(docRef, {
+        bills: updated.map((billItem) =>
+          removeUndefinedFields(billItem as any),
+        ),
+        updatedAt: now,
+      });
+
+      return {
+        id,
+        name: bill.name,
+        amount: bill.amount,
+        paymentMethod: bill.paymentMethod || "cash",
+        dueDay: bill.dueDay,
+        dueDate: bill.dueDate,
+        notes: bill.notes,
+        status: "pending",
+        recurring: false,
+        dailyTracking: false,
+        createdAt: now.toDate(),
+        updatedAt: now.toDate(),
+      } as Bill;
+    } catch (error) {
+      console.error("❌ [PLANNING SERVICE] Erro ao adicionar bill (cliente):", error);
       throw error;
     }
   },
@@ -1008,6 +1104,32 @@ export const planningServices = {
       await updateDoc(docRef, { bills: filtered, updatedAt: now });
     } catch (error) {
       console.error("❌ [PLANNING SERVICE] Erro ao deletar bill:", error);
+      throw error;
+    }
+  },
+
+  /** Cliente remove conta do próprio planejamento. */
+  async deleteBillByClient(userId: string, billId: string): Promise<void> {
+    try {
+      const docRef = getUserPlanningDoc(userId);
+      const snap = await getDoc(docRef);
+      if (!snap.exists()) throw new Error("Planning não encontrado");
+
+      const now = Timestamp.now();
+      const data = snap.data() as any;
+      const bills: BillFirestore[] = data.bills || [];
+      const filtered = bills.filter((b) => b.id !== billId);
+
+      if (filtered.length === bills.length) {
+        throw new Error("Conta não encontrada no planejamento");
+      }
+
+      await updateDoc(docRef, { bills: filtered, updatedAt: now });
+    } catch (error) {
+      console.error(
+        "❌ [PLANNING SERVICE] Erro ao deletar bill (cliente):",
+        error,
+      );
       throw error;
     }
   },
@@ -1344,6 +1466,16 @@ export const planningServices = {
     }
   },
 
+  // Marca uma bill do planning como paga — consultor no cliente vinculado
+  async markBillAsPaidByConsultor(
+    consultantId: string,
+    clientId: string,
+    billId: string,
+  ) {
+    await planningServices.ensureOwnerOrAdmin(consultantId, clientId);
+    return planningServices.markBillAsPaidByClient(clientId, billId);
+  },
+
   // Marca uma bill do planning como paga — pode ser chamado pelo cliente
   async markBillAsPaidByClient(userId: string, billId: string) {
     try {
@@ -1456,6 +1588,117 @@ export const planningServices = {
       throw error;
     }
   },
+
+  async upsertConsultantCardInvoice(
+    consultantId: string,
+    userId: string,
+    entry: {
+      cardId: string;
+      invoiceKey: string;
+      amount?: number;
+      expectedAmount?: number;
+    },
+  ): Promise<ConsultantCardInvoice[]> {
+    await planningServices.ensureOwnerOrAdmin(consultantId, userId);
+
+    const docRef = getUserPlanningDoc(userId);
+    const snap = await getDoc(docRef);
+    const now = Timestamp.now();
+    const existingData = snap.exists() ? (snap.data() as PlanningFirestore) : null;
+    const currentEntries: ConsultantCardInvoiceFirestore[] =
+      existingData?.consultantCardInvoices || [];
+
+    const previous = currentEntries.find(
+      (item) =>
+        item.cardId === entry.cardId &&
+        item.invoiceKey === entry.invoiceKey,
+    );
+
+    const nextEntries: ConsultantCardInvoiceFirestore[] = currentEntries.filter(
+      (item) =>
+        !(
+          item.cardId === entry.cardId &&
+          item.invoiceKey === entry.invoiceKey
+        ),
+    );
+
+    nextEntries.push({
+      cardId: entry.cardId,
+      invoiceKey: entry.invoiceKey,
+      amount:
+        entry.amount !== undefined
+          ? Number(entry.amount) || 0
+          : Number(previous?.amount || 0),
+      expectedAmount:
+        entry.expectedAmount !== undefined
+          ? Number(entry.expectedAmount) || 0
+          : previous?.expectedAmount !== undefined
+            ? Number(previous.expectedAmount)
+            : undefined,
+      updatedAt: now,
+    });
+
+    await setDoc(
+      docRef,
+      {
+        consultantId,
+        consultantCardInvoices: nextEntries,
+        updatedAt: now,
+        ...(snap.exists() ? {} : { createdAt: now }),
+      },
+      { merge: true },
+    );
+
+    return nextEntries.map((item) => ({
+      cardId: item.cardId,
+      invoiceKey: item.invoiceKey,
+      amount: Number(item.amount || 0),
+      expectedAmount:
+        item.expectedAmount !== undefined && item.expectedAmount !== null
+          ? Number(item.expectedAmount)
+          : undefined,
+      updatedAt: item.updatedAt ? item.updatedAt.toDate() : undefined,
+    }));
+  },
+};
+
+export const getConsultantCardInvoiceAmount = (
+  invoices: ConsultantCardInvoice[] | undefined,
+  cardId: string | undefined,
+  invoiceKey: string,
+): number | null => {
+  if (!cardId || !invoiceKey || !invoices?.length) return null;
+  const match = invoices.find(
+    (item) => item.cardId === cardId && item.invoiceKey === invoiceKey,
+  );
+  return match ? Number(match.amount) : null;
+};
+
+export const getConsultantCardInvoiceExpectedAmount = (
+  invoices: ConsultantCardInvoice[] | undefined,
+  cardId: string | undefined,
+  invoiceKey: string,
+): number | null => {
+  if (!cardId || !invoiceKey || !invoices?.length) return null;
+  const match = invoices.find(
+    (item) => item.cardId === cardId && item.invoiceKey === invoiceKey,
+  );
+  if (!match || match.expectedAmount === undefined) return null;
+  return Number(match.expectedAmount);
+};
+
+export const getConsultantCardInvoiceDisplayTotal = (
+  expenseTotal: number,
+  invoices: ConsultantCardInvoice[] | undefined,
+  cardId: string | undefined,
+  invoiceKey: string,
+): number => {
+  const consultantAmount = getConsultantCardInvoiceAmount(
+    invoices,
+    cardId,
+    invoiceKey,
+  );
+  return expenseTotal + (consultantAmount ?? 0);
 };
 
 export default planningServices;

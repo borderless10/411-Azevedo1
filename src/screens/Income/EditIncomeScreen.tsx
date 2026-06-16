@@ -277,7 +277,7 @@ export const EditIncomeScreen = () => {
                   />
                   <TextInput
                     style={styles.input}
-                    placeholder="Ex: Salário do mês, Freelance, Venda de item"
+                    placeholder="Ex: Salário do mês, Freelancer, Venda de item"
                     placeholderTextColor="#999"
                     value={description}
                     onChangeText={handleDescriptionChange}
