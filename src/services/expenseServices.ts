@@ -35,6 +35,7 @@ import { formatCurrency } from "../utils/currencyUtils";
 import { activityServices } from "./activityServices";
 import { creditCardServices } from "./creditCardServices";
 import { toExpenseCategoryLookupKey } from "../types/category";
+import { filterGeneralHistoryExpenses } from "../utils/expenseScopeUtils";
 
 /**
  * Validar dados de criação de gasto
@@ -155,6 +156,10 @@ export const expenseServices = {
         expenseData.isConsumoModerado = true;
       }
 
+      if (data.isTrackedDaily) {
+        expenseData.isTrackedDaily = true;
+      }
+
       if (data.sourceBillId) {
         expenseData.sourceBillId = data.sourceBillId;
       }
@@ -194,6 +199,7 @@ export const expenseServices = {
           ? { autoDebitInvoiceKey: data.autoDebitInvoiceKey }
           : {}),
         ...(data.isConsumoModerado ? { isConsumoModerado: true } : {}),
+        ...(data.isTrackedDaily ? { isTrackedDaily: true } : {}),
         ...(data.sourceBillId ? { sourceBillId: data.sourceBillId } : {}),
         createdAt: now,
         updatedAt: now,
@@ -332,6 +338,10 @@ export const expenseServices = {
         expenses = expenses.filter((expense) =>
           expense.description.toLowerCase().includes(searchLower),
         );
+      }
+
+      if (filters?.excludeSectionOnly) {
+        expenses = filterGeneralHistoryExpenses(expenses);
       }
 
       // Ordenar por data (mais recente primeiro)
@@ -583,6 +593,7 @@ export const expenseServices = {
     userId: string,
     startDate?: Date,
     endDate?: Date,
+    options?: { excludeSectionOnly?: boolean },
   ): Promise<number> {
     console.log("💸 [EXPENSE SERVICE] Calculando total de gastos...");
 
@@ -590,6 +601,7 @@ export const expenseServices = {
       const expenses = await this.getExpenses(userId, {
         startDate,
         endDate,
+        excludeSectionOnly: options?.excludeSectionOnly,
       });
 
       const total = expenses.reduce((sum, expense) => sum + expense.value, 0);
@@ -701,6 +713,7 @@ export const expenseServices = {
     userId: string,
     startDate?: Date,
     endDate?: Date,
+    options?: { excludeSectionOnly?: boolean },
   ): Promise<ExpenseByCategory[]> {
     console.log("💸 [EXPENSE SERVICE] Agrupando gastos por categoria...");
 
@@ -708,6 +721,7 @@ export const expenseServices = {
       const expenses = await this.getExpenses(userId, {
         startDate,
         endDate,
+        excludeSectionOnly: options?.excludeSectionOnly,
       });
 
       // Agrupar por categoria

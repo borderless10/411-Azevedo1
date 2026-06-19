@@ -22,7 +22,11 @@ import { Layout } from "../../components/Layout/Layout";
 import { useAuth } from "../../contexts/AuthContext";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useNavigation } from "../../routes/NavigationContext";
-import { formatCurrency } from "../../utils/currencyUtils";
+import {
+  DECIMAL_INPUT_KEYBOARD,
+  formatCurrency,
+  sanitizeDecimalInput,
+} from "../../utils/currencyUtils";
 import {
   createBill,
   getBills,
@@ -33,6 +37,7 @@ import {
   updateOverdueBills,
 } from "../../services/billServices";
 import { planningServices } from "../../services/planningServices";
+import { isPayablePlanningBill } from "../../types/planning";
 import expenseServices from "../../services/expenseServices";
 import {
   scheduleBillNotification,
@@ -299,7 +304,9 @@ export const BillsScreen = () => {
           });
         }
         const mapping_result = { mapped: 0, expectedExpenses: 0 };
-        const mapped = (planning?.bills || []).map((b) => {
+        const mapped = (planning?.bills || [])
+          .filter(isPayablePlanningBill)
+          .map((b) => {
           mapping_result.mapped++;
           // create a reasonable dueDate from dueDay if available
           let dueDate: Date = b.dueDate || b.createdAt || new Date();
@@ -339,9 +346,10 @@ export const BillsScreen = () => {
           } as Bill;
         });
 
-        // Mapear Expected Expenses como contas também
-        const mappedExpectedExpenses = (planning?.expectedExpenses || []).map(
-          (exp) => {
+        // Mapear gastos esperados pontuais (somente contas, sem acompanhamento diário)
+        const mappedExpectedExpenses = (planning?.expectedExpenses || [])
+          .filter(isPayablePlanningBill)
+          .map((exp) => {
             mapping_result.expectedExpenses++;
             // Usar o expectedMonth para calcular uma data estimada
             let dueDate = new Date();
@@ -367,8 +375,7 @@ export const BillsScreen = () => {
               updatedAt: exp.updatedAt || new Date(),
               _isExpectedExpense: true as any,
             } as Bill;
-          },
-        );
+          });
 
         // Mesclar bills e expected expenses
         if (__DEV__) {
@@ -1175,10 +1182,10 @@ export const BillsScreen = () => {
                         },
                       ]}
                       value={amount}
-                      onChangeText={setAmount}
-                      placeholder="Ex: 150.00"
+                      onChangeText={(text) => setAmount(sanitizeDecimalInput(text))}
+                      placeholder="Ex: 150,00"
                       placeholderTextColor={colors.placeholder}
-                      keyboardType="numeric"
+                      keyboardType={DECIMAL_INPUT_KEYBOARD}
                     />
                   </View>
 

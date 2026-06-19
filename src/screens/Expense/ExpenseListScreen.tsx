@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Tela de Listagem de Gastos
  */
 
@@ -49,6 +49,7 @@ export const ExpenseListScreen = () => {
       console.log("💸 Carregando gastos...");
       const data = await expenseServices.getExpenses(user.id, {
         ...(paymentFilter !== "all" ? { paymentMethod: paymentFilter } : {}),
+        excludeSectionOnly: true,
       });
       setExpenses(data);
 

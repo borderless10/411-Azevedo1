@@ -31,6 +31,7 @@ import ExpenseCreatedModal from "../../components/ui/ExpenseCreatedModal";
 import { creditCardServices } from "../../services/creditCardServices";
 import { markBillAsPaid, createBill } from "../../services/billServices";
 import { isBillUnpaid } from "../../types/bill";
+import { isPayablePlanningBill } from "../../types/planning";
 import { CreditCard } from "../../types/creditCard";
 import { Bill } from "../../types/planning";
 
@@ -92,6 +93,10 @@ export const AddExpenseScreen = () => {
   const [loading, setLoading] = useState(false);
   const [successModalVisible, setSuccessModalVisible] = useState(false);
   const [savedValueForModal, setSavedValueForModal] = useState(0);
+  const [lastSavedExpenseType, setLastSavedExpenseType] = useState<
+    "consumption" | "tracked" | "bill" | null
+  >(null);
+  const [lastSavedTrackedTitle, setLastSavedTrackedTitle] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   // Carregar cards e dados de planejamento
@@ -121,7 +126,9 @@ export const AddExpenseScreen = () => {
           setTrackedExpenses(tracked);
 
           // Extrair contas a serem pagas
-          const unpaidBills = (planning.bills || []).filter(isBillUnpaid);
+          const unpaidBills = (planning.bills || [])
+            .filter(isBillUnpaid)
+            .filter(isPayablePlanningBill);
           setBills(unpaidBills);
           if (unpaidBills.length === 0) {
             setBillSourceMode("custom");
@@ -166,8 +173,19 @@ export const AddExpenseScreen = () => {
     const prefillExpenseType = String(params?.prefillExpenseType || "");
     if (prefillExpenseType === "bill") {
       setExpenseType("bill");
+    } else if (prefillExpenseType === "tracked") {
+      setExpenseType("tracked");
+    } else if (prefillExpenseType === "consumption") {
+      setExpenseType("consumption");
     }
   }, [params?.prefillExpenseType]);
+
+  useEffect(() => {
+    const prefillTrackedTitle = String(params?.prefillTrackedTitle || "").trim();
+    if (prefillTrackedTitle) {
+      setTrackedTitle(prefillTrackedTitle);
+    }
+  }, [params?.prefillTrackedTitle]);
 
   useEffect(() => {
     const prefillBillId = String(params?.prefillBillId || "");
@@ -193,6 +211,9 @@ export const AddExpenseScreen = () => {
     }
     if (!consumoDescription.trim()) {
       newErrors.consumoDescription = "Descrição é obrigatória";
+    } else if (consumoDescription.trim().length < 3) {
+      newErrors.consumoDescription =
+        "Descrição deve ter pelo menos 3 caracteres";
     }
     if (consumoPayment === "card" && !consumoSelectedCardId) {
       newErrors.consumoCard = "Selecione um cartão";
@@ -312,6 +333,8 @@ export const AddExpenseScreen = () => {
 
         await expenseServices.createExpense(user.id, expenseData);
         setSavedValueForModal(consumoValue);
+        setLastSavedExpenseType("consumption");
+        setLastSavedTrackedTitle("");
       } else if (expenseType === "tracked") {
         // Criar expense comum mas com descrição do tracked e dailyTracking flag
         const expenseData = {
@@ -320,6 +343,7 @@ export const AddExpenseScreen = () => {
           date: trackedDate,
           category: "Acompanhamento Diário",
           paymentMethod: trackedPayment,
+          isTrackedDaily: true,
           ...(trackedPayment === "credit_card" && trackedSelectedCardId
             ? { cardId: trackedSelectedCardId }
             : {}),
@@ -327,6 +351,8 @@ export const AddExpenseScreen = () => {
 
         await expenseServices.createExpense(user.id, expenseData);
         setSavedValueForModal(trackedValue);
+        setLastSavedExpenseType("tracked");
+        setLastSavedTrackedTitle(trackedTitle);
       } else if (expenseType === "bill") {
         if (billSourceMode === "custom") {
           const title = billCustomTitle.trim();
@@ -392,6 +418,8 @@ export const AddExpenseScreen = () => {
         }
 
         setSavedValueForModal(billAmount);
+        setLastSavedExpenseType("bill");
+        setLastSavedTrackedTitle("");
       }
 
       setLoading(false);
@@ -406,6 +434,50 @@ export const AddExpenseScreen = () => {
   const handleCancel = () => {
     navigateToReturnScreen();
   };
+
+  const navigateAfterSave = () => {
+    if (lastSavedExpenseType === "tracked" && lastSavedTrackedTitle) {
+      navigate("CategoryBudget", { trackedTitle: lastSavedTrackedTitle });
+      return;
+    }
+
+    if (lastSavedExpenseType === "consumption") {
+      navigate("Budget");
+      return;
+    }
+
+    navigateToReturnScreen();
+  };
+
+  const handleViewSavedExpense = () => {
+    setSuccessModalVisible(false);
+
+    if (lastSavedExpenseType === "tracked" && lastSavedTrackedTitle) {
+      navigate("CategoryBudget", { trackedTitle: lastSavedTrackedTitle });
+      return;
+    }
+
+    if (lastSavedExpenseType === "consumption") {
+      navigate("Budget");
+      return;
+    }
+
+    navigate("ExpenseList");
+  };
+
+  const successModalMessage =
+    lastSavedExpenseType === "tracked" && lastSavedTrackedTitle
+      ? `Registrado no acompanhamento de ${lastSavedTrackedTitle}.`
+      : lastSavedExpenseType === "consumption"
+        ? "Registrado no consumo moderado do ciclo."
+        : "Seu gasto foi registrado com sucesso.";
+
+  const successModalViewLabel =
+    lastSavedExpenseType === "tracked"
+      ? "Ver histórico"
+      : lastSavedExpenseType === "consumption"
+        ? "Ver consumo moderado"
+        : "Ver gastos";
 
   return (
     <Layout title="Adicionar Gasto" showBackButton={true} showSidebar={false}>
@@ -1165,14 +1237,13 @@ export const AddExpenseScreen = () => {
         <ExpenseCreatedModal
           visible={successModalVisible}
           amount={savedValueForModal}
+          message={successModalMessage}
+          viewListLabel={successModalViewLabel}
           onClose={() => {
             setSuccessModalVisible(false);
-            navigateToReturnScreen();
+            navigateAfterSave();
           }}
-          onViewList={() => {
-            setSuccessModalVisible(false);
-            navigate("ExpenseList");
-          }}
+          onViewList={handleViewSavedExpense}
           onAddAnother={() => {
             setSuccessModalVisible(false);
           }}

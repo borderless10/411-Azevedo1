@@ -184,7 +184,7 @@ export interface ExpectedItem {
   amountCard?: number;
   amountCash?: number;
   dailyTracking?: boolean;
-  expectedMonth?: string; // opcional, formato YYYY-MM
+  expectedMonth?: string; // opcional, formato DD/MM (legado: YYYY-MM)
   paymentMethod?: string; // 'card' | 'cash' | 'pix' etc.
   categoryId?: string;
   notes?: string;
@@ -206,5 +206,10 @@ export interface ExpectedItemFirestore {
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
+
+/** Conta real a pagar — exclui gastos com acompanhamento diário. */
+export const isPayablePlanningBill = (entry?: {
+  dailyTracking?: boolean;
+}): boolean => !Boolean(entry?.dailyTracking);
 
 export default Planning;

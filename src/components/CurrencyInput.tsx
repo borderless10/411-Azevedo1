@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Input com máscara de moeda brasileira (R$)
  */
 
@@ -6,8 +6,10 @@ import React, { useEffect, useState } from "react";
 import { View, Text, TextInput, StyleSheet, ViewStyle } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import {
+  DECIMAL_INPUT_KEYBOARD,
   formatCurrencyWithoutSymbol,
   parseCurrency,
+  sanitizeDecimalInput,
 } from "../utils/currencyUtils";
 
 interface CurrencyInputProps {
@@ -46,15 +48,16 @@ export const CurrencyInput: React.FC<CurrencyInputProps> = ({
       return;
     }
 
-    const numericValue = parseCurrency(text);
-    setDisplayValue(text);
+    const sanitized = sanitizeDecimalInput(text);
+    const numericValue = parseCurrency(sanitized);
+    setDisplayValue(sanitized);
     onChangeValue(numericValue);
   };
 
   const handleFocus = () => {
     setIsFocused(true);
     if (value > 0) {
-      setDisplayValue(String(value));
+      setDisplayValue(formatCurrencyWithoutSymbol(value));
     }
   };
 
@@ -89,7 +92,7 @@ export const CurrencyInput: React.FC<CurrencyInputProps> = ({
           onChangeText={handleChangeText}
           onFocus={handleFocus}
           onBlur={handleBlur}
-          keyboardType="numeric"
+          keyboardType={DECIMAL_INPUT_KEYBOARD}
           editable={editable}
         />
         {error ? (

@@ -371,8 +371,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const signOut = async (): Promise<void> => {
     try {
       setLoading(true);
-      await authServices.logout();
       setUser(null);
+      await authServices.logout();
     } catch (error: any) {
       if (__DEV__) {
         console.log("Erro ao fazer logout:", error);

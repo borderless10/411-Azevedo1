@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Tela de Metas Financeiras
  */
 
@@ -20,7 +20,11 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { Layout } from "../../components/Layout/Layout";
 import { useNavigation } from "../../routes/NavigationContext";
-import { formatCurrency } from "../../utils/currencyUtils";
+import {
+  DECIMAL_INPUT_KEYBOARD,
+  formatCurrency,
+  sanitizeDecimalInput,
+} from "../../utils/currencyUtils";
 import { useAuth } from "../../contexts/AuthContext";
 import { goalServices } from "../../services/goalServices";
 import {
@@ -608,9 +612,11 @@ export const MetasScreen = () => {
                   style={styles.input}
                   placeholder="0,00"
                   placeholderTextColor="#666"
-                  keyboardType="numeric"
+                  keyboardType={DECIMAL_INPUT_KEYBOARD}
                   value={newGoalTarget}
-                  onChangeText={setNewGoalTarget}
+                  onChangeText={(text) =>
+                    setNewGoalTarget(sanitizeDecimalInput(text))
+                  }
                 />
               </View>
 
@@ -768,9 +774,11 @@ export const MetasScreen = () => {
                     style={styles.input}
                     placeholder="0,00"
                     placeholderTextColor="#666"
-                    keyboardType="numeric"
+                    keyboardType={DECIMAL_INPUT_KEYBOARD}
                     value={contributionAmount}
-                    onChangeText={setContributionAmount}
+                    onChangeText={(text) =>
+                      setContributionAmount(sanitizeDecimalInput(text))
+                    }
                   />
                 </View>
 

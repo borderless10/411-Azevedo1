@@ -11,6 +11,11 @@ import {
   Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import {
+  DECIMAL_INPUT_KEYBOARD,
+  parseCurrency,
+  sanitizeDecimalInput,
+} from "../../utils/currencyUtils";
 
 type Props = {
   visible: boolean;
@@ -19,12 +24,6 @@ type Props = {
   onConfirmZero: () => void;
   onConfirmExpense: (amount: number) => void;
   onCancel: () => void;
-};
-
-const parseAmount = (raw: string): number => {
-  const normalized = raw.replace(/[^0-9.,]/g, "").replace(",", ".");
-  const parsed = parseFloat(normalized);
-  return Number.isFinite(parsed) ? parsed : 0;
 };
 
 const ZeroPlanilhaConfirmModal: React.FC<Props> = ({
@@ -48,9 +47,10 @@ const ZeroPlanilhaConfirmModal: React.FC<Props> = ({
   }, [visible, dayLabel]);
 
   const handleSaveExpense = () => {
-    const amount = parseAmount(amountText);
+    const amount = parseCurrency(amountText);
     if (amount <= 0) {
-      setAmountError("Informe um valor maior que zero");
+      setAmountError("");
+      onConfirmZero();
       return;
     }
     setAmountError("");
@@ -113,19 +113,20 @@ const ZeroPlanilhaConfirmModal: React.FC<Props> = ({
             <>
               <Text style={styles.title}>Qual foi o gasto?</Text>
               <Text style={styles.message}>
-                Informe o valor gasto no dia {dayLabel}.
+                Informe o valor gasto no dia {dayLabel}. Use 0 para registrar
+                zero na planilha.
               </Text>
 
               <TextInput
                 style={[styles.input, amountError ? styles.inputError : null]}
                 value={amountText}
                 onChangeText={(text) => {
-                  setAmountText(text);
+                  setAmountText(sanitizeDecimalInput(text));
                   if (amountError) setAmountError("");
                 }}
                 placeholder="0,00"
                 placeholderTextColor="#6b6480"
-                keyboardType="decimal-pad"
+                keyboardType={DECIMAL_INPUT_KEYBOARD}
                 autoFocus
               />
               {amountError ? (

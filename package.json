@@ -14,6 +14,7 @@
     "build:apk": "cd android && ./gradlew assembleRelease",
     "build:apk:clean": "cd android && ./gradlew clean assembleRelease",
     "lint": "tsc --noEmit",
+    "seed:users": "node scripts/seed-demo-users.mjs",
     "eas:build:dev": "eas build --profile development --platform android",
     "eas:build:preview": "eas build --profile preview --platform android",
     "eas:build:production": "eas build --profile production --platform android",

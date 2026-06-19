@@ -17,7 +17,13 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Layout } from "../../components/Layout/Layout";
-import { formatCurrency } from "../../utils/currencyUtils";
+import {
+  DECIMAL_INPUT_KEYBOARD,
+  formatCurrency,
+  formatCurrencyWithoutSymbol,
+  parseCurrency,
+  sanitizeDecimalInput,
+} from "../../utils/currencyUtils";
 import { useAuth } from "../../contexts/AuthContext";
 import { useNavigation } from "../../routes/NavigationContext";
 import {
@@ -29,13 +35,17 @@ import {
   getPlanningCycleLabel,
   planningServices,
 } from "../../services/planningServices";
-import { getStartOfDay, getEndOfDay, addDays } from "../../utils/dateUtils";
+import { getStartOfDay, getEndOfDay, addDays, formatExpectedMonthLabel } from "../../utils/dateUtils";
 import { DailyExpense } from "../../types/budget";
 import {
   requestNotificationPermissions,
   scheduleDailyExpenseReminder,
   cancelDailyExpenseReminder,
 } from "../../services/notificationServices";
+import ConfettiCelebration from "../../components/ui/ConfettiCelebration";
+import {
+  isTrackedDailyExpense,
+} from "../../utils/expenseScopeUtils";
 
 export const BudgetScreen = () => {
   const { user } = useAuth();
@@ -64,6 +74,7 @@ export const BudgetScreen = () => {
   const [cycleDateEnd, setCycleDateEnd] = useState<Date | null>(null);
   const [plannedCycleDurationDays, setPlannedCycleDurationDays] =
     useState<number>(0);
+  const [showConfetti, setShowConfetti] = useState(false);
 
   // Calcular dias do mês atual
   const today = new Date();
@@ -165,19 +176,6 @@ export const BudgetScreen = () => {
     return /card|cart|cartão|credit|debit|cr[eé]dito|d[eé]bito/.test(pm);
   };
 
-  const isTrackedDailyExpense = (expense: any) => {
-    const normalizedCategory = String(expense?.category || "")
-      .trim()
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "");
-
-    return (
-      normalizedCategory === "acompanhamento diario" ||
-      normalizedCategory === "gasto acompanhado"
-    );
-  };
-
   const isBillPaymentExpense = (expense: any) => {
     const normalizedCategory = String(expense?.category || "")
       .trim()
@@ -205,9 +203,9 @@ export const BudgetScreen = () => {
       }
     }
 
-    if (item?.expectedMonth && String(item.expectedMonth).length >= 7) {
-      const [year, month] = String(item.expectedMonth).split("-");
-      if (year && month) return `${month}/${year}`;
+    if (item?.expectedMonth) {
+      const label = formatExpectedMonthLabel(String(item.expectedMonth));
+      if (label) return label;
     }
 
     if (typeof item?.dueDay === "number") {
@@ -486,11 +484,42 @@ export const BudgetScreen = () => {
   const handleSaveExpense = async (day: number, date: Date) => {
     if (!user) return;
 
-    const value =
-      parseFloat(tempValue.replace(/[^0-9.,]/g, "").replace(",", ".")) || 0;
+    const value = parseCurrency(tempValue);
 
     if (value < 0) {
       Alert.alert("Erro", "O valor não pode ser negativo");
+      return;
+    }
+
+    if (value === 0) {
+      try {
+        setSaving(true);
+        await budgetServices.confirmZeroExpenseDay(user.id, date);
+        setZeroConfirmedDays((prev) =>
+          Array.from(new Set([...prev, day])).sort((a, b) => a - b),
+        );
+        setDailyExpenses((prev) => {
+          const exists = prev.some((item) => item.day === day);
+          if (exists) {
+            return prev.map((item) =>
+              item.day === day ? { ...item, amount: 0 } : item,
+            );
+          }
+          return [...prev, { day, amount: 0 }].sort((a, b) => a.day - b.day);
+        });
+        setEditingDay(null);
+        setTempValue("");
+        setShowConfetti(true);
+        Alert.alert(
+          "Parabéns! 🎉",
+          "Zero na planilha confirmado. Você ganhou 2 pontos no ranking!",
+        );
+      } catch (error) {
+        console.error("❌ Erro ao confirmar zero na planilha:", error);
+        Alert.alert("Erro", "Não foi possível confirmar o zero agora.");
+      } finally {
+        setSaving(false);
+      }
       return;
     }
 
@@ -549,7 +578,7 @@ export const BudgetScreen = () => {
   const handleEditDay = (day: number) => {
     const existing = dailyExpenses.find((item) => item.day === day);
     setEditingDay(day);
-    setTempValue(existing ? existing.amount.toString() : "");
+    setTempValue(existing ? formatCurrencyWithoutSymbol(existing.amount) : "");
   };
 
   const handleOpenNoRecordActions = (date: Date) => {
@@ -590,6 +619,11 @@ export const BudgetScreen = () => {
         const out = [...prev, { day, amount: 0 }];
         return out.sort((a, b) => a.day - b.day);
       });
+      setShowConfetti(true);
+      Alert.alert(
+        "Parabéns! 🎉",
+        "Zero na planilha confirmado. Você ganhou 2 pontos no ranking!",
+      );
     } catch (err) {
       console.error("❌ [BUDGET] Erro ao confirmar zero:", err);
       Alert.alert("Erro", "Não foi possível confirmar o zero agora.");
@@ -822,9 +856,11 @@ export const BudgetScreen = () => {
                             style={styles.dayInput}
                             placeholder="0,00"
                             placeholderTextColor="#666"
-                            keyboardType="numeric"
+                            keyboardType={DECIMAL_INPUT_KEYBOARD}
                             value={tempValue}
-                            onChangeText={setTempValue}
+                            onChangeText={(text) =>
+                              setTempValue(sanitizeDecimalInput(text))
+                            }
                             autoFocus
                           />
                           <TouchableOpacity
@@ -913,6 +949,11 @@ export const BudgetScreen = () => {
           </View>
         </View>
       </Modal>
+
+      <ConfettiCelebration
+        active={showConfetti}
+        onComplete={() => setShowConfetti(false)}
+      />
 
       {/* confirmation now happens directly when choosing 'Marcar zero' */}
     </Layout>

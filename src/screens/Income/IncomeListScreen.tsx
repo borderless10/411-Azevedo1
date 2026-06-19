@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Tela de Listagem de Rendas
  */
 
@@ -13,6 +13,7 @@ import {
   RefreshControl,
   Alert,
   Modal,
+  TextInput,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../hooks/useAuth";
@@ -107,7 +108,6 @@ export const IncomeListScreen = () => {
   const [incomes, setIncomes] = useState<Income[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [total, setTotal] = useState(0);
   const [deletingIncomeId, setDeletingIncomeId] = useState<string | null>(null);
   const [planning, setPlanning] = useState<Planning | null>(null);
   const [periodFilter, setPeriodFilter] = useState<IncomePeriodFilter>("all");
@@ -125,6 +125,38 @@ export const IncomeListScreen = () => {
   });
   const [appliedCustomEnd, setAppliedCustomEnd] = useState<Date>(
     () => new Date(),
+  );
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const normalizeSearch = (value: string) =>
+    String(value || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .trim();
+
+  const filteredIncomes = useMemo(() => {
+    const query = normalizeSearch(searchQuery);
+    if (!query) return incomes;
+
+    return incomes.filter((income) => {
+      const searchable = [
+        income.description,
+        income.category,
+        formatCurrency(income.value),
+        String(income.value),
+        formatDateForDisplay(income.date),
+      ]
+        .filter(Boolean)
+        .join(" ");
+
+      return normalizeSearch(searchable).includes(query);
+    });
+  }, [incomes, searchQuery]);
+
+  const filteredTotal = useMemo(
+    () => filteredIncomes.reduce((acc, income) => acc + income.value, 0),
+    [filteredIncomes],
   );
 
   const hasActiveCycle = Boolean(planning?.consumoModeradoCycleStartedAt);
@@ -160,7 +192,6 @@ export const IncomeListScreen = () => {
         endDate: activePeriod.endDate,
       });
       setIncomes(data);
-      setTotal(data.reduce((acc, income) => acc + income.value, 0));
     } catch (error) {
       console.error("❌ Erro ao carregar rendas:", error);
     } finally {
@@ -237,7 +268,7 @@ export const IncomeListScreen = () => {
     ]);
   };
 
-  const groupedByDate = incomes.reduce(
+  const groupedByDate = filteredIncomes.reduce(
     (acc, income) => {
       const dateKey = formatDateToString(income.date);
       if (!acc[dateKey]) {
@@ -345,9 +376,13 @@ export const IncomeListScreen = () => {
           <View style={styles.headerContent}>
             <View style={styles.totalContainer}>
               <Text style={styles.totalLabel}>Total Recebido</Text>
-              <Text style={styles.totalValue}>{formatCurrency(total)}</Text>
+              <Text style={styles.totalValue}>{formatCurrency(filteredTotal)}</Text>
               <Text style={styles.totalSubtext}>
-                {incomes.length} {incomes.length === 1 ? "renda" : "rendas"}
+                {filteredIncomes.length}{" "}
+                {filteredIncomes.length === 1 ? "renda" : "rendas"}
+                {searchQuery.trim().length > 0 && incomes.length !== filteredIncomes.length
+                  ? ` de ${incomes.length}`
+                  : ""}
               </Text>
               <Text style={styles.periodLabel}>{activePeriod.label}</Text>
             </View>
@@ -387,6 +422,32 @@ export const IncomeListScreen = () => {
               );
             })}
           </ScrollView>
+
+          <View style={styles.searchContainer}>
+            <Ionicons
+              name="search-outline"
+              size={20}
+              color="#999"
+              style={styles.searchIcon}
+            />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Buscar por descrição, categoria ou valor..."
+              placeholderTextColor="#666"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            {searchQuery.length > 0 ? (
+              <TouchableOpacity
+                onPress={() => setSearchQuery("")}
+                style={styles.clearSearchButton}
+              >
+                <Ionicons name="close-circle" size={20} color="#999" />
+              </TouchableOpacity>
+            ) : null}
+          </View>
         </View>
 
         {incomes.length === 0 ? (
@@ -407,6 +468,21 @@ export const IncomeListScreen = () => {
               onPress={() => navigate("AddIncome")}
               variant="primary"
               icon="add"
+              style={styles.emptyButton}
+            />
+          </View>
+        ) : filteredIncomes.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Ionicons name="search-outline" size={64} color="#ccc" />
+            <Text style={styles.emptyText}>Nenhuma renda encontrada</Text>
+            <Text style={styles.emptySubtext}>
+              Tente outro termo de busca ou limpe o filtro
+            </Text>
+            <Button
+              title="Limpar busca"
+              onPress={() => setSearchQuery("")}
+              variant="secondary"
+              icon="close"
               style={styles.emptyButton}
             />
           </View>
@@ -559,6 +635,30 @@ const styles = StyleSheet.create({
   },
   filterChipTextActive: {
     color: "#fff",
+  },
+  searchContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 12,
+    backgroundColor: "#2b2b2b",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#444",
+    paddingHorizontal: 12,
+    minHeight: 44,
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    color: "#fff",
+    fontSize: 14,
+    paddingVertical: 10,
+  },
+  clearSearchButton: {
+    marginLeft: 8,
+    padding: 2,
   },
   scrollView: {
     flex: 1,

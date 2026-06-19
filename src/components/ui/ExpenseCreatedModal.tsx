@@ -6,6 +6,8 @@ import { formatCurrency } from "../../utils/currencyUtils";
 type Props = {
   visible: boolean;
   amount: number;
+  message?: string;
+  viewListLabel?: string;
   onClose: () => void;
   onViewList?: () => void;
   onAddAnother?: () => void;
@@ -14,6 +16,8 @@ type Props = {
 const ExpenseCreatedModal: React.FC<Props> = ({
   visible,
   amount,
+  message = "Seu gasto foi registrado com sucesso.",
+  viewListLabel = "Ver gastos",
   onClose,
   onViewList,
   onAddAnother,
@@ -35,9 +39,7 @@ const ExpenseCreatedModal: React.FC<Props> = ({
 
           <Text style={styles.amount}>{formatCurrency(amount)}</Text>
 
-          <Text style={styles.message}>
-            Seu gasto foi registrado com sucesso.
-          </Text>
+          <Text style={styles.message}>{message}</Text>
 
             <View style={styles.actionsRow}>
             <TouchableOpacity
@@ -56,7 +58,7 @@ const ExpenseCreatedModal: React.FC<Props> = ({
                 else onClose();
               }}
             >
-              <Text style={styles.primaryLabel}>Ver gastos</Text>
+              <Text style={styles.primaryLabel}>{viewListLabel}</Text>
             </TouchableOpacity>
             </View>
 

@@ -10,21 +10,20 @@ export function useUserChats(userId: string | null, role: string | null) {
     setIsLoading(true);
 
     // Try to subscribe to realtime updates
-    const unsub = chatService.listenToUserChats(userId, role, (items) => {
+    const finishLoading = (items: Chat[]) => {
       setChats(items);
       setIsLoading(false);
-    });
+    };
 
-    // Also try a fallback one-time fetch without ordering (avoids composite index requirement)
+    const unsub = chatService.listenToUserChats(userId, role, finishLoading);
+
+    // Fallback sem orderBy (evita índice composto) e garante fim do loading em erro
     (async () => {
       try {
         const initial = await chatService.getChatsForUserNoOrder(userId, role);
-        if (initial && initial.length > 0) {
-          setChats(initial);
-          setIsLoading(false);
-        }
-      } catch (e) {
-        // ignore fallback errors; subscription error handler logs index issues
+        finishLoading(initial || []);
+      } catch {
+        setIsLoading(false);
       }
     })();
 

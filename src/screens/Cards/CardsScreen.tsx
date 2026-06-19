@@ -23,7 +23,9 @@ import expenseServices from "../../services/expenseServices";
 import {
   getConsultantCardInvoiceAmount,
   getConsultantCardInvoiceExpectedAmount,
-  getConsultantCardInvoiceDisplayTotal,
+  getEffectiveInvoiceForCard,
+  sumConsultantExpectedInvoicesForKey,
+  sumEffectiveInvoicesForCycle,
   planningServices,
 } from "../../services/planningServices";
 import {
@@ -123,19 +125,29 @@ export const CardsScreen: React.FC = () => {
   }, [targetUserId]);
 
   const summary = useMemo(() => {
-    const currentTotal = invoices
-      .filter((invoice) => invoice.invoiceKey === currentInvoiceKey)
-      .reduce((acc, invoice) => acc + invoice.total, 0);
-
-    const nextTotal = invoices
-      .filter((invoice) => invoice.invoiceKey === nextInvoiceKey)
-      .reduce((acc, invoice) => acc + invoice.total, 0);
+    const cardFilter = selectedCardId === "all" ? undefined : selectedCardId;
 
     return {
-      currentTotal,
-      nextTotal,
+      expectedTotal: sumConsultantExpectedInvoicesForKey(
+        consultantCardInvoices,
+        currentInvoiceKey,
+        cardFilter,
+      ),
+      effectiveTotal: sumEffectiveInvoicesForCycle(
+        consultantCardInvoices,
+        invoices,
+        currentInvoiceKey,
+        nextInvoiceKey,
+        cardFilter,
+      ),
     };
-  }, [invoices, currentInvoiceKey, nextInvoiceKey]);
+  }, [
+    consultantCardInvoices,
+    invoices,
+    currentInvoiceKey,
+    nextInvoiceKey,
+    selectedCardId,
+  ]);
 
   const filteredInvoices = useMemo(() => {
     return invoices.filter((invoice) => {
@@ -294,10 +306,13 @@ export const CardsScreen: React.FC = () => {
               ]}
             >
               <Text style={{ color: colors.textSecondary }}>
-                Faturas do mês atual
+                Fatura esperada
+              </Text>
+              <Text style={{ fontSize: 11, color: colors.textSecondary, marginTop: 2 }}>
+                {currentInvoiceKey.replace("-", "/")}
               </Text>
               <Text style={[styles.summaryValue, { color: colors.text }]}>
-                {formatCurrency(summary.currentTotal)}
+                {formatCurrency(summary.expectedTotal)}
               </Text>
             </View>
             <View
@@ -307,10 +322,13 @@ export const CardsScreen: React.FC = () => {
               ]}
             >
               <Text style={{ color: colors.textSecondary }}>
-                Faturas do próximo mês
+                Fatura efetiva (mês seguinte)
+              </Text>
+              <Text style={{ fontSize: 11, color: colors.textSecondary, marginTop: 2 }}>
+                Consultor + gastos no cartão
               </Text>
               <Text style={[styles.summaryValue, { color: colors.text }]}>
-                {formatCurrency(summary.nextTotal)}
+                {formatCurrency(summary.effectiveTotal)}
               </Text>
             </View>
           </View>
@@ -512,22 +530,25 @@ export const CardsScreen: React.FC = () => {
               </Text>
             ) : (
               filteredInvoices.map((invoice) => {
-                const consultantInvoiceAmount = getConsultantCardInvoiceAmount(
-                  consultantCardInvoices,
-                  invoice.cardId,
-                  invoice.invoiceKey,
-                );
+                if (!invoice.cardId) return null;
+
                 const consultantExpectedAmount =
                   getConsultantCardInvoiceExpectedAmount(
                     consultantCardInvoices,
                     invoice.cardId,
-                    invoice.invoiceKey,
+                    currentInvoiceKey,
                   );
-                const invoiceValueTotal = getConsultantCardInvoiceDisplayTotal(
-                  invoice.total,
+                const consultantManualAmount = getConsultantCardInvoiceAmount(
                   consultantCardInvoices,
                   invoice.cardId,
-                  invoice.invoiceKey,
+                  currentInvoiceKey,
+                );
+                const effectiveTotal = getEffectiveInvoiceForCard(
+                  consultantCardInvoices,
+                  invoices,
+                  invoice.cardId,
+                  currentInvoiceKey,
+                  nextInvoiceKey,
                 );
 
                 return (
@@ -549,11 +570,12 @@ export const CardsScreen: React.FC = () => {
                       marginTop: 4,
                     }}
                   >
-                    Total: {formatCurrency(invoice.total)} (
+                    Gastos no cartão: {formatCurrency(invoice.total)} (
                     {invoice.expenseCount} gasto
                     {invoice.expenseCount === 1 ? "" : "s"})
                   </Text>
-                  {consultantInvoiceAmount != null ? (
+                  {consultantManualAmount != null &&
+                  consultantManualAmount > 0 ? (
                     <Text
                       style={{
                         color: colors.textSecondary,
@@ -561,9 +583,20 @@ export const CardsScreen: React.FC = () => {
                         marginTop: 4,
                       }}
                     >
-                      Valor da fatura: {formatCurrency(invoiceValueTotal)}
+                      Valor registrado pelo consultor:{" "}
+                      {formatCurrency(consultantManualAmount)}
                     </Text>
                   ) : null}
+                  <Text
+                    style={{
+                      color: colors.text,
+                      fontWeight: "700",
+                      fontStyle: "italic",
+                      marginTop: 4,
+                    }}
+                  >
+                    Fatura efetiva: {formatCurrency(effectiveTotal)}
+                  </Text>
                   {consultantExpectedAmount != null ? (
                     <Text
                       style={{

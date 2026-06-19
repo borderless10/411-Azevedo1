@@ -24,8 +24,14 @@ import {
   DailyExpense,
 } from "../types/budget";
 import expenseServices from "./expenseServices";
-import { getEndOfDay, getStartOfDay } from "../utils/dateUtils";
+import { getEndOfDay, getStartOfDay, addDays } from "../utils/dateUtils";
 import rankingPlanilhaService from "./rankingPlanilhaService";
+import {
+  isConsumoModeradoExpense,
+  isTrackedDailyExpense,
+} from "../utils/expenseScopeUtils";
+import { planningServices } from "./planningServices";
+import { formatCurrency } from "../utils/currencyUtils";
 
 /**
  * Gerar ID único para o orçamento (userId_YYYY-MM)
@@ -38,6 +44,108 @@ export const getMonthYearFromDate = (date: Date): string => {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
   return `${year}-${month}`;
+};
+
+export const normalizeTrackedTitleKey = (value?: string): string =>
+  String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLocaleLowerCase("pt-BR");
+
+export type ConsumoModeradoPerformanceIcon =
+  | "trending-up"
+  | "trending-down"
+  | "checkmark-circle"
+  | "information-circle-outline";
+
+export interface ConsumoModeradoPerformance {
+  budgetValue: number;
+  idealDailyAverage: number;
+  actualDailyAverage: number;
+  totalSpent: number;
+  label: string;
+  detail: string;
+  color: string;
+  icon: ConsumoModeradoPerformanceIcon;
+}
+
+const isBillPaymentExpense = (expense: { category?: string }): boolean => {
+  const normalizedCategory = String(expense?.category || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+  return (
+    normalizedCategory === "conta" ||
+    normalizedCategory === "contas" ||
+    normalizedCategory === "contas a pagar" ||
+    normalizedCategory === "pagamento de conta" ||
+    normalizedCategory === "pagamento conta"
+  );
+};
+
+const buildConsumoModeradoPerformance = (
+  budgetValue: number,
+  idealDailyAverage: number,
+  actualDailyAverage: number,
+  totalSpent: number,
+): ConsumoModeradoPerformance => {
+  if (budgetValue <= 0) {
+    return {
+      budgetValue: 0,
+      idealDailyAverage: 0,
+      actualDailyAverage,
+      totalSpent,
+      label: "Sem planejamento definido",
+      detail:
+        "Peça ao consultor para preencher o planejamento de consumo moderado.",
+      color: "#999",
+      icon: "information-circle-outline",
+    };
+  }
+
+  const difference = actualDailyAverage - idealDailyAverage;
+  const tolerance = 0.01;
+
+  if (difference > tolerance) {
+    return {
+      budgetValue,
+      idealDailyAverage,
+      actualDailyAverage,
+      totalSpent,
+      label: "Acima da meta",
+      detail: `${formatCurrency(Math.abs(difference))} acima da média diária ideal.`,
+      color: "#ff4d6d",
+      icon: "trending-up",
+    };
+  }
+
+  if (difference < -tolerance) {
+    return {
+      budgetValue,
+      idealDailyAverage,
+      actualDailyAverage,
+      totalSpent,
+      label: "Abaixo da meta",
+      detail: `${formatCurrency(Math.abs(difference))} abaixo da média diária ideal.`,
+      color: "#8c52ff",
+      icon: "trending-down",
+    };
+  }
+
+  return {
+    budgetValue,
+    idealDailyAverage,
+    actualDailyAverage,
+    totalSpent,
+    label: "Dentro da meta",
+    detail: "Sua média diária está alinhada com a meta definida.",
+    color: "#c084fc",
+    icon: "checkmark-circle",
+  };
 };
 
 /**
@@ -91,6 +199,10 @@ export const budgetServices = {
             data.zeroPromptDismissedDays ??
             existing.zeroPromptDismissedDays ??
             [],
+          trackedZeroConfirmedDays:
+            data.trackedZeroConfirmedDays ??
+            existing.trackedZeroConfirmedDays ??
+            {},
           rankingPlanilhaEntries:
             data.rankingPlanilhaEntries ??
             existing.rankingPlanilhaEntries ??
@@ -108,6 +220,7 @@ export const budgetServices = {
           zeroConfirmedDays: data.zeroConfirmedDays || [],
           zeroConfirmedDaysNoRanking: data.zeroConfirmedDaysNoRanking || [],
           zeroPromptDismissedDays: data.zeroPromptDismissedDays || [],
+          trackedZeroConfirmedDays: data.trackedZeroConfirmedDays || {},
           rankingPlanilhaEntries: data.rankingPlanilhaEntries || [],
           createdAt: Timestamp.fromDate(now),
           updatedAt: Timestamp.fromDate(now),
@@ -126,6 +239,7 @@ export const budgetServices = {
         zeroConfirmedDays: budgetData.zeroConfirmedDays || [],
         zeroConfirmedDaysNoRanking: budgetData.zeroConfirmedDaysNoRanking || [],
         zeroPromptDismissedDays: budgetData.zeroPromptDismissedDays || [],
+        trackedZeroConfirmedDays: budgetData.trackedZeroConfirmedDays || {},
         rankingPlanilhaEntries: budgetData.rankingPlanilhaEntries || [],
         createdAt: budgetData.createdAt.toDate(),
         updatedAt: budgetData.updatedAt.toDate(),
@@ -154,6 +268,7 @@ export const budgetServices = {
       zeroConfirmedDays: [],
       zeroConfirmedDaysNoRanking: [],
       zeroPromptDismissedDays: [],
+      trackedZeroConfirmedDays: {},
       rankingPlanilhaEntries: [],
     });
   },
@@ -345,50 +460,33 @@ export const budgetServices = {
     return saved;
   },
 
-  async confirmZeroExpenseDayNoRanking(
+  async confirmZeroExpenseDayForTracked(
     userId: string,
     date: Date,
+    trackedTitle: string,
   ): Promise<Budget> {
     const monthYear = getMonthYearFromDate(date);
     const day = date.getDate();
+    const titleKey = normalizeTrackedTitleKey(trackedTitle);
+
+    if (!titleKey) {
+      throw new Error("Título do acompanhamento inválido");
+    }
 
     const budget = await this.getBudget(userId, monthYear);
-
-    if (!budget) {
-      return this.saveBudget(userId, monthYear, {
-        monthlyBudget: 0,
-        dailyExpenses: [{ day, amount: 0 }],
-        zeroConfirmedDays: [day],
-        zeroConfirmedDaysNoRanking: [day],
-      });
-    }
-
-    const dailyExpenses = [...(budget.dailyExpenses || [])];
-    const dayIndex = dailyExpenses.findIndex((item) => item.day === day);
-
-    if (dayIndex >= 0) {
-      dailyExpenses[dayIndex] = { day, amount: 0 };
-    } else {
-      dailyExpenses.push({ day, amount: 0 });
-    }
-
-    dailyExpenses.sort((a, b) => a.day - b.day);
-
-    const zeroConfirmedSet = new Set<number>(budget.zeroConfirmedDays || []);
-    zeroConfirmedSet.add(day);
-
-    const zeroNoRankingSet = new Set<number>(
-      budget.zeroConfirmedDaysNoRanking || [],
-    );
-    zeroNoRankingSet.add(day);
+    const trackedMap = { ...(budget?.trackedZeroConfirmedDays || {}) };
+    const daysSet = new Set<number>(trackedMap[titleKey] || []);
+    daysSet.add(day);
+    trackedMap[titleKey] = Array.from(daysSet).sort((a, b) => a - b);
 
     return this.saveBudget(userId, monthYear, {
-      monthlyBudget: budget.monthlyBudget,
-      dailyExpenses,
-      zeroConfirmedDays: Array.from(zeroConfirmedSet).sort((a, b) => a - b),
-      zeroConfirmedDaysNoRanking: Array.from(zeroNoRankingSet).sort(
-        (a, b) => a - b,
-      ),
+      monthlyBudget: budget?.monthlyBudget ?? 0,
+      dailyExpenses: budget?.dailyExpenses ?? [],
+      zeroConfirmedDays: budget?.zeroConfirmedDays ?? [],
+      zeroConfirmedDaysNoRanking: budget?.zeroConfirmedDaysNoRanking ?? [],
+      zeroPromptDismissedDays: budget?.zeroPromptDismissedDays ?? [],
+      trackedZeroConfirmedDays: trackedMap,
+      rankingPlanilhaEntries: budget?.rankingPlanilhaEntries ?? [],
     });
   },
 
@@ -416,8 +514,10 @@ export const budgetServices = {
       endDate: getEndOfDay(date),
     });
 
-    const total = expenses.reduce((sum, item) => sum + item.value, 0);
-    return total > 0;
+    const planilhaTotal = expenses
+      .filter((item) => isConsumoModeradoExpense(item))
+      .reduce((sum, item) => sum + item.value, 0);
+    return planilhaTotal > 0;
   },
 
   async dismissExpensePromptForDay(
@@ -476,6 +576,142 @@ export const budgetServices = {
     } catch (error) {
       console.error("❌ [BUDGET SERVICE] Erro ao buscar orçamentos:", error);
       throw error;
+    }
+  },
+
+  async getConsumoModeradoPerformance(
+    userId: string,
+  ): Promise<ConsumoModeradoPerformance | null> {
+    try {
+      const planning = await planningServices.getPlanning(userId);
+      const budgetValue = Number(planning?.consumoModerado ?? 0);
+      const plannedCycleDurationDays = Number(
+        planning?.consumoModeradoCycleDurationDays || 0,
+      );
+
+      const today = new Date();
+      const cycleStartDate = planning?.consumoModeradoCycleStartedAt
+        ? getStartOfDay(new Date(planning.consumoModeradoCycleStartedAt))
+        : null;
+      const cycleEndDate = planning?.consumoModeradoCycleEndedAt
+        ? getEndOfDay(new Date(planning.consumoModeradoCycleEndedAt))
+        : null;
+
+      let start: Date;
+      let end: Date;
+      if (!cycleStartDate && !cycleEndDate) {
+        start = getStartOfDay(
+          new Date(today.getFullYear(), today.getMonth(), 1),
+        );
+        end = getEndOfDay(
+          new Date(today.getFullYear(), today.getMonth() + 1, 0),
+        );
+      } else {
+        start = cycleStartDate || getStartOfDay(today);
+        end = cycleEndDate || getEndOfDay(today);
+      }
+
+      const cycleDates: Date[] = [];
+      let dateCursor = getStartOfDay(start);
+      const lastDate = getStartOfDay(end);
+      while (dateCursor <= lastDate) {
+        cycleDates.push(new Date(dateCursor));
+        dateCursor = addDays(dateCursor, 1);
+      }
+
+      const daysInCycle = Math.max(
+        1,
+        Math.floor(
+          (lastDate.getTime() - getStartOfDay(start).getTime()) /
+            (1000 * 60 * 60 * 24),
+        ) + 1,
+      );
+      const daysForIdealTarget =
+        plannedCycleDurationDays > 0 ? plannedCycleDurationDays : daysInCycle;
+      const idealDailyAverage =
+        budgetValue > 0 && daysForIdealTarget > 0
+          ? budgetValue / daysForIdealTarget
+          : 0;
+
+      const budget = await this.getCurrentBudget(userId);
+      const zeroConfirmedDays = budget?.zeroConfirmedDays || [];
+
+      const expenses = await expenseServices.getExpenses(userId, {
+        startDate: start,
+        endDate: end,
+      });
+
+      const expensesForModerado = expenses.filter((expense) => {
+        if (isTrackedDailyExpense(expense)) return false;
+        if (isBillPaymentExpense(expense)) return false;
+        return true;
+      });
+
+      const map = new Map<number, number>();
+      let cursor = getStartOfDay(start);
+      while (cursor <= getStartOfDay(end)) {
+        map.set(cursor.getDate(), 0);
+        cursor = addDays(cursor, 1);
+      }
+
+      expensesForModerado.forEach((expense) => {
+        const dayNum = new Date(expense.date).getDate();
+        const prev = map.get(dayNum) ?? 0;
+        const value =
+          typeof expense.value === "number"
+            ? expense.value
+            : parseFloat(String(expense.value)) || 0;
+        map.set(dayNum, prev + value);
+      });
+
+      const computed: DailyExpense[] = Array.from(map.entries())
+        .map(([day, amount]) => ({ day, amount }))
+        .sort((a, b) => a.day - b.day);
+
+      const dailyExpenses =
+        (budget?.dailyExpenses || []).length > 0
+          ? (() => {
+              const byDay = new Map<number, number>();
+              computed.forEach((item) => byDay.set(item.day, item.amount));
+              (budget?.dailyExpenses || []).forEach((item) => {
+                const existing = byDay.get(item.day) ?? 0;
+                byDay.set(item.day, existing > 0 ? existing : item.amount);
+              });
+              return Array.from(byDay.entries())
+                .map(([day, amount]) => ({ day, amount }))
+                .sort((a, b) => a.day - b.day);
+            })()
+          : computed;
+
+      const totalSpent = dailyExpenses.reduce(
+        (sum, item) => sum + item.amount,
+        0,
+      );
+
+      const countedDays = cycleDates.filter((date) => {
+        const day = date.getDate();
+        const hasExpense = dailyExpenses.some(
+          (item) => item.day === day && item.amount > 0,
+        );
+        const isZeroConfirmed = zeroConfirmedDays.includes(day);
+        return hasExpense || isZeroConfirmed;
+      }).length;
+
+      const actualDailyAverage =
+        countedDays > 0 ? totalSpent / countedDays : 0;
+
+      return buildConsumoModeradoPerformance(
+        budgetValue,
+        idealDailyAverage,
+        actualDailyAverage,
+        totalSpent,
+      );
+    } catch (error) {
+      console.error(
+        "❌ [BUDGET SERVICE] Erro ao calcular performance do consumo moderado:",
+        error,
+      );
+      return null;
     }
   },
 

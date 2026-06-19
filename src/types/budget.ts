@@ -37,6 +37,7 @@ export interface Budget {
   zeroConfirmedDays: number[];
   zeroConfirmedDaysNoRanking?: number[];
   zeroPromptDismissedDays?: number[];
+  trackedZeroConfirmedDays?: Record<string, number[]>;
   rankingPlanilhaEntries?: RankingPlanilhaEntry[];
   createdAt: Date;
   updatedAt: Date;
@@ -54,6 +55,7 @@ export interface BudgetFirestore {
   zeroConfirmedDays?: number[];
   zeroConfirmedDaysNoRanking?: number[];
   zeroPromptDismissedDays?: number[];
+  trackedZeroConfirmedDays?: Record<string, number[]>;
   rankingPlanilhaEntries?: RankingPlanilhaEntry[];
   createdAt: Timestamp;
   updatedAt: Timestamp;
@@ -68,6 +70,7 @@ export interface CreateBudgetData {
   zeroConfirmedDays?: number[];
   zeroConfirmedDaysNoRanking?: number[];
   zeroPromptDismissedDays?: number[];
+  trackedZeroConfirmedDays?: Record<string, number[]>;
   rankingPlanilhaEntries?: RankingPlanilhaEntry[];
 }
 
@@ -80,5 +83,6 @@ export interface UpdateBudgetData {
   zeroConfirmedDays?: number[];
   zeroConfirmedDaysNoRanking?: number[];
   zeroPromptDismissedDays?: number[];
+  trackedZeroConfirmedDays?: Record<string, number[]>;
   rankingPlanilhaEntries?: RankingPlanilhaEntry[];
 }

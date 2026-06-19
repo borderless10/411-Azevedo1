@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useRef } from "react";
+import React, { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import {
   View,
   Text,
@@ -9,7 +9,6 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
-  Animated,
   Image,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -20,9 +19,18 @@ import { useChatMessages } from "../../hooks/useChatMessages";
 import { Layout } from "../../components/Layout/Layout";
 import chatService from "../../services/chatService";
 import { userService } from "../../services/userServices";
+import consultantServices from "../../services/consultantServices";
+import { setActiveChatId } from "../../utils/chatActivity";
+import { useNavigation } from "../../routes/NavigationContext";
+import { MessageBubble } from "../../components/Chat/MessageBubble";
+import {
+  profileDisplayName,
+  resolveChatDisplayName,
+} from "../../utils/chatDisplayNames";
 
 export const ChatScreen: React.FC = () => {
   const { user } = useAuth();
+  const { params } = useNavigation();
   const insets = useSafeAreaInsets();
   const { chats, isLoading } = useUserChats(
     user?.id || null,
@@ -42,7 +50,21 @@ export const ChatScreen: React.FC = () => {
 
   const [userMap, setUserMap] = useState<Record<string, any>>({});
   const [previewSenderMap, setPreviewSenderMap] = useState<Record<string, string>>({});
+  const userMapRef = useRef<Record<string, any>>({});
+  const profilesLoadingRef = useRef<Set<string>>(new Set());
   const flatListRef = useRef<FlatList<any> | null>(null);
+
+  useEffect(() => {
+    userMapRef.current = userMap;
+  }, [userMap]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    setUserMap((prev) => (prev[user.id] ? prev : { ...prev, [user.id]: user }));
+    setPreviewSenderMap((prev) =>
+      prev[user.id] ? prev : { ...prev, [user.id]: "Você" },
+    );
+  }, [user]);
 
   // Ensure global chat exists and direct chats with consultant/admin for clients
   useEffect(() => {
@@ -66,6 +88,15 @@ export const ChatScreen: React.FC = () => {
             user.id,
             consultantId,
             "direct",
+          );
+        }
+
+        if (user.role === "consultor") {
+          const clients = await consultantServices.getClientsByConsultant(user.id);
+          await Promise.all(
+            clients.map((client) =>
+              chatService.createChatIfNotExists(user.id, client.id, "direct"),
+            ),
           );
         }
 
@@ -93,6 +124,16 @@ export const ChatScreen: React.FC = () => {
     initChats();
   }, [user?.id, user?.role, (user as any)?.consultantId]);
 
+  useEffect(() => {
+    if (!params?.chatId) return;
+    setSelectedChatId(String(params.chatId));
+  }, [params?.chatId]);
+
+  useEffect(() => {
+    setActiveChatId(selectedChatId);
+    return () => setActiveChatId(null);
+  }, [selectedChatId]);
+
   // Deduplicate and sort chats - Include global chat manually
   const processedChats = useMemo(() => {
     let allChats = [...(chats || [])];
@@ -115,49 +156,75 @@ export const ChatScreen: React.FC = () => {
     });
   }, [chats, globalChat]);
 
-  // Resolve participant profiles for chats shown in the list
+  const loadProfiles = useCallback(async (ids: string[]) => {
+    const uniqueIds = Array.from(
+      new Set(ids.filter((id) => id && id !== "system")),
+    ).filter(
+      (id) => !userMapRef.current[id] && !profilesLoadingRef.current.has(id),
+    );
+
+    if (!uniqueIds.length) return;
+
+    uniqueIds.forEach((id) => profilesLoadingRef.current.add(id));
+
+    const updates: Record<string, any> = {};
+    const nameUpdates: Record<string, string> = {};
+
+    await Promise.all(
+      uniqueIds.map(async (id) => {
+        try {
+          const userData = await userService.getUserById(id);
+          if (userData) {
+            updates[id] = userData;
+            nameUpdates[id] = profileDisplayName(userData);
+          }
+        } catch {
+          // ignore
+        } finally {
+          profilesLoadingRef.current.delete(id);
+        }
+      }),
+    );
+
+    if (Object.keys(updates).length > 0) {
+      setUserMap((prev) => ({ ...prev, ...updates }));
+    }
+    if (Object.keys(nameUpdates).length > 0) {
+      setPreviewSenderMap((prev) => ({ ...prev, ...nameUpdates }));
+    }
+  }, []);
+
+  // Resolve participant profiles for chats and messages
   useEffect(() => {
     if (!user?.id) return;
 
-    const participantIds = Array.from(
-      new Set(
-        (processedChats || [])
-          .flatMap((chat: any) => chat?.participants || [])
-          .filter((id: string) => id && id !== "system"),
-      ),
-    ) as string[];
+    const ids: string[] = [];
+    if ((user as any).consultantId) ids.push((user as any).consultantId);
+    if (primaryAdminId) ids.push(primaryAdminId);
 
-    const missingIds = participantIds.filter((id) => !userMap[id]);
-    if (!missingIds.length) return;
+    (processedChats || []).forEach((chat: any) => {
+      (chat?.participants || []).forEach((id: string) => ids.push(id));
+      if (chat?.lastMessage?.senderId) ids.push(chat.lastMessage.senderId);
+    });
 
-    let mounted = true;
-    (async () => {
-      const updates: Record<string, any> = {};
-      for (const id of missingIds) {
-        try {
-          const userData = await userService.getUserById(id);
-          if (userData) updates[id] = userData;
-        } catch {
-          // ignore and keep fallback title
-        }
-      }
+    (messages || []).forEach((msg: any) => {
+      if (msg?.senderId) ids.push(msg.senderId);
+    });
 
-      if (mounted && Object.keys(updates).length > 0) {
-        setUserMap((prev) => ({ ...prev, ...updates }));
-      }
-    })();
+    loadProfiles(ids);
+  }, [processedChats, messages, user?.id, primaryAdminId, loadProfiles]);
 
-    return () => {
-      mounted = false;
-    };
-  }, [processedChats, user?.id, userMap]);
-
-  const getParticipantDisplayName = (id?: string | null): string => {
-    if (!id) return "Usuário";
-    if (id === user?.id) return "Você";
-    const profile = userMap[id];
-    return profile?.nickname || profile?.name || previewSenderMap[id] || id;
-  };
+  const getParticipantDisplayName = useCallback(
+    (id?: string | null): string => {
+      return resolveChatDisplayName(
+        id,
+        user?.id,
+        id ? userMap[id] : null,
+        id ? previewSenderMap[id] : undefined,
+      );
+    },
+    [previewSenderMap, user?.id, userMap],
+  );
 
   const getParticipantRole = (id?: string | null): string => {
     if (!id) return "";
@@ -209,61 +276,8 @@ export const ChatScreen: React.FC = () => {
       ),
     ) as string[];
 
-    const missing = senderIds.filter((id) => !previewSenderMap[id]);
-    if (!missing.length) return;
-
-    let mounted = true;
-    (async () => {
-      const updates: Record<string, string> = {};
-      for (const senderId of missing) {
-        try {
-          const sender = await userService.getUserById(senderId);
-          updates[senderId] =
-            sender?.nickname || sender?.name || (senderId === user?.id ? "Você" : "Usuário");
-        } catch {
-          updates[senderId] = senderId === user?.id ? "Você" : "Usuário";
-        }
-      }
-      if (mounted && Object.keys(updates).length > 0) {
-        setPreviewSenderMap((prev) => ({ ...prev, ...updates }));
-      }
-    })();
-
-    return () => {
-      mounted = false;
-    };
-  }, [processedChats, previewSenderMap, user?.id]);
-
-  // Fetch sender info (avatar/name) for messages shown in the conversation
-  useEffect(() => {
-    const missingIds = Array.from(
-      new Set((messages || []).map((m: any) => m.senderId)),
-    ).filter((id) => id && !userMap[id]);
-
-    if (!missingIds.length) return;
-    let mounted = true;
-
-    (async () => {
-      try {
-        const results: Record<string, any> = {};
-        for (const id of missingIds) {
-          try {
-            const u = await userService.getUserById(id);
-            if (u) results[id] = u;
-          } catch (err) {
-            // ignore
-          }
-        }
-        if (mounted) setUserMap((prev) => ({ ...prev, ...results }));
-      } catch (err) {
-        console.warn("Erro ao buscar usuários do chat:", err);
-      }
-    })();
-
-    return () => {
-      mounted = false;
-    };
-  }, [messages]);
+    loadProfiles(senderIds);
+  }, [processedChats, loadProfiles]);
 
   // Conversation helpers
   const selectedChat = processedChats.find((c) => c.id === selectedChatId);
@@ -350,118 +364,8 @@ export const ChatScreen: React.FC = () => {
 
   useEffect(() => {
     if (!otherParticipantId || userMap[otherParticipantId]) return;
-    let mounted = true;
-    (async () => {
-      try {
-        const u = await userService.getUserById(otherParticipantId);
-        if (u && mounted)
-          setUserMap((p) => ({ ...p, [otherParticipantId]: u }));
-      } catch (err) {
-        // ignore
-      }
-    })();
-    return () => {
-      mounted = false;
-    };
-  }, [otherParticipantId]);
-
-  // Animated MessageBubble component
-  const MessageBubble: React.FC<{
-    msg: any;
-    isOwn: boolean;
-    showAvatar?: boolean;
-    showSenderName?: boolean;
-    sender?: any;
-  }> = ({ msg, isOwn, showAvatar = false, showSenderName = false, sender }) => {
-    const anim = useRef(new Animated.Value(0)).current;
-
-    useEffect(() => {
-      Animated.timing(anim, {
-        toValue: 1,
-        duration: 220,
-        useNativeDriver: true,
-      }).start();
-    }, [anim]);
-
-    return (
-      <Animated.View
-        style={{
-          opacity: anim,
-          width: "100%",
-          paddingHorizontal: 8,
-          transform: [
-            {
-              scale: anim.interpolate({
-                inputRange: [0, 1],
-                outputRange: [0.99, 1],
-              }),
-            },
-          ],
-        }}
-      >
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "flex-end",
-            justifyContent: isOwn ? "flex-end" : "flex-start",
-          }}
-        >
-          {showAvatar && !isOwn && (
-            <View style={styles.msgAvatarContainer}>
-              {sender?.photoBase64 ? (
-                <Image
-                  source={{
-                    uri: `data:image/png;base64,${sender.photoBase64}`,
-                  }}
-                  style={styles.msgAvatar}
-                />
-              ) : (
-                <View style={styles.msgAvatarFallback}>
-                  <Text style={styles.msgAvatarInitial}>
-                    {(
-                      (sender?.name || sender?.nickname || "U") as string
-                    )[0]?.toUpperCase()}
-                  </Text>
-                </View>
-              )}
-            </View>
-          )}
-
-          <View
-            style={[
-              styles.messageBubble,
-              isOwn ? styles.ownMessage : styles.otherMessage,
-              showAvatar && { marginLeft: 4 },
-            ]}
-          >
-            {showSenderName && !isOwn && (
-              <Text style={styles.senderName}>
-                {sender?.nickname || sender?.name || "Usuário"}
-              </Text>
-            )}
-
-            <Text style={[styles.messageText, isOwn && styles.ownMessageText]}>
-              {msg.text}
-            </Text>
-
-            <Text
-              numberOfLines={1}
-              allowFontScaling={false}
-              style={[
-                styles.messageTime,
-                isOwn ? styles.ownMessageTime : styles.otherMessageTime,
-              ]}
-            >
-              {new Date(msg.createdAt).toLocaleTimeString("pt-BR", {
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
-            </Text>
-          </View>
-        </View>
-      </Animated.View>
-    );
-  };
+    loadProfiles([otherParticipantId]);
+  }, [otherParticipantId, userMap, loadProfiles]);
 
   // Access control
   const userRole = String(user?.role || "").toLowerCase();
@@ -516,7 +420,7 @@ export const ChatScreen: React.FC = () => {
         return getDirectChatTitleForPrivileged(chat);
       }
 
-      return otherDisplayName || otherUser || "Chat";
+      return otherDisplayName || "Chat";
     }
 
     if (chat.participants && chat.participants.length > 2) {
@@ -529,10 +433,12 @@ export const ChatScreen: React.FC = () => {
   const getChatPreview = (chat: any): string => {
     const fromList = chat?.lastMessage?.text;
     const senderId = chat?.lastMessage?.senderId;
-    const senderLabel =
-      senderId === user?.id
-        ? "Você"
-        : previewSenderMap[senderId] || userMap[senderId]?.nickname || userMap[senderId]?.name || "Usuário";
+    const senderLabel = resolveChatDisplayName(
+      senderId,
+      user?.id,
+      senderId ? userMap[senderId] : null,
+      senderId ? previewSenderMap[senderId] : undefined,
+    );
 
     if (typeof fromList === "string" && fromList.trim().length > 0) {
       return `${senderLabel}: ${fromList.trim()}`.substring(0, 70);
@@ -543,10 +449,12 @@ export const ChatScreen: React.FC = () => {
       const lastMsg = messages[messages.length - 1];
       const text = String(lastMsg?.text || "").trim();
       const liveSenderId = lastMsg?.senderId;
-      const liveSenderLabel =
-        liveSenderId === user?.id
-          ? "Você"
-          : userMap[liveSenderId]?.nickname || userMap[liveSenderId]?.name || "Usuário";
+      const liveSenderLabel = resolveChatDisplayName(
+        liveSenderId,
+        user?.id,
+        liveSenderId ? userMap[liveSenderId] : null,
+        liveSenderId ? previewSenderMap[liveSenderId] : undefined,
+      );
       if (text.length > 0) return `${liveSenderLabel}: ${text}`.substring(0, 70);
     }
 
@@ -721,13 +629,20 @@ export const ChatScreen: React.FC = () => {
               (selectedChat?.participants &&
                 selectedChat.participants.length > 2);
             const sender = userMap[msg.senderId];
+            const senderLabel = resolveChatDisplayName(
+              msg.senderId,
+              user?.id,
+              sender,
+              previewSenderMap[msg.senderId],
+            );
             return (
               <MessageBubble
                 msg={msg}
                 isOwn={isOwn}
                 showAvatar={isGroup}
-                showSenderName={true}
-                sender={sender}
+                showSenderName={isGroup}
+                senderLabel={senderLabel}
+                senderPhotoBase64={sender?.photoBase64}
               />
             );
           }}
@@ -834,46 +749,6 @@ const styles = StyleSheet.create({
     color: "#000",
   },
   headerRight: { width: 44 },
-  messageBubble: {
-    marginHorizontal: 12,
-    marginVertical: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    paddingRight: 48,
-    paddingBottom: 22,
-    borderRadius: 18,
-    maxWidth: "70%",
-    position: "relative",
-  },
-  ownMessage: { alignSelf: "flex-end", backgroundColor: "#8c52ff" },
-  otherMessage: { alignSelf: "flex-start", backgroundColor: "#f4eaff" },
-  messageText: {
-    fontSize: 14,
-    color: "#000",
-    lineHeight: 20,
-    paddingRight: 6,
-    flexShrink: 1,
-  },
-  ownMessageText: { color: "#fff" },
-  messageTime: {
-    fontSize: 10,
-    lineHeight: 10,
-    color: "#666",
-    position: "absolute",
-    right: 8,
-    bottom: 6,
-    minWidth: 36,
-    textAlign: "right",
-    includeFontPadding: false,
-  },
-  ownMessageTime: { color: "rgba(255,255,255,0.85)" },
-  otherMessageTime: { color: "#666" },
-  senderName: {
-    fontSize: 12,
-    color: "#5a4b7a",
-    fontWeight: "600",
-    marginBottom: 4,
-  },
   msgAvatarContainer: {
     width: 40,
     height: 40,

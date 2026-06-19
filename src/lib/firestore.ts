@@ -247,6 +247,7 @@ export const convertBudgetFromFirestore = (data: BudgetFirestore): Budget => {
     zeroConfirmedDays: data.zeroConfirmedDays || [],
     zeroConfirmedDaysNoRanking: data.zeroConfirmedDaysNoRanking || [],
     zeroPromptDismissedDays: data.zeroPromptDismissedDays || [],
+    trackedZeroConfirmedDays: data.trackedZeroConfirmedDays || {},
     rankingPlanilhaEntries: data.rankingPlanilhaEntries || [],
     createdAt: timestampToDate(data.createdAt),
     updatedAt: timestampToDate(data.updatedAt),

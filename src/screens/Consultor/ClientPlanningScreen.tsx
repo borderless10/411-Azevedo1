@@ -2,7 +2,7 @@
  * Tela (esqueleto) para que o consultor crie/edite o planejamento do cliente
  */
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -25,16 +25,27 @@ import { useNavigation } from "../../routes/NavigationContext";
 import {
   getPlanningCycleLabel,
   planningServices,
+  sumConsultantExpectedInvoicesForKey,
+  sumEffectiveInvoicesForCycle,
+  getEffectiveInvoiceForCard,
 } from "../../services/planningServices";
 import { creditCardServices } from "../../services/creditCardServices";
 import { budgetServices } from "../../services/budgetServices";
 import { userService } from "../../services/userServices";
-import type { Bill, ExpectedItem } from "../../types/planning";
-import { CreditCard } from "../../types/creditCard";
+import type { Bill, ConsultantCardInvoice, ExpectedItem } from "../../types/planning";
+import { CreditCard, CreditCardInvoiceSummary } from "../../types/creditCard";
 import { formatCurrency } from "../../utils/currencyUtils";
 import { toInvoiceKey } from "../../utils/creditCardUtils";
+import { addMonths } from "../../utils/dateUtils";
+import {
+  formatExpectedMonthLabel,
+  isValidDayMonth,
+  normalizeExpectedMonthForInput,
+  toDayMonthMask,
+} from "../../utils/dateUtils";
 import { CurrencyInput } from "../../components/CurrencyInput";
 import DatePicker from "../../components/DatePicker";
+import { CreditCardFormModal } from "../../components/Cards/CreditCardFormModal";
 
 export const ClientPlanningScreen = () => {
   const { user } = useAuth();
@@ -97,11 +108,22 @@ export const ClientPlanningScreen = () => {
   const [cardExpectedInvoiceInputs, setCardExpectedInvoiceInputs] = useState<
     Record<string, number>
   >({});
+  const [clientInvoiceSummaries, setClientInvoiceSummaries] = useState<
+    CreditCardInvoiceSummary[]
+  >([]);
+  const [consultantCardInvoices, setConsultantCardInvoices] = useState<
+    ConsultantCardInvoice[]
+  >([]);
   const [savingCardInvoiceId, setSavingCardInvoiceId] = useState<string | null>(
     null,
   );
   const [loadingCardsTab, setLoadingCardsTab] = useState(false);
+  const [isCardModalVisible, setIsCardModalVisible] = useState(false);
+  const [editingClientCard, setEditingClientCard] = useState<CreditCard | null>(
+    null,
+  );
   const currentInvoiceKey = toInvoiceKey(new Date());
+  const nextInvoiceKey = toInvoiceKey(addMonths(new Date(), 1));
 
   // Expense modal state (gastos gerais)
   const [isExpenseModalVisible, setIsExpenseModalVisible] = useState(false);
@@ -139,6 +161,8 @@ export const ClientPlanningScreen = () => {
     "active" | "closed" | ""
   >("");
   const [consumptionCycleLoading, setConsumptionCycleLoading] = useState(false);
+  const [cycleSuccessVisible, setCycleSuccessVisible] = useState(false);
+  const [cycleSuccessMessage, setCycleSuccessMessage] = useState("");
   const [isCycleDurationModalVisible, setIsCycleDurationModalVisible] =
     useState(false);
   const [cycleDurationInput, setCycleDurationInput] = useState<string>("");
@@ -266,52 +290,96 @@ export const ClientPlanningScreen = () => {
     loadPlanning();
   }, [selectedClient]);
 
-  useEffect(() => {
-    async function loadCardsTab() {
-      if (!selectedClient || activeTab !== "cartoes") return;
+  const reloadClientCards = useCallback(async () => {
+    if (!selectedClient?.id) return;
 
-      setLoadingCardsTab(true);
-      try {
-        const [cards, planning, invoiceSummaries] = await Promise.all([
-          creditCardServices.getCreditCards(selectedClient.id),
-          planningServices.getPlanning(selectedClient.id),
-          creditCardServices.getInvoiceSummaries(selectedClient.id),
-        ]);
+    setLoadingCardsTab(true);
+    try {
+      const [cards, planning, invoiceSummaries] = await Promise.all([
+        creditCardServices.getCreditCards(selectedClient.id),
+        planningServices.getPlanning(selectedClient.id),
+        creditCardServices.getInvoiceSummaries(selectedClient.id),
+      ]);
 
-        setClientCards(cards.filter((card) => card.isActive !== false));
+      setClientCards(cards.filter((card) => card.isActive !== false));
+      setClientInvoiceSummaries(invoiceSummaries);
+      setConsultantCardInvoices(planning?.consultantCardInvoices || []);
 
-        const totals: Record<string, number> = {};
-        invoiceSummaries.forEach((invoice) => {
-          if (
-            invoice.invoiceKey === currentInvoiceKey &&
-            invoice.cardId
-          ) {
-            totals[invoice.cardId] = invoice.total;
+      const totals: Record<string, number> = {};
+      invoiceSummaries.forEach((invoice) => {
+        if (invoice.invoiceKey === nextInvoiceKey && invoice.cardId) {
+          totals[invoice.cardId] = invoice.total;
+        }
+      });
+      setCardExpenseTotals(totals);
+
+      const inputs: Record<string, number> = {};
+      const expectedInputs: Record<string, number> = {};
+      (planning?.consultantCardInvoices || []).forEach((entry) => {
+        if (entry.invoiceKey === currentInvoiceKey) {
+          inputs[entry.cardId] = entry.amount;
+          if (entry.expectedAmount !== undefined) {
+            expectedInputs[entry.cardId] = entry.expectedAmount;
           }
-        });
-        setCardExpenseTotals(totals);
-
-        const inputs: Record<string, number> = {};
-        const expectedInputs: Record<string, number> = {};
-        (planning?.consultantCardInvoices || []).forEach((entry) => {
-          if (entry.invoiceKey === currentInvoiceKey) {
-            inputs[entry.cardId] = entry.amount;
-            if (entry.expectedAmount !== undefined) {
-              expectedInputs[entry.cardId] = entry.expectedAmount;
-            }
-          }
-        });
-        setCardInvoiceInputs(inputs);
-        setCardExpectedInvoiceInputs(expectedInputs);
-      } catch (error) {
-        console.warn("Erro ao carregar cartões do cliente", error);
-      } finally {
-        setLoadingCardsTab(false);
-      }
+        }
+      });
+      setCardInvoiceInputs(inputs);
+      setCardExpectedInvoiceInputs(expectedInputs);
+    } catch (error) {
+      console.warn("Erro ao carregar cartões do cliente", error);
+    } finally {
+      setLoadingCardsTab(false);
     }
+  }, [selectedClient?.id, currentInvoiceKey, nextInvoiceKey]);
 
-    loadCardsTab();
-  }, [selectedClient, activeTab, currentInvoiceKey]);
+  const cardInvoiceSummary = useMemo(
+    () => ({
+      expectedTotal: sumConsultantExpectedInvoicesForKey(
+        consultantCardInvoices,
+        currentInvoiceKey,
+      ),
+      effectiveTotal: sumEffectiveInvoicesForCycle(
+        consultantCardInvoices,
+        clientInvoiceSummaries,
+        currentInvoiceKey,
+        nextInvoiceKey,
+      ),
+    }),
+    [
+      consultantCardInvoices,
+      clientInvoiceSummaries,
+      currentInvoiceKey,
+      nextInvoiceKey,
+    ],
+  );
+
+  useEffect(() => {
+    if (!selectedClient || activeTab !== "cartoes") return;
+    reloadClientCards();
+  }, [selectedClient, activeTab, reloadClientCards]);
+
+  const openCreateCardModal = () => {
+    setEditingClientCard(null);
+    setIsCardModalVisible(true);
+  };
+
+  const openEditCardModal = (card: CreditCard) => {
+    setEditingClientCard(card);
+    setIsCardModalVisible(true);
+  };
+
+  const handleClientCardSaved = async (_card: CreditCard) => {
+    const wasEditing = Boolean(editingClientCard);
+    setIsCardModalVisible(false);
+    setEditingClientCard(null);
+    await reloadClientCards();
+    Alert.alert(
+      "Sucesso",
+      wasEditing
+        ? "Cartão atualizado com sucesso."
+        : "Cartão cadastrado com sucesso.",
+    );
+  };
 
   const handleSaveCardInvoice = async (cardId: string) => {
     if (!user?.id || !selectedClient) return;
@@ -514,8 +582,8 @@ export const ClientPlanningScreen = () => {
 
     const totalConsumoModerado = consumptionBreakdown.total;
     const totalExpectedIncomes = sum(expectedIncomes);
-    const totalSpending = totalCashExpenses;
-    const expectedSavings = totalExpectedIncomes - totalCashExpenses;
+    const totalSpending = totalCashExpenses + totalCardExpenses;
+    const expectedSavings = totalExpectedIncomes - totalSpending;
     const dailyTrackedCount =
       (bills || []).filter((bill) => bill.dailyTracking).length +
       (expectedExpenses || []).filter((item) => item.dailyTracking).length;
@@ -538,6 +606,28 @@ export const ClientPlanningScreen = () => {
     consumoModeradoAmountCard,
     consumoModeradoAmountCash,
   ]);
+
+  const fixedBills = useMemo(
+    () => (bills || []).filter((bill) => !bill.dailyTracking),
+    [bills],
+  );
+
+  const regularExpectedExpenses = useMemo(
+    () => (expectedExpenses || []).filter((item) => !item.dailyTracking),
+    [expectedExpenses],
+  );
+
+  const trackedExpensesList = useMemo(
+    () => [
+      ...(bills || [])
+        .filter((bill) => bill.dailyTracking)
+        .map((bill) => ({ kind: "bill" as const, bill })),
+      ...(expectedExpenses || [])
+        .filter((item) => item.dailyTracking)
+        .map((item) => ({ kind: "expected" as const, item })),
+    ],
+    [bills, expectedExpenses],
+  );
 
   const handleSave = async () => {
     if (!user || !selectedClient) {
@@ -712,11 +802,43 @@ export const ClientPlanningScreen = () => {
     setConsumoModeradoValue(formatCurrencyInput(value));
   };
 
+  const toggleIncomeDailyTracking = () => {
+    setIncomeDailyTracking((previous) => {
+      const next = !previous;
+      if (next) setIncomeMonth("");
+      return next;
+    });
+  };
+
+  const toggleExpenseDailyTracking = () => {
+    setExpenseDailyTracking((previous) => {
+      const next = !previous;
+      if (next) {
+        setExpenseDate("");
+        setExpenseRecurringDay("");
+      }
+      return next;
+    });
+  };
+
   const handleCreateIncomeModal = async () => {
     const amount = incomeAmountNumber || 0;
     if (!user || !selectedClient || !incomeSource || amount <= 0) return;
+
+    const trimmedIncomeDayMonth = incomeDailyTracking ? "" : incomeMonth.trim();
+    if (
+      !incomeDailyTracking &&
+      trimmedIncomeDayMonth &&
+      !isValidDayMonth(trimmedIncomeDayMonth)
+    ) {
+      Alert.alert("Data inválida", "Informe o dia e mês no formato DD/MM.");
+      return;
+    }
+
     try {
       setSavingIncome(true);
+
+      const expectedMonthValue = trimmedIncomeDayMonth || undefined;
 
       if (editingIncomeId) {
         const updated = await planningServices.updateExpectedIncome(
@@ -726,7 +848,7 @@ export const ClientPlanningScreen = () => {
           {
             source: incomeSource,
             amount,
-            expectedMonth: incomeMonth || undefined,
+            expectedMonth: expectedMonthValue,
             dailyTracking: incomeDailyTracking,
             notes: undefined,
           } as any,
@@ -744,7 +866,7 @@ export const ClientPlanningScreen = () => {
           {
             source: incomeSource,
             amount,
-            expectedMonth: incomeMonth || undefined,
+            expectedMonth: expectedMonthValue,
             dailyTracking: incomeDailyTracking,
             notes: undefined,
           } as any,
@@ -781,11 +903,14 @@ export const ClientPlanningScreen = () => {
 
       if (expenseIsRecurring) {
         // criar/atualizar como Bill (recorrente)
-        const dayNum = parseInt(expenseRecurringDay, 10);
-        if (isNaN(dayNum) || dayNum < 1 || dayNum > 31) {
-          Alert.alert("Erro", "Dia deve estar entre 1 e 31");
-          setSavingExpense(false);
-          return;
+        let dayNum: number | undefined;
+        if (!expenseDailyTracking) {
+          dayNum = parseInt(expenseRecurringDay, 10);
+          if (isNaN(dayNum) || dayNum < 1 || dayNum > 31) {
+            Alert.alert("Erro", "Dia deve estar entre 1 e 31");
+            setSavingExpense(false);
+            return;
+          }
         }
 
         if (editingBillId) {
@@ -839,7 +964,9 @@ export const ClientPlanningScreen = () => {
               amount,
               amountCard,
               amountCash,
-              expectedMonth: expenseDate || undefined,
+              expectedMonth: expenseDailyTracking
+                ? undefined
+                : expenseDate || undefined,
               paymentMethod,
               dailyTracking: expenseDailyTracking,
             } as any,
@@ -859,7 +986,9 @@ export const ClientPlanningScreen = () => {
               amount,
               amountCard,
               amountCash,
-              expectedMonth: expenseDate || undefined,
+              expectedMonth: expenseDailyTracking
+                ? undefined
+                : expenseDate || undefined,
               paymentMethod,
               dailyTracking: expenseDailyTracking,
               notes: undefined,
@@ -1020,10 +1149,14 @@ export const ClientPlanningScreen = () => {
             });
 
       if (cycleDurationAction === "restart") {
-        await budgetServices.resetBudgetForDate(
-          selectedClient.id,
-          cycleDateStart,
-        );
+        try {
+          await budgetServices.resetBudgetForDate(
+            selectedClient.id,
+            cycleDateStart,
+          );
+        } catch (budgetError) {
+          console.warn("Falha ao resetar orçamento do ciclo:", budgetError);
+        }
       }
 
       setConsumptionCycleLabel(getPlanningCycleLabel(updated) || "");
@@ -1032,12 +1165,13 @@ export const ClientPlanningScreen = () => {
         updated?.consumoModeradoCycleDurationDays || 0,
       );
       setIsCycleDurationModalVisible(false);
-      Alert.alert(
-        "Sucesso",
-        cycleDurationAction === "restart"
-          ? "Ciclo renovado com sucesso"
-          : "Duração do ciclo atual atualizada com sucesso",
-      );
+
+      if (cycleDurationAction === "restart") {
+        setCycleSuccessMessage("Ciclo renovado com sucesso!");
+        setCycleSuccessVisible(true);
+      } else {
+        Alert.alert("Sucesso", "Duração do ciclo atual atualizada com sucesso");
+      }
     } catch (error) {
       console.error("Erro ao reiniciar ciclo de consumo:", error);
       Alert.alert(
@@ -1085,7 +1219,12 @@ export const ClientPlanningScreen = () => {
       showBackButton={true}
       showSidebar={false}
     >
-      <ScrollView contentContainerStyle={styles.container}>
+      <View style={styles.page}>
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.container}
+          keyboardShouldPersistTaps="handled"
+        >
         <View style={styles.cycleCard}>
           <Text style={styles.cycleCardTitle}>Ciclo de Consumo Moderado</Text>
           <Text style={styles.cycleCardText}>
@@ -1196,6 +1335,14 @@ export const ClientPlanningScreen = () => {
               <View style={{ flexDirection: "row", marginTop: 8, gap: 8 }}>
                 <View style={[styles.highlightCardSmall, { flex: 1 }]}>
                   <Text style={styles.highlightLabelSmall}>
+                    Gastos no Dinheiro
+                  </Text>
+                  <Text style={styles.highlightValueSmall}>
+                    {formatCurrency(totals.totalCashExpenses)}
+                  </Text>
+                </View>
+                <View style={[styles.highlightCardSmall, { flex: 1 }]}>
+                  <Text style={styles.highlightLabelSmall}>
                     Gastos no Cartão
                   </Text>
                   <Text style={styles.highlightValueSmall}>
@@ -1247,11 +1394,179 @@ export const ClientPlanningScreen = () => {
               </View>
             </View>
 
+            {trackedExpensesList.length > 0 && (
+              <View style={styles.sectionBlock}>
+                <Text style={styles.label}>Gastos com acompanhamento diário</Text>
+                {trackedExpensesList.map((entry) => {
+                  if (entry.kind === "bill") {
+                    const bill = entry.bill;
+                    return (
+                      <View
+                        key={`tracked-bill-${bill.id}`}
+                        style={[
+                          styles.billCard,
+                          { backgroundColor: "#0f0f11", borderColor: "#222" },
+                        ]}
+                      >
+                        <View style={styles.billHeader}>
+                          <View style={styles.billInfo}>
+                            <Text style={styles.billTitle}>{bill.name}</Text>
+                            <View style={styles.dailyTrackingBadge}>
+                              <Ionicons
+                                name="analytics"
+                                size={12}
+                                color="#8c52ff"
+                              />
+                              <Text style={styles.dailyTrackingBadgeText}>
+                                Acompanhado diariamente
+                              </Text>
+                            </View>
+                            {bill.notes ? (
+                              <Text style={styles.billDescription}>
+                                {bill.notes}
+                              </Text>
+                            ) : null}
+                            <Text style={{ color: "#ccc", marginTop: 6 }}>
+                              Método:{" "}
+                              {formatPaymentMethodLabel(bill.paymentMethod)}
+                            </Text>
+                          </View>
+                          <View>
+                            <Text style={styles.billAmount}>
+                              {formatCurrency(Number(bill.amount) || 0)}
+                            </Text>
+                          </View>
+                        </View>
+                        <View style={styles.billActions}>
+                          <TouchableOpacity
+                            style={[
+                              styles.actionButton,
+                              { backgroundColor: "#8c52ff" },
+                            ]}
+                            onPress={() => {
+                              const split = resolveSplitAmounts(bill as any);
+                              setExpenseSource(bill.name || "");
+                              setExpenseAmount(formatCurrencyValue(split.total));
+                              setExpenseAmountCard(split.card);
+                              setExpenseAmountCash(split.cash);
+                              setExpenseIsRecurring(true);
+                              setExpenseDailyTracking(true);
+                              setExpenseRecurringDay("");
+                              setExpenseDate("");
+                              setEditingExpenseId(null);
+                              setEditingBillId(bill.id || null);
+                              setIsExpenseModalVisible(true);
+                            }}
+                          >
+                            <Ionicons name="pencil" size={16} color="#fff" />
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[
+                              styles.actionButton,
+                              { backgroundColor: "#ff6666" },
+                            ]}
+                            onPress={() =>
+                              handleOpenDeleteConfirm("bill", {
+                                id: bill.id,
+                                name: bill.name,
+                                amount: bill.amount,
+                              })
+                            }
+                          >
+                            <Ionicons name="trash" size={16} color="#fff" />
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    );
+                  }
+
+                  const item = entry.item;
+                  return (
+                    <View
+                      key={`tracked-expense-${item.id}`}
+                      style={[
+                        styles.billCard,
+                        { backgroundColor: "#0f0f11", borderColor: "#222" },
+                      ]}
+                    >
+                      <View style={styles.billHeader}>
+                        <View style={styles.billInfo}>
+                          <Text style={styles.billTitle}>{item.source}</Text>
+                          <View style={styles.dailyTrackingBadge}>
+                            <Ionicons
+                              name="analytics"
+                              size={12}
+                              color="#8c52ff"
+                            />
+                            <Text style={styles.dailyTrackingBadgeText}>
+                              Acompanhado diariamente
+                            </Text>
+                          </View>
+                          {item.notes ? (
+                            <Text style={styles.billDescription}>
+                              {item.notes}
+                            </Text>
+                          ) : null}
+                          <Text style={{ color: "#ccc", marginTop: 6 }}>
+                            Método: {formatPaymentMethodLabel(item.paymentMethod)}
+                          </Text>
+                        </View>
+                        <View>
+                          <Text style={styles.billAmount}>
+                            {formatCurrency(Number(item.amount) || 0)}
+                          </Text>
+                        </View>
+                      </View>
+                      <View style={styles.billActions}>
+                        <TouchableOpacity
+                          style={[
+                            styles.actionButton,
+                            { backgroundColor: "#8c52ff" },
+                          ]}
+                          onPress={() => {
+                            setExpenseSource(item.source || "");
+                            const split = resolveSplitAmounts(item as any);
+                            setExpenseAmount(formatCurrencyValue(split.total));
+                            setExpenseAmountCard(split.card);
+                            setExpenseAmountCash(split.cash);
+                            setExpenseDailyTracking(true);
+                            setExpenseDate("");
+                            setExpenseIsRecurring(false);
+                            setExpenseRecurringDay("");
+                            setEditingExpenseId(item.id || null);
+                            setEditingBillId(null);
+                            setIsExpenseModalVisible(true);
+                          }}
+                        >
+                          <Ionicons name="pencil" size={16} color="#fff" />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[
+                            styles.actionButton,
+                            { backgroundColor: "#ff6666" },
+                          ]}
+                          onPress={() =>
+                            handleOpenDeleteConfirm("expense", {
+                              id: item.id,
+                              source: item.source,
+                              amount: item.amount,
+                            })
+                          }
+                        >
+                          <Ionicons name="trash" size={16} color="#fff" />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+
             <Text style={styles.label}>Contas / Despesas fixas</Text>
-            {bills.length === 0 ? (
+            {fixedBills.length === 0 ? (
               <Text style={styles.emptyListText}>Nenhuma conta adicionada</Text>
             ) : (
-              bills.map((bill) => (
+              fixedBills.map((bill) => (
                 <View
                   key={bill.id}
                   style={[
@@ -1262,18 +1577,6 @@ export const ClientPlanningScreen = () => {
                   <View style={styles.billHeader}>
                     <View style={styles.billInfo}>
                       <Text style={styles.billTitle}>{bill.name}</Text>
-                      {bill.dailyTracking ? (
-                        <View style={styles.dailyTrackingBadge}>
-                          <Ionicons
-                            name="analytics"
-                            size={12}
-                            color="#8c52ff"
-                          />
-                          <Text style={styles.dailyTrackingBadgeText}>
-                            Acompanhado diariamente
-                          </Text>
-                        </View>
-                      ) : null}
                       {bill.notes ? (
                         <Text style={styles.billDescription}>{bill.notes}</Text>
                       ) : null}
@@ -1295,20 +1598,19 @@ export const ClientPlanningScreen = () => {
                         { backgroundColor: "#8c52ff" },
                       ]}
                       onPress={() => {
-                        // edit bill using the same expense modal
                         const split = resolveSplitAmounts(bill as any);
                         setExpenseSource(bill.name || "");
                         setExpenseAmount(formatCurrencyValue(split.total));
                         setExpenseAmountCard(split.card);
                         setExpenseAmountCash(split.cash);
                         setExpenseIsRecurring(true);
+                        setExpenseDailyTracking(false);
                         setExpenseRecurringDay(
                           bill.dueDay
                             ? String(bill.dueDay)
                             : String(new Date().getDate()),
                         );
                         setExpenseDate("");
-                        setExpenseDailyTracking(Boolean(bill.dailyTracking));
                         setEditingExpenseId(null);
                         setEditingBillId(bill.id || null);
                         setIsExpenseModalVisible(true);
@@ -1336,10 +1638,10 @@ export const ClientPlanningScreen = () => {
               ))
             )}
 
-            {expectedExpenses.length > 0 && (
+            {regularExpectedExpenses.length > 0 && (
               <View style={styles.sectionBlock}>
                 <Text style={styles.label}>Gastos esperados</Text>
-                {expectedExpenses.map((item) => (
+                {regularExpectedExpenses.map((item) => (
                   <View
                     key={item.id}
                     style={[
@@ -1350,18 +1652,6 @@ export const ClientPlanningScreen = () => {
                     <View style={styles.billHeader}>
                       <View style={styles.billInfo}>
                         <Text style={styles.billTitle}>{item.source}</Text>
-                        {item.dailyTracking ? (
-                          <View style={styles.dailyTrackingBadge}>
-                            <Ionicons
-                              name="analytics"
-                              size={12}
-                              color="#8c52ff"
-                            />
-                            <Text style={styles.dailyTrackingBadgeText}>
-                              Acompanhado diariamente
-                            </Text>
-                          </View>
-                        ) : null}
                         {item.notes ? (
                           <Text style={styles.billDescription}>
                             {item.notes}
@@ -1384,16 +1674,17 @@ export const ClientPlanningScreen = () => {
                           { backgroundColor: "#8c52ff" },
                         ]}
                         onPress={() => {
-                          // edit expected expense
                           setExpenseSource(item.source || "");
                           const split = resolveSplitAmounts(item as any);
                           setExpenseAmount(formatCurrencyValue(split.total));
                           setExpenseAmountCard(split.card);
                           setExpenseAmountCash(split.cash);
-                          setExpenseDate(item.expectedMonth || "");
+                          setExpenseDailyTracking(false);
+                          setExpenseDate(
+                            normalizeExpectedMonthForInput(item.expectedMonth),
+                          );
                           setExpenseIsRecurring(false);
-                          setExpenseRecurringDay(String(new Date().getDate()));
-                          setExpenseDailyTracking(Boolean(item.dailyTracking));
+                          setExpenseRecurringDay("");
                           setEditingExpenseId(item.id || null);
                           setEditingBillId(null);
                           setIsExpenseModalVisible(true);
@@ -1444,6 +1735,41 @@ export const ClientPlanningScreen = () => {
               </Text>
             </View>
 
+            <View style={styles.cardInvoiceSummaryRow}>
+              <View style={styles.cardInvoiceSummaryCard}>
+                <Text style={styles.cardInvoiceSummaryLabel}>
+                  Fatura esperada
+                </Text>
+                <Text style={styles.cardInvoiceSummaryHint}>
+                  {currentInvoiceKey.replace("-", "/")}
+                </Text>
+                <Text style={styles.cardInvoiceSummaryValue}>
+                  {formatCurrency(cardInvoiceSummary.expectedTotal)}
+                </Text>
+              </View>
+              <View style={styles.cardInvoiceSummaryCard}>
+                <Text style={styles.cardInvoiceSummaryLabel}>
+                  Fatura efetiva (mês seguinte)
+                </Text>
+                <Text style={styles.cardInvoiceSummaryHint}>
+                  Consultor + gastos no cartão
+                </Text>
+                <Text style={styles.cardInvoiceSummaryValue}>
+                  {formatCurrency(cardInvoiceSummary.effectiveTotal)}
+                </Text>
+              </View>
+            </View>
+
+            <View style={{ marginBottom: 12 }}>
+              <TouchableOpacity
+                style={styles.saveButton}
+                onPress={openCreateCardModal}
+                disabled={!selectedClient?.id}
+              >
+                <Text style={styles.saveButtonText}>Cadastrar cartão</Text>
+              </TouchableOpacity>
+            </View>
+
             {loadingCardsTab ? (
               <View style={styles.loadingCardsRow}>
                 <ActivityIndicator color="#8c52ff" />
@@ -1451,7 +1777,8 @@ export const ClientPlanningScreen = () => {
               </View>
             ) : clientCards.length === 0 ? (
               <Text style={styles.emptyListText}>
-                Nenhum cartão cadastrado para este cliente.
+                Nenhum cartão cadastrado para este cliente. Use o botão acima
+                para cadastrar.
               </Text>
             ) : (
               clientCards.map((card) => (
@@ -1462,15 +1789,45 @@ export const ClientPlanningScreen = () => {
                     { backgroundColor: "#0f0f11", borderColor: "#222" },
                   ]}
                 >
-                  <Text style={styles.billTitle}>
-                    {card.bank} ••••{card.last4}
-                  </Text>
+                  <View style={styles.billHeader}>
+                    <View style={styles.billInfo}>
+                      <Text style={styles.billTitle}>
+                        {card.bank} ••••{card.last4}
+                      </Text>
+                      <Text style={styles.billDescription}>
+                        Melhor dia: {card.bestDay} | Venc. fatura: dia{" "}
+                        {card.invoiceDueDay} | Limite:{" "}
+                        {formatCurrency(card.limit)}
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      style={[
+                        styles.actionButton,
+                        { backgroundColor: "#8c52ff" },
+                      ]}
+                      onPress={() => openEditCardModal(card)}
+                    >
+                      <Ionicons name="pencil" size={16} color="#fff" />
+                    </TouchableOpacity>
+                  </View>
                   <Text style={styles.billDescription}>
                     Fatura atual ({currentInvoiceKey.replace("-", "/")})
                   </Text>
                   <Text style={styles.cardExpenseRegistered}>
                     Gastos registrados no app:{" "}
                     {formatCurrency(cardExpenseTotals[card.id] || 0)}
+                  </Text>
+                  <Text style={styles.cardExpenseRegistered}>
+                    Fatura efetiva:{" "}
+                    {formatCurrency(
+                      getEffectiveInvoiceForCard(
+                        consultantCardInvoices,
+                        clientInvoiceSummaries,
+                        card.id,
+                        currentInvoiceKey,
+                        nextInvoiceKey,
+                      ),
+                    )}
                   </Text>
 
                   <Text style={[styles.label, { marginTop: 12 }]}>
@@ -1581,6 +1938,12 @@ export const ClientPlanningScreen = () => {
                       {item.notes ? (
                         <Text style={styles.billDescription}>{item.notes}</Text>
                       ) : null}
+                      {item.expectedMonth ? (
+                        <Text style={styles.billDescription}>
+                          Previsto para:{" "}
+                          {formatExpectedMonthLabel(item.expectedMonth)}
+                        </Text>
+                      ) : null}
                     </View>
                     <View>
                       <Text style={styles.billAmount}>
@@ -1598,8 +1961,12 @@ export const ClientPlanningScreen = () => {
                       onPress={() => {
                         setIncomeSource(item.source || "");
                         setIncomeAmountNumber(Number(item.amount || 0));
-                        setIncomeMonth(item.expectedMonth || "");
                         setIncomeDailyTracking(Boolean(item.dailyTracking));
+                        setIncomeMonth(
+                          item.dailyTracking
+                            ? ""
+                            : normalizeExpectedMonthForInput(item.expectedMonth),
+                        );
                         setEditingIncomeId(item.id || null);
                         setIsIncomeModalVisible(true);
                       }}
@@ -1632,18 +1999,55 @@ export const ClientPlanningScreen = () => {
           </View>
         )}
 
-        <TouchableOpacity
-          style={styles.primarySaveButton}
-          onPress={handleSave}
-          disabled={saving}
-        >
-          <Text style={styles.saveButtonText}>
-            {saving ? "Salvando..." : "Salvar Planejamento"}
-          </Text>
-        </TouchableOpacity>
-
         <View style={styles.bottomSpacer} />
-      </ScrollView>
+        </ScrollView>
+
+        <View style={styles.fixedFooter}>
+          <View style={styles.summaryRow}>
+            <View style={styles.summaryBlock}>
+              <Text style={styles.summaryLabel}>Rendas esperadas</Text>
+              <Text style={styles.summaryValue}>
+                {formatCurrency(totals.totalExpectedIncomes)}
+              </Text>
+            </View>
+            <View style={styles.summaryBlock}>
+              <Text style={styles.summaryLabel}>Gastos esperados</Text>
+              <Text style={styles.summaryValue}>
+                {formatCurrency(totals.totalSpending)}
+              </Text>
+            </View>
+            <View style={styles.summaryBlock}>
+              <Text style={styles.summaryLabel}>Poupança esperada</Text>
+              <Text
+                style={[
+                  styles.summaryValue,
+                  totals.expectedSavings >= 0
+                    ? styles.positiveValue
+                    : styles.negativeValue,
+                ]}
+              >
+                {formatCurrency(totals.expectedSavings)}
+              </Text>
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={[
+              styles.primarySaveButton,
+              saving && styles.primarySaveButtonDisabled,
+            ]}
+            onPress={handleSave}
+            disabled={saving}
+            activeOpacity={0.85}
+          >
+            {saving ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.saveButtonText}>Salvar Planejamento</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </View>
       <Modal
         visible={isBillModalVisible}
         transparent
@@ -1862,16 +2266,30 @@ export const ClientPlanningScreen = () => {
                     />
                   </View>
 
-                  <View style={styles.inputGroup}>
+                  <View
+                    style={[
+                      styles.inputGroup,
+                      incomeDailyTracking && styles.disabledSection,
+                    ]}
+                    pointerEvents={incomeDailyTracking ? "none" : "auto"}
+                  >
                     <Text style={styles.inputLabel}>
-                      Mês previsto (opcional)
+                      Dia e mês previstos (opcional)
                     </Text>
                     <TextInput
-                      style={styles.input}
+                      style={[
+                        styles.input,
+                        incomeDailyTracking && styles.inputDisabled,
+                      ]}
                       value={incomeMonth}
-                      onChangeText={setIncomeMonth}
-                      placeholder="YYYY-MM ou MM/YYYY"
+                      onChangeText={(value) =>
+                        setIncomeMonth(toDayMonthMask(value))
+                      }
+                      placeholder="DD/MM"
                       placeholderTextColor="#777"
+                      keyboardType="numeric"
+                      maxLength={5}
+                      editable={!incomeDailyTracking && !savingIncome}
                     />
                   </View>
 
@@ -1884,9 +2302,7 @@ export const ClientPlanningScreen = () => {
                           styles.checkbox,
                           incomeDailyTracking && styles.checkboxActive,
                         ]}
-                        onPress={() =>
-                          setIncomeDailyTracking(!incomeDailyTracking)
-                        }
+                        onPress={toggleIncomeDailyTracking}
                       >
                         {incomeDailyTracking ? (
                           <Ionicons name="checkmark" size={16} color="#fff" />
@@ -2013,61 +2429,80 @@ export const ClientPlanningScreen = () => {
                     </Text>
                   </View>
 
-                  <View style={styles.inputGroup}>
-                    <View
-                      style={{ flexDirection: "row", alignItems: "center" }}
-                    >
-                      <TouchableOpacity
-                        style={[
-                          styles.checkbox,
-                          expenseIsRecurring && styles.checkboxActive,
-                        ]}
-                        onPress={() =>
-                          setExpenseIsRecurring(!expenseIsRecurring)
-                        }
+                  <View
+                    style={[
+                      styles.schedulingSection,
+                      expenseDailyTracking && styles.disabledSection,
+                    ]}
+                    pointerEvents={expenseDailyTracking ? "none" : "auto"}
+                  >
+                    <View style={styles.inputGroup}>
+                      <View
+                        style={{ flexDirection: "row", alignItems: "center" }}
                       >
-                        {expenseIsRecurring && (
-                          <Ionicons name="checkmark" size={16} color="#fff" />
-                        )}
-                      </TouchableOpacity>
-                      <Text
-                        style={[
-                          styles.inputLabel,
-                          { marginLeft: 12, marginBottom: 0 },
-                        ]}
-                      >
-                        É uma despesa recorrente?
-                      </Text>
+                        <TouchableOpacity
+                          style={[
+                            styles.checkbox,
+                            expenseIsRecurring && styles.checkboxActive,
+                          ]}
+                          onPress={() =>
+                            setExpenseIsRecurring(!expenseIsRecurring)
+                          }
+                          disabled={expenseDailyTracking}
+                        >
+                          {expenseIsRecurring && (
+                            <Ionicons name="checkmark" size={16} color="#fff" />
+                          )}
+                        </TouchableOpacity>
+                        <Text
+                          style={[
+                            styles.inputLabel,
+                            { marginLeft: 12, marginBottom: 0 },
+                          ]}
+                        >
+                          É uma despesa recorrente?
+                        </Text>
+                      </View>
                     </View>
-                  </View>
 
-                  {expenseIsRecurring ? (
-                    <View style={styles.inputGroup}>
-                      <Text style={styles.inputLabel}>Dia do mês (1-31) *</Text>
-                      <TextInput
-                        style={styles.input}
-                        value={expenseRecurringDay}
-                        onChangeText={setExpenseRecurringDay}
-                        placeholder="Ex: 15"
-                        placeholderTextColor="#777"
-                        keyboardType="number-pad"
-                        maxLength={2}
-                      />
-                    </View>
-                  ) : (
-                    <View style={styles.inputGroup}>
-                      <Text style={styles.inputLabel}>Data (Dia/Mês) *</Text>
-                      <TextInput
-                        style={styles.input}
-                        value={expenseDate}
-                        onChangeText={setExpenseDate}
-                        placeholder="DD/MM"
-                        placeholderTextColor="#777"
-                        keyboardType="numeric"
-                        maxLength={5}
-                      />
-                    </View>
-                  )}
+                    {expenseIsRecurring ? (
+                      <View style={styles.inputGroup}>
+                        <Text style={styles.inputLabel}>Dia do mês (1-31) *</Text>
+                        <TextInput
+                          style={[
+                            styles.input,
+                            expenseDailyTracking && styles.inputDisabled,
+                          ]}
+                          value={expenseRecurringDay}
+                          onChangeText={setExpenseRecurringDay}
+                          placeholder="Ex: 15"
+                          placeholderTextColor="#777"
+                          keyboardType="number-pad"
+                          maxLength={2}
+                          editable={!expenseDailyTracking && !savingExpense}
+                        />
+                      </View>
+                    ) : (
+                      <View style={styles.inputGroup}>
+                        <Text style={styles.inputLabel}>Data (Dia/Mês) *</Text>
+                        <TextInput
+                          style={[
+                            styles.input,
+                            expenseDailyTracking && styles.inputDisabled,
+                          ]}
+                          value={expenseDate}
+                          onChangeText={(value) =>
+                            setExpenseDate(toDayMonthMask(value))
+                          }
+                          placeholder="DD/MM"
+                          placeholderTextColor="#777"
+                          keyboardType="numeric"
+                          maxLength={5}
+                          editable={!expenseDailyTracking && !savingExpense}
+                        />
+                      </View>
+                    )}
+                  </View>
 
                   <View style={[styles.inputGroup, styles.lastInputGroup]}>
                     <View
@@ -2078,9 +2513,7 @@ export const ClientPlanningScreen = () => {
                           styles.checkbox,
                           expenseDailyTracking && styles.checkboxActive,
                         ]}
-                        onPress={() =>
-                          setExpenseDailyTracking(!expenseDailyTracking)
-                        }
+                        onPress={toggleExpenseDailyTracking}
                       >
                         {expenseDailyTracking ? (
                           <Ionicons name="checkmark" size={16} color="#fff" />
@@ -2338,43 +2771,53 @@ export const ClientPlanningScreen = () => {
         </KeyboardAvoidingView>
       </Modal>
 
-      <View style={styles.fixedSummary}>
-        <View style={styles.summaryRow}>
-          <View style={styles.summaryBlock}>
-            <Text style={styles.summaryLabel}>Rendas esperadas</Text>
-            <Text style={styles.summaryValue}>
-              {formatCurrency(totals.totalExpectedIncomes)}
-            </Text>
-          </View>
-          <View style={styles.summaryBlock}>
-            <Text style={styles.summaryLabel}>Gastos esperados</Text>
-            <Text style={styles.summaryValue}>
-              {formatCurrency(totals.totalSpending)}
-            </Text>
-          </View>
-          <View style={styles.summaryBlock}>
-            <Text style={styles.summaryLabel}>Poupança esperada</Text>
-            <Text
-              style={[
-                styles.summaryValue,
-                totals.expectedSavings >= 0
-                  ? styles.positiveValue
-                  : styles.negativeValue,
-              ]}
+      {selectedClient?.id ? (
+        <CreditCardFormModal
+          visible={isCardModalVisible}
+          userId={selectedClient.id}
+          editingCard={editingClientCard}
+          onClose={() => {
+            setIsCardModalVisible(false);
+            setEditingClientCard(null);
+          }}
+          onSaved={handleClientCardSaved}
+        />
+      ) : null}
+
+      <Modal
+        visible={cycleSuccessVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setCycleSuccessVisible(false)}
+      >
+        <View style={styles.successModalBackdrop}>
+          <View style={styles.successModalCard}>
+            <Ionicons name="checkmark-circle" size={64} color="#8c52ff" />
+            <Text style={styles.successModalTitle}>Ciclo renovado</Text>
+            <Text style={styles.successModalMessage}>{cycleSuccessMessage}</Text>
+            <TouchableOpacity
+              style={styles.successModalButton}
+              onPress={() => setCycleSuccessVisible(false)}
             >
-              {formatCurrency(totals.expectedSavings)}
-            </Text>
+              <Text style={styles.saveButtonText}>OK</Text>
+            </TouchableOpacity>
           </View>
         </View>
-      </View>
+      </Modal>
     </Layout>
   );
 };
 
 const styles = StyleSheet.create({
+  page: {
+    flex: 1,
+  },
+  scroll: {
+    flex: 1,
+  },
   container: {
     padding: 16,
-    paddingBottom: 20,
+    paddingBottom: 8,
   },
   centerContainer: {
     flex: 1,
@@ -2497,6 +2940,37 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     alignItems: "center",
+  },
+  cardInvoiceSummaryRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  cardInvoiceSummaryCard: {
+    flex: 1,
+    backgroundColor: "#0f0f11",
+    borderWidth: 1,
+    borderColor: "#6b46c1",
+    borderRadius: 12,
+    padding: 12,
+    gap: 4,
+  },
+  cardInvoiceSummaryLabel: {
+    color: "#b89aff",
+    fontSize: 11,
+    fontWeight: "700",
+    textTransform: "uppercase",
+  },
+  cardInvoiceSummaryHint: {
+    color: "#888",
+    fontSize: 10,
+  },
+  cardInvoiceSummaryValue: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "700",
+    marginTop: 2,
   },
   highlightLabel: {
     color: "#b89aff",
@@ -2683,6 +3157,16 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "700",
   },
+  disabledSection: {
+    opacity: 0.45,
+  },
+  schedulingSection: {
+    marginBottom: 4,
+  },
+  inputDisabled: {
+    backgroundColor: "#1a1a1a",
+    color: "#666",
+  },
   billDescription: {
     fontSize: 14,
     color: "#ccc",
@@ -2792,7 +3276,12 @@ const styles = StyleSheet.create({
     padding: 14,
     borderRadius: 8,
     alignItems: "center",
-    marginTop: 16,
+    marginTop: 12,
+    minHeight: 48,
+    justifyContent: "center",
+  },
+  primarySaveButtonDisabled: {
+    opacity: 0.7,
   },
   saveButtonText: {
     color: "#fff",
@@ -2850,23 +3339,51 @@ const styles = StyleSheet.create({
     color: "#fff",
   },
   bottomSpacer: {
-    height: 140,
+    height: 24,
   },
-  totalPreviewText: {
-    color: "#fff",
-    fontSize: 18,
-    fontWeight: "700",
-  },
-  fixedSummary: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
+  fixedFooter: {
     backgroundColor: "#0a0a0a",
     borderTopWidth: 1,
     borderTopColor: "#333",
     paddingHorizontal: 12,
+    paddingTop: 12,
+    paddingBottom: 12,
+  },
+  successModalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.65)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
+  },
+  successModalCard: {
+    width: "100%",
+    maxWidth: 360,
+    backgroundColor: "#0f0f10",
+    borderRadius: 14,
+    padding: 24,
+    alignItems: "center",
+  },
+  successModalTitle: {
+    color: "#fff",
+    fontSize: 20,
+    fontWeight: "700",
+    marginTop: 12,
+    marginBottom: 8,
+  },
+  successModalMessage: {
+    color: "#ddd",
+    fontSize: 15,
+    textAlign: "center",
+    marginBottom: 20,
+  },
+  successModalButton: {
+    backgroundColor: "#8c52ff",
     paddingVertical: 12,
+    paddingHorizontal: 32,
+    borderRadius: 10,
+    minWidth: 120,
+    alignItems: "center",
   },
   summaryRow: {
     flexDirection: "row",
@@ -2892,6 +3409,11 @@ const styles = StyleSheet.create({
   },
   negativeValue: {
     color: "#ff6666",
+  },
+  totalPreviewText: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "700",
   },
 });
 

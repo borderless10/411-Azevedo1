@@ -17,12 +17,14 @@ import { Layout } from "../../components/Layout/Layout";
 import SummaryCard from "../../components/ui/SummaryCard";
 import DetailCard from "../../components/ui/DetailCard";
 import { useAuth } from "../../hooks/useAuth";
-import { planningServices } from "../../services/planningServices";
+import { planningServices, sumConsultantExpectedInvoicesForKey, sumEffectiveInvoicesForCycle } from "../../services/planningServices";
 import { creditCardServices } from "../../services/creditCardServices";
 import { activityServices } from "../../services/activityServices";
 import { formatCurrency } from "../../utils/currencyUtils";
 import { toInvoiceKey } from "../../utils/creditCardUtils";
+import { addMonths, formatExpectedMonthLabel } from "../../utils/dateUtils";
 import { CreditCard } from "../../types/creditCard";
+import { CreditCardInvoiceSummary } from "../../types/creditCard";
 import { useTheme } from "../../contexts/ThemeContext";
 
 export const PlanningViewScreen = () => {
@@ -30,9 +32,13 @@ export const PlanningViewScreen = () => {
   const [loading, setLoading] = useState(true);
   const [planning, setPlanning] = useState<any | null>(null);
   const [clientCards, setClientCards] = useState<CreditCard[]>([]);
+  const [cardInvoiceSummaries, setCardInvoiceSummaries] = useState<
+    CreditCardInvoiceSummary[]
+  >([]);
   const [comment, setComment] = useState("");
   const [sending, setSending] = useState(false);
   const currentInvoiceKey = toInvoiceKey(new Date());
+  const nextInvoiceKey = toInvoiceKey(addMonths(new Date(), 1));
 
   const totals = useMemo(() => {
     const sum = (arr?: any[]) =>
@@ -114,9 +120,9 @@ export const PlanningViewScreen = () => {
       if (!Number.isNaN(d.getTime())) return d.toLocaleDateString("pt-BR");
     }
 
-    if (item?.expectedMonth && String(item.expectedMonth).length >= 7) {
-      const [year, month] = String(item.expectedMonth).split("-");
-      if (year && month) return `${month}/${year}`;
+    if (item?.expectedMonth) {
+      const label = formatExpectedMonthLabel(String(item.expectedMonth));
+      if (label) return label;
     }
 
     if (typeof item?.dueDay === "number") return `Dia ${item.dueDay}`;
@@ -170,12 +176,32 @@ export const PlanningViewScreen = () => {
       .filter((entry: { hasData: boolean }) => entry.hasData);
   }, [planning, clientCards, currentInvoiceKey]);
 
+  const cardInvoiceSummary = useMemo(
+    () => ({
+      expectedTotal: sumConsultantExpectedInvoicesForKey(
+        planning?.consultantCardInvoices,
+        currentInvoiceKey,
+      ),
+      effectiveTotal: sumEffectiveInvoicesForCycle(
+        planning?.consultantCardInvoices,
+        cardInvoiceSummaries,
+        currentInvoiceKey,
+        nextInvoiceKey,
+      ),
+    }),
+    [planning, cardInvoiceSummaries, currentInvoiceKey, nextInvoiceKey],
+  );
+
   useEffect(() => {
     const loadCards = async () => {
       if (!user?.id) return;
       try {
-        const cards = await creditCardServices.getCreditCards(user.id);
+        const [cards, summaries] = await Promise.all([
+          creditCardServices.getCreditCards(user.id),
+          creditCardServices.getInvoiceSummaries(user.id),
+        ]);
         setClientCards(cards.filter((card) => card.isActive !== false));
+        setCardInvoiceSummaries(summaries);
       } catch (error) {
         console.warn("Erro ao carregar cartões do planejamento:", error);
       }
@@ -343,43 +369,97 @@ export const PlanningViewScreen = () => {
                 <View style={{ marginTop: 12 }}>
                   <Text style={styles.sectionTitle}>Gastos - Detalhes</Text>
 
-                  {planning.bills && planning.bills.length > 0 && (
-                    <View style={{ marginTop: 8 }}>
-                      <Text style={styles.sectionTitle}>
-                        Contas / Despesas fixas
-                      </Text>
-                      {planning.bills.map((b: any) => (
-                        <DetailCard
-                          key={b.id}
-                          title={b.name}
-                          value={formatCurrency(Number(b.amount) || 0)}
-                          note={`Método: ${formatPaymentMethodLabel(b.paymentMethod)}\nData: ${formatItemDateLabel(b)}${b.notes ? `\n${b.notes}` : ""}`}
-                        />
-                      ))}
-                    </View>
-                  )}
+                  {(() => {
+                    const trackedExpenses = [
+                      ...(planning.bills || []).filter((b: any) => b.dailyTracking),
+                      ...(planning.expectedExpenses || []).filter(
+                        (it: any) => it.dailyTracking,
+                      ),
+                    ];
+                    const fixedBills = (planning.bills || []).filter(
+                      (b: any) => !b.dailyTracking,
+                    );
+                    const regularExpectedExpenses = (
+                      planning.expectedExpenses || []
+                    ).filter((it: any) => !it.dailyTracking);
 
-                  {planning.expectedExpenses &&
-                    planning.expectedExpenses.length > 0 && (
-                      <View style={{ marginTop: 8 }}>
-                        <Text style={styles.sectionTitle}>
-                          Gastos esperados
-                        </Text>
-                        {planning.expectedExpenses.map((it: any) => (
-                          <DetailCard
-                            key={it.id}
-                            title={it.source || "Outros"}
-                            value={formatCurrency(it.amount)}
-                            note={`Método: ${formatPaymentMethodLabel(it.paymentMethod)}\nData: ${formatItemDateLabel(it)}${it.notes ? `\n${it.notes}` : ""}`}
-                          />
-                        ))}
-                      </View>
-                    )}
+                    return (
+                      <>
+                        {trackedExpenses.length > 0 && (
+                          <View style={{ marginTop: 8 }}>
+                            <Text style={styles.sectionTitle}>
+                              Gastos com acompanhamento diário
+                            </Text>
+                            {trackedExpenses.map((entry: any) => (
+                              <DetailCard
+                                key={entry.id}
+                                title={entry.name || entry.source || "Outros"}
+                                value={formatCurrency(Number(entry.amount) || 0)}
+                                note={`Acompanhamento diário\nMétodo: ${formatPaymentMethodLabel(entry.paymentMethod)}${entry.notes ? `\n${entry.notes}` : ""}`}
+                              />
+                            ))}
+                          </View>
+                        )}
+
+                        {fixedBills.length > 0 && (
+                          <View style={{ marginTop: 8 }}>
+                            <Text style={styles.sectionTitle}>
+                              Contas / Despesas fixas
+                            </Text>
+                            {fixedBills.map((b: any) => (
+                              <DetailCard
+                                key={b.id}
+                                title={b.name}
+                                value={formatCurrency(Number(b.amount) || 0)}
+                                note={`Método: ${formatPaymentMethodLabel(b.paymentMethod)}\nData: ${formatItemDateLabel(b)}${b.notes ? `\n${b.notes}` : ""}`}
+                              />
+                            ))}
+                          </View>
+                        )}
+
+                        {regularExpectedExpenses.length > 0 && (
+                          <View style={{ marginTop: 8 }}>
+                            <Text style={styles.sectionTitle}>
+                              Gastos esperados
+                            </Text>
+                            {regularExpectedExpenses.map((it: any) => (
+                              <DetailCard
+                                key={it.id}
+                                title={it.source || "Outros"}
+                                value={formatCurrency(it.amount)}
+                                note={`Método: ${formatPaymentMethodLabel(it.paymentMethod)}\nData: ${formatItemDateLabel(it)}${it.notes ? `\n${it.notes}` : ""}`}
+                              />
+                            ))}
+                          </View>
+                        )}
+                      </>
+                    );
+                  })()}
                 </View>
 
-                {cardInvoiceEntries.length > 0 ? (
+                {(cardInvoiceSummary.expectedTotal > 0 ||
+                  cardInvoiceSummary.effectiveTotal > 0 ||
+                  cardInvoiceEntries.length > 0) && (
                   <View style={{ marginTop: 12 }}>
                     <Text style={styles.sectionTitle}>Cartões — Faturas</Text>
+                    <View style={styles.invoiceSummaryRow}>
+                      <View style={styles.invoiceSummaryCard}>
+                        <Text style={styles.invoiceSummaryLabel}>
+                          Fatura esperada
+                        </Text>
+                        <Text style={styles.invoiceSummaryValue}>
+                          {formatCurrency(cardInvoiceSummary.expectedTotal)}
+                        </Text>
+                      </View>
+                      <View style={styles.invoiceSummaryCard}>
+                        <Text style={styles.invoiceSummaryLabel}>
+                          Fatura efetiva (mês seguinte)
+                        </Text>
+                        <Text style={styles.invoiceSummaryValue}>
+                          {formatCurrency(cardInvoiceSummary.effectiveTotal)}
+                        </Text>
+                      </View>
+                    </View>
                     {cardInvoiceEntries.map((entry: any) => (
                       <DetailCard
                         key={entry.id}
@@ -388,7 +468,7 @@ export const PlanningViewScreen = () => {
                       />
                     ))}
                   </View>
-                ) : null}
+                )}
 
                 {/* Detailed Rendas */}
                 {planning.expectedIncomes &&
@@ -527,6 +607,30 @@ const styles = StyleSheet.create({
   },
   summaryCardWrapperFull: {
     width: "100%",
+  },
+  invoiceSummaryRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 8,
+  },
+  invoiceSummaryCard: {
+    flex: 1,
+    backgroundColor: "#1a1a1a",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#333",
+    padding: 12,
+    gap: 4,
+  },
+  invoiceSummaryLabel: {
+    color: "#ccc",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  invoiceSummaryValue: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "700",
   },
 });
 

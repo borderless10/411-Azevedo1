@@ -17,15 +17,28 @@ import { Ionicons } from "@expo/vector-icons";
 import { Layout } from "../../components/Layout/Layout";
 import { useAuth } from "../../hooks/useAuth";
 import expenseServices from "../../services/expenseServices";
-import budgetServices from "../../services/budgetServices";
+import budgetServices, {
+  normalizeTrackedTitleKey,
+} from "../../services/budgetServices";
 import { formatCurrency } from "../../utils/currencyUtils";
+import {
+  filterTrackedExpensesForTitle,
+  normalizeExpenseTitleKey,
+} from "../../utils/expenseScopeUtils";
 import {
   getPlanningCycleLabel,
   planningServices,
 } from "../../services/planningServices";
-import { getStartOfDay, getEndOfDay, addDays } from "../../utils/dateUtils";
+import {
+  getStartOfDay,
+  getEndOfDay,
+  addDays,
+  formatDateForDisplay,
+} from "../../utils/dateUtils";
 import { useNavigation } from "../../routes/NavigationContext";
 import ZeroPlanilhaConfirmModal from "../../components/ui/ZeroPlanilhaConfirmModal";
+import ConfettiCelebration from "../../components/ui/ConfettiCelebration";
+import { Expense } from "../../types/expense";
 
 type DaySummary = {
   date: Date;
@@ -37,12 +50,13 @@ export const CategoryBudgetScreen = () => {
   const slideAnim = useRef(new Animated.Value(30)).current;
 
   const { user } = useAuth();
-  const { navigate, params } = useNavigation() as any;
+  const { navigate, params, currentScreen } = useNavigation() as any;
   const trackedTitle = String(
     params?.trackedTitle || params?.categoryName || "",
   ).trim();
   const [loading, setLoading] = useState(true);
   const [days, setDays] = useState<DaySummary[]>([]);
+  const [expenseHistory, setExpenseHistory] = useState<Expense[]>([]);
   const [plannedAmount, setPlannedAmount] = useState<number>(0);
   const [cycleLabel, setCycleLabel] = useState<string>("");
   const [zeroConfirmedDays, setZeroConfirmedDays] = useState<number[]>([]);
@@ -50,27 +64,13 @@ export const CategoryBudgetScreen = () => {
   const [zeroConfirmDate, setZeroConfirmDate] = useState<Date | null>(null);
   const [zeroConfirmDayLabel, setZeroConfirmDayLabel] = useState("");
   const [confirmingZero, setConfirmingZero] = useState(false);
+  const [showConfetti, setShowConfetti] = useState(false);
+  const [plannedCycleDurationDays, setPlannedCycleDurationDays] =
+    useState<number>(0);
+  const [cycleDateStart, setCycleDateStart] = useState<Date | null>(null);
+  const [cycleDateEnd, setCycleDateEnd] = useState<Date | null>(null);
 
-  const normalizeTitle = (value?: string) =>
-    String(value || "")
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .trim()
-      .replace(/\s+/g, " ")
-      .toLocaleLowerCase("pt-BR");
-
-  const isTrackedDailyCategory = (category?: string) => {
-    const normalizedCategory = String(category || "")
-      .trim()
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "");
-
-    return (
-      normalizedCategory === "acompanhamento diario" ||
-      normalizedCategory === "gasto acompanhado"
-    );
-  };
+  const normalizeTitle = normalizeExpenseTitleKey;
 
   const getPlannedAmount = (item: any) => {
     const amountCard = Number(item?.amountCard);
@@ -123,6 +123,9 @@ export const CategoryBudgetScreen = () => {
         }, 0);
 
       setPlannedAmount(plannedFromBills + plannedFromExpectedExpenses);
+      setPlannedCycleDurationDays(
+        Number(planning?.consumoModeradoCycleDurationDays || 0),
+      );
 
       const cycleStartDate = planning?.consumoModeradoCycleStartedAt
         ? getStartOfDay(new Date(planning.consumoModeradoCycleStartedAt))
@@ -147,15 +150,24 @@ export const CategoryBudgetScreen = () => {
         end = cycleEndDate || getEndOfDay(today);
       }
 
+      setCycleDateStart(start);
+      setCycleDateEnd(end);
+
       const expenses = await expenseServices.getExpenses(user.id, {
         startDate: start,
         endDate: end,
       });
 
-      const filteredExpenses = expenses.filter((exp) => {
-        if (!isTrackedDailyCategory((exp as any)?.category)) return false;
-        return normalizeTitle(exp.description) === targetTitleKey;
-      });
+      const filteredExpenses = filterTrackedExpensesForTitle(
+        expenses,
+        trackedTitle,
+      );
+
+      setExpenseHistory(
+        [...filteredExpenses].sort(
+          (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+        ),
+      );
 
       const dayMap = new Map<string, number>();
       let cursor = getStartOfDay(start);
@@ -183,16 +195,12 @@ export const CategoryBudgetScreen = () => {
       setDays(list);
 
       const budget = await budgetServices.getCurrentBudget(user.id);
-      const normalZeroDays = (budget?.zeroConfirmedDays || []).map((day) =>
-        Number(day),
-      );
-      const noRankingZeroDays = (budget?.zeroConfirmedDaysNoRanking || []).map(
-        (day) => Number(day),
-      );
+      const titleKey = normalizeTrackedTitleKey(trackedTitle);
       setZeroConfirmedDays(
-        Array.from(new Set([...normalZeroDays, ...noRankingZeroDays])).sort(
-          (a, b) => a - b,
-        ),
+        (budget?.trackedZeroConfirmedDays?.[titleKey] || [])
+          .map((day) => Number(day))
+          .filter((day) => Number.isFinite(day))
+          .sort((a, b) => a - b),
       );
     } catch (error) {
       console.error("❌ [CATEGORY BUDGET] Erro ao carregar dados:", error);
@@ -219,36 +227,103 @@ export const CategoryBudgetScreen = () => {
   }, []);
 
   useEffect(() => {
+    if (currentScreen !== "CategoryBudget") return;
     loadData();
-  }, [user?.id, trackedTitle]);
+  }, [currentScreen, user?.id, trackedTitle]);
 
-  const daysInCycle = days.length > 0 ? days.length : 1;
+  const handleAddTrackedExpense = () => {
+    navigate("AddExpense", {
+      prefillExpenseType: "tracked",
+      prefillTrackedTitle: trackedTitle,
+      returnTo: "CategoryBudget",
+      returnParams: { trackedTitle },
+    });
+  };
+
+  const today = new Date();
+  const daysInMonth = new Date(
+    today.getFullYear(),
+    today.getMonth() + 1,
+    0,
+  ).getDate();
+
+  const calculateDaysInCycle = (): number => {
+    if (!cycleDateStart || !cycleDateEnd) return daysInMonth;
+    const start = getStartOfDay(cycleDateStart);
+    const end = getStartOfDay(cycleDateEnd);
+    const diffTime = end.getTime() - start.getTime();
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
+    return Math.max(1, diffDays);
+  };
+
+  const daysInCycle = calculateDaysInCycle();
+  const daysForIdealTarget =
+    plannedCycleDurationDays > 0 ? plannedCycleDurationDays : daysInCycle;
+  const budgetValue = plannedAmount || 0;
+  const idealDailyAverage =
+    budgetValue > 0 && daysForIdealTarget > 0
+      ? budgetValue / daysForIdealTarget
+      : 0;
+
   const totalSpent = useMemo(
     () => days.reduce((sum, item) => sum + item.total, 0),
     [days],
   );
-  const remainingToSpend = Math.max(0, plannedAmount - totalSpent);
-  const overPlannedAmount = Math.max(0, totalSpent - plannedAmount);
-  const actualDailyAverage = days.length > 0 ? totalSpent / days.length : 0;
-  const hasData = days.some((item) => item.total > 0);
+  const remainingToSpend = Math.max(0, budgetValue - totalSpent);
+  const overPlannedAmount = Math.max(0, totalSpent - budgetValue);
 
-  const performanceIndicator = (() => {
-    if (!hasData) {
+  const countedDays = days.filter((daySummary) => {
+    const day = daySummary.date.getDate();
+    const hasExpense = daySummary.total > 0;
+    const isZeroConfirmed = zeroConfirmedDays.includes(day);
+    return hasExpense || isZeroConfirmed;
+  }).length;
+
+  const actualDailyAverage = countedDays > 0 ? totalSpent / countedDays : 0;
+  const isOverBudget =
+    actualDailyAverage > idealDailyAverage && budgetValue > 0;
+
+  const getPerformanceIndicator = () => {
+    if (budgetValue <= 0) {
       return {
-        label: "Sem lancamentos",
-        detail: "Ainda nao existem gastos lancados para este acompanhamento.",
+        label: "Sem planejamento definido",
+        detail:
+          "Peça ao consultor para preencher o planejamento com gastos esperados.",
         color: "#999",
         icon: "information-circle-outline" as const,
       };
     }
 
+    const difference = actualDailyAverage - idealDailyAverage;
+    const tolerance = 0.01;
+
+    if (difference > tolerance) {
+      return {
+        label: "Acima da meta",
+        detail: `${formatCurrency(Math.abs(difference))} acima da meta diária.`,
+        color: "#ff4d6d",
+        icon: "trending-up" as const,
+      };
+    }
+
+    if (difference < -tolerance) {
+      return {
+        label: "Abaixo da meta",
+        detail: `${formatCurrency(Math.abs(difference))} abaixo da meta diária.`,
+        color: "#8c52ff",
+        icon: "trending-down" as const,
+      };
+    }
+
     return {
-      label: "Em acompanhamento",
-      detail: "Continue registrando para acompanhar sua media diaria.",
+      label: "Dentro da meta",
+      detail: "Sua média diária está alinhada com a meta definida.",
       color: "#c084fc",
-      icon: "analytics" as const,
+      icon: "checkmark-circle" as const,
     };
-  })();
+  };
+
+  const performanceIndicator = getPerformanceIndicator();
 
   const handleOpenNoRecordActions = (date: Date) => {
     const label = date.toLocaleDateString("pt-BR", {
@@ -269,9 +344,10 @@ export const CategoryBudgetScreen = () => {
 
     try {
       setConfirmingZero(true);
-      await budgetServices.confirmZeroExpenseDayNoRanking(
+      await budgetServices.confirmZeroExpenseDayForTracked(
         user.id,
         zeroConfirmDate,
+        trackedTitle,
       );
 
       const day = zeroConfirmDate.getDate();
@@ -280,6 +356,8 @@ export const CategoryBudgetScreen = () => {
       );
       setZeroConfirmVisible(false);
       setZeroConfirmDate(null);
+      setShowConfetti(true);
+      Alert.alert("Parabéns! 🎉", "Zero registrado com sucesso.");
     } catch (error) {
       console.error("❌ [CATEGORY BUDGET] Erro ao confirmar zero:", error);
       Alert.alert("Erro", "Não foi possível confirmar o zero agora.");
@@ -302,6 +380,7 @@ export const CategoryBudgetScreen = () => {
         date: zeroConfirmDate,
         category: "Acompanhamento Diário",
         paymentMethod: "other",
+        isTrackedDaily: true,
       });
 
       setZeroConfirmVisible(false);
@@ -373,56 +452,90 @@ export const CategoryBudgetScreen = () => {
             <Text style={styles.helperText}>
               Cálculo: gasto esperado do ciclo menos total gasto até agora.
             </Text>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Media diaria:</Text>
-              <Text style={styles.infoValue}>
-                {formatCurrency(actualDailyAverage)}
-              </Text>
-            </View>
+            {budgetValue > 0 ? (
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Média diária ideal:</Text>
+                <Text style={styles.infoValue}>
+                  {formatCurrency(idealDailyAverage)}
+                </Text>
+              </View>
+            ) : null}
           </View>
 
-          <View style={styles.statsContainer}>
-            <View style={styles.statCard}>
-              <Ionicons name="calendar-outline" size={24} color="#8c52ff" />
-              <Text style={styles.statLabel}>Dias do ciclo</Text>
-              <Text style={styles.statValue}>{daysInCycle}</Text>
-            </View>
+          {budgetValue > 0 ? (
+            <View style={styles.statsContainer}>
+              <View style={styles.statCard}>
+                <Ionicons name="calendar-outline" size={24} color="#8c52ff" />
+                <Text style={styles.statLabel}>Dias no ciclo</Text>
+                <Text style={styles.statValue}>{daysInCycle}</Text>
+              </View>
 
-            <View style={styles.statCard}>
-              <Ionicons name="cash-outline" size={24} color="#8c52ff" />
-              <Text style={styles.statLabel}>Total gasto</Text>
-              <Text style={styles.statValue}>{formatCurrency(totalSpent)}</Text>
-            </View>
+              <View style={styles.statCard}>
+                <Ionicons name="cash-outline" size={24} color="#8c52ff" />
+                <Text style={styles.statLabel}>Total gasto</Text>
+                <Text style={styles.statValue}>{formatCurrency(totalSpent)}</Text>
+              </View>
 
-            <View style={styles.statCard}>
-              <Ionicons name="analytics" size={24} color="#8c52ff" />
-              <Text style={styles.statLabel}>Media real/dia</Text>
-              <Text style={styles.statValue}>
-                {formatCurrency(actualDailyAverage)}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.performanceCard}>
-            <View style={styles.performanceHeader}>
-              <Ionicons
-                name={performanceIndicator.icon}
-                size={22}
-                color={performanceIndicator.color}
-              />
-              <Text
+              <View
                 style={[
-                  styles.performanceTitle,
-                  { color: performanceIndicator.color },
+                  styles.statCard,
+                  isOverBudget && styles.statCardWarning,
                 ]}
               >
-                {performanceIndicator.label}
-              </Text>
+                <Ionicons
+                  name={isOverBudget ? "trending-up" : "trending-down"}
+                  size={24}
+                  color={isOverBudget ? "#ff4d6d" : "#8c52ff"}
+                />
+                <Text style={styles.statLabel}>Média real/dia</Text>
+                <Text
+                  style={[
+                    styles.statValue,
+                    isOverBudget && styles.statValueWarning,
+                  ]}
+                >
+                  {formatCurrency(actualDailyAverage)}
+                </Text>
+              </View>
             </View>
-            <Text style={styles.performanceDetail}>
-              {performanceIndicator.detail}
-            </Text>
-          </View>
+          ) : null}
+
+          {budgetValue > 0 ? (
+            <View style={styles.performanceCard}>
+              <View style={styles.performanceHeader}>
+                <Ionicons
+                  name={performanceIndicator.icon}
+                  size={22}
+                  color={performanceIndicator.color}
+                />
+                <Text
+                  style={[
+                    styles.performanceTitle,
+                    { color: performanceIndicator.color },
+                  ]}
+                >
+                  {performanceIndicator.label}
+                </Text>
+              </View>
+              <Text style={styles.performanceDetail}>
+                {performanceIndicator.detail}
+              </Text>
+              <View style={styles.performanceMetaRow}>
+                <Text style={styles.performanceMetaLabel}>Meta diária</Text>
+                <Text style={styles.performanceMetaValue}>
+                  {formatCurrency(idealDailyAverage)}
+                </Text>
+              </View>
+              <View style={styles.performanceMetaRow}>
+                <Text style={styles.performanceMetaLabel}>
+                  Zeros confirmados
+                </Text>
+                <Text style={styles.performanceMetaValue}>
+                  {zeroConfirmedDays.length}
+                </Text>
+              </View>
+            </View>
+          ) : null}
 
           <View style={styles.daysCard}>
             <View style={styles.daysHeaderRow}>
@@ -506,6 +619,48 @@ export const CategoryBudgetScreen = () => {
               </Text>
             ) : null}
           </View>
+
+          <View style={styles.historyCard}>
+            <View style={styles.daysHeaderRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.cardTitle}>Histórico de lançamentos</Text>
+                <Text style={styles.cardSubtitle}>
+                  Gastos registrados em {trackedTitle} neste ciclo
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.addExpenseButton}
+                onPress={handleAddTrackedExpense}
+              >
+                <Ionicons name="add-circle" size={18} color="#fff" />
+                <Text style={styles.addExpenseButtonText}>Adicionar</Text>
+              </TouchableOpacity>
+            </View>
+
+            {expenseHistory.length === 0 ? (
+              <Text style={styles.emptyText}>
+                Nenhum lançamento registrado ainda para {trackedTitle}.
+              </Text>
+            ) : (
+              expenseHistory.map((expense) => (
+                <View key={expense.id} style={styles.historyRow}>
+                  <View style={styles.historyInfo}>
+                    <Text style={styles.historyDate}>
+                      {formatDateForDisplay(expense.date)}
+                    </Text>
+                    {expense.paymentMethod ? (
+                      <Text style={styles.historyMeta}>
+                        {expense.paymentMethod.replace("_", " ")}
+                      </Text>
+                    ) : null}
+                  </View>
+                  <Text style={styles.historyAmount}>
+                    {formatCurrency(expense.value)}
+                  </Text>
+                </View>
+              ))
+            )}
+          </View>
         </Animated.View>
       </ScrollView>
       <ZeroPlanilhaConfirmModal
@@ -519,6 +674,10 @@ export const CategoryBudgetScreen = () => {
           setZeroConfirmVisible(false);
           setZeroConfirmDate(null);
         }}
+      />
+      <ConfettiCelebration
+        active={showConfetti}
+        onComplete={() => setShowConfetti(false)}
       />
     </Layout>
   );
@@ -783,6 +942,55 @@ const styles = StyleSheet.create({
     color: "#999",
     marginTop: 12,
     textAlign: "center",
+  },
+  historyCard: {
+    backgroundColor: "#1a1a1a",
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#333",
+  },
+  addExpenseButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#8c52ff",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  addExpenseButtonText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 13,
+  },
+  historyRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#2a2a2a",
+  },
+  historyInfo: {
+    flex: 1,
+    marginRight: 12,
+  },
+  historyDate: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  historyMeta: {
+    color: "#888",
+    fontSize: 12,
+    marginTop: 2,
+    textTransform: "capitalize",
+  },
+  historyAmount: {
+    color: "#ff4d6d",
+    fontSize: 15,
+    fontWeight: "700",
   },
 });
 

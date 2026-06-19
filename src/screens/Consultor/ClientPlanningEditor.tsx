@@ -14,6 +14,10 @@ import { getCategoriesByType } from "../../types/category";
 import type { User } from "../../types/auth";
 import type { Planning, CreatePlanningData } from "../../types/planning";
 import { useAuth } from "../../hooks/useAuth";
+import {
+  DECIMAL_INPUT_KEYBOARD,
+  sanitizeDecimalInput,
+} from "../../utils/currencyUtils";
 
 export default function ClientPlanningEditor() {
   const [clients, setClients] = useState<User[]>([]);
@@ -143,8 +147,8 @@ export default function ClientPlanningEditor() {
             style={styles.input}
             placeholder="Renda mensal"
             value={monthlyIncome}
-            onChangeText={setMonthlyIncome}
-            keyboardType="numeric"
+            onChangeText={(text) => setMonthlyIncome(sanitizeDecimalInput(text))}
+            keyboardType={DECIMAL_INPUT_KEYBOARD}
           />
           <TextInput
             style={[styles.input, { height: 100 }]}
@@ -167,9 +171,12 @@ export default function ClientPlanningEditor() {
                   placeholder="Valor previsto"
                   value={plannedByCategory[cat.name] ?? ""}
                   onChangeText={(v) =>
-                    setPlannedByCategory((s) => ({ ...s, [cat.name]: v }))
+                    setPlannedByCategory((s) => ({
+                      ...s,
+                      [cat.name]: sanitizeDecimalInput(v),
+                    }))
                   }
-                  keyboardType="numeric"
+                  keyboardType={DECIMAL_INPUT_KEYBOARD}
                 />
               </View>
             ))}

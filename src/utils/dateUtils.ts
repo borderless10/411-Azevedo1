@@ -24,6 +24,48 @@ export const formatDateForDisplay = (date: Date): string => {
   return `${day}/${month}/${year}`;
 };
 
+/** Máscara DD/MM para campos de dia e mês */
+export const toDayMonthMask = (value: string): string => {
+  const digits = value.replace(/\D/g, "").slice(0, 4);
+  if (digits.length <= 2) return digits;
+  return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+};
+
+/** Converte formatos legados (YYYY-MM, MM/YYYY) para DD/MM no input */
+export const normalizeExpectedMonthForInput = (value?: string): string => {
+  if (!value) return "";
+  const raw = String(value).trim();
+  if (/^\d{2}\/\d{2}$/.test(raw)) return raw;
+
+  const yyyyMm = raw.match(/^(\d{4})-(\d{2})$/);
+  if (yyyyMm) return `01/${yyyyMm[2]}`;
+
+  const mmYyyy = raw.match(/^(\d{2})\/(\d{4})$/);
+  if (mmYyyy) return `01/${mmYyyy[1]}`;
+
+  const fullDate = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (fullDate) return `${fullDate[1]}/${fullDate[2]}`;
+
+  return raw;
+};
+
+/** Rótulo amigável para expectedMonth (prioriza DD/MM) */
+export const formatExpectedMonthLabel = (expectedMonth?: string): string => {
+  if (!expectedMonth) return "";
+  const normalized = normalizeExpectedMonthForInput(expectedMonth);
+  if (/^\d{2}\/\d{2}$/.test(normalized)) return normalized;
+  return String(expectedMonth).trim();
+};
+
+export const isValidDayMonth = (value?: string): boolean => {
+  if (!value) return true;
+  const match = String(value).trim().match(/^(\d{2})\/(\d{2})$/);
+  if (!match) return false;
+  const day = Number(match[1]);
+  const month = Number(match[2]);
+  return day >= 1 && day <= 31 && month >= 1 && month <= 12;
+};
+
 /**
  * Formatar data para exibição com nome do mês
  */

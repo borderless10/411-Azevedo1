@@ -25,6 +25,7 @@ import { CadastrarClienteScreen } from "../screens/Admin/CadastrarClienteScreen"
 import { AdminUsersScreen } from "../screens/Admin/AdminUsersScreen";
 import { ClientPlanningScreen } from "../screens/Consultor/ClientPlanningScreen";
 import { ClientDetail } from "../screens/Consultor/ClientDetail";
+import { ClientExpenseRecordsScreen } from "../screens/Consultor/ClientExpenseRecordsScreen";
 import { ClientInvestments } from "../screens/Consultor/ClientInvestments";
 import { ClientInvestmentsView } from "../screens/Consultor/ClientInvestmentsView";
 import { ClientList } from "../screens/Consultor/ClientList";
@@ -159,6 +160,8 @@ export const Router = () => {
         return <ClientList />;
       case "ClientDetail":
         return <ClientDetail />;
+      case "ClientExpenseRecords":
+        return <ClientExpenseRecordsScreen />;
       case "PlanningView":
         return <PlanningViewScreen />;
       case "CategoryBudget":

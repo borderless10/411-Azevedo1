@@ -9,12 +9,14 @@ import {
   ViewStyle,
   TouchableOpacity,
   Animated,
+  Text,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { Header } from "../Header/Header";
 import { Sidebar } from "../Sidebar/Sidebar";
 import { useTheme } from "../../contexts/ThemeContext";
+import { useUnreadChatCount } from "../../hooks/useUnreadChatCount";
 
 interface LayoutProps {
   children: ReactNode;
@@ -40,6 +42,7 @@ export const Layout: React.FC<LayoutProps> = ({
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const { colors } = useTheme();
+  const unreadChatCount = useUnreadChatCount();
 
   useEffect(() => {
     Animated.timing(fadeAnim, {
@@ -68,6 +71,13 @@ export const Layout: React.FC<LayoutProps> = ({
                 style={styles.menuButton}
               >
                 <Ionicons name="menu" size={24} color={colors.text} />
+                {unreadChatCount > 0 ? (
+                  <View style={styles.menuBadge}>
+                    <Text style={styles.menuBadgeText}>
+                      {unreadChatCount > 9 ? "9+" : unreadChatCount}
+                    </Text>
+                  </View>
+                ) : null}
               </TouchableOpacity>
             )}
             <Header
@@ -113,6 +123,23 @@ const styles = StyleSheet.create({
     padding: 12,
     paddingRight: 4,
     zIndex: 10,
+  },
+  menuBadge: {
+    position: "absolute",
+    top: 6,
+    right: 0,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: "#ff4d6d",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 4,
+  },
+  menuBadgeText: {
+    color: "#fff",
+    fontSize: 10,
+    fontWeight: "700",
   },
   header: {
     flex: 1,

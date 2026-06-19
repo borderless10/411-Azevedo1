@@ -3,27 +3,29 @@ import { getAuth, Auth } from "firebase/auth";
 import { getFirestore, Firestore } from "firebase/firestore";
 
 /**
- * Configuração do Firebase - Projeto Azevedo
+ * Configuração do Firebase - Projeto Visão (visao-cce8f)
  *
- * Credenciais configuradas diretamente no código
- * Para usar variáveis de ambiente, crie um arquivo .env na raiz
+ * Valores lidos do `.env` (EXPO_PUBLIC_*).
+ * Fallbacks abaixo usam o projeto visao-cce8f.
  */
 export const firebaseConfig = {
   apiKey:
     process.env.EXPO_PUBLIC_FIREBASE_API_KEY ||
-    "AIzaSyDmy2BVlewzcggOwdg8pgD64wgNTei_gfA",
+    "AIzaSyCEGGSmFNjJ5tpHQJMvYT3GiwfZKxr1MFc",
   authDomain:
     process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN ||
-    "azevedo-b9b0b.firebaseapp.com",
-  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID || "azevedo-b9b0b",
+    "visao-cce8f.firebaseapp.com",
+  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID || "visao-cce8f",
   storageBucket:
     process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET ||
-    "azevedo-b9b0b.firebasestorage.app",
+    "visao-cce8f.firebasestorage.app",
   messagingSenderId:
-    process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "462337336344",
+    process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "931767771267",
   appId:
     process.env.EXPO_PUBLIC_FIREBASE_APP_ID ||
-    "1:462337336344:web:25f0f8c03bcd4113480f6d",
+    "1:931767771267:web:c700278e3cbf2fb5397bb6",
+  measurementId:
+    process.env.EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID || "G-8TCSX8GMPP",
 };
 
 // Inicializar Firebase

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Tela Home - Dashboard Inicial
  */
 
@@ -24,7 +24,11 @@ import { Layout } from "../../components/Layout/Layout";
 import { useAuth } from "../../hooks/useAuth";
 import incomeServices from "../../services/incomeServices";
 import expenseServices from "../../services/expenseServices";
-import { budgetServices, getMonthYearFromDate } from "../../services/budgetServices";
+import {
+  budgetServices,
+  getMonthYearFromDate,
+  type ConsumoModeradoPerformance,
+} from "../../services/budgetServices";
 import { planningServices } from "../../services/planningServices";
 import { activityServices } from "../../services/activityServices";
 import {
@@ -57,6 +61,7 @@ import {
 import { DEFAULT_EXPENSE_CATEGORIES } from "../../types/category";
 import ZeroPlanilhaConfirmModal from "../../components/ui/ZeroPlanilhaConfirmModal";
 import ConfirmDeleteModal from "../../components/ui/ConfirmDeleteModal";
+import ConfettiCelebration from "../../components/ui/ConfettiCelebration";
 import ExpectedDetails from "../../components/ui/ExpectedDetails";
 
 export const HomeScreen = () => {
@@ -90,6 +95,8 @@ export const HomeScreen = () => {
   );
   const [lineChartData, setLineChartData] = useState<LineChartData[]>([]);
   const [activePeriodLabel, setActivePeriodLabel] = useState("Este mês");
+  const [consumoModeradoPerformance, setConsumoModeradoPerformance] =
+    useState<ConsumoModeradoPerformance | null>(null);
 
   // Animações
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -108,6 +115,7 @@ export const HomeScreen = () => {
     value: number;
   } | null>(null);
   const [deletingTransaction, setDeletingTransaction] = useState(false);
+  const [showConfetti, setShowConfetti] = useState(false);
   const [expanded, setExpanded] = useState<"income" | "expense" | null>(null);
 
   useEffect(() => {
@@ -261,7 +269,9 @@ export const HomeScreen = () => {
             return 0;
           }),
         expenseServices
-          .getExpensesTotal(user.id, activeStartDate, activeEndDate)
+          .getExpensesTotal(user.id, activeStartDate, activeEndDate, {
+            excludeSectionOnly: true,
+          })
           .catch((err) => {
             console.error("❌ [HOME] Erro ao buscar totais de gastos:", err);
             return 0;
@@ -279,13 +289,19 @@ export const HomeScreen = () => {
           .getExpenses(user.id, {
             startDate: activeStartDate,
             endDate: activeEndDate,
+            excludeSectionOnly: true,
           })
           .catch((err) => {
             console.error("❌ [HOME] Erro ao buscar gastos:", err);
             return [];
           }),
         expenseServices
-          .getExpensesGroupedByCategory(user.id, activeStartDate, activeEndDate)
+          .getExpensesGroupedByCategory(
+            user.id,
+            activeStartDate,
+            activeEndDate,
+            { excludeSectionOnly: true },
+          )
           .catch((err) => {
             console.error(
               "❌ [HOME] Erro ao buscar gastos por categoria:",
@@ -312,6 +328,7 @@ export const HomeScreen = () => {
               .getExpenses(user.id, {
                 startDate: lineChartStartDate,
                 endDate: activeEndDate,
+                excludeSectionOnly: true,
               })
               .catch((err) => {
                 console.error(
@@ -488,6 +505,17 @@ export const HomeScreen = () => {
       // Atualizar estados
       if (requestId !== loadRequestIdRef.current) {
         return;
+      }
+
+      if (user.role !== "consultor" && !user.isAdmin) {
+        const performance =
+          await budgetServices.getConsumoModeradoPerformance(user.id);
+        if (requestId !== loadRequestIdRef.current) {
+          return;
+        }
+        setConsumoModeradoPerformance(performance);
+      } else {
+        setConsumoModeradoPerformance(null);
       }
 
       setTotalIncome(incomeTotal);
@@ -745,6 +773,7 @@ export const HomeScreen = () => {
 
       setZeroConfirmVisible(false);
       setZeroConfirmDate(null);
+      setShowConfetti(true);
       Alert.alert(
         "Parabéns! 🎉",
         "Zero na planilha confirmado. Você ganhou 2 pontos no ranking!",
@@ -775,8 +804,9 @@ export const HomeScreen = () => {
         value: amount,
         description: "Gasto do dia",
         date: zeroConfirmDate,
-        category: "Outros",
+        category: "Consumo Moderado",
         paymentMethod: "other",
+        isConsumoModerado: true,
       });
 
       await budgetServices.updateDailyExpense(
@@ -1430,6 +1460,72 @@ export const HomeScreen = () => {
                   </View>
                 </Animated.View>
 
+                {consumoModeradoPerformance ? (
+                  <TouchableOpacity
+                    activeOpacity={0.9}
+                    onPress={() => navigate("Budget")}
+                  >
+                    <View style={styles.consumoModeradoCard}>
+                      <View style={styles.consumoModeradoHeader}>
+                        <Ionicons
+                          name="wallet-outline"
+                          size={20}
+                          color="#8c52ff"
+                        />
+                        <Text style={styles.consumoModeradoTitle}>
+                          Consumo Moderado
+                        </Text>
+                        <Ionicons
+                          name="chevron-forward"
+                          size={18}
+                          color="#999"
+                        />
+                      </View>
+
+                      <View style={styles.consumoModeradoStatusRow}>
+                        <Ionicons
+                          name={consumoModeradoPerformance.icon}
+                          size={22}
+                          color={consumoModeradoPerformance.color}
+                        />
+                        <Text
+                          style={[
+                            styles.consumoModeradoStatusLabel,
+                            { color: consumoModeradoPerformance.color },
+                          ]}
+                        >
+                          {consumoModeradoPerformance.label}
+                        </Text>
+                      </View>
+
+                      <Text style={styles.consumoModeradoDetail}>
+                        {consumoModeradoPerformance.detail}
+                      </Text>
+
+                      <View style={styles.consumoModeradoMetaRow}>
+                        <Text style={styles.consumoModeradoMetaLabel}>
+                          Média real/dia
+                        </Text>
+                        <Text style={styles.consumoModeradoMetaValue}>
+                          {formatCurrency(
+                            consumoModeradoPerformance.actualDailyAverage,
+                          )}
+                        </Text>
+                      </View>
+                      <View style={styles.consumoModeradoMetaRow}>
+                        <Text style={styles.consumoModeradoMetaLabel}>
+                          Média diária ideal
+                        </Text>
+                        <Text style={styles.consumoModeradoMetaValue}>
+                          {formatCurrency(
+                            consumoModeradoPerformance.idealDailyAverage,
+                          )}
+                        </Text>
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                ) : null}
+
                 <View style={styles.balanceCardsSection}>
                   <Text style={styles.sectionTitle}>Saldo</Text>
                   <View style={styles.balanceCardsRow}>
@@ -1890,6 +1986,11 @@ export const HomeScreen = () => {
         onConfirmExpense={handleRegisterExpensePlanilha}
       />
 
+      <ConfettiCelebration
+        active={showConfetti}
+        onComplete={() => setShowConfetti(false)}
+      />
+
       <ConfirmDeleteModal
         visible={!!transactionToDelete}
         title="Confirmar exclusão"
@@ -2195,6 +2296,56 @@ const styles = StyleSheet.create({
     color: "#fff",
     marginBottom: 10,
     letterSpacing: -0.3,
+  },
+  consumoModeradoCard: {
+    backgroundColor: "#1a1a1a",
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#333",
+    marginBottom: 16,
+    gap: 8,
+  },
+  consumoModeradoHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 4,
+  },
+  consumoModeradoTitle: {
+    flex: 1,
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  consumoModeradoStatusRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  consumoModeradoStatusLabel: {
+    fontSize: 17,
+    fontWeight: "700",
+  },
+  consumoModeradoDetail: {
+    color: "#ccc",
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  consumoModeradoMetaRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingTop: 4,
+  },
+  consumoModeradoMetaLabel: {
+    color: "#aaa",
+    fontSize: 13,
+  },
+  consumoModeradoMetaValue: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "700",
   },
   actionsGrid: {
     flexDirection: "row",

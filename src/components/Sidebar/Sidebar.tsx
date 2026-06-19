@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Componente de Sidebar/Menu Lateral
  */
 
@@ -19,6 +19,7 @@ import { useNavigation, ScreenName } from "../../routes/NavigationContext";
 import { useTheme } from "../../contexts/ThemeContext";
 import { planningServices } from "../../services/planningServices";
 import { useUserChats } from "../../hooks/useUserChats";
+import { isChatUnreadForUser } from "../../utils/chatUtils";
 
 interface SidebarProps {
   visible: boolean;
@@ -38,7 +39,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onClose,
   style,
 }) => {
-  const { user, signOut } = useAuth();
+  const { user, signOut, isAuthenticated } = useAuth();
   const { navigate, currentScreen, params } = useNavigation() as any;
   const { colors } = useTheme();
   const { chats } = useUserChats(user?.id || null, user?.role || null);
@@ -63,26 +64,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
       .replace(/\s+/g, " ")
       .toLocaleLowerCase("pt-BR");
 
-  const toJsDate = (value: any): Date | null => {
-    if (!value) return null;
-    if (value instanceof Date) return value;
-    if (typeof value?.toDate === "function") return value.toDate();
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? null : parsed;
-  };
-
-  const hasUnreadChats = (chats || []).some((chat: any) => {
-    if (!user?.id) return false;
-    const senderId = chat?.lastMessage?.senderId;
-    if (!senderId || senderId === user.id) return false;
-
-    const lastMessageAt = toJsDate(chat?.lastMessageAt);
-    if (!lastMessageAt) return false;
-
-    const lastReadAt = toJsDate(chat?.lastReadBy?.[user.id]);
-    if (!lastReadAt) return true;
-    return lastMessageAt.getTime() > lastReadAt.getTime();
-  });
+  const hasUnreadChats = (chats || []).some((chat: any) =>
+    isChatUnreadForUser(chat, user?.id),
+  );
 
   useEffect(() => {
     if (visible) {
@@ -115,8 +99,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
   }, [visible]);
 
   useEffect(() => {
+    let cancelled = false;
+
     const loadTrackedExpenses = async () => {
-      if (!user?.id || !isCommonUser) {
+      if (!user?.id || !isCommonUser || !isAuthenticated) {
         setTrackedExpenseTitles([]);
         setTrackedIncomeTitles([]);
         return;
@@ -124,6 +110,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       try {
         const planning = await planningServices.getPlanning(user.id);
+        if (cancelled) return;
         const rawTitles = [
           ...(planning?.bills || [])
             .filter((bill) => bill.dailyTracking)
@@ -165,6 +152,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         );
         setTrackedIncomeTitles(uniqueIncomeTitles);
       } catch (error) {
+        if (cancelled) return;
         console.warn("Erro ao carregar gastos acompanhados", error);
         setTrackedExpenseTitles([]);
         setTrackedIncomeTitles([]);
@@ -172,7 +160,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
     };
 
     loadTrackedExpenses();
-  }, [user?.id, isCommonUser]);
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, isCommonUser, isAuthenticated]);
 
   const activeTrackedExpenseTitle = String(
     params?.trackedTitle || params?.categoryName || "",

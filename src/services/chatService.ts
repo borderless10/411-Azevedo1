@@ -46,6 +46,13 @@ const CHATS_COL = "chats";
 const MESSAGES_SUBCOL = "messages";
 
 /**
+ * Deterministic id for direct chats between two users.
+ */
+export function getDirectChatId(userAId: string, userBId: string): string {
+  return [userAId, userBId].sort().join("_");
+}
+
+/**
  * Create or return existing direct chat between two users.
  * For direct chats we use a deterministic id (`userA_userB` sorted) so duplicates are prevented.
  */
@@ -72,7 +79,7 @@ export async function createChatIfNotExists(
   }
 
   // deterministic id for direct chats
-  const pair = [userAId, userBId].sort().join("_");
+  const pair = getDirectChatId(userAId, userBId);
   const chatRef = doc(db, CHATS_COL, pair);
   const chatSnap = await getDoc(chatRef);
   if (chatSnap.exists())
@@ -118,6 +125,24 @@ export async function sendMessage(
   });
 
   await batch.commit();
+}
+
+/**
+ * Ensure direct chat exists and send a message in one flow.
+ */
+export async function sendDirectMessage(
+  senderId: string,
+  recipientId: string,
+  text: string,
+): Promise<Chat> {
+  const trimmed = String(text || "").trim();
+  if (!trimmed) {
+    throw new Error("Mensagem vazia");
+  }
+
+  const chat = await createChatIfNotExists(senderId, recipientId, "direct");
+  await sendMessage(chat.id, senderId, trimmed);
+  return chat;
 }
 
 /**
@@ -213,7 +238,11 @@ export function listenToUserChats(
   const chatsCol = collection(db, CHATS_COL);
 
   if (role === "admin") {
-    q = query(chatsCol, orderBy("lastMessageAt", "desc"));
+    q = query(
+      chatsCol,
+      where("participants", "array-contains", userId),
+      orderBy("lastMessageAt", "desc"),
+    );
   } else {
     q = query(
       chatsCol,
@@ -254,7 +283,11 @@ export async function getChatsForUser(
   const chatsCol = collection(db, CHATS_COL);
   let q: Query;
   if (role === "admin") {
-    q = query(chatsCol, orderBy("lastMessageAt", "desc"));
+    q = query(
+      chatsCol,
+      where("participants", "array-contains", userId),
+      orderBy("lastMessageAt", "desc"),
+    );
   } else {
     q = query(
       chatsCol,
@@ -273,19 +306,16 @@ export async function getChatsForUser(
  */
 export async function getChatsForUserNoOrder(userId: string, role: string): Promise<Chat[]> {
   const chatsCol = collection(db, CHATS_COL);
-  if (role === "admin") {
-    const snap = await getDocs(chatsCol);
-    return snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }) as Chat);
-  }
-
   const q = query(chatsCol, where("participants", "array-contains", userId));
   const snap = await getDocs(q);
   return snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }) as Chat);
 }
 
 export default {
+  getDirectChatId,
   createChatIfNotExists,
   sendMessage,
+  sendDirectMessage,
   markChatAsRead,
   listenToMessages,
   loadMoreMessages,

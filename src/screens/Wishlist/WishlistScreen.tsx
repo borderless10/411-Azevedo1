@@ -18,7 +18,11 @@ import { Layout } from "../../components/Layout/Layout";
 import { useAuth } from "../../hooks/useAuth";
 import { useNavigation } from "../../routes/NavigationContext";
 import { wishlistServices } from "../../services/wishlistServices";
-import { formatCurrency } from "../../utils/currencyUtils";
+import {
+  DECIMAL_INPUT_KEYBOARD,
+  formatCurrency,
+  sanitizeDecimalInput,
+} from "../../utils/currencyUtils";
 import { WishlistItem, CreateWishlistData } from "../../types/wishlist";
 
 export const WishlistScreen = () => {
@@ -273,10 +277,10 @@ export const WishlistScreen = () => {
               <TextInput
                 style={styles.input}
                 value={value}
-                onChangeText={setValue}
+                onChangeText={(text) => setValue(sanitizeDecimalInput(text))}
                 placeholder="0,00"
                 placeholderTextColor="#666"
-                keyboardType="numeric"
+                keyboardType={DECIMAL_INPUT_KEYBOARD}
               />
 
               <Text style={styles.label}>Descrição (opcional)</Text>

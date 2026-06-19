@@ -1,6 +1,27 @@
-﻿/**
+/**
  * Utilitários para trabalhar com moeda (Real Brasileiro)
  */
+
+import type { KeyboardTypeOptions } from "react-native";
+
+/** Teclado com separador decimal (no iOS exibe ".", convertido para "," na digitação). */
+export const DECIMAL_INPUT_KEYBOARD: KeyboardTypeOptions = "decimal-pad";
+
+/**
+ * Normaliza texto digitado em campos monetários (aceita "." do iOS e exibe ",").
+ */
+export const sanitizeDecimalInput = (text: string): string => {
+  if (!text) return "";
+
+  let cleaned = text.replace(/\./g, ",").replace(/[^\d,]/g, "");
+
+  const commaIndex = cleaned.indexOf(",");
+  if (commaIndex === -1) return cleaned;
+
+  const integerPart = cleaned.slice(0, commaIndex);
+  const decimalPart = cleaned.slice(commaIndex + 1).replace(/,/g, "");
+  return `${integerPart},${decimalPart}`;
+};
 
 /**
  * Formatar número para moeda brasileira
@@ -34,13 +55,31 @@ export const formatCurrencyWithoutSymbol = (
  * Ex: "R$ 1.234,56" -> 1234.56
  */
 export const parseCurrency = (value: string): number => {
-  const cleaned = value
-    .replace(/[R$\s]/g, "")
-    .replace(/\./g, "")
-    .replace(",", ".");
+  if (!value?.trim()) return 0;
+
+  let cleaned = value.replace(/[R$\s]/g, "").trim();
+  if (!cleaned) return 0;
+
+  const hasComma = cleaned.includes(",");
+  const hasDot = cleaned.includes(".");
+
+  if (hasComma && hasDot) {
+    cleaned = cleaned.replace(/\./g, "").replace(",", ".");
+  } else if (hasComma) {
+    cleaned = cleaned.replace(",", ".");
+  } else if (hasDot) {
+    const lastDot = cleaned.lastIndexOf(".");
+    const afterDot = cleaned.slice(lastDot + 1);
+    if (lastDot !== -1 && afterDot.length > 0 && afterDot.length <= 2) {
+      cleaned =
+        cleaned.slice(0, lastDot).replace(/\./g, "") + "." + afterDot;
+    } else {
+      cleaned = cleaned.replace(/\./g, "");
+    }
+  }
 
   const parsed = parseFloat(cleaned);
-  return isNaN(parsed) ? 0 : parsed;
+  return Number.isNaN(parsed) ? 0 : parsed;
 };
 
 /**
@@ -185,6 +224,8 @@ export const getBalanceColor = (balance: number): string => {
 };
 
 export default {
+  DECIMAL_INPUT_KEYBOARD,
+  sanitizeDecimalInput,
   formatCurrency,
   formatCurrencyWithoutSymbol,
   parseCurrency,

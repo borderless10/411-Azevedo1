@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -23,8 +23,8 @@ import CustomModal from "../../components/ui/CustomModal";
 
 const REMEMBER_EMAIL_KEY = "@411:remember-email";
 const SAVED_EMAIL_KEY = "@411:saved-email";
-const BIOMETRIC_EMAIL_KEY = "@411:biometric-email";
-const BIOMETRIC_PASSWORD_KEY = "@411:biometric-password";
+const BIOMETRIC_EMAIL_KEY = "411_biometric_email";
+const BIOMETRIC_PASSWORD_KEY = "411_biometric_password";
 
 export const LoginScreen = () => {
   const { navigate } = useNavigation();

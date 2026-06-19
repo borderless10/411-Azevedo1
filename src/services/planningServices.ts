@@ -21,6 +21,7 @@ import {
 import { userService } from "./userServices";
 import { activityServices } from "./activityServices";
 import { resolveExpenseCategoryName } from "../types/category";
+import { CreditCardInvoiceSummary } from "../types/creditCard";
 
 const getUserPlanningDoc = (userId: string) =>
   doc(db, "users", userId, "planning", "current");
@@ -270,7 +271,10 @@ export const planningServices = {
         createdAt: data.createdAt.toDate(),
         updatedAt: data.updatedAt.toDate(),
       } as Planning;
-    } catch (error) {
+    } catch (error: any) {
+      if (error?.code === "permission-denied") {
+        return null;
+      }
       console.error("❌ [PLANNING SERVICE] Erro ao buscar planning:", error);
       throw error;
     }
@@ -413,6 +417,11 @@ export const planningServices = {
           statusRaw === "overdue" ||
           statusRaw === "atrasada"
         ) {
+          return b;
+        }
+
+        // Gastos acompanhados não são contas a pagar
+        if (b.dailyTracking) {
           return b;
         }
 
@@ -1700,5 +1709,98 @@ export const getConsultantCardInvoiceDisplayTotal = (
   );
   return expenseTotal + (consultantAmount ?? 0);
 };
+
+/** Fatura efetiva = valor manual do consultor (ciclo atual) + gastos no cartão (fatura seguinte). */
+export const getEffectiveInvoiceForCard = (
+  invoices: ConsultantCardInvoice[] | undefined,
+  invoiceSummaries: CreditCardInvoiceSummary[],
+  cardId: string,
+  planningInvoiceKey: string,
+  purchasesInvoiceKey: string,
+): number => {
+  const consultantAmount =
+    getConsultantCardInvoiceAmount(invoices, cardId, planningInvoiceKey) ?? 0;
+
+  const purchasesTotal =
+    invoiceSummaries.find(
+      (item) =>
+        item.cardId === cardId && item.invoiceKey === purchasesInvoiceKey,
+    )?.total ?? 0;
+
+  return consultantAmount + purchasesTotal;
+};
+
+export const sumConsultantExpectedInvoicesForKey = (
+  invoices: ConsultantCardInvoice[] | undefined,
+  invoiceKey: string,
+  cardId?: string,
+): number => {
+  if (!invoices?.length) return 0;
+
+  return invoices
+    .filter((item) => item.invoiceKey === invoiceKey)
+    .filter((item) => !cardId || item.cardId === cardId)
+    .reduce((sum, item) => {
+      if (item.expectedAmount === undefined || item.expectedAmount === null) {
+        return sum;
+      }
+      return sum + (Number(item.expectedAmount) || 0);
+    }, 0);
+};
+
+export const sumEffectiveInvoicesForCycle = (
+  invoices: ConsultantCardInvoice[] | undefined,
+  invoiceSummaries: CreditCardInvoiceSummary[],
+  planningInvoiceKey: string,
+  purchasesInvoiceKey: string,
+  cardId?: string,
+): number => {
+  const cardIds = new Set<string>();
+
+  if (cardId) {
+    cardIds.add(cardId);
+  } else {
+    (invoices || [])
+      .filter((item) => item.invoiceKey === planningInvoiceKey)
+      .forEach((item) => cardIds.add(item.cardId));
+
+    invoiceSummaries
+      .filter(
+        (item) =>
+          item.cardId &&
+          (item.invoiceKey === planningInvoiceKey ||
+            item.invoiceKey === purchasesInvoiceKey),
+      )
+      .forEach((item) => cardIds.add(item.cardId));
+  }
+
+  return Array.from(cardIds).reduce(
+    (sum, id) =>
+      sum +
+      getEffectiveInvoiceForCard(
+        invoices,
+        invoiceSummaries,
+        id,
+        planningInvoiceKey,
+        purchasesInvoiceKey,
+      ),
+    0,
+  );
+};
+
+/** @deprecated Use sumEffectiveInvoicesForCycle */
+export const sumEffectiveInvoicesForKey = (
+  invoices: ConsultantCardInvoice[] | undefined,
+  invoiceSummaries: CreditCardInvoiceSummary[],
+  invoiceKey: string,
+  cardId?: string,
+): number =>
+  sumEffectiveInvoicesForCycle(
+    invoices,
+    invoiceSummaries,
+    invoiceKey,
+    invoiceKey,
+    cardId,
+  );
 
 export default planningServices;

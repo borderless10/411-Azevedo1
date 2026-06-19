@@ -436,6 +436,7 @@ export const cancelDailyExpenseReminder = async (): Promise<void> => {
 export const sendImmediateNotification = async (
   title: string,
   body: string,
+  data?: Record<string, unknown>,
 ): Promise<void> => {
   try {
     await Notifications.scheduleNotificationAsync({
@@ -443,12 +444,33 @@ export const sendImmediateNotification = async (
         title,
         body,
         sound: true,
+        data,
       },
       trigger: null, // Imediata
     });
   } catch (error) {
     console.error("Erro ao enviar notificação imediata:", error);
   }
+};
+
+/**
+ * Notificação imediata de nova mensagem de chat.
+ */
+export const showChatMessageNotification = async (
+  senderName: string,
+  messageText: string,
+  chatId: string,
+): Promise<void> => {
+  const preview = String(messageText || "").trim();
+  if (!preview) return;
+
+  const body =
+    preview.length > 120 ? `${preview.slice(0, 117)}...` : preview;
+
+  await sendImmediateNotification(`💬 ${senderName}`, body, {
+    type: "chat_message",
+    chatId,
+  });
 };
 
 /**

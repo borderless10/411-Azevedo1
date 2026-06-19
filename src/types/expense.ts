@@ -17,6 +17,7 @@ export interface Expense {
   cardLast4?: string;
   invoiceYearMonth?: string;
   isConsumoModerado?: boolean; // Marcado quando cadastrado como Consumo Moderado
+  isTrackedDaily?: boolean; // Marcado quando cadastrado como Gasto Acompanhado
   sourceBillId?: string; // Vincula o gasto a uma conta paga
   createdAt: Date;
   updatedAt: Date;
@@ -35,6 +36,7 @@ export interface CreateExpenseData {
   cardLast4?: string;
   invoiceYearMonth?: string;
   isConsumoModerado?: boolean; // Marcado quando cadastrado como Consumo Moderado
+  isTrackedDaily?: boolean; // Marcado quando cadastrado como Gasto Acompanhado
   sourceBillId?: string;
 }
 
@@ -51,6 +53,7 @@ export interface UpdateExpenseData {
   cardLast4?: string;
   invoiceYearMonth?: string;
   isConsumoModerado?: boolean;
+  isTrackedDaily?: boolean;
   sourceBillId?: string;
 }
 
@@ -68,6 +71,7 @@ export interface ExpenseFilters {
   minValue?: number;
   maxValue?: number;
   searchTerm?: string;
+  excludeSectionOnly?: boolean;
 }
 
 /**
@@ -85,6 +89,7 @@ export interface ExpenseFirestore {
   cardLast4?: string;
   invoiceYearMonth?: string;
   isConsumoModerado?: boolean; // Marcado quando cadastrado como Consumo Moderado
+  isTrackedDaily?: boolean; // Marcado quando cadastrado como Gasto Acompanhado
   sourceBillId?: string;
   createdAt: any; // Timestamp do Firestore
   updatedAt: any; // Timestamp do Firestore
