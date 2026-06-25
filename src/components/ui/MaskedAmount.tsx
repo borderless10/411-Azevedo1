@@ -6,7 +6,7 @@ import { useTheme } from "../../contexts/ThemeContext";
 
 type Props = {
   value?: number | string;
-  style?: TextStyle | TextStyle[];
+  style?: TextStyle | TextStyle[] | null | (TextStyle | null | undefined)[];
   placeholder?: string;
   numberOfLines?: number;
   adjustsFontSizeToFit?: boolean;

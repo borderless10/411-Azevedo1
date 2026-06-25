@@ -142,14 +142,63 @@ export const filterExpensesByConsultantScope = <
   }
 };
 
+const SECTION_ONLY_CATEGORY_KEYS = new Set([
+  "consumo moderado",
+  "acompanhamento diario",
+  "gasto acompanhado",
+  "conta",
+  "contas",
+  "contas a pagar",
+  "pagamento de conta",
+]);
+
+/** Rótulo de escopo especial (Consumo Moderado, Acompanhamento, Conta). Null para gastos gerais. */
+export const getExpenseScopeLabel = (expense: {
+  category?: string;
+  isConsumoModerado?: boolean;
+  isTrackedDaily?: boolean;
+  sourceBillId?: string;
+}): string | null => {
+  if (isConsumoModeradoExpense(expense)) return "Consumo Moderado";
+  if (isTrackedDailyExpense(expense)) return "Acompanhamento";
+  if (isBillPaymentExpense(expense)) return "Conta";
+  return null;
+};
+
+/** Evita repetir categoria quando ela já aparece na tag de escopo. */
+export const shouldShowExpenseCategoryTag = (expense: {
+  category?: string;
+  isConsumoModerado?: boolean;
+  isTrackedDaily?: boolean;
+  sourceBillId?: string;
+}): boolean => {
+  const category = expense.category?.trim();
+  if (!category) return false;
+
+  const categoryKey = normalizeExpenseCategoryKey(category);
+  const scopeLabel = getExpenseScopeLabel(expense);
+
+  if (
+    scopeLabel &&
+    normalizeExpenseCategoryKey(scopeLabel) === categoryKey
+  ) {
+    return false;
+  }
+
+  if (SECTION_ONLY_CATEGORY_KEYS.has(categoryKey)) {
+    if (isConsumoModeradoExpense(expense)) return false;
+    if (isTrackedDailyExpense(expense)) return false;
+    if (isBillPaymentExpense(expense)) return false;
+  }
+
+  return true;
+};
+
 export const getExpenseScopeBadge = (expense: {
   category?: string;
   isConsumoModerado?: boolean;
   isTrackedDaily?: boolean;
   sourceBillId?: string;
 }): string => {
-  if (isConsumoModeradoExpense(expense)) return "Consumo Moderado";
-  if (isTrackedDailyExpense(expense)) return "Acompanhamento";
-  if (isBillPaymentExpense(expense)) return "Conta";
-  return expense.category || "Geral";
+  return getExpenseScopeLabel(expense) ?? expense.category ?? "Geral";
 };

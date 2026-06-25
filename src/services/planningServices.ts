@@ -134,6 +134,20 @@ export const getPlanningCycleLabel = (
   return `${format(start)}${end ? ` - ${format(end)}` : " - em andamento"}`;
 };
 
+const createEmptyPlanningPayload = (
+  consultantId: string,
+  now: Timestamp,
+): PlanningFirestore => ({
+  consultantId,
+  createdAt: now,
+  updatedAt: now,
+  bills: [],
+  expectedIncomes: [],
+  expectedExpenses: [],
+  consultantCardInvoices: [],
+  plannedByCategory: {},
+});
+
 export const planningServices = {
   // helper: ensure the acting consultant is allowed to manage this user's planning
   async ensureOwnerOrAdmin(consultantId: string, userId: string) {
@@ -153,6 +167,20 @@ export const planningServices = {
       throw new Error("Usuário não autorizado a modificar dados deste cliente");
     }
   },
+
+  async ensurePlanningDocument(
+    consultantId: string,
+    userId: string,
+  ): Promise<boolean> {
+    const docRef = getUserPlanningDoc(userId);
+    const snap = await getDoc(docRef);
+    if (snap.exists()) return false;
+
+    const now = Timestamp.now();
+    await setDoc(docRef, createEmptyPlanningPayload(consultantId, now));
+    return true;
+  },
+
   async getPlanning(userId: string): Promise<Planning | null> {
     try {
       const docRef = getUserPlanningDoc(userId);
@@ -634,10 +662,10 @@ export const planningServices = {
       await planningServices.ensureOwnerOrAdmin(consultantId, userId);
 
       const docRef = getUserPlanningDoc(userId);
-      const snap = await getDoc(docRef);
-      if (!snap.exists()) {
-        throw new Error("Planning não encontrado para este usuário");
-      }
+      const created = await planningServices.ensurePlanningDocument(
+        consultantId,
+        userId,
+      );
 
       const now = Timestamp.now();
       const updatePayload: any = {
@@ -701,18 +729,20 @@ export const planningServices = {
       const updatedSnap = await getDoc(docRef);
       const updatedData = updatedSnap.data() as PlanningFirestore;
 
-      // Registrar atividade de atualização no feed do cliente
       try {
         await activityServices.logActivity(userId, {
-          type: "plan_updated",
-          title: "Planejamento atualizado",
-          description:
-            "Seu consultor atualizou o planejamento financeiro. Abra para ver as alterações.",
-          metadata: { consultantId: consultantId },
+          type: created ? "plan_created" : "plan_updated",
+          title: created
+            ? "Novo planejamento financeiro disponível"
+            : "Planejamento atualizado",
+          description: created
+            ? "Seu consultor criou um planejamento financeiro. Abra para ver os detalhes."
+            : "Seu consultor atualizou o planejamento financeiro. Abra para ver as alterações.",
+          metadata: { consultantId },
         });
       } catch (e) {
         console.warn(
-          "⚠️ [PLANNING SERVICE] Falha ao registrar atividade de atualização:",
+          "⚠️ [PLANNING SERVICE] Falha ao registrar atividade de planejamento:",
           e,
         );
       }

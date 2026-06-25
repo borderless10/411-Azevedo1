@@ -185,6 +185,43 @@ const seedChats = async (consultorId, clientIds) => {
   }
 };
 
+const seedPlanning = async (clientId, consultantId) => {
+  const app = initializeApp(firebaseConfig, `seed-planning-${clientId.slice(0, 8)}`);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+
+  try {
+    await signInWithEmailAndPassword(auth, USERS[0].email, USERS[0].password);
+
+    const planningRef = doc(db, "users", clientId, "planning", "current");
+    const existing = await getDoc(planningRef);
+    if (existing.exists()) {
+      console.log(`ℹ️ Planning já existia: users/${clientId}/planning/current`);
+      return;
+    }
+
+    const now = Timestamp.now();
+    await setDoc(planningRef, {
+      consultantId,
+      createdAt: now,
+      updatedAt: now,
+      bills: [],
+      expectedIncomes: [],
+      expectedExpenses: [],
+      consultantCardInvoices: [],
+      plannedByCategory: {},
+    });
+    console.log(`✅ Planning criado: users/${clientId}/planning/current`);
+  } finally {
+    try {
+      await signOut(auth);
+    } catch {
+      // ignore
+    }
+    await deleteApp(app);
+  }
+};
+
 const main = async () => {
   if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
     throw new Error("Configure o .env com EXPO_PUBLIC_FIREBASE_* antes de rodar.");
@@ -206,6 +243,9 @@ const main = async () => {
   console.log(`UID sabrina:   ${sabrinaId}`);
 
   await seedChats(consultorId, [clientId, sabrinaId]);
+
+  await seedPlanning(clientId, consultorId);
+  await seedPlanning(sabrinaId, consultorId);
 };
 
 main().catch((error) => {

@@ -25,6 +25,80 @@ import {
   formatDateForDisplay,
   formatDateToString,
 } from "../../utils/dateUtils";
+import {
+  getExpenseScopeLabel,
+  shouldShowExpenseCategoryTag,
+} from "../../utils/expenseScopeUtils";
+
+// ─── helpers de tag ──────────────────────────────────────────────
+const PAYMENT_TAG: Record<
+  string,
+  { label: string; icon: keyof typeof import("@expo/vector-icons").Ionicons.glyphMap; color: string; bg: string }
+> = {
+  credit_card: { label: "Crédito", icon: "card", color: "#c9b5ff", bg: "#2f214d" },
+  debit_card:  { label: "Débito",  icon: "card-outline", color: "#86efac", bg: "#14351f" },
+  pix:         { label: "Pix",     icon: "flash", color: "#67e8f9", bg: "#0e2e35" },
+  cash:        { label: "Dinheiro",icon: "cash-outline", color: "#fde68a", bg: "#352e10" },
+  other:       { label: "Outro",   icon: "ellipsis-horizontal", color: "#aaa", bg: "#222" },
+};
+
+const SCOPE_TAG: Record<
+  string,
+  { color: string; bg: string }
+> = {
+  "Consumo Moderado":  { color: "#c084fc", bg: "#280a3a" },
+  "Acompanhamento":    { color: "#34d399", bg: "#062820" },
+  "Conta":             { color: "#f87171", bg: "#300e0e" },
+};
+
+const ScopeBadge = ({ expense }: { expense: Expense }) => {
+  const scope = getExpenseScopeLabel(expense);
+  if (!scope) return null;
+  const tag = SCOPE_TAG[scope];
+  if (!tag) return null;
+  return (
+    <View style={[tagStyles.base, { backgroundColor: tag.bg, borderColor: tag.color + "55" }]}>
+      <Text style={[tagStyles.text, { color: tag.color }]}>{scope}</Text>
+    </View>
+  );
+};
+
+const CategoryBadge = ({ expense }: { expense: Expense }) => {
+  if (!shouldShowExpenseCategoryTag(expense)) return null;
+  return (
+    <View style={[tagStyles.base, { backgroundColor: "#1a1a1a", borderColor: "#333" }]}>
+      <Text style={[tagStyles.text, { color: "#888" }]}>{expense.category}</Text>
+    </View>
+  );
+};
+
+const PaymentBadge = ({ expense }: { expense: Expense }) => {
+  const pm = expense.paymentMethod ?? "other";
+  const tag = PAYMENT_TAG[pm] ?? PAYMENT_TAG.other;
+  return (
+    <View style={[tagStyles.base, { backgroundColor: tag.bg, borderColor: tag.color + "55", flexDirection: "row", alignItems: "center", gap: 3 }]}>
+      <Ionicons name={tag.icon as any} size={10} color={tag.color} />
+      <Text style={[tagStyles.text, { color: tag.color }]}>{tag.label}</Text>
+      {expense.paymentMethod === "credit_card" && expense.cardLast4 ? (
+        <Text style={[tagStyles.text, { color: tag.color, opacity: 0.7 }]}>••{expense.cardLast4}</Text>
+      ) : null}
+    </View>
+  );
+};
+
+const tagStyles = StyleSheet.create({
+  base: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
+  text: {
+    fontSize: 10,
+    fontWeight: "700",
+    letterSpacing: 0.2,
+  },
+});
 
 export const ExpenseListScreen = () => {
   const { user } = useAuth();
@@ -49,7 +123,6 @@ export const ExpenseListScreen = () => {
       console.log("💸 Carregando gastos...");
       const data = await expenseServices.getExpenses(user.id, {
         ...(paymentFilter !== "all" ? { paymentMethod: paymentFilter } : {}),
-        excludeSectionOnly: true,
       });
       setExpenses(data);
 
@@ -120,10 +193,7 @@ export const ExpenseListScreen = () => {
     <TouchableOpacity
       key={expense.id}
       style={styles.expenseItem}
-      onPress={() => {
-        // TODO: Navegar para edição
-        console.log("Editar gasto:", expense.id);
-      }}
+      onPress={() => navigate("EditExpense", { expenseId: expense.id })}
     >
       <View style={styles.expenseItemLeft}>
         <View style={styles.expenseIconContainer}>
@@ -133,14 +203,13 @@ export const ExpenseListScreen = () => {
           <Text style={styles.expenseDescription} numberOfLines={1}>
             {expense.description}
           </Text>
+          {/* Linha de tags */}
+          <View style={styles.tagsRow}>
+            <ScopeBadge expense={expense} />
+            <PaymentBadge expense={expense} />
+            <CategoryBadge expense={expense} />
+          </View>
           <View style={styles.expenseMeta}>
-            <Ionicons name="pricetag-outline" size={14} color="#999" />
-            <Text style={styles.expenseCategory}>{expense.category}</Text>
-            {expense.paymentMethod === "credit_card" && expense.cardLast4 ? (
-              <Text style={styles.creditBadge}>
-                Cartão ••••{expense.cardLast4}
-              </Text>
-            ) : null}
             <Text style={styles.expenseTime}>
               {formatDateForDisplay(expense.date)}
             </Text>
@@ -436,26 +505,25 @@ const styles = StyleSheet.create({
     color: "#fff",
     marginBottom: 4,
   },
+  tagsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 5,
+    marginBottom: 4,
+  },
   expenseMeta: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 6,
   },
   expenseCategory: {
-    fontSize: 12,
-    color: "#999",
-  },
-  creditBadge: {
     fontSize: 11,
-    color: "#c9b5ff",
-    backgroundColor: "#2f214d",
-    borderRadius: 999,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    color: "#555",
+    flexShrink: 1,
   },
   expenseTime: {
-    fontSize: 12,
-    color: "#999",
+    fontSize: 11,
+    color: "#555",
   },
   expenseItemRight: {
     alignItems: "flex-end",

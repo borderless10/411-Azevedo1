@@ -63,6 +63,10 @@ import ZeroPlanilhaConfirmModal from "../../components/ui/ZeroPlanilhaConfirmMod
 import ConfirmDeleteModal from "../../components/ui/ConfirmDeleteModal";
 import ConfettiCelebration from "../../components/ui/ConfettiCelebration";
 import ExpectedDetails from "../../components/ui/ExpectedDetails";
+import {
+  getExpenseScopeLabel,
+  shouldShowExpenseCategoryTag,
+} from "../../utils/expenseScopeUtils";
 
 export const HomeScreen = () => {
   const { navigate, currentScreen } = useNavigation();
@@ -289,7 +293,6 @@ export const HomeScreen = () => {
           .getExpenses(user.id, {
             startDate: activeStartDate,
             endDate: activeEndDate,
-            excludeSectionOnly: true,
           })
           .catch((err) => {
             console.error("❌ [HOME] Erro ao buscar gastos:", err);
@@ -1125,6 +1128,47 @@ export const HomeScreen = () => {
                 </TouchableOpacity>
               </View>
             </View>
+            {/* Tags de tipo e pagamento */}
+            <View style={styles.transactionTagsRow}>
+              {(() => {
+                const scope = getExpenseScopeLabel(expense);
+                const SCOPE_COLOR: Record<string, { color: string; bg: string }> = {
+                  "Consumo Moderado": { color: "#c084fc", bg: "#280a3a" },
+                  "Acompanhamento":   { color: "#34d399", bg: "#062820" },
+                  "Conta":            { color: "#f87171", bg: "#300e0e" },
+                };
+                const PAYMENT_TAG: Record<string, { label: string; color: string; bg: string }> = {
+                  credit_card: { label: "Crédito", color: "#c9b5ff", bg: "#2f214d" },
+                  debit_card:  { label: "Débito",  color: "#86efac", bg: "#14351f" },
+                  pix:         { label: "Pix",     color: "#67e8f9", bg: "#0e2e35" },
+                  cash:        { label: "Dinheiro",color: "#fde68a", bg: "#352e10" },
+                  other:       { label: "Outro",   color: "#aaa",    bg: "#222"    },
+                };
+                const scopeTag = scope ? SCOPE_COLOR[scope] : null;
+                const pm = expense.paymentMethod ?? "other";
+                const pmTag = PAYMENT_TAG[pm] ?? PAYMENT_TAG.other;
+                const showCategory = shouldShowExpenseCategoryTag(expense);
+                return (
+                  <>
+                    {scope && scopeTag ? (
+                      <View style={[styles.transactionTag, { backgroundColor: scopeTag.bg, borderColor: scopeTag.color + "55" }]}>
+                        <Text style={[styles.transactionTagText, { color: scopeTag.color }]}>{scope}</Text>
+                      </View>
+                    ) : null}
+                    <View style={[styles.transactionTag, { backgroundColor: pmTag.bg, borderColor: pmTag.color + "55" }]}>
+                      <Text style={[styles.transactionTagText, { color: pmTag.color }]}>
+                        {pmTag.label}{expense.paymentMethod === "credit_card" && expense.cardLast4 ? ` ••${expense.cardLast4}` : ""}
+                      </Text>
+                    </View>
+                    {showCategory ? (
+                      <View style={[styles.transactionTag, { backgroundColor: "#1a1a1a", borderColor: "#333" }]}>
+                        <Text style={[styles.transactionTagText, { color: "#888" }]}>{expense.category}</Text>
+                      </View>
+                    ) : null}
+                  </>
+                );
+              })()}
+            </View>
             <View style={styles.transactionFooter}>
               <View style={styles.transactionPriceContainer}>
                 <Text style={styles.transactionValueExpense}>
@@ -1603,12 +1647,14 @@ export const HomeScreen = () => {
                           <Text style={styles.summaryLabelBalance}>Saldo</Text>
                           <MaskedAmount
                             value={realizedBalance}
-                            style={[
-                              styles.summaryValueSquare,
-                              realizedBalance < 0
-                                ? styles.summaryValueNegative
-                                : undefined,
-                            ]}
+                            style={
+                              [
+                                styles.summaryValueSquare,
+                                realizedBalance < 0
+                                  ? styles.summaryValueNegative
+                                  : null,
+                              ] as any
+                            }
                             numberOfLines={1}
                             adjustsFontSizeToFit={true}
                             minimumFontScale={0.7}
@@ -1644,10 +1690,12 @@ export const HomeScreen = () => {
                       </Text>
                       <MaskedAmount
                         value={balance}
-                        style={[
-                          styles.summaryValue,
-                          balance < 0 ? styles.summaryValueNegative : undefined,
-                        ]}
+                        style={
+                          [
+                            styles.summaryValue,
+                            balance < 0 ? styles.summaryValueNegative : null,
+                          ] as any
+                        }
                         numberOfLines={1}
                         adjustsFontSizeToFit={true}
                         minimumFontScale={0.7}
@@ -2601,6 +2649,24 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: "700",
     color: "#ff4d6d",
+    letterSpacing: 0.2,
+  },
+  transactionTagsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 5,
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  transactionTag: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
+  transactionTagText: {
+    fontSize: 10,
+    fontWeight: "700",
     letterSpacing: 0.2,
   },
   chartsContainer: {
