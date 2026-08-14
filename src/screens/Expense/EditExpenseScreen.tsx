@@ -32,7 +32,9 @@ import { CreditCard } from "../../types/creditCard";
 export const EditExpenseScreen = () => {
   const { user } = useAuth();
   const { navigate, params } = useNavigation();
-  const expenseId = params?.id;
+  const expenseId = params?.id || params?.expenseId;
+  const returnTo = params?.returnTo || "Home";
+  const returnParams = params?.returnParams;
 
   const [value, setValue] = useState(0);
   const [description, setDescription] = useState("");
@@ -64,13 +66,13 @@ export const EditExpenseScreen = () => {
 
         if (!expense) {
           Alert.alert("Erro", "Gasto não encontrado");
-          navigate("Home");
+          navigate(returnTo, returnParams);
           return;
         }
 
         if (expense.userId !== user.id) {
           Alert.alert("Erro", "Você não tem permissão para editar este gasto");
-          navigate("Home");
+          navigate(returnTo, returnParams);
           return;
         }
 
@@ -244,7 +246,7 @@ export const EditExpenseScreen = () => {
             text: "OK",
             onPress: () => {
               console.log("🏠 Navegando para Home após atualizar gasto...");
-              navigate("Home");
+              navigate(returnTo, returnParams);
             },
             style: "default",
           },
@@ -263,7 +265,7 @@ export const EditExpenseScreen = () => {
   };
 
   const handleCancel = () => {
-    navigate("Home");
+    navigate(returnTo, returnParams);
   };
 
   if (loading) {

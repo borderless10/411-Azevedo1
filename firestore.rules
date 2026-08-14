@@ -91,7 +91,9 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow read: if isSignedIn();
-      allow create: if isSignedIn() && request.auth.uid == userId;
+      // Admin cadastra cliente/consultor com app Auth secundário:
+      // o write usa o uid do admin, não o uid do documento criado.
+      allow create: if isSignedIn() && (request.auth.uid == userId || isAdmin());
       allow update: if isOwner(userId) || isAdmin() || isConsultantOf(userId);
       allow delete: if isAdmin();
 

@@ -22,6 +22,7 @@ import { userService } from "./userServices";
 import { activityServices } from "./activityServices";
 import { resolveExpenseCategoryName } from "../types/category";
 import { CreditCardInvoiceSummary } from "../types/creditCard";
+import { cancelBillNotification } from "./notificationServices";
 
 const getUserPlanningDoc = (userId: string) =>
   doc(db, "users", userId, "planning", "current");
@@ -807,12 +808,71 @@ export const planningServices = {
     durationDays?: number,
     startedAt: Date = new Date(),
   ): Promise<Planning | null> {
-    return this.updatePlanning(consultantId, userId, {
-      consumoModeradoCycleStartedAt: normalizeCycleStart(startedAt),
+    await planningServices.ensureOwnerOrAdmin(consultantId, userId);
+
+    const now = new Date();
+    const selectedDay = normalizeCycleStart(startedAt || now);
+    const today = normalizeCycleStart(now);
+    const cycleStart =
+      selectedDay.getTime() <= today.getTime() ? now : selectedDay;
+
+    const docRef = getUserPlanningDoc(userId);
+    const snap = await getDoc(docRef);
+    if (!snap.exists()) {
+      return this.updatePlanning(consultantId, userId, {
+        consumoModeradoCycleStartedAt: cycleStart,
+        consumoModeradoCycleEndedAt: null,
+        consumoModeradoCycleStatus: "active",
+        consumoModeradoCycleDurationDays: durationDays,
+      });
+    }
+
+    const nowTs = Timestamp.now();
+    const data = snap.data() as any;
+    const resetBills = (data.bills || []).map((bill: any) => {
+      let dueDay =
+        bill?.dueDay !== undefined && bill?.dueDay !== null
+          ? Number(bill.dueDay)
+          : undefined;
+
+      if (!dueDay && bill?.dueDate) {
+        const rawDueDate =
+          typeof bill.dueDate?.toDate === "function"
+            ? bill.dueDate.toDate()
+            : new Date(bill.dueDate);
+        if (!isNaN(rawDueDate.getTime())) {
+          dueDay = rawDueDate.getDate();
+        }
+      }
+
+      const {
+        paidDate: _paidDate,
+        dueDate: _dueDate,
+        ...billRest
+      } = bill;
+
+      return removeUndefinedFields({
+        ...billRest,
+        dueDay,
+        status: "pending",
+        updatedAt: nowTs,
+      });
+    });
+
+    const payload: Record<string, unknown> = {
+      consumoModeradoCycleStartedAt: Timestamp.fromDate(cycleStart),
       consumoModeradoCycleEndedAt: null,
       consumoModeradoCycleStatus: "active",
-      consumoModeradoCycleDurationDays: durationDays,
-    });
+      bills: resetBills,
+      updatedAt: nowTs,
+    };
+    if (durationDays !== undefined) {
+      payload.consumoModeradoCycleDurationDays = durationDays;
+    }
+
+    await updateDoc(docRef, payload);
+
+    return planningServices.getPlanning(userId);
   },
 
   async upsertCategoryRelease(
@@ -1536,6 +1596,7 @@ export const planningServices = {
       } as BillFirestore;
 
       await updateDoc(docRef, { bills, updatedAt: now });
+      await cancelBillNotification(billId);
 
       // Registrar atividade para o consultor/cliente
       try {

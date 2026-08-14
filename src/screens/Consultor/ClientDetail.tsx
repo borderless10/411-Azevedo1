@@ -122,6 +122,7 @@ export const ClientDetail: React.FC = () => {
           clientId,
           period.start,
           period.end,
+          { createdAtFrom: period.createdAtFrom },
         );
         const monthlyIncomesTotal = await incomeServices.getIncomesTotal(
           clientId,
@@ -132,6 +133,7 @@ export const ClientDetail: React.FC = () => {
         const ex = await expenseServices.getExpenses(clientId, {
           startDate: period.start,
           endDate: period.end,
+          createdAtFrom: period.createdAtFrom,
         });
         const inc = await incomeServices.getIncomes(clientId, {
           startDate: period.start,

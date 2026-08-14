@@ -211,6 +211,7 @@ export const HomeScreen = () => {
       const endOfToday = getEndOfDay(today);
       let activeStartDate = startOfMonth;
       let activeEndDate = endOfToday;
+      let createdAtFrom: Date | undefined;
 
       // Load planning first to respect cycle start/end when present.
       let planning: any = null;
@@ -219,9 +220,11 @@ export const HomeScreen = () => {
           planning = await planningServices.getPlanning(user.id);
 
           if (planning?.consumoModeradoCycleStartedAt) {
-            activeStartDate = getStartOfDay(
-              new Date(planning.consumoModeradoCycleStartedAt),
+            const cycleStartedAt = new Date(
+              planning.consumoModeradoCycleStartedAt,
             );
+            createdAtFrom = cycleStartedAt;
+            activeStartDate = getStartOfDay(cycleStartedAt);
             setActivePeriodLabel("No ciclo");
 
             if (planning?.consumoModeradoCycleEndedAt) {
@@ -275,6 +278,7 @@ export const HomeScreen = () => {
         expenseServices
           .getExpensesTotal(user.id, activeStartDate, activeEndDate, {
             excludeSectionOnly: true,
+            createdAtFrom,
           })
           .catch((err) => {
             console.error("❌ [HOME] Erro ao buscar totais de gastos:", err);
@@ -293,6 +297,7 @@ export const HomeScreen = () => {
           .getExpenses(user.id, {
             startDate: activeStartDate,
             endDate: activeEndDate,
+            createdAtFrom,
           })
           .catch((err) => {
             console.error("❌ [HOME] Erro ao buscar gastos:", err);
@@ -303,7 +308,7 @@ export const HomeScreen = () => {
             user.id,
             activeStartDate,
             activeEndDate,
-            { excludeSectionOnly: true },
+            { excludeSectionOnly: true, createdAtFrom },
           )
           .catch((err) => {
             console.error(
@@ -332,6 +337,7 @@ export const HomeScreen = () => {
                 startDate: lineChartStartDate,
                 endDate: activeEndDate,
                 excludeSectionOnly: true,
+                createdAtFrom,
               })
               .catch((err) => {
                 console.error(

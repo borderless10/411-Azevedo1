@@ -34,6 +34,7 @@ import {
   getEndOfDay,
   addDays,
   formatDateForDisplay,
+  formatDateToString,
 } from "../../utils/dateUtils";
 import { useNavigation } from "../../routes/NavigationContext";
 import ZeroPlanilhaConfirmModal from "../../components/ui/ZeroPlanilhaConfirmModal";
@@ -69,6 +70,7 @@ export const CategoryBudgetScreen = () => {
     useState<number>(0);
   const [cycleDateStart, setCycleDateStart] = useState<Date | null>(null);
   const [cycleDateEnd, setCycleDateEnd] = useState<Date | null>(null);
+  const [editingDateKey, setEditingDateKey] = useState<string | null>(null);
 
   const normalizeTitle = normalizeExpenseTitleKey;
 
@@ -127,8 +129,11 @@ export const CategoryBudgetScreen = () => {
         Number(planning?.consumoModeradoCycleDurationDays || 0),
       );
 
-      const cycleStartDate = planning?.consumoModeradoCycleStartedAt
-        ? getStartOfDay(new Date(planning.consumoModeradoCycleStartedAt))
+      const cycleStartedAtRaw = planning?.consumoModeradoCycleStartedAt
+        ? new Date(planning.consumoModeradoCycleStartedAt)
+        : null;
+      const cycleStartDate = cycleStartedAtRaw
+        ? getStartOfDay(cycleStartedAtRaw)
         : null;
       const cycleEndDate = planning?.consumoModeradoCycleEndedAt
         ? getEndOfDay(new Date(planning.consumoModeradoCycleEndedAt))
@@ -156,6 +161,7 @@ export const CategoryBudgetScreen = () => {
       const expenses = await expenseServices.getExpenses(user.id, {
         startDate: start,
         endDate: end,
+        createdAtFrom: cycleStartedAtRaw || undefined,
       });
 
       const filteredExpenses = filterTrackedExpensesForTitle(
@@ -324,6 +330,31 @@ export const CategoryBudgetScreen = () => {
   };
 
   const performanceIndicator = getPerformanceIndicator();
+
+  const getExpensePaymentLabel = (raw?: string) => {
+    const method = String(raw || "").toLowerCase();
+    if (method.includes("credit") || method === "card") return "Crédito";
+    if (method.includes("debit")) return "Débito";
+    if (method.includes("pix")) return "PIX";
+    if (method.includes("cash") || method.includes("dinheiro")) return "Dinheiro";
+    return "Outro";
+  };
+
+  const getExpensesForDate = (date: Date) => {
+    const dateKey = formatDateToString(date);
+    return expenseHistory.filter(
+      (expense) => formatDateToString(new Date(expense.date)) === dateKey,
+    );
+  };
+
+  const openExpenseEditor = (expenseId: string) => {
+    navigate("EditExpense", {
+      id: expenseId,
+      expenseId,
+      returnTo: "CategoryBudget",
+      returnParams: { trackedTitle },
+    });
+  };
 
   const handleOpenNoRecordActions = (date: Date) => {
     const label = date.toLocaleDateString("pt-BR", {
@@ -550,14 +581,18 @@ export const CategoryBudgetScreen = () => {
             <View style={styles.daysList}>
               {days.map((daySummary) => {
                 const day = daySummary.date.getDate();
+                const dateKey = formatDateToString(daySummary.date);
                 const isZeroConfirmed = zeroConfirmedDays.includes(day);
+                const isEditing = editingDateKey === dateKey;
+                const dayItems = getExpensesForDate(daySummary.date);
 
                 return (
                   <View
-                    key={daySummary.date.toISOString()}
+                    key={dateKey}
                     style={[
                       styles.dayRow,
                       isZeroConfirmed && styles.dayRowZeroConfirmed,
+                      isEditing && styles.dayRowEditing,
                     ]}
                   >
                     <View style={styles.dayInfo}>
@@ -568,15 +603,15 @@ export const CategoryBudgetScreen = () => {
                           month: "2-digit",
                         })}
                       </Text>
-                      {daySummary.total > 0 ? (
+                      {!isEditing && daySummary.total > 0 ? (
                         <Text style={styles.dayExpense}>
                           {formatCurrency(daySummary.total)}
                         </Text>
-                      ) : !isZeroConfirmed ? (
+                      ) : !isEditing && !isZeroConfirmed ? (
                         <Text style={styles.dayEmpty}>
                           Sem gasto registrado
                         </Text>
-                      ) : (
+                      ) : !isEditing ? (
                         <View style={styles.zeroConfirmedBadge}>
                           <Ionicons
                             name="checkmark-circle"
@@ -587,10 +622,48 @@ export const CategoryBudgetScreen = () => {
                             Zero confirmado
                           </Text>
                         </View>
-                      )}
+                      ) : null}
                     </View>
 
-                    {daySummary.total === 0 && !isZeroConfirmed ? (
+                    {isEditing ? (
+                      <View style={styles.editItemsWrap}>
+                        {dayItems.map((item) => (
+                          <TouchableOpacity
+                            key={item.id}
+                            style={styles.editItemRow}
+                            onPress={() => openExpenseEditor(item.id)}
+                          >
+                            <View style={{ flex: 1 }}>
+                              <Text style={styles.editItemTitle}>
+                                {item.description || trackedTitle}
+                              </Text>
+                              <Text style={styles.editItemMeta}>
+                                {getExpensePaymentLabel(item.paymentMethod)}
+                              </Text>
+                            </View>
+                            <Text style={styles.editItemAmount}>
+                              {formatCurrency(item.value)}
+                            </Text>
+                            <Ionicons name="pencil" size={16} color="#8c52ff" />
+                          </TouchableOpacity>
+                        ))}
+                        <TouchableOpacity
+                          style={styles.addItemButton}
+                          onPress={handleAddTrackedExpense}
+                        >
+                          <Ionicons name="add" size={16} color="#fff" />
+                          <Text style={styles.addItemButtonText}>
+                            Adicionar lançamento
+                          </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.cancelEditButton}
+                          onPress={() => setEditingDateKey(null)}
+                        >
+                          <Ionicons name="close" size={18} color="#fff" />
+                        </TouchableOpacity>
+                      </View>
+                    ) : daySummary.total === 0 && !isZeroConfirmed ? (
                       <TouchableOpacity
                         style={styles.alertIconButton}
                         onPress={() =>
@@ -604,9 +677,12 @@ export const CategoryBudgetScreen = () => {
                         />
                       </TouchableOpacity>
                     ) : (
-                      <Text style={styles.dayAmount}>
-                        {formatCurrency(daySummary.total)}
-                      </Text>
+                      <TouchableOpacity
+                        style={styles.editIconButton}
+                        onPress={() => setEditingDateKey(dateKey)}
+                      >
+                        <Ionicons name="pencil" size={18} color="#8c52ff" />
+                      </TouchableOpacity>
                     )}
                   </View>
                 );
@@ -892,6 +968,64 @@ const styles = StyleSheet.create({
   dayRowZeroConfirmed: {
     backgroundColor: "rgba(76, 175, 80, 0.08)",
     borderColor: "rgba(76, 175, 80, 0.45)",
+  },
+  dayRowEditing: {
+    flexDirection: "column",
+    alignItems: "stretch",
+  },
+  editItemsWrap: {
+    width: "100%",
+    marginTop: 8,
+  },
+  editItemRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#000",
+    borderWidth: 1,
+    borderColor: "#333",
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginBottom: 6,
+  },
+  editItemTitle: {
+    color: "#fff",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  editItemMeta: {
+    color: "#999",
+    fontSize: 11,
+    marginTop: 2,
+  },
+  editItemAmount: {
+    color: "#8c52ff",
+    fontWeight: "700",
+    marginRight: 8,
+  },
+  addItemButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#8c52ff",
+    borderRadius: 8,
+    paddingVertical: 8,
+    marginBottom: 6,
+  },
+  addItemButtonText: {
+    color: "#fff",
+    fontWeight: "600",
+    marginLeft: 6,
+    fontSize: 13,
+  },
+  cancelEditButton: {
+    alignSelf: "flex-end",
+    backgroundColor: "#333",
+    borderRadius: 8,
+    padding: 8,
+  },
+  editIconButton: {
+    padding: 8,
   },
   dayInfo: {
     flex: 1,

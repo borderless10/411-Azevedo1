@@ -213,3 +213,21 @@ export const getExpenseScopeBadge = (expense: {
 }): string => {
   return getExpenseScopeLabel(expense) ?? expense.category ?? "Geral";
 };
+
+export const isExpenseCreatedFrom = (
+  expense: { createdAt?: Date | string; date?: Date | string },
+  createdAtFrom?: Date | string | null,
+): boolean => {
+  if (!createdAtFrom) return true;
+  const cutoff = new Date(createdAtFrom).getTime();
+  if (!Number.isFinite(cutoff)) return true;
+
+  const createdAt = expense.createdAt
+    ? new Date(expense.createdAt).getTime()
+    : NaN;
+  const occurredAt = Number.isFinite(createdAt)
+    ? createdAt
+    : new Date(expense.date || 0).getTime();
+
+  return occurredAt >= cutoff;
+};

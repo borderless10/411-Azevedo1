@@ -72,6 +72,7 @@ export interface ExpenseFilters {
   maxValue?: number;
   searchTerm?: string;
   excludeSectionOnly?: boolean;
+  createdAtFrom?: Date;
 }
 
 /**

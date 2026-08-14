@@ -1142,7 +1142,7 @@ export const ClientPlanningScreen = () => {
               user.id,
               selectedClient.id,
               durationDays,
-              cycleDateStart,
+              new Date(),
             )
           : await planningServices.updatePlanning(user.id, selectedClient.id, {
               consumoModeradoCycleDurationDays: durationDays,

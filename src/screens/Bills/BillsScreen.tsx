@@ -187,29 +187,23 @@ export const BillsScreen = () => {
     }
   }, [currentScreen, user, billsOwnerId, isConsultorManagingClient]);
 
-  const getPlanningBillStatus = (bill: any): Bill["status"] => {
-    const normalized = String(bill?.status || "")
-      .trim()
-      .toLowerCase();
+  const getPlanningBillStatus = (
+    bill: any,
+    cycleStartedAt?: Date | null,
+  ): Bill["status"] => {
+    const paidAt = bill?.paidDate
+      ? typeof bill.paidDate?.toDate === "function"
+        ? bill.paidDate.toDate()
+        : new Date(bill.paidDate)
+      : null;
+    const paidAtValid = paidAt && !isNaN(paidAt.getTime()) ? paidAt : null;
+    const paidInCurrentCycle =
+      Boolean(paidAtValid) &&
+      (!cycleStartedAt ||
+        paidAtValid!.getTime() >= new Date(cycleStartedAt).getTime());
 
-    if (normalized === "paid" || bill?.paidDate) {
-      if (__DEV__) {
-        console.log("[BILLS][planning] status=paid", {
-          id: bill?.id,
-          rawStatus: bill?.status,
-          paidDate: bill?.paidDate,
-        });
-      }
+    if (paidInCurrentCycle) {
       return "paid";
-    }
-    if (normalized === "overdue" || normalized === "atrasada") {
-      if (__DEV__) {
-        console.log("[BILLS][planning] status=overdue(raw)", {
-          id: bill?.id,
-          rawStatus: bill?.status,
-        });
-      }
-      return "overdue";
     }
 
     const today = new Date();
@@ -224,19 +218,9 @@ export const BillsScreen = () => {
       const safeDay = Math.min(Math.max(1, Number(bill.dueDay) || 1), lastDay);
       const dueDate = new Date(year, month, safeDay);
       dueDate.setHours(0, 0, 0, 0);
-      if (__DEV__) {
-        console.log("[BILLS][planning] dueDay-check", {
-          id: bill?.id,
-          dueDay: bill?.dueDay,
-          dueDateISO: dueDate.toISOString(),
-          todayISO: today.toISOString(),
-          result: dueDate < today ? "overdue" : "pending",
-        });
-      }
       return dueDate < today ? "overdue" : "pending";
     }
 
-    // Fallback para dados antigos com dueDate
     const rawDueDate = bill?.dueDate;
     if (rawDueDate) {
       const dueDate =
@@ -248,50 +232,8 @@ export const BillsScreen = () => {
 
       if (!isNaN(dueDate.getTime())) {
         dueDate.setHours(0, 0, 0, 0);
-        if (__DEV__) {
-          console.log("[BILLS][planning] dueDate-check", {
-            id: bill?.id,
-            rawDueDate,
-            parsedDueDateISO: dueDate.toISOString(),
-            todayISO: today.toISOString(),
-            result: dueDate < today ? "overdue" : "pending",
-          });
-        }
         return dueDate < today ? "overdue" : "pending";
       }
-    }
-
-    // Fallback legado final: usar createdAt como vencimento quando não houver dueDay/dueDate
-    const rawCreatedAt = bill?.createdAt;
-    if (rawCreatedAt) {
-      const createdDate =
-        typeof rawCreatedAt?.toDate === "function"
-          ? rawCreatedAt.toDate()
-          : rawCreatedAt instanceof Date
-            ? rawCreatedAt
-            : new Date(rawCreatedAt);
-
-      if (!isNaN(createdDate.getTime())) {
-        createdDate.setHours(0, 0, 0, 0);
-        if (__DEV__) {
-          console.log("[BILLS][planning] createdAt-fallback-check", {
-            id: bill?.id,
-            createdAtISO: createdDate.toISOString(),
-            todayISO: today.toISOString(),
-            result: createdDate < today ? "overdue" : "pending",
-          });
-        }
-        return createdDate < today ? "overdue" : "pending";
-      }
-    }
-
-    if (__DEV__) {
-      console.log("[BILLS][planning] fallback=pending(no dueDay/dueDate)", {
-        id: bill?.id,
-        rawStatus: bill?.status,
-        dueDay: bill?.dueDay,
-        dueDate: bill?.dueDate,
-      });
     }
 
     return "pending";
@@ -356,33 +298,30 @@ export const BillsScreen = () => {
               : "NO_PLANNING",
           });
         }
+        const cycleStartedAt = planning?.consumoModeradoCycleStartedAt
+          ? new Date(planning.consumoModeradoCycleStartedAt)
+          : null;
         const mapping_result = { mapped: 0, expectedExpenses: 0 };
         const mapped = (planning?.bills || [])
           .filter(isPayablePlanningBill)
           .map((b) => {
           mapping_result.mapped++;
-          // create a reasonable dueDate from dueDay if available
+          const dueDay =
+            b.dueDay !== undefined && b.dueDay !== null
+              ? Number(b.dueDay)
+              : b.dueDate
+                ? new Date(b.dueDate).getDate()
+                : undefined;
           let dueDate: Date = b.dueDate || b.createdAt || new Date();
-          if (b.dueDay !== undefined && b.dueDay !== null) {
+          if (dueDay) {
             const now = new Date();
             const year = now.getFullYear();
             const month = now.getMonth();
             const lastDay = new Date(year, month + 1, 0).getDate();
-            const day = Math.min(Math.max(1, b.dueDay), lastDay);
+            const day = Math.min(Math.max(1, dueDay), lastDay);
             dueDate = new Date(year, month, day);
           }
-          const status = getPlanningBillStatus(b);
-          if (__DEV__) {
-            console.log("[BILLS] mapped planning bill", {
-              id: b.id,
-              title: b.name,
-              rawStatus: b.status,
-              dueDay: b.dueDay,
-              dueDate: b.dueDate,
-              mappedDueDateISO: dueDate?.toISOString?.(),
-              mappedStatus: status,
-            });
-          }
+          const status = getPlanningBillStatus(b, cycleStartedAt);
           return {
             id: b.id!,
             userId: billsOwnerId,
@@ -391,8 +330,9 @@ export const BillsScreen = () => {
             amount: b.amount,
             paymentMethod: b.paymentMethod as any,
             dueDate,
+            dueDay,
             status,
-            paidDate: b.paidDate,
+            paidDate: status === "paid" ? b.paidDate : undefined,
             notificationId: undefined,
             createdAt: b.createdAt || new Date(),
             updatedAt: b.updatedAt || new Date(),
@@ -615,10 +555,8 @@ export const BillsScreen = () => {
       await planningServices.markBillAsPaidByClient(billsOwnerId, bill.id);
     } catch {
       await markBillAsPaid(bill.id);
-      if (!isPlanningSource) {
-        await cancelBillNotification(bill.id);
-      }
     }
+    await cancelBillNotification(bill.id);
   };
 
   const handleMarkAsPaid = async (bill: Bill) => {
@@ -1113,7 +1051,10 @@ export const BillsScreen = () => {
                     <Text
                       style={[styles.billDate, { color: colors.textSecondary }]}
                     >
-                      Vence: {formatDate(bill.dueDate)}
+                      Vence{" "}
+                      {bill.dueDay
+                        ? `dia ${bill.dueDay}`
+                        : formatDate(bill.dueDate)}
                     </Text>
                   </View>
                   <View style={styles.billDetailItem}>

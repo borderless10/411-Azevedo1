@@ -35,7 +35,7 @@ import { formatCurrency } from "../utils/currencyUtils";
 import { activityServices } from "./activityServices";
 import { creditCardServices } from "./creditCardServices";
 import { toExpenseCategoryLookupKey } from "../types/category";
-import { filterGeneralHistoryExpenses, isConsumoModeradoHistoryExpense } from "../utils/expenseScopeUtils";
+import { filterGeneralHistoryExpenses, isConsumoModeradoHistoryExpense, isExpenseCreatedFrom } from "../utils/expenseScopeUtils";
 
 /**
  * Validar dados de criação de gasto
@@ -344,6 +344,12 @@ export const expenseServices = {
         expenses = filterGeneralHistoryExpenses(expenses);
       }
 
+      if (filters?.createdAtFrom) {
+        expenses = expenses.filter((expense) =>
+          isExpenseCreatedFrom(expense, filters.createdAtFrom),
+        );
+      }
+
       // Ordenar por data (mais recente primeiro)
       expenses.sort((a, b) => b.date.getTime() - a.date.getTime());
 
@@ -601,7 +607,7 @@ export const expenseServices = {
     userId: string,
     startDate?: Date,
     endDate?: Date,
-    options?: { excludeSectionOnly?: boolean },
+    options?: { excludeSectionOnly?: boolean; createdAtFrom?: Date },
   ): Promise<number> {
     console.log("💸 [EXPENSE SERVICE] Calculando total de gastos...");
 
@@ -610,6 +616,7 @@ export const expenseServices = {
         startDate,
         endDate,
         excludeSectionOnly: options?.excludeSectionOnly,
+        createdAtFrom: options?.createdAtFrom,
       });
 
       const total = expenses.reduce((sum, expense) => sum + expense.value, 0);
@@ -721,7 +728,7 @@ export const expenseServices = {
     userId: string,
     startDate?: Date,
     endDate?: Date,
-    options?: { excludeSectionOnly?: boolean },
+    options?: { excludeSectionOnly?: boolean; createdAtFrom?: Date },
   ): Promise<ExpenseByCategory[]> {
     console.log("💸 [EXPENSE SERVICE] Agrupando gastos por categoria...");
 
@@ -730,6 +737,7 @@ export const expenseServices = {
         startDate,
         endDate,
         excludeSectionOnly: options?.excludeSectionOnly,
+        createdAtFrom: options?.createdAtFrom,
       });
 
       // Agrupar por categoria

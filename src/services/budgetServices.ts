@@ -637,8 +637,11 @@ export const budgetServices = {
       );
 
       const today = new Date();
-      const cycleStartDate = planning?.consumoModeradoCycleStartedAt
-        ? getStartOfDay(new Date(planning.consumoModeradoCycleStartedAt))
+      const cycleStartedAtRaw = planning?.consumoModeradoCycleStartedAt
+        ? new Date(planning.consumoModeradoCycleStartedAt)
+        : null;
+      const cycleStartDate = cycleStartedAtRaw
+        ? getStartOfDay(cycleStartedAtRaw)
         : null;
       const cycleEndDate = planning?.consumoModeradoCycleEndedAt
         ? getEndOfDay(new Date(planning.consumoModeradoCycleEndedAt))
@@ -686,6 +689,7 @@ export const budgetServices = {
       const expenses = await expenseServices.getExpenses(userId, {
         startDate: start,
         endDate: end,
+        createdAtFrom: cycleStartedAtRaw || undefined,
       });
 
       const expensesForModerado = expenses.filter((expense) => {

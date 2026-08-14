@@ -25,6 +25,7 @@ import {
   UpdateBillData,
   BillStatus,
 } from "../types/bill";
+import { cancelBillNotification } from "./notificationServices";
 
 /**
  * Criar nova conta
@@ -181,6 +182,7 @@ export const markBillAsPaid = async (billId: string): Promise<void> => {
       status: "paid",
       paidDate: new Date(),
     });
+    await cancelBillNotification(billId);
   } catch (error) {
     console.error("Erro ao marcar conta como paga:", error);
     throw error;

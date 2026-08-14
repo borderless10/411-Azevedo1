@@ -6,12 +6,13 @@ import {
 } from "../types/planning";
 import { formatCurrency } from "./currencyUtils";
 import { getEndOfDay, getStartOfDay, formatDateToString } from "./dateUtils";
-import { normalizeExpenseTitleKey, isBillPaymentExpense, ConsultantExpenseScope } from "./expenseScopeUtils";
+import { normalizeExpenseTitleKey, isBillPaymentExpense, ConsultantExpenseScope, isExpenseCreatedFrom } from "./expenseScopeUtils";
 
 export type MovementPeriod = {
   start: Date;
   end: Date;
   label: string;
+  createdAtFrom?: Date;
 };
 
 export type PlannedSpendingSummary = {
@@ -164,7 +165,8 @@ export const resolveClientMovementPeriod = (
   const endOfToday = getEndOfDay(reference);
 
   if (planning?.consumoModeradoCycleStartedAt) {
-    const start = getStartOfDay(new Date(planning.consumoModeradoCycleStartedAt));
+    const startedAt = new Date(planning.consumoModeradoCycleStartedAt);
+    const start = getStartOfDay(startedAt);
     let end = endOfToday;
 
     if (planning.consumoModeradoCycleEndedAt) {
@@ -178,7 +180,7 @@ export const resolveClientMovementPeriod = (
       end = getEndOfDay(start);
     }
 
-    return { start, end, label: "Ciclo atual" };
+    return { start, end, label: "Ciclo atual", createdAtFrom: startedAt };
   }
 
   return { start: startOfMonth, end: endOfToday, label: "Este mês" };
@@ -281,6 +283,7 @@ export const compareBillPayments = (
 ): BillPaymentComparison[] => {
   return expenses
     .filter((expense) => isDateWithinPeriod(expense.date, period))
+    .filter((expense) => isExpenseCreatedFrom(expense, period.createdAtFrom))
     .filter(isBillPaymentExpense)
     .map((expense) => {
       const bill = findPlanningBillForExpense(expense, planning);

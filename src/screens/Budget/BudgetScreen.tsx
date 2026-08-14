@@ -38,6 +38,7 @@ import {
 } from "../../services/planningServices";
 import { getStartOfDay, getEndOfDay, addDays, formatExpectedMonthLabel, formatDateToString } from "../../utils/dateUtils";
 import { DailyExpense } from "../../types/budget";
+import { Expense } from "../../types/expense";
 import {
   requestNotificationPermissions,
   scheduleDailyExpenseReminder,
@@ -60,6 +61,9 @@ export const BudgetScreen = () => {
   const [plannedMonthlySpending, setPlannedMonthlySpending] =
     useState<number>(0);
   const [dailyExpenses, setDailyExpenses] = useState<CycleDailyExpense[]>([]);
+  const [expensesByDate, setExpensesByDate] = useState<Record<string, Expense[]>>(
+    {},
+  );
   const [dailyExpenseDates, setDailyExpenseDates] = useState<Date[]>([]);
   const [editingDateKey, setEditingDateKey] = useState<string | null>(null);
   const [tempValue, setTempValue] = useState<string>("");
@@ -322,8 +326,11 @@ export const BudgetScreen = () => {
       }
 
       const today = new Date();
-      const cycleStartDate = planning?.consumoModeradoCycleStartedAt
-        ? getStartOfDay(new Date(planning.consumoModeradoCycleStartedAt))
+      const cycleStartedAtRaw = planning?.consumoModeradoCycleStartedAt
+        ? new Date(planning.consumoModeradoCycleStartedAt)
+        : null;
+      const cycleStartDate = cycleStartedAtRaw
+        ? getStartOfDay(cycleStartedAtRaw)
         : null;
       const cycleEndDate = planning?.consumoModeradoCycleEndedAt
         ? getEndOfDay(new Date(planning.consumoModeradoCycleEndedAt))
@@ -379,12 +386,14 @@ export const BudgetScreen = () => {
         const expenses = await expenseServices.getExpenses(user.id, {
           startDate: start,
           endDate: end,
+          createdAtFrom: cycleStartedAtRaw || undefined,
         });
         const expensesForModerado = expenses.filter(
           isConsumoModeradoHistoryExpense,
         );
 
         const amountByDateKey = new Map<string, number>();
+        const grouped: Record<string, Expense[]> = {};
         cycleDates.forEach((date) => {
           amountByDateKey.set(formatDateToString(date), 0);
         });
@@ -398,6 +407,8 @@ export const BudgetScreen = () => {
               ? exp.value
               : parseFloat(String(exp.value)) || 0;
           amountByDateKey.set(dateKey, prev + val);
+          if (!grouped[dateKey]) grouped[dateKey] = [];
+          grouped[dateKey].push(exp);
         });
 
         const merged: CycleDailyExpense[] = [];
@@ -411,9 +422,11 @@ export const BudgetScreen = () => {
         });
         merged.sort((a, b) => a.dateKey.localeCompare(b.dateKey));
         setDailyExpenses(merged);
+        setExpensesByDate(grouped);
       } catch (err) {
         console.error("❌ [BUDGET] Erro ao agregar gastos do mês:", err);
         setDailyExpenses([]);
+        setExpensesByDate({});
       }
 
       console.log("✅ Orçamento carregado do Firebase");
@@ -537,11 +550,35 @@ export const BudgetScreen = () => {
     }
   };
 
+  const getExpensePaymentLabel = (raw?: string) => {
+    const method = String(raw || "").toLowerCase();
+    if (method.includes("credit") || method === "card") return "Crédito";
+    if (method.includes("debit")) return "Débito";
+    if (method.includes("pix")) return "PIX";
+    if (method.includes("cash") || method.includes("dinheiro")) return "Dinheiro";
+    return "Outro";
+  };
+
+  const openExpenseEditor = (expenseId: string) => {
+    navigate("EditExpense", {
+      id: expenseId,
+      expenseId,
+      returnTo: "Budget",
+    });
+  };
+
   const handleEditDay = (date: Date) => {
     const dateKey = formatDateToString(date);
     const existing = dailyExpenses.find((item) => item.dateKey === dateKey);
+    const items = expensesByDate[dateKey] || [];
     setEditingDateKey(dateKey);
-    setTempValue(existing ? formatCurrencyWithoutSymbol(existing.amount) : "");
+    setTempValue(
+      items.length > 0
+        ? ""
+        : existing
+          ? formatCurrencyWithoutSymbol(existing.amount)
+          : "",
+    );
   };
 
   const handleOpenNoRecordActions = (date: Date) => {
@@ -775,6 +812,7 @@ export const BudgetScreen = () => {
                       style={[
                         styles.dayRow,
                         isZeroConfirmed && styles.dayRowZeroConfirmed,
+                        isEditing && styles.dayRowEditing,
                       ]}
                     >
                       <View style={styles.dayInfo}>
@@ -804,25 +842,71 @@ export const BudgetScreen = () => {
                       </View>
 
                       {isEditing ? (
-                        <View style={styles.editContainer}>
-                          <Text style={styles.currencySymbol}>R$</Text>
-                          <TextInput
-                            style={styles.dayInput}
-                            placeholder="0,00"
-                            placeholderTextColor="#666"
-                            keyboardType={DECIMAL_INPUT_KEYBOARD}
-                            value={tempValue}
-                            onChangeText={(text) =>
-                              setTempValue(sanitizeDecimalInput(text))
-                            }
-                            autoFocus
-                          />
-                          <TouchableOpacity
-                            style={styles.saveButton}
-                            onPress={() => handleSaveExpense(day, date)}
-                          >
-                            <Ionicons name="checkmark" size={20} color="#fff" />
-                          </TouchableOpacity>
+                        <View style={styles.editItemsWrap}>
+                          {(expensesByDate[dateKey] || []).length > 0 ? (
+                            <>
+                              {(expensesByDate[dateKey] || []).map((item) => (
+                                <TouchableOpacity
+                                  key={item.id}
+                                  style={styles.editItemRow}
+                                  onPress={() => openExpenseEditor(item.id)}
+                                >
+                                  <View style={{ flex: 1 }}>
+                                    <Text style={styles.editItemTitle}>
+                                      {item.description || "Gasto"}
+                                    </Text>
+                                    <Text style={styles.editItemMeta}>
+                                      {getExpensePaymentLabel(item.paymentMethod)}
+                                    </Text>
+                                  </View>
+                                  <Text style={styles.editItemAmount}>
+                                    {formatCurrency(item.value)}
+                                  </Text>
+                                  <Ionicons
+                                    name="pencil"
+                                    size={16}
+                                    color="#8c52ff"
+                                  />
+                                </TouchableOpacity>
+                              ))}
+                              <TouchableOpacity
+                                style={styles.addItemButton}
+                                onPress={() =>
+                                  navigate("AddExpense", {
+                                    prefillDate: dateKey,
+                                    prefillExpenseType: "consumption",
+                                    returnTo: "Budget",
+                                  })
+                                }
+                              >
+                                <Ionicons name="add" size={16} color="#fff" />
+                                <Text style={styles.addItemButtonText}>
+                                  Adicionar lançamento
+                                </Text>
+                              </TouchableOpacity>
+                            </>
+                          ) : (
+                            <View style={styles.editContainer}>
+                              <Text style={styles.currencySymbol}>R$</Text>
+                              <TextInput
+                                style={styles.dayInput}
+                                placeholder="0,00"
+                                placeholderTextColor="#666"
+                                keyboardType={DECIMAL_INPUT_KEYBOARD}
+                                value={tempValue}
+                                onChangeText={(text) =>
+                                  setTempValue(sanitizeDecimalInput(text))
+                                }
+                                autoFocus
+                              />
+                              <TouchableOpacity
+                                style={styles.saveButton}
+                                onPress={() => handleSaveExpense(day, date)}
+                              >
+                                <Ionicons name="checkmark" size={20} color="#fff" />
+                              </TouchableOpacity>
+                            </View>
+                          )}
                           <TouchableOpacity
                             style={styles.cancelButton}
                             onPress={() => {
@@ -833,9 +917,7 @@ export const BudgetScreen = () => {
                             <Ionicons name="close" size={20} color="#fff" />
                           </TouchableOpacity>
                         </View>
-                      ) : // Se o dia não tem registro e não está confirmado, mostrar
-                      // a exclamação rosa maior na ponta em vez do lápis.
-                      expense === 0 && !isZeroConfirmed ? (
+                      ) : expense === 0 && !isZeroConfirmed ? (
                         <TouchableOpacity
                           style={styles.alertIconButton}
                           onPress={() => handleOpenNoRecordActions(date)}
@@ -1184,6 +1266,55 @@ const styles = StyleSheet.create({
   dayRowZeroConfirmed: {
     backgroundColor: "rgba(76, 175, 80, 0.08)",
     borderColor: "rgba(76, 175, 80, 0.45)",
+  },
+  dayRowEditing: {
+    flexDirection: "column",
+    alignItems: "stretch",
+  },
+  editItemsWrap: {
+    width: "100%",
+    marginTop: 8,
+  },
+  editItemRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#000",
+    borderWidth: 1,
+    borderColor: "#333",
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginBottom: 6,
+  },
+  editItemTitle: {
+    color: "#fff",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  editItemMeta: {
+    color: "#999",
+    fontSize: 11,
+    marginTop: 2,
+  },
+  editItemAmount: {
+    color: "#8c52ff",
+    fontWeight: "700",
+    marginRight: 8,
+  },
+  addItemButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#8c52ff",
+    borderRadius: 8,
+    paddingVertical: 8,
+    marginBottom: 6,
+  },
+  addItemButtonText: {
+    color: "#fff",
+    fontWeight: "600",
+    marginLeft: 6,
+    fontSize: 13,
   },
   dayInfo: {
     flex: 1,

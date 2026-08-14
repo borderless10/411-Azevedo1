@@ -22,6 +22,7 @@ import { initializeApp, deleteApp } from "firebase/app";
 import {
   getAuth,
   createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
   updateProfile,
 } from "firebase/auth";
 import { doc, setDoc, getDoc, Timestamp } from "firebase/firestore";
@@ -144,11 +145,36 @@ export const CadastrarClienteScreen = () => {
       );
       try {
         const secondaryAuth = getAuth(secondaryApp);
-        const userCredential = await createUserWithEmailAndPassword(
-          secondaryAuth,
-          email,
-          password,
-        );
+        let userCredential;
+        try {
+          userCredential = await createUserWithEmailAndPassword(
+            secondaryAuth,
+            email,
+            password,
+          );
+        } catch (createError: any) {
+          if (createError?.code !== "auth/email-already-in-use") {
+            throw createError;
+          }
+
+          const existingProfile = await userService.getUserByEmail(email);
+          if (existingProfile) {
+            throw createError;
+          }
+
+          try {
+            userCredential = await signInWithEmailAndPassword(
+              secondaryAuth,
+              email,
+              password,
+            );
+          } catch {
+            const orphanError = new Error(
+              "Este email já existe no Authentication (cadastro anterior incompleto), mas a senha não confere. Use a mesma senha da tentativa anterior ou exclua o usuário órfão no Firebase Console > Authentication.",
+            );
+            throw orphanError;
+          }
+        }
 
         await updateProfile(userCredential.user, {
           displayName: name,

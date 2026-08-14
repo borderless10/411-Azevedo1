@@ -14,6 +14,7 @@ type BillNotificationInput = {
   amount: number;
   dueDate: Date;
   status?: string;
+  _isExpectedExpense?: boolean;
 };
 
 type ExpectedIncomeNotificationInput = {
@@ -151,24 +152,6 @@ export const scheduleBillNotification = async (
       scheduledIds.push(notificationId);
     }
 
-    // Se já está vencida e não havia notificação futura, dispara um aviso imediato
-    if (scheduledIds.length === 0 && baseDate < now) {
-      const immediateId = await Notifications.scheduleNotificationAsync({
-        content: {
-          title: "🚨 Conta vencida",
-          body: `${title} está vencida - R$ ${amount.toFixed(2)}`,
-          data: {
-            billId,
-            type: "bill_due_reminder",
-            stage: "overdue_immediate",
-          },
-          sound: true,
-        },
-        trigger: null,
-      });
-      scheduledIds.push(immediateId);
-    }
-
     if (scheduledIds.length === 0) {
       return null;
     }
@@ -189,15 +172,22 @@ export const cancelBillNotification = async (billId: string): Promise<void> => {
   }
 
   try {
+    const targetId = String(billId || "");
+    if (!targetId) return;
+
     const scheduledNotifications =
       await Notifications.getAllScheduledNotificationsAsync();
 
     for (const notification of scheduledNotifications) {
       const data = notification.content.data || {};
-      if (
-        data.billId === billId &&
-        (data.type === "bill_due" || data.type === "bill_due_reminder")
-      ) {
+      const notificationBillId = String(data.billId || "");
+      const notificationType = String(data.type || "");
+      const isBillReminder =
+        notificationType === "bill_due" ||
+        notificationType === "bill_due_reminder" ||
+        notificationType === "";
+
+      if (notificationBillId === targetId && isBillReminder) {
         await Notifications.cancelScheduledNotificationAsync(
           notification.identifier,
         );
@@ -355,10 +345,17 @@ export const syncBillNotifications = async (
 
   for (const bill of bills) {
     if (!bill?.id) continue;
-    if (bill.status === "paid") {
+
+    const status = String(bill.status || "")
+      .trim()
+      .toLowerCase();
+    const isPaid = status === "paid" || status === "paga";
+
+    if (isPaid || bill._isExpectedExpense) {
       await cancelBillNotification(bill.id);
       continue;
     }
+
     await scheduleBillNotification(
       bill.id,
       bill.title,

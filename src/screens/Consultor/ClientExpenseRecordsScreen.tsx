@@ -119,6 +119,7 @@ export const ClientExpenseRecordsScreen: React.FC = () => {
       const data = await expenseServices.getExpenses(clientId, {
         startDate: period.start,
         endDate: period.end,
+        createdAtFrom: period.createdAtFrom,
       });
       setExpenses(data);
     } catch (error) {

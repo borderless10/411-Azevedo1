@@ -26,6 +26,7 @@ export interface Bill {
   amount: number;
   paymentMethod?: string;
   dueDate: Date;
+  dueDay?: number;
   status: BillStatus;
   paidDate?: Date;
   notificationId?: string;
