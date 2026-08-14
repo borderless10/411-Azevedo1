@@ -154,7 +154,7 @@ export const AdminUsersScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
 
-        <View style={{ marginBottom: 12 }}>
+        <View style={styles.listSection}>
           <View style={styles.searchRow}>
             <TextInput
               placeholder="Buscar por nome, email ou telefone"
@@ -255,8 +255,9 @@ export const AdminUsersScreen: React.FC = () => {
               keyExtractor={(i) => i.id}
               renderItem={renderItem}
               ItemSeparatorComponent={() => <View style={styles.separator} />}
-              contentContainerStyle={{ paddingBottom: 120 }}
-              style={{ flexGrow: 1 }}
+              contentContainerStyle={styles.listContent}
+              style={styles.list}
+              removeClippedSubviews={false}
             />
           )}
         </View>
@@ -294,11 +295,25 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontWeight: "600",
   },
+  listSection: {
+    flex: 1,
+    marginBottom: 12,
+  },
+  list: {
+    flex: 1,
+    backgroundColor: "#000",
+  },
+  listContent: {
+    paddingBottom: 120,
+    backgroundColor: "#000",
+    flexGrow: 1,
+  },
   item: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingVertical: 12,
+    backgroundColor: "#000",
   },
   info: {
     flex: 1,
