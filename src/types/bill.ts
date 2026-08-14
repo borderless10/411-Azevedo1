@@ -24,6 +24,7 @@ export interface Bill {
   title: string;
   description?: string;
   amount: number;
+  paymentMethod?: string;
   dueDate: Date;
   status: BillStatus;
   paidDate?: Date;
@@ -38,6 +39,7 @@ export interface BillFirestore {
   title: string;
   description?: string;
   amount: number;
+  paymentMethod?: string;
   dueDate: any; // Timestamp
   status: BillStatus;
   paidDate?: any; // Timestamp
@@ -50,6 +52,7 @@ export interface CreateBillData {
   title: string;
   description?: string;
   amount: number;
+  paymentMethod?: string;
   dueDate: Date;
 }
 

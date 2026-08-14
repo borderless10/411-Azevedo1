@@ -714,6 +714,30 @@ export const HomeScreen = () => {
     }
 
     const yesterday = getStartOfDay(subtractDays(new Date(), 1));
+
+    try {
+      const planning = await planningServices.getPlanning(user.id);
+      const cycleStartedAt = planning?.consumoModeradoCycleStartedAt;
+      if (cycleStartedAt) {
+        const cycleStart = getStartOfDay(new Date(cycleStartedAt));
+        if (yesterday.getTime() < cycleStart.getTime()) {
+          return;
+        }
+
+        const cycleEndedAt = planning?.consumoModeradoCycleEndedAt;
+        if (cycleEndedAt) {
+          const cycleEnd = getStartOfDay(new Date(cycleEndedAt));
+          if (yesterday.getTime() > cycleEnd.getTime()) {
+            return;
+          }
+        }
+      }
+    } catch (e) {
+      if (__DEV__) {
+        console.log("[HOME] erro ao validar ciclo no prompt de ontem:", e);
+      }
+    }
+
     const sessionKey = getZeroPromptSessionKey(user.id, yesterday);
 
     if (isZeroPromptResolvedForSession(sessionKey)) {

@@ -47,6 +47,8 @@ import {
 } from "../../services/notificationServices";
 import { Bill } from "../../types/bill";
 import ConfirmDeleteModal from "../../components/ui/ConfirmDeleteModal";
+import { creditCardServices } from "../../services/creditCardServices";
+import { CreditCard } from "../../types/creditCard";
 
 export const BillsScreen = () => {
   const { user } = useAuth();
@@ -70,6 +72,12 @@ export const BillsScreen = () => {
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [isDeleteModalVisible, setIsDeleteModalVisible] = useState(false);
   const [billToDelete, setBillToDelete] = useState<Bill | null>(null);
+  const [isPayModalVisible, setIsPayModalVisible] = useState(false);
+  const [billToPay, setBillToPay] = useState<Bill | null>(null);
+  const [payHow, setPayHow] = useState<"cash" | "credit_card">("cash");
+  const [payCards, setPayCards] = useState<CreditCard[]>([]);
+  const [payCardId, setPayCardId] = useState("");
+  const [paying, setPaying] = useState(false);
   const [filter, setFilter] = useState<"all" | "pending" | "paid" | "overdue">(
     "all",
   );
@@ -80,6 +88,9 @@ export const BillsScreen = () => {
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
   const [dueDate, setDueDate] = useState("");
+  const [formPaymentMethod, setFormPaymentMethod] = useState<
+    "cash" | "debit_card" | "credit_card" | "pix"
+  >("cash");
   const [saving, setSaving] = useState(false);
 
   const normalizePaymentMethodForExpense = (
@@ -114,6 +125,42 @@ export const BillsScreen = () => {
 
   const isCreditPaymentMethod = (raw?: string) =>
     normalizePaymentMethodForExpense(raw) === "credit_card";
+
+  const getPlannedPayGroupLabel = (raw?: string) =>
+    isCreditPaymentMethod(raw) ? "cartão de crédito" : "dinheiro";
+
+  const getPaymentMethodDisplay = (raw?: string) => {
+    const value = String(raw || "")
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+
+    if (value.includes("split")) {
+      return {
+        label: "Cartão + Dinheiro/Pix",
+        icon: "swap-horizontal-outline" as const,
+      };
+    }
+    if (value.includes("debito") || value.includes("debit")) {
+      return { label: "Débito", icon: "card-outline" as const };
+    }
+    if (
+      value.includes("credito") ||
+      value.includes("credit") ||
+      value.includes("card") ||
+      value.includes("cart")
+    ) {
+      return { label: "Cartão de crédito", icon: "card" as const };
+    }
+    if (value.includes("pix")) {
+      return { label: "PIX", icon: "flash-outline" as const };
+    }
+    if (value.includes("cash") || value.includes("dinheiro")) {
+      return { label: "Dinheiro", icon: "cash-outline" as const };
+    }
+    return { label: "Não informado", icon: "help-circle-outline" as const };
+  };
 
   useEffect(() => {
     Animated.parallel([
@@ -369,8 +416,7 @@ export const BillsScreen = () => {
               id: exp.id!,
               userId: billsOwnerId,
               title: exp.source || "Gasto Esperado",
-              description:
-                exp.notes || `${exp.paymentMethod || "Sem método definido"}`,
+              description: exp.notes,
               amount: exp.amount,
               paymentMethod: exp.paymentMethod as any,
               dueDate,
@@ -494,7 +540,7 @@ export const BillsScreen = () => {
                   amount: amountValue,
                   notes: description || undefined,
                   dueDay: dueDateObj.getDate(),
-                  paymentMethod: "cash",
+                  paymentMethod: formPaymentMethod,
                 } as any)
               : await planningServices.addBillByClient(billsOwnerId, {
                   name: title,
@@ -502,7 +548,7 @@ export const BillsScreen = () => {
                   notes: description || undefined,
                   dueDay: dueDateObj.getDate(),
                   dueDate: dueDateObj,
-                  paymentMethod: "cash",
+                  paymentMethod: formPaymentMethod,
                 });
             return {
               id: created.id!,
@@ -510,6 +556,7 @@ export const BillsScreen = () => {
               title: created.name,
               description: created.notes,
               amount: created.amount,
+              paymentMethod: formPaymentMethod,
               dueDate: dueDateObj,
               status: "pending" as const,
               createdAt: created.createdAt || new Date(),
@@ -520,6 +567,7 @@ export const BillsScreen = () => {
             title,
             description: description || undefined,
             amount: amountValue,
+            paymentMethod: formPaymentMethod,
             dueDate: dueDateObj,
           });
 
@@ -596,45 +644,60 @@ export const BillsScreen = () => {
       return;
     }
 
-    if (isCreditPaymentMethod((bill as any)?.paymentMethod)) {
-      navigate("AddExpense", {
-        prefillExpenseType: "bill",
-        prefillBillId: bill.id,
-        prefillDate: new Date().toISOString(),
-        prefillDescription: bill.title,
-        returnTo: "Bills",
-      });
+    const plannedCard = isCreditPaymentMethod(bill.paymentMethod);
+    setBillToPay(bill);
+    setPayHow(plannedCard ? "credit_card" : "cash");
+    setPayCardId("");
+    setIsPayModalVisible(true);
+
+    creditCardServices
+      .getCreditCards(billsOwnerId)
+      .then((cards) => {
+        const active = cards.filter((card) => card.isActive !== false);
+        setPayCards(active);
+        if (plannedCard && active.length === 1) {
+          setPayCardId(active[0].id);
+        }
+      })
+      .catch(() => setPayCards([]));
+  };
+
+  const closePayModal = () => {
+    setIsPayModalVisible(false);
+    setBillToPay(null);
+    setPayCardId("");
+    setPaying(false);
+  };
+
+  const confirmPayBill = async () => {
+    if (!billToPay || paying) return;
+
+    if (payHow === "credit_card" && !payCardId) {
+      Alert.alert("Cartão", "Selecione o cartão usado no pagamento.");
       return;
     }
 
-    Alert.alert("Confirmar Pagamento", `Marcar "${bill.title}" como paga?`, [
-      { text: "Cancelar", style: "cancel" },
-      {
-        text: "Confirmar",
-        onPress: async () => {
-          try {
-            const paymentMethod = normalizePaymentMethodForExpense(
-              (bill as any)?.paymentMethod,
-            );
+    try {
+      setPaying(true);
 
-            await expenseServices.createExpense(billsOwnerId, {
-              value: Number(bill.amount) || 0,
-              description: bill.title,
-              date: new Date(),
-              category: "Conta",
-              paymentMethod,
-              sourceBillId: bill.id,
-            });
+      await expenseServices.createExpense(billsOwnerId, {
+        value: Number(billToPay.amount) || 0,
+        description: billToPay.title,
+        date: new Date(),
+        category: "Conta",
+        paymentMethod: payHow,
+        sourceBillId: billToPay.id,
+        ...(payHow === "credit_card" && payCardId ? { cardId: payCardId } : {}),
+      });
 
-            await markBillPaidAfterExpense(bill);
-            loadBills();
-          } catch (error) {
-            console.error("[BILLS] Erro ao marcar conta como paga:", error);
-            Alert.alert("Erro", "Não foi possível marcar como paga");
-          }
-        },
-      },
-    ]);
+      await markBillPaidAfterExpense(billToPay);
+      closePayModal();
+      loadBills();
+    } catch (error) {
+      console.error("[BILLS] Erro ao marcar conta como paga:", error);
+      Alert.alert("Erro", "Não foi possível marcar como paga");
+      setPaying(false);
+    }
   };
 
   const handleDeleteBill = async (bill: Bill) => {
@@ -743,6 +806,7 @@ export const BillsScreen = () => {
     setDescription("");
     setAmount("");
     setDueDate("");
+    setFormPaymentMethod("cash");
   };
 
   const handleDateChange = (text: string) => {
@@ -1052,6 +1116,18 @@ export const BillsScreen = () => {
                       Vence: {formatDate(bill.dueDate)}
                     </Text>
                   </View>
+                  <View style={styles.billDetailItem}>
+                    <Ionicons
+                      name={getPaymentMethodDisplay(bill.paymentMethod).icon}
+                      size={16}
+                      color={colors.textSecondary}
+                    />
+                    <Text
+                      style={[styles.billDate, { color: colors.textSecondary }]}
+                    >
+                      {getPaymentMethodDisplay(bill.paymentMethod).label}
+                    </Text>
+                  </View>
                 </View>
 
                 {bill.status === "pending" || bill.status === "overdue" ? (
@@ -1208,6 +1284,51 @@ export const BillsScreen = () => {
 
                   <View style={styles.inputGroup}>
                     <Text style={[styles.inputLabel, { color: colors.text }]}>
+                      Forma de pagamento *
+                    </Text>
+                    <View style={styles.paymentMethodsRow}>
+                      {(
+                        [
+                          { id: "cash", label: "Dinheiro" },
+                          { id: "pix", label: "PIX" },
+                          { id: "debit_card", label: "Débito" },
+                          { id: "credit_card", label: "Crédito" },
+                        ] as const
+                      ).map((method) => {
+                        const active = formPaymentMethod === method.id;
+                        return (
+                          <TouchableOpacity
+                            key={method.id}
+                            style={[
+                              styles.paymentMethodChip,
+                              {
+                                backgroundColor: colors.inputBackground,
+                                borderColor: colors.border,
+                              },
+                              active && {
+                                backgroundColor: colors.primary,
+                                borderColor: colors.primary,
+                              },
+                            ]}
+                            onPress={() => setFormPaymentMethod(method.id)}
+                          >
+                            <Text
+                              style={[
+                                styles.paymentMethodChipText,
+                                { color: colors.text },
+                                active && { color: "#fff" },
+                              ]}
+                            >
+                              {method.label}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={[styles.inputLabel, { color: colors.text }]}>
                       Data de Vencimento *
                     </Text>
                     <TextInput
@@ -1247,6 +1368,167 @@ export const BillsScreen = () => {
             </TouchableOpacity>
           </TouchableOpacity>
         </KeyboardAvoidingView>
+      </Modal>
+
+      <Modal
+        visible={isPayModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={closePayModal}
+      >
+        <View style={styles.payModalBackdrop}>
+          <View
+            style={[styles.payModalCard, { backgroundColor: colors.card }]}
+          >
+            <Text style={[styles.payModalTitle, { color: colors.text }]}>
+              Como essa conta foi paga?
+            </Text>
+            <Text
+              style={[styles.payModalMessage, { color: colors.textSecondary }]}
+            >
+              Essa conta foi prevista para pagar no{" "}
+              {getPlannedPayGroupLabel(billToPay?.paymentMethod)}. Como ela foi
+              paga?
+            </Text>
+
+            <View style={styles.payOptionsRow}>
+              <TouchableOpacity
+                style={[
+                  styles.payOption,
+                  {
+                    backgroundColor: colors.inputBackground,
+                    borderColor: colors.border,
+                  },
+                  payHow === "cash" && {
+                    backgroundColor: colors.primary,
+                    borderColor: colors.primary,
+                  },
+                ]}
+                onPress={() => setPayHow("cash")}
+              >
+                <Text style={styles.payOptionEmoji}>💵</Text>
+                <Text
+                  style={[
+                    styles.payOptionLabel,
+                    { color: colors.text },
+                    payHow === "cash" && { color: "#fff" },
+                  ]}
+                >
+                  Dinheiro
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.payOption,
+                  {
+                    backgroundColor: colors.inputBackground,
+                    borderColor: colors.border,
+                  },
+                  payHow === "credit_card" && {
+                    backgroundColor: colors.primary,
+                    borderColor: colors.primary,
+                  },
+                ]}
+                onPress={() => setPayHow("credit_card")}
+              >
+                <Text style={styles.payOptionEmoji}>💳</Text>
+                <Text
+                  style={[
+                    styles.payOptionLabel,
+                    { color: colors.text },
+                    payHow === "credit_card" && { color: "#fff" },
+                  ]}
+                >
+                  Cartão
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {payHow === "credit_card" ? (
+              <View style={{ width: "100%", marginBottom: 16 }}>
+                <Text style={[styles.inputLabel, { color: colors.text }]}>
+                  Qual cartão?
+                </Text>
+                {payCards.length === 0 ? (
+                  <Text
+                    style={[
+                      styles.payModalMessage,
+                      { color: colors.danger, marginBottom: 0 },
+                    ]}
+                  >
+                    Nenhum cartão cadastrado. Cadastre um cartão ou pague em
+                    dinheiro.
+                  </Text>
+                ) : (
+                  <View style={styles.paymentMethodsRow}>
+                    {payCards.map((card) => {
+                      const active = payCardId === card.id;
+                      return (
+                        <TouchableOpacity
+                          key={card.id}
+                          style={[
+                            styles.paymentMethodChip,
+                            {
+                              backgroundColor: colors.inputBackground,
+                              borderColor: colors.border,
+                            },
+                            active && {
+                              backgroundColor: colors.primary,
+                              borderColor: colors.primary,
+                            },
+                          ]}
+                          onPress={() => setPayCardId(card.id)}
+                        >
+                          <Text
+                            style={[
+                              styles.paymentMethodChipText,
+                              { color: colors.text },
+                              active && { color: "#fff" },
+                            ]}
+                          >
+                            {card.bank} ••••{card.last4}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                )}
+              </View>
+            ) : null}
+
+            <View style={styles.payActionsRow}>
+              <TouchableOpacity
+                style={[
+                  styles.payActionButton,
+                  { backgroundColor: colors.inputBackground },
+                ]}
+                onPress={closePayModal}
+                disabled={paying}
+              >
+                <Text style={[styles.payActionText, { color: colors.text }]}>
+                  Cancelar
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.payActionButton,
+                  { backgroundColor: colors.success },
+                ]}
+                onPress={confirmPayBill}
+                disabled={paying}
+              >
+                {paying ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={[styles.payActionText, { color: "#fff" }]}>
+                    Confirmar
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
       </Modal>
 
       {/* Modal de Confirmação de Exclusão */}
@@ -1457,6 +1739,21 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 16,
   },
+  paymentMethodsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  paymentMethodChip: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  paymentMethodChipText: {
+    fontSize: 13,
+    fontWeight: "600",
+  },
   saveButton: {
     paddingVertical: 16,
     borderRadius: 12,
@@ -1466,6 +1763,65 @@ const styles = StyleSheet.create({
   saveButtonText: {
     color: "#fff",
     fontSize: 16,
+    fontWeight: "600",
+  },
+  payModalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  payModalCard: {
+    width: "100%",
+    maxWidth: 420,
+    borderRadius: 16,
+    padding: 20,
+  },
+  payModalTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  payModalMessage: {
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: "center",
+    marginBottom: 16,
+  },
+  payOptionsRow: {
+    flexDirection: "row",
+    marginBottom: 16,
+  },
+  payOption: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: "center",
+    marginHorizontal: 4,
+  },
+  payOptionEmoji: {
+    fontSize: 32,
+    marginBottom: 8,
+  },
+  payOptionLabel: {
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  payActionsRow: {
+    flexDirection: "row",
+  },
+  payActionButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: "center",
+    marginHorizontal: 4,
+  },
+  payActionText: {
+    fontSize: 14,
     fontWeight: "600",
   },
 });

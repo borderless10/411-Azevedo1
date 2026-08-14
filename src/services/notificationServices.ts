@@ -6,6 +6,8 @@ import * as Notifications from "expo-notifications";
 import * as Device from "expo-device";
 import { Platform } from "react-native";
 
+const canUseNativeNotifications = Platform.OS !== "web";
+
 type BillNotificationInput = {
   id: string;
   title: string;
@@ -23,21 +25,22 @@ type ExpectedIncomeNotificationInput = {
 /**
  * Configurar comportamento padrão das notificações
  */
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
-});
+if (canUseNativeNotifications) {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+    }),
+  });
+}
 
 /**
  * Solicitar permissões de notificação
  */
 export const requestNotificationPermissions = async (): Promise<boolean> => {
   try {
-    if (!Device.isDevice) {
-      console.log("Notificações só funcionam em dispositivos físicos");
+    if (!canUseNativeNotifications || !Device.isDevice) {
       return false;
     }
 
@@ -81,6 +84,10 @@ export const scheduleBillNotification = async (
   amount: number,
   dueDate: Date,
 ): Promise<string | null> => {
+  if (!canUseNativeNotifications) {
+    return null;
+  }
+
   try {
     // Cancelar notificação anterior se existir
     await cancelBillNotification(billId);
@@ -177,6 +184,10 @@ export const scheduleBillNotification = async (
  * Cancelar notificação de uma conta
  */
 export const cancelBillNotification = async (billId: string): Promise<void> => {
+  if (!canUseNativeNotifications) {
+    return;
+  }
+
   try {
     const scheduledNotifications =
       await Notifications.getAllScheduledNotificationsAsync();
@@ -234,6 +245,10 @@ const parseExpectedIncomeDate = (expectedMonth?: string): Date | null => {
 export const cancelExpectedIncomeNotification = async (
   incomeId: string,
 ): Promise<void> => {
+  if (!canUseNativeNotifications) {
+    return;
+  }
+
   try {
     const scheduledNotifications =
       await Notifications.getAllScheduledNotificationsAsync();
@@ -254,6 +269,10 @@ export const cancelExpectedIncomeNotification = async (
 export const cancelExpectedIncomeNotificationsByUser = async (
   userId: string,
 ): Promise<void> => {
+  if (!canUseNativeNotifications) {
+    return;
+  }
+
   try {
     const scheduledNotifications =
       await Notifications.getAllScheduledNotificationsAsync();
@@ -277,6 +296,10 @@ export const scheduleExpectedIncomeNotification = async (
   source: string,
   expectedMonth?: string,
 ): Promise<string | null> => {
+  if (!canUseNativeNotifications) {
+    return null;
+  }
+
   try {
     await cancelExpectedIncomeNotification(incomeId);
 
@@ -326,6 +349,10 @@ export const scheduleExpectedIncomeNotification = async (
 export const syncBillNotifications = async (
   bills: BillNotificationInput[],
 ): Promise<void> => {
+  if (!canUseNativeNotifications) {
+    return;
+  }
+
   for (const bill of bills) {
     if (!bill?.id) continue;
     if (bill.status === "paid") {
@@ -364,6 +391,10 @@ export const syncExpectedIncomeNotifications = async (
 export const scheduleDailyExpenseReminder = async (): Promise<
   string | null
 > => {
+  if (!canUseNativeNotifications) {
+    return null;
+  }
+
   try {
     // Cancelar lembretes anteriores
     await cancelDailyExpenseReminder();
@@ -408,6 +439,10 @@ export const scheduleDailyExpenseReminder = async (): Promise<
  * Cancelar lembrete diário de gastos
  */
 export const cancelDailyExpenseReminder = async (): Promise<void> => {
+  if (!canUseNativeNotifications) {
+    return;
+  }
+
   try {
     const scheduledNotifications =
       await Notifications.getAllScheduledNotificationsAsync();
@@ -438,6 +473,10 @@ export const sendImmediateNotification = async (
   body: string,
   data?: Record<string, unknown>,
 ): Promise<void> => {
+  if (!canUseNativeNotifications) {
+    return;
+  }
+
   try {
     await Notifications.scheduleNotificationAsync({
       content: {
@@ -496,6 +535,10 @@ export const shouldSendDailyReminder = async (
  * Listar todas as notificações agendadas (debug)
  */
 export const listScheduledNotifications = async (): Promise<void> => {
+  if (!canUseNativeNotifications) {
+    return;
+  }
+
   try {
     const notifications =
       await Notifications.getAllScheduledNotificationsAsync();
