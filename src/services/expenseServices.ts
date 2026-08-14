@@ -35,7 +35,7 @@ import { formatCurrency } from "../utils/currencyUtils";
 import { activityServices } from "./activityServices";
 import { creditCardServices } from "./creditCardServices";
 import { toExpenseCategoryLookupKey } from "../types/category";
-import { filterGeneralHistoryExpenses } from "../utils/expenseScopeUtils";
+import { filterGeneralHistoryExpenses, isConsumoModeradoHistoryExpense } from "../utils/expenseScopeUtils";
 
 /**
  * Validar dados de criação de gasto
@@ -479,6 +479,14 @@ export const expenseServices = {
       const docRef = getExpenseDoc(id);
       await deleteDoc(docRef);
       console.log("✅ [EXPENSE SERVICE] Gasto deletado");
+
+      if (expense && isConsumoModeradoHistoryExpense(expense)) {
+        const { budgetServices } = await import("./budgetServices");
+        await budgetServices.reconcileConsumoModeradoDay(
+          expense.userId,
+          new Date(expense.date),
+        );
+      }
 
       // Registrar atividade
       if (expense) {

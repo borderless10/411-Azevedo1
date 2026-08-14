@@ -349,18 +349,10 @@ export const userService = {
           updatedAt: now,
         });
         console.log("✅ Documento de usuário criado como usuário normal");
-      } else {
-        // Se já existe, garantir que seja usuário normal
-        const existingData = userDoc.data();
-        if (existingData.role === "admin" || existingData.isAdmin === true) {
-          await updateDoc(userRef, {
-            role: "user",
-            isAdmin: false,
-            updatedAt: now,
-          });
-          console.log("✅ Usuário existente atualizado para usuário normal");
-        }
+        return;
       }
+
+      // Doc já existe: nunca apagar consultantId nem reescrever cadastro admin.
     } catch (error) {
       console.error("❌ Erro ao criar documento de usuário:", error);
       throw error;

@@ -3,7 +3,7 @@
  * Suporta 3 tipos: Consumo Moderado, Gasto Acompanhado e Conta
  */
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -35,9 +35,33 @@ import { isPayablePlanningBill } from "../../types/planning";
 import { CreditCard } from "../../types/creditCard";
 import { Bill } from "../../types/planning";
 
+const parsePrefillDate = (value?: string): Date | null => {
+  if (!value) return null;
+  const isoDateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (isoDateOnly) {
+    const year = Number(isoDateOnly[1]);
+    const month = Number(isoDateOnly[2]) - 1;
+    const day = Number(isoDateOnly[3]);
+    return new Date(year, month, day, 12, 0, 0, 0);
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return new Date(
+    parsed.getFullYear(),
+    parsed.getMonth(),
+    parsed.getDate(),
+    12,
+    0,
+    0,
+    0,
+  );
+};
+
 export const AddExpenseScreen = () => {
   const { user } = useAuth();
   const { navigate, params } = useNavigation() as any;
+  const skipPrefillAfterAddAnother = useRef(false);
+  const initialPrefillDate = parsePrefillDate(params?.prefillDate);
 
   const navigateToReturnScreen = () => {
     navigate(params?.returnTo || "Home", params?.returnParams);
@@ -58,7 +82,9 @@ export const AddExpenseScreen = () => {
   // Consumo Moderado
   const [consumoValue, setConsumoValue] = useState(0);
   const [consumoDescription, setConsumoDescription] = useState("");
-  const [consumoDate, setConsumoDate] = useState<Date>(new Date());
+  const [consumoDate, setConsumoDate] = useState<Date>(
+    initialPrefillDate || new Date(),
+  );
   const [consumoPayment, setConsumoPayment] = useState<"cash" | "card">("cash");
   const [consumoSelectedCardId, setConsumoSelectedCardId] =
     useState<string>("");
@@ -67,7 +93,7 @@ export const AddExpenseScreen = () => {
   const [trackedTitle, setTrackedTitle] = useState("");
   const [trackedValue, setTrackedValue] = useState(0);
   const [trackedDate, setTrackedDate] = useState<Date>(
-    params?.prefillDate ? new Date(params.prefillDate) : new Date(),
+    initialPrefillDate || new Date(),
   );
   const [trackedPayment, setTrackedPayment] = useState<
     "cash" | "debit_card" | "credit_card" | "pix" | "other"
@@ -82,7 +108,9 @@ export const AddExpenseScreen = () => {
   const [billId, setBillId] = useState("");
   const [billCustomTitle, setBillCustomTitle] = useState("");
   const [billAmount, setBillAmount] = useState(0);
-  const [billDueDate, setBillDueDate] = useState<Date>(new Date());
+  const [billDueDate, setBillDueDate] = useState<Date>(
+    initialPrefillDate || new Date(),
+  );
   const [billPaymentMethod, setBillPaymentMethod] = useState<
     "cash" | "debit_card" | "credit_card" | "pix"
   >("cash");
@@ -170,7 +198,20 @@ export const AddExpenseScreen = () => {
   };
 
   useEffect(() => {
+    const prefillDate = parsePrefillDate(params?.prefillDate);
+    if (!prefillDate || skipPrefillAfterAddAnother.current) {
+      return;
+    }
+    setConsumoDate(prefillDate);
+    setTrackedDate(prefillDate);
+    setBillDueDate(prefillDate);
+  }, [params?.prefillDate]);
+
+  useEffect(() => {
     const prefillExpenseType = String(params?.prefillExpenseType || "");
+    if (skipPrefillAfterAddAnother.current) {
+      return;
+    }
     if (prefillExpenseType === "bill") {
       setExpenseType("bill");
     } else if (prefillExpenseType === "tracked") {
@@ -181,6 +222,9 @@ export const AddExpenseScreen = () => {
   }, [params?.prefillExpenseType]);
 
   useEffect(() => {
+    if (skipPrefillAfterAddAnother.current) {
+      return;
+    }
     const prefillTrackedTitle = String(params?.prefillTrackedTitle || "").trim();
     if (prefillTrackedTitle) {
       setTrackedTitle(prefillTrackedTitle);
@@ -188,6 +232,9 @@ export const AddExpenseScreen = () => {
   }, [params?.prefillTrackedTitle]);
 
   useEffect(() => {
+    if (skipPrefillAfterAddAnother.current) {
+      return;
+    }
     const prefillBillId = String(params?.prefillBillId || "");
     if (!prefillBillId || bills.length === 0) {
       return;
@@ -201,6 +248,29 @@ export const AddExpenseScreen = () => {
     setExpenseType("bill");
     selectPlannedBill(selectedBill);
   }, [bills, params?.prefillBillId]);
+
+  const resetFormForAddAnother = () => {
+    skipPrefillAfterAddAnother.current = true;
+    setErrors({});
+    setConsumoValue(0);
+    setConsumoDescription("");
+    setConsumoPayment("cash");
+    setConsumoSelectedCardId("");
+    setTrackedTitle("");
+    setTrackedValue(0);
+    setTrackedPayment("cash");
+    setTrackedSelectedCardId("");
+    setBillId("");
+    setBillCustomTitle("");
+    setBillAmount(0);
+    setBillPaymentMethod("cash");
+    setBillSelectedCardId("");
+    if (bills.length === 0) {
+      setBillSourceMode("custom");
+    } else {
+      setBillSourceMode("planned");
+    }
+  };
 
   // Validação para Consumo Moderado
   const validateConsumoModerado = (): boolean => {
@@ -644,7 +714,7 @@ export const AddExpenseScreen = () => {
                       <View style={styles.paymentMethodsRow}>
                         {[
                           { id: "cash", label: "Dinheiro", icon: "wallet" },
-                          { id: "card", label: "Cartão", icon: "card" },
+                          { id: "card", label: "Crédito", icon: "card" },
                         ].map((method) => {
                           const active = consumoPayment === method.id;
                           return (
@@ -1246,6 +1316,7 @@ export const AddExpenseScreen = () => {
           onViewList={handleViewSavedExpense}
           onAddAnother={() => {
             setSuccessModalVisible(false);
+            resetFormForAddAnother();
           }}
         />
       </KeyboardAvoidingView>

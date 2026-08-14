@@ -24,7 +24,7 @@ import {
   createUserWithEmailAndPassword,
   updateProfile,
 } from "firebase/auth";
-import { doc, setDoc, Timestamp } from "firebase/firestore";
+import { doc, setDoc, getDoc, Timestamp } from "firebase/firestore";
 import { auth, db, firebaseConfig } from "../../lib/firebase";
 import { userService } from "../../services/userServices";
 import ConsultantPicker from "../../components/ui/ConsultantPicker";
@@ -150,14 +150,11 @@ export const CadastrarClienteScreen = () => {
           password,
         );
 
-        // Atualizar o perfil com o nome (no usuário recém-criado)
         await updateProfile(userCredential.user, {
           displayName: name,
         });
 
-        // Criar documento no Firestore como usuário normal (não admin)
         const now = Timestamp.now();
-        // Remover máscara do telefone antes de salvar (apenas números)
         const phoneNumbers = phone.replace(/\D/g, "");
         const shouldPersistConsultant =
           role === "user" || role === "cliente_premium";
@@ -169,7 +166,6 @@ export const CadastrarClienteScreen = () => {
           email,
           phone: phoneNumbers || "",
           role: role,
-          // Persist consultantId only for roles that support consultant assignment.
           ...(shouldPersistConsultant
             ? { consultantId: normalizedConsultantId }
             : {}),
@@ -179,32 +175,37 @@ export const CadastrarClienteScreen = () => {
           updatedAt: now,
         };
         console.log("[CADASTRAR] Documento a salvar:", docData);
-        await setDoc(doc(db, "users", userCredential.user.uid), docData);
-        console.log(
-          "[CADASTRAR] ✅ Documento salvo com sucesso para userId:",
-          userCredential.user.uid,
-          "com consultantId:",
-          docData.consultantId,
-        );
+        const userRef = doc(db, "users", userCredential.user.uid);
+        await setDoc(userRef, docData);
 
-        // Não reautenticar o admin — o uso do app secundário isolou o novo login.
-        // Limpar a instância secundária.
-        await deleteApp(secondaryApp);
+        const savedSnap = await getDoc(userRef);
+        if (!savedSnap.exists()) {
+          throw new Error("Documento do cliente não foi persistido.");
+        }
+        const savedData = savedSnap.data() as any;
+        if (
+          shouldPersistConsultant &&
+          normalizedConsultantId &&
+          savedData.consultantId !== normalizedConsultantId
+        ) {
+          throw new Error("Consultor não foi vinculado ao cliente.");
+        }
 
-        // Navegar para a tela de perfil com mensagem de sucesso
+        const successMessage = `Cliente "${name}" cadastrado com sucesso!\n\nEmail: ${email}\n\nO cliente já pode fazer login no sistema.`;
+        Alert.alert("Sucesso", successMessage);
         navigate("Profile", {
           showSuccess: true,
-          successMessage: `Cliente "${name}" cadastrado com sucesso!\n\nEmail: ${email}\n\nO cliente já pode fazer login no sistema.`,
+          successMessage,
         });
         return;
       } catch (err) {
-        // Se der erro na criação com app secundário, tentar remover app e continuar com erro geral
+        throw err;
+      } finally {
         try {
           await deleteApp(secondaryApp);
         } catch (e) {
-          /* ignore */
+          /* ignore cleanup of secondary auth app */
         }
-        throw err;
       }
     } catch (error: any) {
       console.error("Erro ao cadastrar cliente:", error);
@@ -216,6 +217,8 @@ export const CadastrarClienteScreen = () => {
         errorMessage = "Email inválido.";
       } else if (error.code === "auth/weak-password") {
         errorMessage = "Senha muito fraca.";
+      } else if (error?.message) {
+        errorMessage = error.message;
       }
 
       Alert.alert("Erro", errorMessage);

@@ -49,6 +49,13 @@ const firebaseConfig = {
 
 const USERS = [
   {
+    appName: "seed-admin",
+    email: "admin@gmail.com",
+    password: "123456",
+    name: "Admin Demo",
+    role: "admin",
+  },
+  {
     appName: "seed-consultor",
     email: "consultor@gmail.com",
     password: "123456",
@@ -108,11 +115,16 @@ const upsertUser = async (
 
     const payload = {
       name,
-      nickname: role === "consultor" ? "Consultor" : "Usuario",
+      nickname:
+        role === "admin"
+          ? "Admin"
+          : role === "consultor"
+            ? "Consultor"
+            : "Usuario",
       email,
       phone: "",
       role,
-      isAdmin: false,
+      isAdmin: role === "admin",
       isActive: true,
       currency: "BRL",
       updatedAt: now,
@@ -143,7 +155,7 @@ const seedChats = async (consultorId, clientIds) => {
   const db = getFirestore(app);
 
   try {
-    await signInWithEmailAndPassword(auth, USERS[0].email, USERS[0].password);
+    await signInWithEmailAndPassword(auth, USERS[1].email, USERS[1].password);
 
     const globalRef = doc(db, "chats", "global");
     const globalSnap = await getDoc(globalRef);
@@ -191,7 +203,7 @@ const seedPlanning = async (clientId, consultantId) => {
   const db = getFirestore(app);
 
   try {
-    await signInWithEmailAndPassword(auth, USERS[0].email, USERS[0].password);
+    await signInWithEmailAndPassword(auth, USERS[1].email, USERS[1].password);
 
     const planningRef = doc(db, "users", clientId, "planning", "current");
     const existing = await getDoc(planningRef);
@@ -229,14 +241,17 @@ const main = async () => {
 
   console.log(`Projeto: ${firebaseConfig.projectId}\n`);
 
-  const consultorId = await upsertUser(USERS[0]);
-  const clientId = await upsertUser(USERS[1], consultorId);
-  const sabrinaId = await upsertUser(USERS[2], consultorId);
+  const adminId = await upsertUser(USERS[0]);
+  const consultorId = await upsertUser(USERS[1]);
+  const clientId = await upsertUser(USERS[2], consultorId);
+  const sabrinaId = await upsertUser(USERS[3], consultorId);
 
   console.log("\n--- Credenciais ---");
+  console.log("Admin:     admin@gmail.com / 123456");
   console.log("Consultor: consultor@gmail.com / 123456");
   console.log("Cliente:   usuario@gmail.com / 123456");
   console.log("Cliente:   sabrina@gmail.com / 123456");
+  console.log(`UID admin:     ${adminId}`);
   console.log(`consultantId dos clientes: ${consultorId}`);
   console.log(`UID consultor: ${consultorId}`);
   console.log(`UID usuario:   ${clientId}`);

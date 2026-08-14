@@ -92,15 +92,18 @@ export const BillsScreen = () => {
       .replace(/[\u0300-\u036f]/g, "");
 
     if (
-      normalized.includes("card") ||
-      normalized.includes("cart") ||
-      normalized.includes("credito") ||
       normalized.includes("debito") ||
-      normalized.includes("credit") ||
       normalized.includes("debit")
     ) {
-      // Mantemos como cartão sem exigir cardId para este fluxo.
       return "debit_card";
+    }
+    if (
+      normalized.includes("credito") ||
+      normalized.includes("credit") ||
+      normalized.includes("card") ||
+      normalized.includes("cart")
+    ) {
+      return "credit_card";
     }
     if (normalized.includes("pix")) return "pix";
     if (normalized.includes("cash") || normalized.includes("dinheiro")) {
@@ -108,6 +111,9 @@ export const BillsScreen = () => {
     }
     return "cash";
   };
+
+  const isCreditPaymentMethod = (raw?: string) =>
+    normalizePaymentMethodForExpense(raw) === "credit_card";
 
   useEffect(() => {
     Animated.parallel([
@@ -587,6 +593,17 @@ export const BillsScreen = () => {
           },
         ],
       );
+      return;
+    }
+
+    if (isCreditPaymentMethod((bill as any)?.paymentMethod)) {
+      navigate("AddExpense", {
+        prefillExpenseType: "bill",
+        prefillBillId: bill.id,
+        prefillDate: new Date().toISOString(),
+        prefillDescription: bill.title,
+        returnTo: "Bills",
+      });
       return;
     }
 

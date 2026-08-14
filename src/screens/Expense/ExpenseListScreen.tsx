@@ -294,7 +294,7 @@ export const ExpenseListScreen = () => {
           <View style={styles.filterRow}>
             {[
               { id: "all", label: "Todos" },
-              { id: "credit_card", label: "Cartão" },
+              { id: "credit_card", label: "Crédito" },
               { id: "debit_card", label: "Débito" },
               { id: "pix", label: "PIX" },
               { id: "cash", label: "Dinheiro" },

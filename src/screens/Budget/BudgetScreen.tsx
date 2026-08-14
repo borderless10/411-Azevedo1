@@ -29,13 +29,14 @@ import { useNavigation } from "../../routes/NavigationContext";
 import {
   budgetServices,
   getMonthYearFromDate,
+  listMonthYearsInRange,
 } from "../../services/budgetServices";
 import expenseServices from "../../services/expenseServices";
 import {
   getPlanningCycleLabel,
   planningServices,
 } from "../../services/planningServices";
-import { getStartOfDay, getEndOfDay, addDays, formatExpectedMonthLabel } from "../../utils/dateUtils";
+import { getStartOfDay, getEndOfDay, addDays, formatExpectedMonthLabel, formatDateToString } from "../../utils/dateUtils";
 import { DailyExpense } from "../../types/budget";
 import {
   requestNotificationPermissions,
@@ -44,8 +45,10 @@ import {
 } from "../../services/notificationServices";
 import ConfettiCelebration from "../../components/ui/ConfettiCelebration";
 import {
-  isTrackedDailyExpense,
+  isConsumoModeradoHistoryExpense,
 } from "../../utils/expenseScopeUtils";
+
+type CycleDailyExpense = DailyExpense & { dateKey: string };
 
 export const BudgetScreen = () => {
   const { user } = useAuth();
@@ -56,13 +59,13 @@ export const BudgetScreen = () => {
   // Estados
   const [plannedMonthlySpending, setPlannedMonthlySpending] =
     useState<number>(0);
-  const [dailyExpenses, setDailyExpenses] = useState<DailyExpense[]>([]);
+  const [dailyExpenses, setDailyExpenses] = useState<CycleDailyExpense[]>([]);
   const [dailyExpenseDates, setDailyExpenseDates] = useState<Date[]>([]);
-  const [editingDay, setEditingDay] = useState<number | null>(null);
+  const [editingDateKey, setEditingDateKey] = useState<string | null>(null);
   const [tempValue, setTempValue] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(true);
   const [saving, setSaving] = useState<boolean>(false);
-  const [zeroConfirmedDays, setZeroConfirmedDays] = useState<number[]>([]);
+  const [zeroConfirmedDateKeys, setZeroConfirmedDateKeys] = useState<string[]>([]);
   const [choiceModalVisible, setChoiceModalVisible] = useState(false);
   const [choiceModalDayLabel, setChoiceModalDayLabel] = useState("");
   const [choiceModalDate, setChoiceModalDate] = useState<Date | null>(null);
@@ -78,7 +81,6 @@ export const BudgetScreen = () => {
 
   // Calcular dias do mês atual
   const today = new Date();
-  const currentDay = today.getDate();
   const daysInMonth = new Date(
     today.getFullYear(),
     today.getMonth() + 1,
@@ -109,9 +111,11 @@ export const BudgetScreen = () => {
   const overPlannedAmount = Math.max(0, totalSpent - budgetValue);
   // Contar apenas dias DENTRO DO CICLO com gasto (>0) ou que foram marcados como zero
   const countedDays = dailyExpenseDates.filter((date) => {
-    const day = date.getDate();
-    const hasExpense = dailyExpenses.some((d) => d.day === day && d.amount > 0);
-    const isZeroConfirmed = zeroConfirmedDays.includes(day);
+    const dateKey = formatDateToString(date);
+    const hasExpense = dailyExpenses.some(
+      (d) => d.dateKey === dateKey && d.amount > 0,
+    );
+    const isZeroConfirmed = zeroConfirmedDateKeys.includes(dateKey);
     return hasExpense || isZeroConfirmed;
   }).length;
   const actualDailyAverage = countedDays > 0 ? totalSpent / countedDays : 0;
@@ -176,22 +180,6 @@ export const BudgetScreen = () => {
     return /card|cart|cartão|credit|debit|cr[eé]dito|d[eé]bito/.test(pm);
   };
 
-  const isBillPaymentExpense = (expense: any) => {
-    const normalizedCategory = String(expense?.category || "")
-      .trim()
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "");
-
-    return (
-      normalizedCategory === "conta" ||
-      normalizedCategory === "contas" ||
-      normalizedCategory === "contas a pagar" ||
-      normalizedCategory === "pagamento de conta" ||
-      normalizedCategory === "pagamento conta"
-    );
-  };
-
   const formatItemDateLabel = (item: any) => {
     const parsedDate =
       item?.date || item?.expectedDate || item?.dueDate || item?.createdAt;
@@ -249,11 +237,13 @@ export const BudgetScreen = () => {
     }
   }, [loading]);
 
-  const loadBudgetData = async () => {
+  const loadBudgetData = async (options?: { silent?: boolean }) => {
     if (!user) return;
 
     try {
-      setLoading(true);
+      if (!options?.silent) {
+        setLoading(true);
+      }
       await budgetServices.syncRankingPenalties(user.id);
 
       // 1) Buscar valor mensal esperado do planejamento do consultor
@@ -331,116 +321,102 @@ export const BudgetScreen = () => {
         });
       }
 
-      const budget = await budgetServices.getCurrentBudget(user.id);
+      const today = new Date();
+      const cycleStartDate = planning?.consumoModeradoCycleStartedAt
+        ? getStartOfDay(new Date(planning.consumoModeradoCycleStartedAt))
+        : null;
+      const cycleEndDate = planning?.consumoModeradoCycleEndedAt
+        ? getEndOfDay(new Date(planning.consumoModeradoCycleEndedAt))
+        : null;
 
-      if (budget) {
-        setZeroConfirmedDays(budget.zeroConfirmedDays || []);
-
-        // Tentar preencher dailyExpenses a partir dos gastos reais do ciclo
-        try {
-          const today = new Date();
-          const cycleStartDate = planning?.consumoModeradoCycleStartedAt
-            ? getStartOfDay(new Date(planning.consumoModeradoCycleStartedAt))
-            : null;
-          const cycleEndDate = planning?.consumoModeradoCycleEndedAt
-            ? getEndOfDay(new Date(planning.consumoModeradoCycleEndedAt))
-            : null;
-
-          // Sem ciclo cadastrado/iniciado no planejamento, antes só mostrávamos "hoje";
-          // o cliente deve ver os gastos do mês (fora de ciclo formal) em Gastos diários.
-          let start: Date;
-          let end: Date;
-          if (!cycleStartDate && !cycleEndDate) {
-            start = getStartOfDay(
-              new Date(today.getFullYear(), today.getMonth(), 1),
-            );
-            end = getEndOfDay(
-              new Date(today.getFullYear(), today.getMonth() + 1, 0),
-            );
-          } else {
-            start = cycleStartDate || getStartOfDay(today);
-            end = cycleEndDate || getEndOfDay(today);
-          }
-
-          setCycleDateStart(start);
-          setCycleDateEnd(end);
-
-          const cycleDates: Date[] = [];
-          let dateCursor = getStartOfDay(start);
-          const lastDate = getStartOfDay(end);
-          while (dateCursor <= lastDate) {
-            cycleDates.push(new Date(dateCursor));
-            dateCursor = addDays(dateCursor, 1);
-          }
-          setDailyExpenseDates(cycleDates);
-
-          const expenses = await expenseServices.getExpenses(user.id, {
-            startDate: start,
-            endDate: end,
-          });
-          const expensesForModerado = expenses.filter((expense) => {
-            if (isTrackedDailyExpense(expense)) return false;
-            if (isBillPaymentExpense(expense)) return false;
-            return true;
-          });
-
-          const map = new Map<number, number>();
-          let cursor = getStartOfDay(start);
-          while (cursor <= getStartOfDay(end)) {
-            map.set(cursor.getDate(), 0);
-            cursor = addDays(cursor, 1);
-          }
-
-          expensesForModerado.forEach((exp) => {
-            const dayNum = new Date(exp.date).getDate();
-            const prev = map.get(dayNum) ?? 0;
-            const val =
-              typeof exp.value === "number"
-                ? exp.value
-                : parseFloat(String(exp.value)) || 0;
-            map.set(dayNum, prev + val);
-          });
-
-          const computed: DailyExpense[] = [];
-          Array.from(map.entries()).forEach(([day, amt]) => {
-            computed.push({ day, amount: amt });
-          });
-          computed.sort((a, b) => a.day - b.day);
-
-          // Se o orçamento já tinha valores manuais salvos, mesclar (priorizar gastos reais quando > 0)
-          const merged =
-            (budget.dailyExpenses || []).length > 0
-              ? ((): DailyExpense[] => {
-                  const byDay = new Map<number, number>();
-                  computed.forEach((d) => byDay.set(d.day, d.amount));
-                  (budget.dailyExpenses || []).forEach((d) => {
-                    const existing = byDay.get(d.day) ?? 0;
-                    // Priorizar valor real se houver (>0), caso contrário usar valor manual salvo
-                    byDay.set(d.day, existing > 0 ? existing : d.amount);
-                  });
-                  const out: DailyExpense[] = [];
-                  Array.from(byDay.entries()).forEach(([day, amount]) =>
-                    out.push({ day, amount }),
-                  );
-                  return out.sort((a, b) => a.day - b.day);
-                })()
-              : computed;
-
-          setDailyExpenses(merged);
-        } catch (err) {
-          console.error("❌ [BUDGET] Erro ao agregar gastos do mês:", err);
-          setDailyExpenses(budget.dailyExpenses || []);
-        }
-
-        console.log("✅ Orçamento carregado do Firebase");
+      let start: Date;
+      let end: Date;
+      if (!cycleStartDate && !cycleEndDate) {
+        start = getStartOfDay(
+          new Date(today.getFullYear(), today.getMonth(), 1),
+        );
+        end = getEndOfDay(
+          new Date(today.getFullYear(), today.getMonth() + 1, 0),
+        );
       } else {
-        console.log("⚠️ Nenhum orçamento encontrado para este mês");
-        setZeroConfirmedDays([]);
-        setPlanningCycleLabel("");
-        setDailyExpenseDates([]);
-        setCycleDateStart(null);
-        setCycleDateEnd(null);
+        start = cycleStartDate || getStartOfDay(today);
+        end = cycleEndDate || getEndOfDay(today);
       }
+
+      setCycleDateStart(start);
+      setCycleDateEnd(end);
+
+      const cycleDates: Date[] = [];
+      let dateCursor = getStartOfDay(start);
+      const lastDate = getStartOfDay(end);
+      while (dateCursor <= lastDate) {
+        cycleDates.push(new Date(dateCursor));
+        dateCursor = addDays(dateCursor, 1);
+      }
+      setDailyExpenseDates(cycleDates);
+
+      const monthYears = listMonthYearsInRange(start, end);
+      const budgetsByMonth = new Map<string, Awaited<ReturnType<typeof budgetServices.getBudget>>>();
+      await Promise.all(
+        monthYears.map(async (monthYear) => {
+          const monthBudget = await budgetServices.getBudget(user.id, monthYear);
+          budgetsByMonth.set(monthYear, monthBudget);
+        }),
+      );
+
+      const zeroKeys: string[] = [];
+      cycleDates.forEach((date) => {
+        const monthYear = getMonthYearFromDate(date);
+        const monthBudget = budgetsByMonth.get(monthYear);
+        const day = date.getDate();
+        if ((monthBudget?.zeroConfirmedDays || []).includes(day)) {
+          zeroKeys.push(formatDateToString(date));
+        }
+      });
+      setZeroConfirmedDateKeys(zeroKeys);
+
+      try {
+        const expenses = await expenseServices.getExpenses(user.id, {
+          startDate: start,
+          endDate: end,
+        });
+        const expensesForModerado = expenses.filter(
+          isConsumoModeradoHistoryExpense,
+        );
+
+        const amountByDateKey = new Map<string, number>();
+        cycleDates.forEach((date) => {
+          amountByDateKey.set(formatDateToString(date), 0);
+        });
+
+        expensesForModerado.forEach((exp) => {
+          const dateKey = formatDateToString(new Date(exp.date));
+          if (!amountByDateKey.has(dateKey)) return;
+          const prev = amountByDateKey.get(dateKey) ?? 0;
+          const val =
+            typeof exp.value === "number"
+              ? exp.value
+              : parseFloat(String(exp.value)) || 0;
+          amountByDateKey.set(dateKey, prev + val);
+        });
+
+        const merged: CycleDailyExpense[] = [];
+        amountByDateKey.forEach((realAmount, dateKey) => {
+          const day = Number(dateKey.slice(-2));
+          merged.push({
+            dateKey,
+            day,
+            amount: realAmount > 0 ? realAmount : 0,
+          });
+        });
+        merged.sort((a, b) => a.dateKey.localeCompare(b.dateKey));
+        setDailyExpenses(merged);
+      } catch (err) {
+        console.error("❌ [BUDGET] Erro ao agregar gastos do mês:", err);
+        setDailyExpenses([]);
+      }
+
+      console.log("✅ Orçamento carregado do Firebase");
     } catch (error) {
       console.error("❌ Erro ao carregar orçamento:", error);
       Alert.alert("Erro", "Não foi possível carregar o orçamento");
@@ -456,8 +432,9 @@ export const BudgetScreen = () => {
         console.log("✅ Permissão de notificações concedida");
 
         // Verificar se já tem gasto registrado hoje
+        const todayKey = formatDateToString(new Date());
         const hasExpenseToday = dailyExpenses.some(
-          (expense) => expense.day === currentDay,
+          (expense) => expense.dateKey === todayKey && expense.amount > 0,
         );
 
         if (!hasExpenseToday) {
@@ -483,6 +460,7 @@ export const BudgetScreen = () => {
 
   const handleSaveExpense = async (day: number, date: Date) => {
     if (!user) return;
+    const dateKey = formatDateToString(date);
 
     const value = parseCurrency(tempValue);
 
@@ -495,19 +473,8 @@ export const BudgetScreen = () => {
       try {
         setSaving(true);
         await budgetServices.confirmZeroExpenseDay(user.id, date);
-        setZeroConfirmedDays((prev) =>
-          Array.from(new Set([...prev, day])).sort((a, b) => a - b),
-        );
-        setDailyExpenses((prev) => {
-          const exists = prev.some((item) => item.day === day);
-          if (exists) {
-            return prev.map((item) =>
-              item.day === day ? { ...item, amount: 0 } : item,
-            );
-          }
-          return [...prev, { day, amount: 0 }].sort((a, b) => a.day - b.day);
-        });
-        setEditingDay(null);
+        await loadBudgetData({ silent: true });
+        setEditingDateKey(null);
         setTempValue("");
         setShowConfetti(true);
         Alert.alert(
@@ -523,29 +490,26 @@ export const BudgetScreen = () => {
       return;
     }
 
-    // Verificar se é o primeiro gasto do dia atual
+    const todayKey = formatDateToString(new Date());
     const isFirstExpenseToday =
-      day === currentDay && !dailyExpenses.some((e) => e.day === currentDay);
+      dateKey === todayKey &&
+      !dailyExpenses.some((e) => e.dateKey === todayKey && e.amount > 0);
 
     try {
       setSaving(true);
 
-      // Atualizar localmente
-      const existingIndex = dailyExpenses.findIndex((item) => item.day === day);
-      let updatedExpenses: DailyExpense[];
-
-      if (existingIndex >= 0) {
-        updatedExpenses = [...dailyExpenses];
-        updatedExpenses[existingIndex] = { day, amount: value };
-      } else {
-        updatedExpenses = [...dailyExpenses, { day, amount: value }].sort(
-          (a, b) => a.day - b.day,
+      setDailyExpenses((prev) => {
+        const existingIndex = prev.findIndex((item) => item.dateKey === dateKey);
+        if (existingIndex >= 0) {
+          const updated = [...prev];
+          updated[existingIndex] = { dateKey, day, amount: value };
+          return updated;
+        }
+        return [...prev, { dateKey, day, amount: value }].sort((a, b) =>
+          a.dateKey.localeCompare(b.dateKey),
         );
-      }
+      });
 
-      setDailyExpenses(updatedExpenses);
-
-      // Salvar no Firebase
       await budgetServices.updateDailyExpense(
         user.id,
         getMonthYearFromDate(date),
@@ -554,18 +518,16 @@ export const BudgetScreen = () => {
       );
       console.log("✅ Gasto diário salvo no Firebase");
 
-      // Se o dia tinha zero confirmado e agora recebeu valor > 0, remover da contagem local
       if (value > 0) {
-        setZeroConfirmedDays((prev) => prev.filter((d) => d !== day));
+        setZeroConfirmedDateKeys((prev) => prev.filter((key) => key !== dateKey));
       }
 
-      // Se for o primeiro gasto de hoje, cancelar o lembrete das 21h
       if (isFirstExpenseToday) {
         await cancelDailyExpenseReminder();
         console.log("🔕 Lembrete diário cancelado (gasto registrado)");
       }
 
-      setEditingDay(null);
+      setEditingDateKey(null);
       setTempValue("");
     } catch (error) {
       console.error("❌ Erro ao salvar gasto diário:", error);
@@ -575,9 +537,10 @@ export const BudgetScreen = () => {
     }
   };
 
-  const handleEditDay = (day: number) => {
-    const existing = dailyExpenses.find((item) => item.day === day);
-    setEditingDay(day);
+  const handleEditDay = (date: Date) => {
+    const dateKey = formatDateToString(date);
+    const existing = dailyExpenses.find((item) => item.dateKey === dateKey);
+    setEditingDateKey(dateKey);
     setTempValue(existing ? formatCurrencyWithoutSymbol(existing.amount) : "");
   };
 
@@ -595,7 +558,8 @@ export const BudgetScreen = () => {
     setChoiceModalVisible(false);
     // informar origem para retornar corretamente após cadastro
     navigate("AddExpense", {
-      prefillDate: choiceModalDate.toISOString(),
+      prefillDate: formatDateToString(choiceModalDate),
+      prefillExpenseType: "consumption",
       returnTo: "Budget",
     });
   };
@@ -606,19 +570,7 @@ export const BudgetScreen = () => {
     try {
       setSaving(true);
       await budgetServices.confirmZeroExpenseDay(user.id, choiceModalDate);
-
-      const day = choiceModalDate.getDate();
-      setZeroConfirmedDays((prev) =>
-        Array.from(new Set([...prev, day])).sort((a, b) => a - b),
-      );
-
-      setDailyExpenses((prev) => {
-        const exists = prev.some((d) => d.day === day);
-        if (exists)
-          return prev.map((d) => (d.day === day ? { ...d, amount: 0 } : d));
-        const out = [...prev, { day, amount: 0 }];
-        return out.sort((a, b) => a.day - b.day);
-      });
+      await loadBudgetData({ silent: true });
       setShowConfetti(true);
       Alert.alert(
         "Parabéns! 🎉",
@@ -632,8 +584,9 @@ export const BudgetScreen = () => {
     }
   };
 
-  const getDayExpense = (day: number): number => {
-    const expense = dailyExpenses.find((item) => item.day === day);
+  const getDayExpense = (date: Date): number => {
+    const dateKey = formatDateToString(date);
+    const expense = dailyExpenses.find((item) => item.dateKey === dateKey);
     return expense ? expense.amount : 0;
   };
 
@@ -794,7 +747,7 @@ export const BudgetScreen = () => {
                   Zeros confirmados
                 </Text>
                 <Text style={styles.performanceMetaValue}>
-                  {zeroConfirmedDays.length}
+                  {zeroConfirmedDateKeys.length}
                 </Text>
               </View>
             </View>
@@ -811,13 +764,14 @@ export const BudgetScreen = () => {
               <View style={styles.daysList}>
                 {dailyExpenseDates.map((date) => {
                   const day = date.getDate();
-                  const expense = getDayExpense(day);
-                  const isEditing = editingDay === day;
-                  const isZeroConfirmed = zeroConfirmedDays.includes(day);
+                  const dateKey = formatDateToString(date);
+                  const expense = getDayExpense(date);
+                  const isEditing = editingDateKey === dateKey;
+                  const isZeroConfirmed = zeroConfirmedDateKeys.includes(dateKey);
 
                   return (
                     <View
-                      key={date.toISOString()}
+                      key={dateKey}
                       style={[
                         styles.dayRow,
                         isZeroConfirmed && styles.dayRowZeroConfirmed,
@@ -872,7 +826,7 @@ export const BudgetScreen = () => {
                           <TouchableOpacity
                             style={styles.cancelButton}
                             onPress={() => {
-                              setEditingDay(null);
+                              setEditingDateKey(null);
                               setTempValue("");
                             }}
                           >
@@ -895,7 +849,7 @@ export const BudgetScreen = () => {
                       ) : (
                         <TouchableOpacity
                           style={styles.editIconButton}
-                          onPress={() => handleEditDay(day)}
+                          onPress={() => handleEditDay(date)}
                         >
                           <Ionicons name="pencil" size={18} color="#8c52ff" />
                         </TouchableOpacity>

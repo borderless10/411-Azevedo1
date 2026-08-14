@@ -415,7 +415,7 @@ export const EditExpenseScreen = () => {
                   {[
                     { id: "cash", label: "Dinheiro" },
                     { id: "debit_card", label: "Débito" },
-                    { id: "credit_card", label: "Cartão" },
+                    { id: "credit_card", label: "Crédito" },
                     { id: "pix", label: "PIX" },
                   ].map((method) => {
                     const active = paymentMethod === method.id;

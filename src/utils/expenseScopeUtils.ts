@@ -97,6 +97,17 @@ export const isBillPaymentExpense = (expense: {
   );
 };
 
+export const isConsumoModeradoHistoryExpense = (expense: {
+  category?: string;
+  sourceBillId?: string;
+  isConsumoModerado?: boolean;
+  isTrackedDaily?: boolean;
+}): boolean => {
+  if (isTrackedDailyExpense(expense)) return false;
+  if (isBillPaymentExpense(expense)) return false;
+  return true;
+};
+
 export type ConsultantExpenseScope =
   | "all"
   | "consumo_moderado"

@@ -28,6 +28,7 @@ import { getEndOfDay, getStartOfDay, addDays } from "../utils/dateUtils";
 import rankingPlanilhaService from "./rankingPlanilhaService";
 import {
   isConsumoModeradoExpense,
+  isConsumoModeradoHistoryExpense,
   isTrackedDailyExpense,
 } from "../utils/expenseScopeUtils";
 import { planningServices } from "./planningServices";
@@ -44,6 +45,17 @@ export const getMonthYearFromDate = (date: Date): string => {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
   return `${year}-${month}`;
+};
+
+export const listMonthYearsInRange = (start: Date, end: Date): string[] => {
+  const months: string[] = [];
+  const cursor = new Date(start.getFullYear(), start.getMonth(), 1);
+  const last = new Date(end.getFullYear(), end.getMonth(), 1);
+  while (cursor.getTime() <= last.getTime()) {
+    months.push(getMonthYearFromDate(cursor));
+    cursor.setMonth(cursor.getMonth() + 1);
+  }
+  return months;
 };
 
 export const normalizeTrackedTitleKey = (value?: string): string =>
@@ -458,6 +470,41 @@ export const budgetServices = {
     );
 
     return saved;
+  },
+
+  async reconcileConsumoModeradoDay(userId: string, date: Date): Promise<void> {
+    const monthYear = getMonthYearFromDate(date);
+    const day = date.getDate();
+    const budget = await this.getBudget(userId, monthYear);
+    if (!budget) return;
+
+    const remaining = await expenseServices.getExpenses(userId, {
+      startDate: getStartOfDay(date),
+      endDate: getEndOfDay(date),
+    });
+    const remainingTotal = remaining
+      .filter(isConsumoModeradoHistoryExpense)
+      .reduce((sum, expense) => sum + (Number(expense.value) || 0), 0);
+
+    const updatedExpenses = (budget.dailyExpenses || []).filter(
+      (item) => item.day !== day,
+    );
+    if (remainingTotal > 0) {
+      updatedExpenses.push({ day, amount: remainingTotal });
+      updatedExpenses.sort((a, b) => a.day - b.day);
+    }
+
+    const updatedZeroConfirmedDays =
+      remainingTotal > 0
+        ? (budget.zeroConfirmedDays || []).filter((item) => item !== day)
+        : budget.zeroConfirmedDays || [];
+
+    await this.saveBudget(userId, monthYear, {
+      monthlyBudget: budget.monthlyBudget,
+      dailyExpenses: updatedExpenses,
+      zeroConfirmedDays: updatedZeroConfirmedDays,
+      zeroConfirmedDaysNoRanking: budget.zeroConfirmedDaysNoRanking || [],
+    });
   },
 
   async confirmZeroExpenseDayForTracked(
