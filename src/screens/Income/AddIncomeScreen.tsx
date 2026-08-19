@@ -27,6 +27,7 @@ import { planningServices } from "../../services/planningServices";
 import { ExpectedItem } from "../../types/planning";
 import { formatCurrency } from "../../utils/currencyUtils";
 import IncomeCreatedModal from "../../components/ui/IncomeCreatedModal";
+import CustomModal from "../../components/ui/CustomModal";
 
 const MONTHLY_INCOME_ID = "__monthly_income__";
 
@@ -63,6 +64,8 @@ export const AddIncomeScreen = () => {
   });
   const [successModalVisible, setSuccessModalVisible] = useState(false);
   const [savedValueForModal, setSavedValueForModal] = useState(0);
+  const [trackedIncomeHintVisible, setTrackedIncomeHintVisible] =
+    useState(false);
 
   const navigateToReturnScreen = () => {
     navigate(params?.returnTo || "Home", params?.returnParams);
@@ -133,6 +136,11 @@ export const AddIncomeScreen = () => {
   }, [user?.id]);
 
   const selectPlannedIncome = (item: ExpectedItem) => {
+    if (item.dailyTracking) {
+      setTrackedIncomeHintVisible(true);
+      return;
+    }
+
     const itemId = String(item.id || item.source || "");
     setIncomeSourceMode("planned");
     setCustomIncomeTitle("");
@@ -517,30 +525,48 @@ export const AddIncomeScreen = () => {
                         <View style={styles.trackedOptionsContainer}>
                           {plannedIncomes.map((item) => {
                             const itemId = String(item.id || item.source || "");
-                            const active = selectedPlannedIncomeId === itemId;
+                            const isTracked = Boolean(item.dailyTracking);
+                            const active =
+                              !isTracked && selectedPlannedIncomeId === itemId;
                             return (
                               <TouchableOpacity
                                 key={itemId}
                                 style={[
                                   styles.plannedIncomeOption,
                                   active && styles.trackedOptionActive,
+                                  isTracked && styles.plannedIncomeOptionLocked,
                                 ]}
                                 onPress={() => selectPlannedIncome(item)}
                                 disabled={loading}
                               >
                                 <View style={styles.plannedIncomeContent}>
-                                  <Text
-                                    style={[
-                                      styles.trackedOptionText,
-                                      active && styles.trackedOptionTextActive,
-                                    ]}
-                                  >
-                                    {item.source || "Renda"}
-                                  </Text>
+                                  <View style={styles.plannedIncomeTitleBlock}>
+                                    <Text
+                                      style={[
+                                        styles.trackedOptionText,
+                                        active &&
+                                          styles.trackedOptionTextActive,
+                                        isTracked &&
+                                          styles.plannedIncomeLockedText,
+                                      ]}
+                                    >
+                                      {item.source || "Renda"}
+                                    </Text>
+                                    {isTracked ? (
+                                      <Text
+                                        style={styles.plannedIncomeLockedHint}
+                                      >
+                                        Renda acompanhada
+                                      </Text>
+                                    ) : null}
+                                  </View>
                                   <Text
                                     style={[
                                       styles.plannedIncomeAmount,
-                                      active && styles.plannedIncomeAmountActive,
+                                      active &&
+                                        styles.plannedIncomeAmountActive,
+                                      isTracked &&
+                                        styles.plannedIncomeLockedText,
                                     ]}
                                   >
                                     {formatCurrency(Number(item.amount) || 0)}
@@ -658,6 +684,13 @@ export const AddIncomeScreen = () => {
             </View>
           </View>
         </ScrollView>
+        <CustomModal
+          visible={trackedIncomeHintVisible}
+          title="Renda acompanhada"
+          message="Esta renda faz parte do acompanhamento diário. Para registrá-la, use a opção Renda acompanhada."
+          primaryLabel="Entendi"
+          onClose={() => setTrackedIncomeHintVisible(false)}
+        />
         <IncomeCreatedModal
           visible={successModalVisible}
           amount={savedValueForModal}
@@ -866,11 +899,27 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     backgroundColor: "#2b2b2b",
   },
+  plannedIncomeOptionLocked: {
+    opacity: 0.72,
+    borderStyle: "dashed",
+  },
   plannedIncomeContent: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     gap: 12,
+  },
+  plannedIncomeTitleBlock: {
+    flex: 1,
+    gap: 2,
+  },
+  plannedIncomeLockedHint: {
+    color: "#c7b0ff",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  plannedIncomeLockedText: {
+    color: "#aaa",
   },
   plannedIncomeAmount: {
     color: "#999",

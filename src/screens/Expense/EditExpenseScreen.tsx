@@ -28,6 +28,7 @@ import { formatCurrency } from "../../utils/currencyUtils";
 import { Expense } from "../../types/expense";
 import { creditCardServices } from "../../services/creditCardServices";
 import { CreditCard } from "../../types/creditCard";
+import { budgetServices } from "../../services/budgetServices";
 
 export const EditExpenseScreen = () => {
   const { user } = useAuth();
@@ -58,7 +59,10 @@ export const EditExpenseScreen = () => {
   // Carregar dados do gasto
   useEffect(() => {
     const loadExpense = async () => {
-      if (!expenseId || !user) return;
+      if (!expenseId || !user) {
+        setLoading(false);
+        return;
+      }
 
       try {
         setLoading(true);
@@ -92,7 +96,7 @@ export const EditExpenseScreen = () => {
     };
 
     loadExpense();
-  }, [expenseId, user, navigate]);
+  }, [expenseId, user?.id]);
 
   useEffect(() => {
     const loadCards = async () => {
@@ -236,6 +240,7 @@ export const EditExpenseScreen = () => {
 
       await expenseServices.updateExpense(expenseId, expenseData);
       console.log("✅ Gasto atualizado");
+      await budgetServices.reconcileConsumoModeradoDay(user.id, date);
 
       // Mostrar mensagem de confirmação e navegar para Home
       Alert.alert(
@@ -282,7 +287,8 @@ export const EditExpenseScreen = () => {
   return (
     <Layout title="Editar Gasto" showBackButton={true} showSidebar={false}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 64 : 0}
         style={styles.container}
       >
         <ScrollView

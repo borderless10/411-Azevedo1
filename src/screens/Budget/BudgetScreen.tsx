@@ -14,6 +14,8 @@ import {
   Alert,
   ActivityIndicator,
   Modal,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Layout } from "../../components/Layout/Layout";
@@ -53,7 +55,12 @@ type CycleDailyExpense = DailyExpense & { dateKey: string };
 
 export const BudgetScreen = () => {
   const { user } = useAuth();
-  const { currentScreen, navigate } = useNavigation() as any;
+  const { currentScreen, navigate, params } = useNavigation() as any;
+  const clientId = String(params?.clientId || "");
+  const isSpectator =
+    !!clientId &&
+    (user?.role === "consultor" || user?.role === "admin" || !!user?.isAdmin);
+  const ownerId = isSpectator ? clientId : user?.id || "";
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
 
@@ -216,11 +223,13 @@ export const BudgetScreen = () => {
 
   // Carregar dados do Firebase ao montar componente
   useEffect(() => {
-    if (currentScreen === "Budget" && user) {
+    if (currentScreen === "Budget" && ownerId) {
       loadBudgetData();
-      setupNotifications();
+      if (!isSpectator) {
+        setupNotifications();
+      }
     }
-  }, [currentScreen, user]);
+  }, [currentScreen, ownerId, isSpectator]);
 
   // Animações de entrada
   useEffect(() => {
@@ -242,16 +251,18 @@ export const BudgetScreen = () => {
   }, [loading]);
 
   const loadBudgetData = async (options?: { silent?: boolean }) => {
-    if (!user) return;
+    if (!ownerId) return;
 
     try {
       if (!options?.silent) {
         setLoading(true);
       }
-      await budgetServices.syncRankingPenalties(user.id);
+      if (!isSpectator) {
+        await budgetServices.syncRankingPenalties(ownerId);
+      }
 
       // 1) Buscar valor mensal esperado do planejamento do consultor
-      const planning = await planningServices.getPlanning(user.id);
+      const planning = await planningServices.getPlanning(ownerId);
       setPlanningCycleLabel(getPlanningCycleLabel(planning) || "");
       setPlannedCycleDurationDays(
         Number(planning?.consumoModeradoCycleDurationDays || 0),
@@ -316,7 +327,7 @@ export const BudgetScreen = () => {
 
       if (__DEV__) {
         console.log("[BUDGET] planejamento carregado para consumo moderado", {
-          userId: user.id,
+          userId: ownerId,
           hasPlanning: !!planning,
           totalPlannedByCategory,
           totalBills,
@@ -366,7 +377,7 @@ export const BudgetScreen = () => {
       const budgetsByMonth = new Map<string, Awaited<ReturnType<typeof budgetServices.getBudget>>>();
       await Promise.all(
         monthYears.map(async (monthYear) => {
-          const monthBudget = await budgetServices.getBudget(user.id, monthYear);
+          const monthBudget = await budgetServices.getBudget(ownerId, monthYear);
           budgetsByMonth.set(monthYear, monthBudget);
         }),
       );
@@ -383,7 +394,7 @@ export const BudgetScreen = () => {
       setZeroConfirmedDateKeys(zeroKeys);
 
       try {
-        const expenses = await expenseServices.getExpenses(user.id, {
+        const expenses = await expenseServices.getExpenses(ownerId, {
           startDate: start,
           endDate: end,
           createdAtFrom: cycleStartedAtRaw || undefined,
@@ -422,6 +433,9 @@ export const BudgetScreen = () => {
         });
         merged.sort((a, b) => a.dateKey.localeCompare(b.dateKey));
         setDailyExpenses(merged);
+        setZeroConfirmedDateKeys(
+          zeroKeys.filter((key) => (amountByDateKey.get(key) ?? 0) <= 0),
+        );
         setExpensesByDate(grouped);
       } catch (err) {
         console.error("❌ [BUDGET] Erro ao agregar gastos do mês:", err);
@@ -472,7 +486,7 @@ export const BudgetScreen = () => {
   };
 
   const handleSaveExpense = async (day: number, date: Date) => {
-    if (!user) return;
+    if (!user || isSpectator) return;
     const dateKey = formatDateToString(date);
 
     const value = parseCurrency(tempValue);
@@ -492,7 +506,7 @@ export const BudgetScreen = () => {
         setShowConfetti(true);
         Alert.alert(
           "Parabéns! 🎉",
-          "Zero na planilha confirmado. Você ganhou 2 pontos no ranking!",
+          "Zero no app confirmado. Você ganhou 2 pontos no ranking!",
         );
       } catch (error) {
         console.error("❌ Erro ao confirmar zero na planilha:", error);
@@ -511,25 +525,20 @@ export const BudgetScreen = () => {
     try {
       setSaving(true);
 
-      setDailyExpenses((prev) => {
-        const existingIndex = prev.findIndex((item) => item.dateKey === dateKey);
-        if (existingIndex >= 0) {
-          const updated = [...prev];
-          updated[existingIndex] = { dateKey, day, amount: value };
-          return updated;
-        }
-        return [...prev, { dateKey, day, amount: value }].sort((a, b) =>
-          a.dateKey.localeCompare(b.dateKey),
-        );
-      });
+      const existingAmount = getDayExpense(date);
+      if (existingAmount <= 0) {
+        await expenseServices.createExpense(user.id, {
+          value,
+          description: "Consumo Moderado",
+          date,
+          category: "Consumo Moderado",
+          paymentMethod: "other",
+          isConsumoModerado: true,
+        });
+      }
 
-      await budgetServices.updateDailyExpense(
-        user.id,
-        getMonthYearFromDate(date),
-        day,
-        value,
-      );
-      console.log("✅ Gasto diário salvo no Firebase");
+      await budgetServices.reconcileConsumoModeradoDay(user.id, date);
+      await loadBudgetData({ silent: true });
 
       if (value > 0) {
         setZeroConfirmedDateKeys((prev) => prev.filter((key) => key !== dateKey));
@@ -582,7 +591,7 @@ export const BudgetScreen = () => {
   };
 
   const handleOpenNoRecordActions = (date: Date) => {
-    if (!user) return;
+    if (!user || isSpectator) return;
     const label = formatDayMonthLabel(date);
 
     setChoiceModalDayLabel(label);
@@ -591,7 +600,7 @@ export const BudgetScreen = () => {
   };
 
   const handleChooseRegister = () => {
-    if (!choiceModalDate) return;
+    if (isSpectator || !choiceModalDate) return;
     setChoiceModalVisible(false);
     // informar origem para retornar corretamente após cadastro
     navigate("AddExpense", {
@@ -602,7 +611,7 @@ export const BudgetScreen = () => {
   };
 
   const handleChooseMarkZero = async () => {
-    if (!user || !choiceModalDate) return;
+    if (!user || isSpectator || !choiceModalDate) return;
     setChoiceModalVisible(false);
     try {
       setSaving(true);
@@ -611,7 +620,7 @@ export const BudgetScreen = () => {
       setShowConfetti(true);
       Alert.alert(
         "Parabéns! 🎉",
-        "Zero na planilha confirmado. Você ganhou 2 pontos no ranking!",
+        "Zero no app confirmado. Você ganhou 2 pontos no ranking!",
       );
     } catch (err) {
       console.error("❌ [BUDGET] Erro ao confirmar zero:", err);
@@ -631,8 +640,8 @@ export const BudgetScreen = () => {
     return (
       <Layout
         title="Controle de Orçamento"
-        showBackButton={false}
-        showSidebar={true}
+        showBackButton={isSpectator}
+        showSidebar={!isSpectator}
       >
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#8c52ff" />
@@ -643,8 +652,17 @@ export const BudgetScreen = () => {
   }
 
   return (
-    <Layout title="Consumo Moderado" showBackButton={false} showSidebar={true}>
-      <ScrollView style={styles.container}>
+    <Layout
+      title="Consumo Moderado"
+      showBackButton={isSpectator}
+      showSidebar={!isSpectator}
+    >
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 64 : 0}
+      >
+      <ScrollView style={styles.container} keyboardShouldPersistTaps="handled">
         <Animated.View
           style={[
             styles.content,
@@ -661,6 +679,11 @@ export const BudgetScreen = () => {
             <Text style={styles.subtitle}>
               Controle quanto você pode gastar por dia
             </Text>
+            {isSpectator ? (
+              <Text style={styles.spectatorHint}>
+                Visualização do cliente (somente leitura)
+              </Text>
+            ) : null}
             {planningCycleLabel ? (
               <Text style={styles.cycleLabel}>{planningCycleLabel}</Text>
             ) : null}
@@ -804,7 +827,8 @@ export const BudgetScreen = () => {
                   const dateKey = formatDateToString(date);
                   const expense = getDayExpense(date);
                   const isEditing = editingDateKey === dateKey;
-                  const isZeroConfirmed = zeroConfirmedDateKeys.includes(dateKey);
+                  const isZeroConfirmed =
+                    expense === 0 && zeroConfirmedDateKeys.includes(dateKey);
 
                   return (
                     <View
@@ -841,7 +865,8 @@ export const BudgetScreen = () => {
                         )}
                       </View>
 
-                      {isEditing ? (
+                      {!isSpectator &&
+                        (isEditing ? (
                         <View style={styles.editItemsWrap}>
                           {(expensesByDate[dateKey] || []).length > 0 ? (
                             <>
@@ -935,7 +960,7 @@ export const BudgetScreen = () => {
                         >
                           <Ionicons name="pencil" size={18} color="#8c52ff" />
                         </TouchableOpacity>
-                      )}
+                      ))}
                     </View>
                   );
                 })}
@@ -958,6 +983,7 @@ export const BudgetScreen = () => {
           )}
         </Animated.View>
       </ScrollView>
+      </KeyboardAvoidingView>
       {/* Modal de escolha: Registrar gasto ou Marcar zero (apenas duas ações) */}
       <Modal transparent visible={choiceModalVisible} animationType="fade">
         <View style={modalStyles.backdrop}>
@@ -970,7 +996,7 @@ export const BudgetScreen = () => {
                 onPress={handleChooseMarkZero}
               >
                 <Text style={modalStyles.buttonWhiteLabel}>
-                  Marcar zero na planilha
+                  Marcar zero no app
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -1060,6 +1086,13 @@ const styles = StyleSheet.create({
     color: "#999",
     textAlign: "center",
     marginTop: 4,
+  },
+  spectatorHint: {
+    marginTop: 8,
+    color: "#b89aff",
+    fontSize: 12,
+    fontWeight: "600",
+    textAlign: "center",
   },
   cycleLabel: {
     marginTop: 10,

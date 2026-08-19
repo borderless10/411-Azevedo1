@@ -57,7 +57,11 @@ export const Header: React.FC<HeaderProps> = ({
 
   const handleBack = () => {
     if (params?.returnTo) {
-      navigate(params.returnTo);
+      navigate(
+        params.returnTo,
+        params.returnToParams ??
+          (params.clientId ? { clientId: params.clientId } : undefined),
+      );
       return;
     }
 
@@ -67,9 +71,19 @@ export const Header: React.FC<HeaderProps> = ({
       currentScreen === "ClientInvestmentsView" ||
       currentScreen === "ClientPlanning" ||
       currentScreen === "Wishlist" ||
-      (currentScreen === "Metas" && params && params.clientId)
+      (currentScreen === "Metas" && params && params.clientId) ||
+      (params?.clientId &&
+        (currentScreen === "Budget" ||
+          currentScreen === "CategoryBudget" ||
+          currentScreen === "TrackedIncome" ||
+          currentScreen === "IncomeList" ||
+          currentScreen === "Bills" ||
+          currentScreen === "ClientExpenseRecords" ||
+          currentScreen === "ClientIncomeRecords" ||
+          currentScreen === "Cartoes" ||
+          currentScreen === "Recomendacao"))
     ) {
-      navigate("ClientDetail", params);
+      navigate("ClientDetail", { clientId: params?.clientId });
       return;
     }
 

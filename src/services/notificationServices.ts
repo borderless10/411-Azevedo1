@@ -221,6 +221,17 @@ const parseExpectedIncomeDate = (expectedMonth?: string): Date | null => {
     if (!isNaN(parsed.getTime())) return parsed;
   }
 
+  // Dia do mês (1-31) — assume mês/ano atuais
+  match = raw.match(/^(\d{1,2})$/);
+  if (match) {
+    const day = Number(match[1]);
+    if (day >= 1 && day <= 31) {
+      const now = new Date();
+      const parsed = new Date(now.getFullYear(), now.getMonth(), day);
+      if (!isNaN(parsed.getTime())) return parsed;
+    }
+  }
+
   // YYYY-MM-DD
   match = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (match) {

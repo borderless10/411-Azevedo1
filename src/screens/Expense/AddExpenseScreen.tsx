@@ -34,6 +34,7 @@ import { isBillUnpaid } from "../../types/bill";
 import { isPayablePlanningBill } from "../../types/planning";
 import { CreditCard } from "../../types/creditCard";
 import { Bill } from "../../types/planning";
+import { budgetServices } from "../../services/budgetServices";
 
 const parsePrefillDate = (value?: string): Date | null => {
   if (!value) return null;
@@ -154,11 +155,27 @@ export const AddExpenseScreen = () => {
           setTrackedExpenses(tracked);
 
           // Extrair contas a serem pagas
-          const unpaidBills = (planning.bills || [])
+          const planningBills = (planning.bills || [])
             .filter(isBillUnpaid)
             .filter(isPayablePlanningBill);
+          const expectedAsBills = (planning.expectedExpenses || [])
+            .filter(isPayablePlanningBill)
+            .map(
+              (exp) =>
+                ({
+                  id: exp.id,
+                  name: exp.source || "Gasto esperado",
+                  amount: Number(exp.amount) || 0,
+                  paymentMethod: exp.paymentMethod,
+                  notes: exp.notes,
+                  createdAt: exp.createdAt,
+                  updatedAt: exp.updatedAt,
+                  _isExpectedExpense: true,
+                }) as Bill & { _isExpectedExpense?: boolean },
+            );
+          const unpaidBills = [...planningBills, ...expectedAsBills];
           setBills(unpaidBills);
-          if (unpaidBills.length === 0) {
+          if (unpaidBills.length === 0 && !params?.prefillBillId) {
             setBillSourceMode("custom");
           }
         } else {
@@ -402,6 +419,7 @@ export const AddExpenseScreen = () => {
         };
 
         await expenseServices.createExpense(user.id, expenseData);
+        await budgetServices.reconcileConsumoModeradoDay(user.id, consumoDate);
         setSavedValueForModal(consumoValue);
         setLastSavedExpenseType("consumption");
         setLastSavedTrackedTitle("");
@@ -480,10 +498,12 @@ export const AddExpenseScreen = () => {
               : {}),
           });
 
-          try {
-            await planningServices.markBillAsPaidByClient(user.id, billId);
-          } catch {
-            await markBillAsPaid(billId);
+          if (!(selectedBill as any)._isExpectedExpense) {
+            try {
+              await planningServices.markBillAsPaidByClient(user.id, billId);
+            } catch {
+              await markBillAsPaid(billId);
+            }
           }
         }
 
@@ -552,7 +572,8 @@ export const AddExpenseScreen = () => {
   return (
     <Layout title="Adicionar Gasto" showBackButton={true} showSidebar={false}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 64 : 0}
         style={styles.container}
       >
         <ScrollView

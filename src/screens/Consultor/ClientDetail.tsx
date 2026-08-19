@@ -21,6 +21,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { expenseServices } from "../../services/expenseServices";
 import { incomeServices } from "../../services/incomeServices";
 import { planningServices } from "../../services/planningServices";
+import { listConfirmedZeroDays } from "../../services/budgetServices";
 import { formatCurrency, getBalanceColor } from "../../utils/currencyUtils";
 import { useTheme } from "../../contexts/ThemeContext";
 import { Planning } from "../../types/planning";
@@ -28,12 +29,14 @@ import {
   buildCategoryPlanningComparisons,
   buildVarianceIndicator,
   compareBillPayments,
+  computeConsultantScopeDailyMetrics,
   computePlannedSpendingSummary,
   countDaysInclusive,
   findPlanningBillForExpense,
   getVarianceColor,
   resolveClientMovementPeriod,
 } from "../../utils/consultantClientMetrics";
+import { filterExpensesByConsultantScope } from "../../utils/expenseScopeUtils";
 
 export const ClientDetail: React.FC = () => {
   const { params, navigate } = useNavigation() as any;
@@ -46,6 +49,7 @@ export const ClientDetail: React.FC = () => {
   const [monthlyExpenses, setMonthlyExpenses] = useState<number>(0);
   const [monthlyIncomes, setMonthlyIncomes] = useState<number>(0);
   const [planning, setPlanning] = useState<Planning | null>(null);
+  const [consumoZeroDateKeys, setConsumoZeroDateKeys] = useState<string[]>([]);
   const [movementPeriodLabel, setMovementPeriodLabel] = useState("Este mês");
   const [expensesByCategory, setExpensesByCategory] = useState<any[]>([]);
   const { colors } = useTheme();
@@ -118,6 +122,13 @@ export const ClientDetail: React.FC = () => {
         const period = resolveClientMovementPeriod(plan ?? null);
         setMovementPeriodLabel(period.label);
 
+        const zeros = await listConfirmedZeroDays(
+          clientId,
+          period.start,
+          period.end,
+        );
+        setConsumoZeroDateKeys(zeros.consumoDateKeys);
+
         const monthlyExpensesTotal = await expenseServices.getExpensesTotal(
           clientId,
           period.start,
@@ -184,10 +195,20 @@ export const ClientDetail: React.FC = () => {
     [movementPeriod],
   );
 
-  const actualDailyAverage = useMemo(
-    () => (periodDayCount > 0 ? monthlyExpenses / periodDayCount : 0),
-    [monthlyExpenses, periodDayCount],
+  const consumoModeradoMetrics = useMemo(
+    () =>
+      computeConsultantScopeDailyMetrics(
+        planning,
+        movementPeriod,
+        "consumo_moderado",
+        filterExpensesByConsultantScope(expenses, "consumo_moderado"),
+        undefined,
+        consumoZeroDateKeys,
+      ),
+    [planning, movementPeriod, expenses, consumoZeroDateKeys],
   );
+
+  const actualDailyAverage = consumoModeradoMetrics.actualDailyAverage;
 
   const totalVariance = useMemo(
     () => buildVarianceIndicator(monthlyExpenses, plannedSummary?.totalPlanned),
@@ -284,6 +305,18 @@ export const ClientDetail: React.FC = () => {
               onPress={() => navigate("ClientExpenseRecords", { clientId })}
             >
               <Text style={styles.actionButtonText}>Registros de Gastos</Text>
+            </TouchableOpacity>
+          )}
+
+          {clientDoc && (
+            <TouchableOpacity
+              style={[
+                styles.actionButtonFull,
+                { backgroundColor: colors.primary },
+              ]}
+              onPress={() => navigate("ClientIncomeRecords", { clientId })}
+            >
+              <Text style={styles.actionButtonText}>Registros de Rendas</Text>
             </TouchableOpacity>
           )}
 
@@ -440,18 +473,8 @@ export const ClientDetail: React.FC = () => {
               Período: {movementPeriodLabel}
             </Text>
 
-            <View
-              style={[
-                styles.metricRow,
-                isCompactLayout && styles.metricRowCompact,
-              ]}
-            >
-              <View
-                style={[
-                  styles.metricBlock,
-                  isCompactLayout && styles.metricBlockCompact,
-                ]}
-              >
+            <View style={styles.metricRow}>
+              <View style={styles.metricBlock}>
                 <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>
                   Gasto total
                 </Text>
@@ -464,14 +487,9 @@ export const ClientDetail: React.FC = () => {
                 {renderVarianceBadge(totalVariance)}
               </View>
 
-              <View
-                style={[
-                  styles.metricBlock,
-                  isCompactLayout && styles.metricBlockCompact,
-                ]}
-              >
+              <View style={[styles.metricBlock, styles.metricBlockLast]}>
                 <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>
-                  Média diária
+                  Média diária (Consumo Moderado)
                 </Text>
                 <Text style={[styles.metricValue, { color: colors.text }]}>
                   {formatCurrency(actualDailyAverage)}
@@ -868,42 +886,38 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   metricRow: {
-    flexDirection: "row",
-    gap: 10,
-  },
-  metricRowCompact: {
     flexDirection: "column",
-    gap: 12,
   },
   metricBlock: {
-    flex: 1,
-    gap: 4,
-    minWidth: 0,
-  },
-  metricBlockCompact: {
-    flex: 0,
     width: "100%",
+    marginBottom: 16,
+  },
+  metricBlockLast: {
+    marginBottom: 0,
   },
   metricLabel: {
     fontSize: 12,
+    marginBottom: 2,
   },
   metricValue: {
     fontSize: 18,
     fontWeight: "700",
+    marginBottom: 2,
   },
   metricPlanned: {
     fontSize: 12,
+    marginBottom: 4,
   },
   varianceBadge: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    flexWrap: "wrap",
     marginTop: 4,
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderWidth: 1,
     borderRadius: 10,
-    alignSelf: "flex-start",
+    alignSelf: "stretch",
     maxWidth: "100%",
   },
   varianceBadgeCompact: {
@@ -912,6 +926,7 @@ const styles = StyleSheet.create({
   },
   varianceBadgeIcon: {
     flexShrink: 0,
+    marginRight: 6,
   },
   varianceBadgeText: {
     fontSize: 11,

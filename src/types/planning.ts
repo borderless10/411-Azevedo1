@@ -184,7 +184,7 @@ export interface ExpectedItem {
   amountCard?: number;
   amountCash?: number;
   dailyTracking?: boolean;
-  expectedMonth?: string; // opcional, formato DD/MM (legado: YYYY-MM)
+  expectedMonth?: string; // opcional: dia do mês (1-31). Legado: DD/MM ou YYYY-MM
   paymentMethod?: string; // 'card' | 'cash' | 'pix' etc.
   categoryId?: string;
   notes?: string;

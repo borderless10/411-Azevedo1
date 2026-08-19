@@ -76,7 +76,7 @@ const ZeroPlanilhaConfirmModal: React.FC<Props> = ({
             <>
               <Text style={styles.title}>Houve gasto?</Text>
               <Text style={styles.message}>
-                No dia {dayLabel} você não registrou gastos na planilha.
+                No dia {dayLabel} você não registrou gastos no aplicativo.
               </Text>
 
               <View style={styles.actionsRow}>
@@ -114,7 +114,7 @@ const ZeroPlanilhaConfirmModal: React.FC<Props> = ({
               <Text style={styles.title}>Qual foi o gasto?</Text>
               <Text style={styles.message}>
                 Informe o valor gasto no dia {dayLabel}. Use 0 para registrar
-                zero na planilha.
+                zero no app.
               </Text>
 
               <TextInput

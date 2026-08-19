@@ -49,12 +49,46 @@ export const normalizeExpectedMonthForInput = (value?: string): string => {
   return raw;
 };
 
-/** Rótulo amigável para expectedMonth (prioriza DD/MM) */
+/** Extrai o dia (1-31) de expectedMonth em formatos atuais e legados */
+export const extractExpectedDay = (value?: string): string => {
+  if (!value) return "";
+  const raw = String(value).trim();
+  if (/^\d{1,2}$/.test(raw)) {
+    const day = Number(raw);
+    return day >= 1 && day <= 31 ? String(day) : "";
+  }
+
+  const normalized = normalizeExpectedMonthForInput(raw);
+  const match = normalized.match(/^(\d{1,2})\//);
+  if (!match) return "";
+  const day = Number(match[1]);
+  return day >= 1 && day <= 31 ? String(day) : "";
+};
+
+export const isValidExpectedDay = (value?: string): boolean => {
+  if (!value) return true;
+  const day = Number(String(value).trim());
+  return Number.isInteger(day) && day >= 1 && day <= 31;
+};
+
+/** Rótulo amigável para expectedMonth (dia, ou DD/MM legado) */
 export const formatExpectedMonthLabel = (expectedMonth?: string): string => {
   if (!expectedMonth) return "";
+  const day = extractExpectedDay(expectedMonth);
+  if (day) {
+    const raw = String(expectedMonth).trim();
+    if (/^\d{1,2}$/.test(raw)) return `Dia ${day}`;
+  }
   const normalized = normalizeExpectedMonthForInput(expectedMonth);
   if (/^\d{2}\/\d{2}$/.test(normalized)) return normalized;
   return String(expectedMonth).trim();
+};
+
+/** Rótulo de renda prevista: sempre "Dia X" quando o dia for extraível */
+export const formatExpectedDayLabel = (expectedMonth?: string): string => {
+  const day = extractExpectedDay(expectedMonth);
+  if (day) return `Dia ${day}`;
+  return formatExpectedMonthLabel(expectedMonth);
 };
 
 export const isValidDayMonth = (value?: string): boolean => {

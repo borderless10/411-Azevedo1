@@ -38,8 +38,10 @@ import { formatCurrency } from "../../utils/currencyUtils";
 import { toInvoiceKey } from "../../utils/creditCardUtils";
 import { addMonths } from "../../utils/dateUtils";
 import {
-  formatExpectedMonthLabel,
+  extractExpectedDay,
+  formatExpectedDayLabel,
   isValidDayMonth,
+  isValidExpectedDay,
   normalizeExpectedMonthForInput,
   toDayMonthMask,
 } from "../../utils/dateUtils";
@@ -60,6 +62,14 @@ export const ClientPlanningScreen = () => {
   const expenseModalScrollMaxHeight = Math.max(
     260,
     expenseModalMaxHeight - 250,
+  );
+  const incomeModalMaxHeight = Math.min(
+    isWeb ? 560 : 620,
+    Math.floor(windowHeight * (isWeb ? 0.82 : 0.86)),
+  );
+  const incomeModalScrollMaxHeight = Math.max(
+    280,
+    incomeModalMaxHeight - 160,
   );
   const [selectedClient, setSelectedClient] = useState<any | null>(null);
   const [notes, setNotes] = useState<string>("");
@@ -825,20 +835,20 @@ export const ClientPlanningScreen = () => {
     const amount = incomeAmountNumber || 0;
     if (!user || !selectedClient || !incomeSource || amount <= 0) return;
 
-    const trimmedIncomeDayMonth = incomeDailyTracking ? "" : incomeMonth.trim();
+    const trimmedIncomeDay = incomeDailyTracking ? "" : incomeMonth.trim();
     if (
       !incomeDailyTracking &&
-      trimmedIncomeDayMonth &&
-      !isValidDayMonth(trimmedIncomeDayMonth)
+      trimmedIncomeDay &&
+      !isValidExpectedDay(trimmedIncomeDay)
     ) {
-      Alert.alert("Data inválida", "Informe o dia e mês no formato DD/MM.");
+      Alert.alert("Data inválida", "Informe um dia entre 1 e 31.");
       return;
     }
 
     try {
       setSavingIncome(true);
 
-      const expectedMonthValue = trimmedIncomeDayMonth || undefined;
+      const expectedMonthValue = trimmedIncomeDay || undefined;
 
       if (editingIncomeId) {
         const updated = await planningServices.updateExpectedIncome(
@@ -1941,7 +1951,7 @@ export const ClientPlanningScreen = () => {
                       {item.expectedMonth ? (
                         <Text style={styles.billDescription}>
                           Previsto para:{" "}
-                          {formatExpectedMonthLabel(item.expectedMonth)}
+                          {formatExpectedDayLabel(item.expectedMonth)}
                         </Text>
                       ) : null}
                     </View>
@@ -1965,7 +1975,7 @@ export const ClientPlanningScreen = () => {
                         setIncomeMonth(
                           item.dailyTracking
                             ? ""
-                            : normalizeExpectedMonthForInput(item.expectedMonth),
+                            : extractExpectedDay(item.expectedMonth),
                         );
                         setEditingIncomeId(item.id || null);
                         setIsIncomeModalVisible(true);
@@ -2214,11 +2224,11 @@ export const ClientPlanningScreen = () => {
         onRequestClose={() => setIsIncomeModalVisible(false)}
       >
         <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={styles.modalOverlay}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={styles.expenseModalAvoidingView}
         >
           <TouchableOpacity
-            style={styles.modalOverlay}
+            style={styles.expenseModalOverlay}
             activeOpacity={1}
             onPress={() => setIsIncomeModalVisible(false)}
           >
@@ -2227,7 +2237,12 @@ export const ClientPlanningScreen = () => {
               onPress={(e) => e.stopPropagation()}
             >
               <View
-                style={[styles.modalContent, { backgroundColor: "#0a0a0a" }]}
+                style={[
+                  styles.modalContent,
+                  styles.expenseModalContent,
+                  { maxHeight: incomeModalMaxHeight },
+                  { backgroundColor: "#0a0a0a" },
+                ]}
               >
                 <View style={styles.modalHeader}>
                   <Text style={[styles.modalTitle]}>
@@ -2241,9 +2256,40 @@ export const ClientPlanningScreen = () => {
                 </View>
 
                 <ScrollView
+                  style={[
+                    styles.expenseModalScroll,
+                    { maxHeight: incomeModalScrollMaxHeight },
+                  ]}
+                  contentContainerStyle={styles.expenseModalScrollContent}
                   showsVerticalScrollIndicator={false}
                   keyboardShouldPersistTaps="handled"
                 >
+                  <View style={styles.inputGroup}>
+                    <View
+                      style={{ flexDirection: "row", alignItems: "center" }}
+                    >
+                      <TouchableOpacity
+                        style={[
+                          styles.checkbox,
+                          incomeDailyTracking && styles.checkboxActive,
+                        ]}
+                        onPress={toggleIncomeDailyTracking}
+                      >
+                        {incomeDailyTracking ? (
+                          <Ionicons name="checkmark" size={16} color="#fff" />
+                        ) : null}
+                      </TouchableOpacity>
+                      <Text
+                        style={[
+                          styles.inputLabel,
+                          { marginLeft: 12, marginBottom: 0 },
+                        ]}
+                      >
+                        Acompanhamento Diário
+                      </Text>
+                    </View>
+                  </View>
+
                   <View style={styles.inputGroup}>
                     <Text style={styles.inputLabel}>Fonte *</Text>
                     <TextInput
@@ -2269,12 +2315,13 @@ export const ClientPlanningScreen = () => {
                   <View
                     style={[
                       styles.inputGroup,
+                      styles.lastInputGroup,
                       incomeDailyTracking && styles.disabledSection,
                     ]}
                     pointerEvents={incomeDailyTracking ? "none" : "auto"}
                   >
                     <Text style={styles.inputLabel}>
-                      Dia e mês previstos (opcional)
+                      Dia previsto (opcional)
                     </Text>
                     <TextInput
                       style={[
@@ -2283,40 +2330,14 @@ export const ClientPlanningScreen = () => {
                       ]}
                       value={incomeMonth}
                       onChangeText={(value) =>
-                        setIncomeMonth(toDayMonthMask(value))
+                        setIncomeMonth(value.replace(/\D/g, "").slice(0, 2))
                       }
-                      placeholder="DD/MM"
+                      placeholder="Ex: 15"
                       placeholderTextColor="#777"
-                      keyboardType="numeric"
-                      maxLength={5}
+                      keyboardType="number-pad"
+                      maxLength={2}
                       editable={!incomeDailyTracking && !savingIncome}
                     />
-                  </View>
-
-                  <View style={[styles.inputGroup, styles.lastInputGroup]}>
-                    <View
-                      style={{ flexDirection: "row", alignItems: "center" }}
-                    >
-                      <TouchableOpacity
-                        style={[
-                          styles.checkbox,
-                          incomeDailyTracking && styles.checkboxActive,
-                        ]}
-                        onPress={toggleIncomeDailyTracking}
-                      >
-                        {incomeDailyTracking ? (
-                          <Ionicons name="checkmark" size={16} color="#fff" />
-                        ) : null}
-                      </TouchableOpacity>
-                      <Text
-                        style={[
-                          styles.inputLabel,
-                          { marginLeft: 12, marginBottom: 0 },
-                        ]}
-                      >
-                        Acompanhamento Diário
-                      </Text>
-                    </View>
                   </View>
                 </ScrollView>
 

@@ -24,9 +24,17 @@ import {
   getPlanningCycleLabel,
   planningServices,
 } from "../../services/planningServices";
-import { getStartOfDay, getEndOfDay, addDays } from "../../utils/dateUtils";
+import { getStartOfDay, getEndOfDay, addDays, formatDateToString, formatDateForDisplay } from "../../utils/dateUtils";
+import { Income } from "../../types/income";
+import { normalizeExpenseTitleKey } from "../../utils/expenseScopeUtils";
 
-type DailyIncome = {
+type DaySummary = {
+  date: Date;
+  total: number;
+};
+
+type CycleDailyIncome = {
+  dateKey: string;
   day: number;
   amount: number;
 };
@@ -37,10 +45,17 @@ export const TrackedIncomeScreen = () => {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
   const trackedTitle = String(params?.trackedTitle || "").trim();
+  const clientId = String(params?.clientId || "");
+  const isSpectator =
+    !!clientId &&
+    (user?.role === "consultor" || user?.role === "admin" || !!user?.isAdmin);
+  const ownerId = isSpectator ? clientId : user?.id || "";
 
   const [plannedMonthlyIncome, setPlannedMonthlyIncome] = useState<number>(0);
-  const [dailyIncomes, setDailyIncomes] = useState<DailyIncome[]>([]);
-  const [dailyIncomeDates, setDailyIncomeDates] = useState<Date[]>([]);
+  const [dailyIncomes, setDailyIncomes] = useState<CycleDailyIncome[]>([]);
+  const [days, setDays] = useState<DaySummary[]>([]);
+  const [incomeHistory, setIncomeHistory] = useState<Income[]>([]);
+  const [editingDateKey, setEditingDateKey] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [saving, setSaving] = useState<boolean>(false);
   const [choiceModalVisible, setChoiceModalVisible] = useState(false);
@@ -52,15 +67,25 @@ export const TrackedIncomeScreen = () => {
   const [cycleDateEnd, setCycleDateEnd] = useState<Date | null>(null);
   const [plannedCycleDurationDays, setPlannedCycleDurationDays] =
     useState<number>(0);
-  const [zeroConfirmedDays, setZeroConfirmedDays] = useState<number[]>([]);
+  const [zeroConfirmedDateKeys, setZeroConfirmedDateKeys] = useState<string[]>([]);
 
-  const normalizeTitle = (value?: string) =>
-    String(value || "")
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .trim()
-      .replace(/\s+/g, " ")
-      .toLocaleLowerCase("pt-BR");
+  const normalizeTitle = normalizeExpenseTitleKey;
+
+  const getPlannedAmount = (item: any) => {
+    const amountCard = Number(item?.amountCard);
+    const amountCash = Number(item?.amountCash);
+    const hasSplitValues =
+      Number.isFinite(amountCard) || Number.isFinite(amountCash);
+
+    if (hasSplitValues) {
+      return (
+        (Number.isFinite(amountCard) ? amountCard : 0) +
+        (Number.isFinite(amountCash) ? amountCash : 0)
+      );
+    }
+
+    return Number(item?.amount) || 0;
+  };
 
   const calculateDaysInCycle = (): number => {
     if (!cycleDateStart || !cycleDateEnd) return 30;
@@ -85,10 +110,11 @@ export const TrackedIncomeScreen = () => {
   );
   const remainingToReceive = Math.max(0, budgetValue - totalReceived);
   const overExpectedAmount = Math.max(0, totalReceived - budgetValue);
-  const countedDays = dailyIncomeDates.filter((date) => {
-    const day = date.getDate();
-    const hasIncome = dailyIncomes.some((d) => d.day === day && d.amount > 0);
-    const isZeroConfirmed = zeroConfirmedDays.includes(day);
+  const countedDays = days.filter((daySummary) => {
+    const hasIncome = daySummary.total > 0;
+    const isZeroConfirmed = zeroConfirmedDateKeys.includes(
+      formatDateToString(daySummary.date),
+    );
     return hasIncome || isZeroConfirmed;
   }).length;
   const actualDailyAverage = countedDays > 0 ? totalReceived / countedDays : 0;
@@ -146,10 +172,10 @@ export const TrackedIncomeScreen = () => {
   };
 
   useEffect(() => {
-    if (currentScreen === "TrackedIncome" && user) {
+    if (currentScreen === "TrackedIncome" && ownerId) {
       loadIncomeData();
     }
-  }, [currentScreen, user, trackedTitle]);
+  }, [currentScreen, ownerId, trackedTitle]);
 
   useEffect(() => {
     if (!loading) {
@@ -170,7 +196,7 @@ export const TrackedIncomeScreen = () => {
   }, [loading]);
 
   const loadIncomeData = async () => {
-    if (!user?.id || !trackedTitle) {
+    if (!ownerId || !trackedTitle) {
       setLoading(false);
       return;
     }
@@ -178,7 +204,7 @@ export const TrackedIncomeScreen = () => {
     try {
       setLoading(true);
 
-      const planning = await planningServices.getPlanning(user.id);
+      const planning = await planningServices.getPlanning(ownerId);
       setPlanningCycleLabel(getPlanningCycleLabel(planning) || "");
       setPlannedCycleDurationDays(
         Number(planning?.consumoModeradoCycleDurationDays || 0),
@@ -191,7 +217,7 @@ export const TrackedIncomeScreen = () => {
           (item) =>
             item.dailyTracking && normalizeTitle(item.source) === trackedKey,
         )
-        .reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+        .reduce((sum, item) => sum + getPlannedAmount(item), 0);
 
       setPlannedMonthlyIncome(totalTrackedExpectedIncome);
       setPlanningLoaded(totalTrackedExpectedIncome > 0);
@@ -217,9 +243,8 @@ export const TrackedIncomeScreen = () => {
         cycleDates.push(new Date(dateCursor));
         dateCursor = addDays(dateCursor, 1);
       }
-      setDailyIncomeDates(cycleDates);
 
-      const incomes = await incomeServices.getIncomes(user.id, {
+      const incomes = await incomeServices.getIncomes(ownerId, {
         startDate: start,
         endDate: end,
       });
@@ -230,27 +255,53 @@ export const TrackedIncomeScreen = () => {
           normalizeTitle(income.description) === trackedKey,
       );
 
-      const dayMap = new Map<number, number>();
-      cycleDates.forEach((date) => dayMap.set(date.getDate(), 0));
+      setIncomeHistory(
+        [...filteredIncomes].sort(
+          (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+        ),
+      );
+
+      const dayMap = new Map<string, number>();
+      let cursor = getStartOfDay(start);
+      const lastDay = getStartOfDay(end);
+      while (cursor <= lastDay) {
+        dayMap.set(formatDateToString(cursor), 0);
+        cursor = addDays(cursor, 1);
+      }
 
       filteredIncomes.forEach((income) => {
-        const day = new Date(income.date).getDate();
-        const current = dayMap.get(day) ?? 0;
+        const dateKey = formatDateToString(new Date(income.date));
+        if (!dayMap.has(dateKey)) return;
+        const prev = dayMap.get(dateKey) ?? 0;
         const amount =
           typeof income.value === "number"
             ? income.value
             : parseFloat(String(income.value)) || 0;
-        dayMap.set(day, current + amount);
+        dayMap.set(dateKey, prev + amount);
       });
 
-      const computed: DailyIncome[] = [];
-      Array.from(dayMap.entries()).forEach(([day, amount]) => {
-        computed.push({ day, amount });
-      });
-      computed.sort((a, b) => a.day - b.day);
+      const list: DaySummary[] = Array.from(dayMap.entries()).map(
+        ([dateKey, total]) => ({
+          date: new Date(`${dateKey}T12:00:00`),
+          total,
+        }),
+      );
 
-      setDailyIncomes(computed);
-      setZeroConfirmedDays([]);
+      setDays(list);
+
+      const merged: CycleDailyIncome[] = [];
+      dayMap.forEach((amount, dateKey) => {
+        merged.push({
+          dateKey,
+          day: Number(dateKey.slice(-2)),
+          amount,
+        });
+      });
+      merged.sort((a, b) => a.dateKey.localeCompare(b.dateKey));
+      setDailyIncomes(merged);
+      setZeroConfirmedDateKeys((previous) =>
+        previous.filter((dateKey) => (dayMap.get(dateKey) ?? 0) <= 0),
+      );
     } catch (error) {
       console.error("❌ Erro ao carregar renda acompanhada:", error);
       Alert.alert("Erro", "Não foi possível carregar a renda acompanhada");
@@ -260,6 +311,7 @@ export const TrackedIncomeScreen = () => {
   };
 
   const handleOpenNoRecordActions = (date: Date) => {
+    if (isSpectator) return;
     const label = formatDayMonthLabel(date);
     setChoiceModalDayLabel(label);
     setChoiceModalDate(date);
@@ -267,37 +319,58 @@ export const TrackedIncomeScreen = () => {
   };
 
   const handleChooseRegister = () => {
-    if (!choiceModalDate) return;
+    if (isSpectator || !choiceModalDate) return;
     setChoiceModalVisible(false);
     navigate("AddIncome", {
       prefillDate: choiceModalDate.toISOString(),
       trackedMode: true,
       prefillDescription: trackedTitle,
       returnTo: "TrackedIncome",
-      returnParams: { trackedTitle },
+      returnParams: { trackedTitle, clientId: clientId || undefined },
     });
   };
 
   const handleChooseMarkZero = () => {
-    if (!choiceModalDate) return;
+    if (isSpectator || !choiceModalDate) return;
     setChoiceModalVisible(false);
-    const day = choiceModalDate.getDate();
-    setZeroConfirmedDays((prev) =>
-      Array.from(new Set([...prev, day])).sort((a, b) => a - b),
+    const dateKey = formatDateToString(choiceModalDate);
+    setZeroConfirmedDateKeys((previous) =>
+      Array.from(new Set([...previous, dateKey])),
     );
   };
 
-  const getDayIncome = (day: number): number => {
-    const income = dailyIncomes.find((item) => item.day === day);
-    return income ? income.amount : 0;
+  const getIncomesForDate = (date: Date) => {
+    const dateKey = formatDateToString(date);
+    return incomeHistory.filter(
+      (income) => formatDateToString(new Date(income.date)) === dateKey,
+    );
+  };
+
+  const openIncomeEditor = (incomeId: string) => {
+    if (isSpectator) return;
+    navigate("EditIncome", {
+      id: incomeId,
+      returnTo: "TrackedIncome",
+      returnParams: { trackedTitle, clientId: clientId || undefined },
+    });
+  };
+
+  const handleAddTrackedIncome = () => {
+    if (isSpectator) return;
+    navigate("AddIncome", {
+      trackedMode: true,
+      prefillDescription: trackedTitle,
+      returnTo: "TrackedIncome",
+      returnParams: { trackedTitle, clientId: clientId || undefined },
+    });
   };
 
   if (loading) {
     return (
       <Layout
         title={trackedTitle || "Renda"}
-        showBackButton={false}
-        showSidebar={true}
+        showBackButton={isSpectator}
+        showSidebar={!isSpectator}
       >
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#8c52ff" />
@@ -310,8 +383,8 @@ export const TrackedIncomeScreen = () => {
   return (
     <Layout
       title={trackedTitle || "Renda"}
-      showBackButton={false}
-      showSidebar={true}
+      showBackButton={isSpectator}
+      showSidebar={!isSpectator}
     >
       <ScrollView style={styles.container}>
         <Animated.View
@@ -327,8 +400,13 @@ export const TrackedIncomeScreen = () => {
             <Ionicons name="wallet-outline" size={64} color="#8c52ff" />
             <Text style={styles.title}>{trackedTitle || "Renda"}</Text>
             <Text style={styles.subtitle}>
-              Controle quanto você está recebendo por dia
+              Acompanhe as rendas diarias desse titulo personalizado
             </Text>
+            {isSpectator ? (
+              <Text style={styles.spectatorHint}>
+                Visualização do cliente (somente leitura)
+              </Text>
+            ) : null}
             {planningCycleLabel ? (
               <Text style={styles.cycleLabel}>{planningCycleLabel}</Text>
             ) : null}
@@ -341,82 +419,71 @@ export const TrackedIncomeScreen = () => {
           </View>
 
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>💰 Total já recebido</Text>
+            <Text style={styles.cardTitle}>💰 Quanto falta no ciclo</Text>
             <View style={styles.inputContainerReadOnly}>
               <Text style={styles.readOnlyBudgetValue}>
-                {formatCurrency(totalReceived)}
+                {formatCurrency(remainingToReceive)}
               </Text>
             </View>
+            {overExpectedAmount > 0 ? (
+              <Text style={styles.overExpectedText}>
+                Você passou {formatCurrency(overExpectedAmount)} do planejado.
+              </Text>
+            ) : null}
             <Text style={styles.helperText}>
-              {planningLoaded
-                ? overExpectedAmount > 0
-                  ? `Você já recebeu ${formatCurrency(overExpectedAmount)} acima do previsto.`
-                  : `Ainda previsto para receber: ${formatCurrency(remainingToReceive)}.`
-                : "Nenhum valor planejado foi definido para esta renda."}
+              Cálculo: renda esperada do ciclo menos total recebido até agora.
             </Text>
-            <View style={styles.infoContainer}>
-              <Ionicons
-                name="information-circle-outline"
-                size={16}
-                color="#999"
-              />
-              <Text style={styles.infoText}>
-                Esse campo não é editável pelo cliente.
-              </Text>
-            </View>
-            {budgetValue > 0 && (
+            {budgetValue > 0 ? (
               <View style={styles.infoRow}>
                 <Text style={styles.infoLabel}>Média diária ideal:</Text>
                 <Text style={styles.infoValue}>
                   {formatCurrency(idealDailyAverage)}
                 </Text>
               </View>
-            )}
+            ) : null}
           </View>
 
-          {budgetValue > 0 && (
-            <View>
-              <View style={styles.statsContainer}>
-                <View style={styles.statCard}>
-                  <Ionicons name="calendar-outline" size={24} color="#8c52ff" />
-                  <Text style={styles.statLabel}>Dias no ciclo</Text>
-                  <Text style={styles.statValue}>{daysInCycle}</Text>
-                </View>
+          {budgetValue > 0 ? (
+            <View style={styles.statsContainer}>
+              <View style={styles.statCard}>
+                <Ionicons name="calendar-outline" size={24} color="#8c52ff" />
+                <Text style={styles.statLabel}>Dias no ciclo</Text>
+                <Text style={styles.statValue}>{daysInCycle}</Text>
+              </View>
 
-                <View style={styles.statCard}>
-                  <Ionicons name="cash-outline" size={24} color="#8c52ff" />
-                  <Text style={styles.statLabel}>Total recebido</Text>
-                  <Text style={styles.statValue}>
-                    {formatCurrency(totalReceived)}
-                  </Text>
-                </View>
+              <View style={styles.statCard}>
+                <Ionicons name="cash-outline" size={24} color="#8c52ff" />
+                <Text style={styles.statLabel}>Total recebido</Text>
+                <Text style={styles.statValue}>
+                  {formatCurrency(totalReceived)}
+                </Text>
+              </View>
 
-                <View
+              <View
+                style={[
+                  styles.statCard,
+                  isOverBudget && styles.statCardWarning,
+                ]}
+              >
+                <Ionicons
+                  name={isOverBudget ? "trending-up" : "trending-down"}
+                  size={24}
+                  color={isOverBudget ? "#8c52ff" : "#ff4d6d"}
+                />
+                <Text style={styles.statLabel}>Média real/dia</Text>
+                <Text
                   style={[
-                    styles.statCard,
-                    isOverBudget && styles.statCardWarning,
+                    styles.statValue,
+                    isOverBudget && styles.statValueWarning,
                   ]}
                 >
-                  <Ionicons
-                    name={isOverBudget ? "trending-up" : "trending-down"}
-                    size={24}
-                    color={isOverBudget ? "#8c52ff" : "#ff4d6d"}
-                  />
-                  <Text style={styles.statLabel}>Média real/dia</Text>
-                  <Text
-                    style={[
-                      styles.statValue,
-                      isOverBudget && styles.statValueWarning,
-                    ]}
-                  >
-                    {formatCurrency(actualDailyAverage)}
-                  </Text>
-                </View>
+                  {formatCurrency(actualDailyAverage)}
+                </Text>
               </View>
             </View>
-          )}
+          ) : null}
 
-          {budgetValue > 0 && (
+          {budgetValue > 0 ? (
             <View style={styles.performanceCard}>
               <View style={styles.performanceHeader}>
                 <Ionicons
@@ -447,63 +514,132 @@ export const TrackedIncomeScreen = () => {
                   Zeros confirmados
                 </Text>
                 <Text style={styles.performanceMetaValue}>
-                  {zeroConfirmedDays.length}
+                  {zeroConfirmedDateKeys.length}
                 </Text>
               </View>
             </View>
-          )}
+          ) : null}
 
-          {budgetValue > 0 && (
-            <View style={styles.daysCard}>
-              <Text style={styles.cardTitle}>📅 Rendas Diárias</Text>
-              <Text style={styles.cardSubtitle}>
-                Registre quanto recebeu em cada dia
-              </Text>
+          <View style={styles.daysCard}>
+            <View style={styles.daysHeaderRow}>
+              <View>
+                <Text style={styles.cardTitle}>📅 Rendas por dia</Text>
+                <Text style={styles.cardSubtitle}>
+                  Detalhamento das rendas deste acompanhamento no ciclo atual
+                </Text>
+              </View>
+            </View>
 
-              <View style={styles.daysList}>
-                {dailyIncomeDates.map((date) => {
-                  const day = date.getDate();
-                  const income = getDayIncome(day);
-                  const isZeroConfirmed = zeroConfirmedDays.includes(day);
+            <View style={styles.daysList}>
+              {days.map((daySummary) => {
+                const dateKey = formatDateToString(daySummary.date);
+                const isZeroConfirmed =
+                  daySummary.total <= 0 &&
+                  zeroConfirmedDateKeys.includes(dateKey);
+                const isEditing = editingDateKey === dateKey;
+                const dayItems = getIncomesForDate(daySummary.date);
 
-                  return (
-                    <View
-                      key={date.toISOString()}
-                      style={[
-                        styles.dayRow,
-                        isZeroConfirmed && styles.dayRowZeroConfirmed,
-                      ]}
-                    >
-                      <View style={styles.dayInfo}>
-                        <Text style={styles.dayNumber}>
-                          {formatDayMonthLabel(date)}
+                return (
+                  <View
+                    key={dateKey}
+                    style={[
+                      styles.dayRow,
+                      isZeroConfirmed && styles.dayRowZeroConfirmed,
+                      isEditing && styles.dayRowEditing,
+                    ]}
+                  >
+                    <View style={styles.dayInfo}>
+                      <Text style={styles.dayNumber}>
+                        {daySummary.date.toLocaleDateString("pt-BR", {
+                          weekday: "short",
+                          day: "2-digit",
+                          month: "2-digit",
+                        })}
+                      </Text>
+                      {!isEditing && daySummary.total > 0 ? (
+                        <Text style={styles.dayExpense}>
+                          {formatCurrency(daySummary.total)}
                         </Text>
-                        {income > 0 && (
-                          <Text style={styles.dayExpense}>
-                            {formatCurrency(income)}
+                      ) : !isEditing && !isZeroConfirmed ? (
+                        <Text style={styles.dayEmpty}>
+                          Sem renda registrada
+                        </Text>
+                      ) : !isEditing ? (
+                        <View style={styles.zeroConfirmedBadge}>
+                          <Ionicons
+                            name="checkmark-circle"
+                            size={14}
+                            color="#8c52ff"
+                          />
+                          <Text style={styles.zeroConfirmedText}>
+                            Zero confirmado
                           </Text>
-                        )}
-                        {income === 0 && !isZeroConfirmed && (
-                          <Text style={styles.dayEmpty}>Sem registro</Text>
-                        )}
-                        {isZeroConfirmed && (
-                          <View style={styles.zeroConfirmedBadge}>
-                            <Ionicons
-                              name="checkmark-circle"
-                              size={14}
-                              color="#8c52ff"
-                            />
-                            <Text style={styles.zeroConfirmedText}>
-                              Zero confirmado
-                            </Text>
-                          </View>
-                        )}
-                      </View>
+                        </View>
+                      ) : null}
+                    </View>
 
-                      {income === 0 && !isZeroConfirmed ? (
+                    {!isSpectator &&
+                      (isEditing ? (
+                        <View style={styles.editItemsWrap}>
+                          {dayItems.map((item) => (
+                            <TouchableOpacity
+                              key={item.id}
+                              style={styles.editItemRow}
+                              onPress={() => openIncomeEditor(item.id)}
+                            >
+                              <View style={{ flex: 1 }}>
+                                <Text style={styles.editItemTitle}>
+                                  {item.description || trackedTitle}
+                                </Text>
+                                {item.category ? (
+                                  <Text style={styles.editItemMeta}>
+                                    {item.category}
+                                  </Text>
+                                ) : null}
+                              </View>
+                              <Text style={styles.editItemAmount}>
+                                {formatCurrency(item.value)}
+                              </Text>
+                              <Ionicons
+                                name="pencil"
+                                size={16}
+                                color="#8c52ff"
+                              />
+                            </TouchableOpacity>
+                          ))}
+                          <TouchableOpacity
+                            style={styles.addItemButton}
+                            onPress={() => {
+                              navigate("AddIncome", {
+                                prefillDate: daySummary.date.toISOString(),
+                                trackedMode: true,
+                                prefillDescription: trackedTitle,
+                                returnTo: "TrackedIncome",
+                                returnParams: {
+                                  trackedTitle,
+                                  clientId: clientId || undefined,
+                                },
+                              });
+                            }}
+                          >
+                            <Ionicons name="add" size={16} color="#fff" />
+                            <Text style={styles.addItemButtonText}>
+                              Adicionar lançamento
+                            </Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.cancelEditButton}
+                            onPress={() => setEditingDateKey(null)}
+                          >
+                            <Ionicons name="close" size={18} color="#fff" />
+                          </TouchableOpacity>
+                        </View>
+                      ) : daySummary.total === 0 && !isZeroConfirmed ? (
                         <TouchableOpacity
                           style={styles.alertIconButton}
-                          onPress={() => handleOpenNoRecordActions(date)}
+                          onPress={() =>
+                            handleOpenNoRecordActions(daySummary.date)
+                          }
                         >
                           <Ionicons
                             name="alert-circle"
@@ -514,27 +650,66 @@ export const TrackedIncomeScreen = () => {
                       ) : (
                         <TouchableOpacity
                           style={styles.editIconButton}
-                          onPress={() =>
-                            navigate("AddIncome", {
-                              prefillDate: date.toISOString(),
-                              prefillDescription: trackedTitle,
-                              trackedMode: true,
-                              returnTo: "TrackedIncome",
-                              returnParams: { trackedTitle },
-                            })
-                          }
+                          onPress={() => setEditingDateKey(dateKey)}
                         >
                           <Ionicons name="pencil" size={18} color="#8c52ff" />
                         </TouchableOpacity>
-                      )}
-                    </View>
-                  );
-                })}
-              </View>
+                      ))}
+                  </View>
+                );
+              })}
             </View>
-          )}
 
-          {budgetValue === 0 && (
+            {!days.length ? (
+              <Text style={styles.emptyText}>
+                Nenhuma renda encontrada para este acompanhamento no ciclo atual.
+              </Text>
+            ) : null}
+          </View>
+
+          <View style={styles.historyCard}>
+            <View style={styles.daysHeaderRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.cardTitle}>Histórico de lançamentos</Text>
+                <Text style={styles.cardSubtitle}>
+                  Rendas registradas em {trackedTitle} neste ciclo
+                </Text>
+              </View>
+              {!isSpectator ? (
+                <TouchableOpacity
+                  style={styles.addIncomeButton}
+                  onPress={handleAddTrackedIncome}
+                >
+                  <Ionicons name="add-circle" size={18} color="#fff" />
+                  <Text style={styles.addIncomeButtonText}>Adicionar</Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
+
+            {incomeHistory.length === 0 ? (
+              <Text style={styles.emptyText}>
+                Nenhum lançamento registrado ainda para {trackedTitle}.
+              </Text>
+            ) : (
+              incomeHistory.map((income) => (
+                <View key={income.id} style={styles.historyRow}>
+                  <View style={styles.historyInfo}>
+                    <Text style={styles.historyDate}>
+                      {formatDateForDisplay(income.date)}
+                    </Text>
+                    {income.category ? (
+                      <Text style={styles.historyMeta}>{income.category}</Text>
+                    ) : null}
+                  </View>
+                  <Text style={styles.historyAmount}>
+                    {formatCurrency(income.value)}
+                  </Text>
+                </View>
+              ))
+            )}
+          </View>
+
+          {budgetValue === 0 ? (
             <View style={styles.emptyState}>
               <Ionicons
                 name="information-circle-outline"
@@ -545,7 +720,7 @@ export const TrackedIncomeScreen = () => {
                 Aguarde o consultor definir valor planejado para esta renda.
               </Text>
             </View>
-          )}
+          ) : null}
         </Animated.View>
       </ScrollView>
 
@@ -613,6 +788,13 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: 4,
   },
+  spectatorHint: {
+    marginTop: 8,
+    color: "#b89aff",
+    fontSize: 12,
+    fontWeight: "600",
+    textAlign: "center",
+  },
   cycleLabel: {
     marginTop: 10,
     color: "#b89aff",
@@ -668,6 +850,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#999",
     marginTop: 10,
+    lineHeight: 20,
+  },
+  overExpectedText: {
+    marginTop: 10,
+    color: "#8c52ff",
+    fontSize: 15,
+    fontWeight: "700",
     lineHeight: 20,
   },
   infoContainer: {
@@ -774,6 +963,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#333",
   },
+  daysHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "flex-start",
+    alignItems: "flex-start",
+    gap: 12,
+    marginBottom: 12,
+  },
   daysList: {
     gap: 8,
   },
@@ -786,6 +982,61 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: "#333",
+  },
+  dayRowEditing: {
+    flexDirection: "column",
+    alignItems: "stretch",
+  },
+  editItemsWrap: {
+    width: "100%",
+    marginTop: 8,
+  },
+  editItemRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#000",
+    borderWidth: 1,
+    borderColor: "#333",
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginBottom: 6,
+  },
+  editItemTitle: {
+    color: "#fff",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  editItemMeta: {
+    color: "#999",
+    fontSize: 11,
+    marginTop: 2,
+  },
+  editItemAmount: {
+    color: "#8c52ff",
+    fontWeight: "700",
+    marginRight: 8,
+  },
+  addItemButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#8c52ff",
+    borderRadius: 8,
+    paddingVertical: 8,
+    marginBottom: 6,
+  },
+  addItemButtonText: {
+    color: "#fff",
+    fontWeight: "600",
+    marginLeft: 6,
+    fontSize: 13,
+  },
+  cancelEditButton: {
+    alignSelf: "flex-end",
+    backgroundColor: "#333",
+    borderRadius: 8,
+    padding: 8,
   },
   dayRowZeroConfirmed: {
     backgroundColor: "rgba(76, 175, 80, 0.08)",
@@ -846,6 +1097,54 @@ const styles = StyleSheet.create({
     color: "#999",
     marginTop: 12,
     textAlign: "center",
+  },
+  historyCard: {
+    backgroundColor: "#1a1a1a",
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#333",
+  },
+  addIncomeButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#8c52ff",
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  addIncomeButtonText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 13,
+  },
+  historyRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#2a2a2a",
+  },
+  historyInfo: {
+    flex: 1,
+    paddingRight: 12,
+  },
+  historyDate: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  historyMeta: {
+    color: "#999",
+    fontSize: 12,
+    marginTop: 2,
+  },
+  historyAmount: {
+    color: "#8c52ff",
+    fontSize: 15,
+    fontWeight: "700",
   },
 });
 

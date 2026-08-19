@@ -27,6 +27,7 @@ export type ScreenName =
   | "ClientInvestmentsView"
   | "ClientDetail"
   | "ClientExpenseRecords"
+  | "ClientIncomeRecords"
   | "ClientList"
   | "ConsultorHome"
   | "PlanningView"

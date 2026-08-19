@@ -194,14 +194,14 @@ export const RankingScreen = () => {
           <View style={styles.infoCard}>
             <Text style={styles.infoTitle}>Como funciona</Text>
             <Text style={styles.infoText}>
-              O ranking mostra quem mais registra a planilha de consumo moderado.
+              O ranking mostra quem mais registra o consumo moderado no aplicativo.
               Quanto mais pontos, melhor a posição. Cada dia vale no máximo uma
               pontuação — registrar vários gastos no mesmo dia não soma pontos
               extras.
             </Text>
 
             <Text style={styles.infoSubtitle}>Como pontuar</Text>
-            <Text style={styles.infoBullet}>• Gasto na planilha no mesmo dia: 1 pt</Text>
+            <Text style={styles.infoBullet}>• Gasto no app no mesmo dia: 1 pt</Text>
             <Text style={styles.infoBullet}>
               • Gasto do dia anterior registrado no dia seguinte: 1 pt
             </Text>
@@ -212,7 +212,7 @@ export const RankingScreen = () => {
 
             <Text style={styles.infoSubtitle}>Atenção</Text>
             <Text style={styles.infoText}>
-              Se passar 2 dias seguidos sem registrar na planilha, esses 2 dias
+              Se passar 2 dias seguidos sem registrar no aplicativo, esses 2 dias
               ficam com 0 pts. Depois disso, você volta a pontuar normalmente ao
               registrar gastos ou confirmar zero no popup do Início ou na tela
               Consumo Moderado.

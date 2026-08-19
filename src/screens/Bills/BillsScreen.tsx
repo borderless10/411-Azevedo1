@@ -1130,7 +1130,8 @@ export const BillsScreen = () => {
         onRequestClose={() => setIsModalVisible(false)}
       >
         <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          keyboardVerticalOffset={Platform.OS === "ios" ? 24 : 0}
           style={styles.modalOverlay}
         >
           <TouchableOpacity

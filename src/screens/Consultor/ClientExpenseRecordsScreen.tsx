@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
+  Modal,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Layout } from "../../components/Layout/Layout";
@@ -16,10 +17,16 @@ import { useTheme } from "../../contexts/ThemeContext";
 import { userService } from "../../services/userServices";
 import { expenseServices } from "../../services/expenseServices";
 import { planningServices } from "../../services/planningServices";
+import {
+  listConfirmedZeroDays,
+  normalizeTrackedTitleKey,
+} from "../../services/budgetServices";
 import { Expense } from "../../types/expense";
 import { Planning } from "../../types/planning";
 import { formatCurrency, getBalanceColor } from "../../utils/currencyUtils";
+import { formatDateToString } from "../../utils/dateUtils";
 import {
+  buildVarianceIndicator,
   computeConsultantScopeDailyMetrics,
   getVarianceColor,
   resolveClientMovementPeriod,
@@ -31,6 +38,11 @@ import {
   filterTrackedExpensesForTitle,
   getExpenseScopeBadge,
 } from "../../utils/expenseScopeUtils";
+
+type ConfirmedZero = {
+  dateKey: string;
+  source: string;
+};
 
 const SCOPE_OPTIONS: ConsultantExpenseScope[] = [
   "all",
@@ -69,8 +81,14 @@ export const ClientExpenseRecordsScreen: React.FC = () => {
   const [clientName, setClientName] = useState("");
   const [planning, setPlanning] = useState<Planning | null>(null);
   const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [scope, setScope] = useState<ConsultantExpenseScope>("all");
-  const [trackedTitle, setTrackedTitle] = useState<string>("");
+  const [confirmedZeros, setConfirmedZeros] = useState<ConfirmedZero[]>([]);
+  const [scope, setScope] = useState<ConsultantExpenseScope>(
+    SCOPE_OPTIONS.includes(params?.scope) ? params.scope : "consumo_moderado",
+  );
+  const [trackedTitle, setTrackedTitle] = useState<string>(
+    String(params?.trackedTitle || ""),
+  );
+  const [clientViewPickerVisible, setClientViewPickerVisible] = useState(false);
 
   const movementPeriod = useMemo(
     () => resolveClientMovementPeriod(planning),
@@ -122,6 +140,40 @@ export const ClientExpenseRecordsScreen: React.FC = () => {
         createdAtFrom: period.createdAtFrom,
       });
       setExpenses(data);
+
+      const titlesByKey: Record<string, string> = {};
+      (plan?.bills || [])
+        .filter((bill) => bill.dailyTracking)
+        .forEach((bill) => {
+          const label = bill.name?.trim();
+          if (label) titlesByKey[normalizeTrackedTitleKey(label)] = label;
+        });
+      (plan?.expectedExpenses || [])
+        .filter((item) => item.dailyTracking)
+        .forEach((item) => {
+          const label = String(item.source || "").trim();
+          if (label) titlesByKey[normalizeTrackedTitleKey(label)] = label;
+        });
+
+      const zeros = await listConfirmedZeroDays(
+        clientId,
+        period.start,
+        period.end,
+      );
+      const mapped: ConfirmedZero[] = [
+        ...zeros.consumoDateKeys.map((dateKey) => ({
+          dateKey,
+          source: "Consumo Moderado",
+        })),
+        ...Object.entries(zeros.trackedByTitleKey).flatMap(
+          ([titleKey, dateKeys]) =>
+            dateKeys.map((dateKey) => ({
+              dateKey,
+              source: titlesByKey[titleKey] || "Acompanhamento",
+            })),
+        ),
+      ];
+      setConfirmedZeros(mapped);
     } catch (error) {
       console.warn("Erro ao carregar registros de gasto do cliente", error);
     } finally {
@@ -148,6 +200,25 @@ export const ClientExpenseRecordsScreen: React.FC = () => {
     return result;
   }, [expenses, scope, trackedTitle]);
 
+  const filteredZeros = useMemo(() => {
+    if (scope === "contas" || scope === "geral") return [] as ConfirmedZero[];
+
+    return confirmedZeros.filter((zero) => {
+      if (scope === "consumo_moderado") {
+        return zero.source === "Consumo Moderado";
+      }
+      if (scope === "acompanhamento") {
+        if (zero.source === "Consumo Moderado") return false;
+        if (!trackedTitle) return true;
+        return (
+          normalizeTrackedTitleKey(zero.source) ===
+          normalizeTrackedTitleKey(trackedTitle)
+        );
+      }
+      return true;
+    });
+  }, [confirmedZeros, scope, trackedTitle]);
+
   const filteredTotal = useMemo(
     () => filteredExpenses.reduce((sum, expense) => sum + expense.value, 0),
     [filteredExpenses],
@@ -161,9 +232,24 @@ export const ClientExpenseRecordsScreen: React.FC = () => {
         scope,
         filteredExpenses,
         trackedTitle || undefined,
+        filteredZeros.map((zero) => zero.dateKey),
       ),
-    [planning, movementPeriod, scope, filteredExpenses, trackedTitle],
+    [planning, movementPeriod, scope, filteredExpenses, trackedTitle, filteredZeros],
   );
+
+  const totalVariance = useMemo(
+    () =>
+      buildVarianceIndicator(
+        filteredTotal,
+        dailyMetrics.plannedBudget > 0 ? dailyMetrics.plannedBudget : undefined,
+      ),
+    [filteredTotal, dailyMetrics.plannedBudget],
+  );
+
+  const includeEmptyDays =
+    scope === "all" ||
+    scope === "consumo_moderado" ||
+    scope === "acompanhamento";
 
   const daysWithExpenses = useMemo(() => {
     const days: Date[] = [];
@@ -177,29 +263,82 @@ export const ClientExpenseRecordsScreen: React.FC = () => {
 
     return days
       .map((day) => {
+        const dateKey = formatDateToString(day);
         const dayExpenses = filteredExpenses.filter((expense) =>
           isSameDay(expense.date, day),
         );
-        if (dayExpenses.length === 0) return null;
+        const dayZeros = filteredZeros.filter((zero) => zero.dateKey === dateKey);
+        const isEmpty = dayExpenses.length === 0 && dayZeros.length === 0;
+        if (isEmpty && !includeEmptyDays) return null;
 
         const dayTotal = dayExpenses.reduce(
           (sum, expense) => sum + expense.value,
           0,
         );
 
-        return { day, dayExpenses, dayTotal };
+        return { day, dayExpenses, dayTotal, zeros: dayZeros, isEmpty };
       })
       .filter(Boolean)
       .reverse() as Array<{
       day: Date;
       dayExpenses: Expense[];
       dayTotal: number;
+      zeros: ConfirmedZero[];
+      isEmpty: boolean;
     }>;
-  }, [filteredExpenses, movementPeriod]);
+  }, [filteredExpenses, filteredZeros, includeEmptyDays, movementPeriod]);
+
+  const missingDaysCount = useMemo(
+    () => daysWithExpenses.filter((entry) => entry.isEmpty).length,
+    [daysWithExpenses],
+  );
 
   const handleRefresh = () => {
     setRefreshing(true);
     loadData();
+  };
+
+  const openClientView = (kind: "consumo" | "acompanhamento", title?: string) => {
+    setClientViewPickerVisible(false);
+    const returnToParams = {
+      clientId,
+      scope,
+      trackedTitle: title || trackedTitle,
+    };
+
+    if (kind === "consumo") {
+      navigate("Budget", {
+        clientId,
+        returnTo: "ClientExpenseRecords",
+        returnToParams,
+      });
+      return;
+    }
+    if (!title) return;
+    navigate("CategoryBudget", {
+      clientId,
+      trackedTitle: title,
+      returnTo: "ClientExpenseRecords",
+      returnToParams,
+    });
+  };
+
+  const handleOpenClientView = () => {
+    if (scope === "consumo_moderado") {
+      openClientView("consumo");
+      return;
+    }
+
+    if (scope === "acompanhamento") {
+      const title =
+        trackedTitle || (trackedTitles.length === 1 ? trackedTitles[0] : "");
+      if (title) {
+        openClientView("acompanhamento", title);
+        return;
+      }
+    }
+
+    setClientViewPickerVisible(true);
   };
 
   return (
@@ -213,6 +352,7 @@ export const ClientExpenseRecordsScreen: React.FC = () => {
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
       ) : (
+        <>
         <ScrollView
           style={[styles.container, { backgroundColor: colors.background }]}
           contentContainerStyle={styles.content}
@@ -240,13 +380,91 @@ export const ClientExpenseRecordsScreen: React.FC = () => {
             ]}
           >
             <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>
-              Total filtrado
+              Total vs planejado · {CONSULTANT_EXPENSE_SCOPE_LABELS[scope]}
+              {scope === "acompanhamento" && trackedTitle
+                ? ` · ${trackedTitle}`
+                : ""}
             </Text>
-            <Text style={[styles.summaryValue, { color: colors.text }]}>
-              {formatCurrency(filteredTotal)}
-            </Text>
+
+            <View style={styles.metricsRow}>
+              <View style={styles.metricBlock}>
+                <Text
+                  style={[styles.metricLabel, { color: colors.textSecondary }]}
+                >
+                  Gasto
+                </Text>
+                <Text
+                  style={[
+                    styles.summarySplitValue,
+                    {
+                      color:
+                        totalVariance.status === "unknown"
+                          ? colors.text
+                          : getVarianceColor(totalVariance.status),
+                    },
+                  ]}
+                >
+                  {formatCurrency(filteredTotal)}
+                </Text>
+              </View>
+
+              <View style={styles.metricBlock}>
+                <Text
+                  style={[styles.metricLabel, { color: colors.textSecondary }]}
+                >
+                  Planejado
+                </Text>
+                <Text style={[styles.summarySplitValue, { color: colors.text }]}>
+                  {dailyMetrics.plannedBudget > 0
+                    ? formatCurrency(dailyMetrics.plannedBudget)
+                    : "—"}
+                </Text>
+              </View>
+            </View>
+
+            {dailyMetrics.plannedBudget > 0 ? (
+              <View
+                style={[
+                  styles.varianceBadge,
+                  { borderColor: getVarianceColor(totalVariance.status) },
+                ]}
+              >
+                <Ionicons
+                  name={
+                    totalVariance.status === "above"
+                      ? "trending-up"
+                      : totalVariance.status === "below"
+                        ? "trending-down"
+                        : "checkmark-circle"
+                  }
+                  size={14}
+                  color={getVarianceColor(totalVariance.status)}
+                />
+                <Text
+                  style={[
+                    styles.varianceText,
+                    { color: getVarianceColor(totalVariance.status) },
+                  ]}
+                >
+                  {totalVariance.label}
+                </Text>
+              </View>
+            ) : (
+              <Text
+                style={[styles.summaryCount, { color: colors.textSecondary }]}
+              >
+                Sem valor planejado para este filtro
+              </Text>
+            )}
+
             <Text style={[styles.summaryCount, { color: colors.textSecondary }]}>
               {filteredExpenses.length} registro(s)
+              {filteredZeros.length > 0
+                ? ` · ${filteredZeros.length} zero(s)`
+                : ""}
+              {missingDaysCount > 0
+                ? ` · ${missingDaysCount} sem registro`
+                : ""}
             </Text>
           </View>
 
@@ -320,7 +538,7 @@ export const ClientExpenseRecordsScreen: React.FC = () => {
                 <Text
                   style={[styles.metricSubtext, { color: colors.textSecondary }]}
                 >
-                  {dailyMetrics.countedDays} dia(s) com gasto
+                  {dailyMetrics.countedDays} dia(s) preenchidos
                 </Text>
               </View>
 
@@ -504,8 +722,24 @@ export const ClientExpenseRecordsScreen: React.FC = () => {
             </>
           ) : null}
 
+          <TouchableOpacity
+            style={[
+              styles.clientViewButton,
+              { backgroundColor: colors.primary },
+            ]}
+            onPress={handleOpenClientView}
+          >
+            <Ionicons
+              name="eye-outline"
+              size={18}
+              color="#fff"
+              style={{ marginRight: 8 }}
+            />
+            <Text style={styles.clientViewButtonText}>Visão do cliente</Text>
+          </TouchableOpacity>
+
           <Text style={[styles.sectionTitle, { color: colors.text }]}>
-            Gastos por dia
+            Registros por dia
           </Text>
 
           {daysWithExpenses.length === 0 ? (
@@ -521,16 +755,19 @@ export const ClientExpenseRecordsScreen: React.FC = () => {
                 color={colors.textSecondary}
               />
               <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-                Nenhum registro encontrado para este filtro no período.
+                Nenhum gasto ou zero encontrado para este filtro no período.
               </Text>
             </View>
           ) : (
-            daysWithExpenses.map(({ day, dayExpenses, dayTotal }) => (
+            daysWithExpenses.map(({ day, dayExpenses, dayTotal, zeros, isEmpty }) => (
               <View
                 key={day.toISOString()}
                 style={[
                   styles.dayCard,
-                  { borderColor: colors.border, backgroundColor: colors.card },
+                  {
+                    borderColor: isEmpty ? "#ff4d6d" : colors.border,
+                    backgroundColor: colors.card,
+                  },
                 ]}
               >
                 <View style={styles.dayHeader}>
@@ -544,12 +781,78 @@ export const ClientExpenseRecordsScreen: React.FC = () => {
                   <Text
                     style={[
                       styles.dayTotal,
-                      { color: getBalanceColor(-dayTotal) },
+                      {
+                        color: isEmpty
+                          ? "#ff4d6d"
+                          : zeros.length > 0 && dayExpenses.length === 0
+                            ? colors.primary
+                            : getBalanceColor(-dayTotal),
+                      },
                     ]}
                   >
-                    {formatCurrency(dayTotal)}
+                    {isEmpty ? "Sem registro" : formatCurrency(dayTotal)}
                   </Text>
                 </View>
+
+                {isEmpty ? (
+                  <View
+                    style={[
+                      styles.expenseRow,
+                      { borderTopColor: colors.border },
+                    ]}
+                  >
+                    <View style={styles.metaRow}>
+                      <Ionicons
+                        name="alert-circle"
+                        size={16}
+                        color="#ff4d6d"
+                      />
+                      <Text
+                        style={[
+                          styles.expenseTitle,
+                          { color: colors.textSecondary },
+                        ]}
+                      >
+                        Cliente não registrou gasto nem zero neste dia
+                      </Text>
+                    </View>
+                  </View>
+                ) : null}
+
+                {zeros.map((zero) => (
+                  <View
+                    key={`${zero.dateKey}-${zero.source}`}
+                    style={[
+                      styles.expenseRow,
+                      { borderTopColor: colors.border },
+                    ]}
+                  >
+                    <View style={styles.expenseMain}>
+                      <Text style={[styles.expenseTitle, { color: colors.text }]}>
+                        Zero confirmado
+                      </Text>
+                      <View style={styles.metaRow}>
+                        <View
+                          style={[
+                            styles.badge,
+                            { backgroundColor: `${colors.primary}22` },
+                          ]}
+                        >
+                          <Text
+                            style={[styles.badgeText, { color: colors.primary }]}
+                          >
+                            {zero.source}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                    <Text
+                      style={[styles.expenseValue, { color: colors.primary }]}
+                    >
+                      {formatCurrency(0)}
+                    </Text>
+                  </View>
+                ))}
 
                 {dayExpenses.map((expense) => {
                   const badge = getExpenseScopeBadge(expense);
@@ -610,6 +913,88 @@ export const ClientExpenseRecordsScreen: React.FC = () => {
             ))
           )}
         </ScrollView>
+        <Modal
+          visible={clientViewPickerVisible}
+          animationType="fade"
+          transparent
+        >
+          <View
+            style={[
+              styles.modalOverlay,
+              { backgroundColor: "rgba(0,0,0,0.5)" },
+            ]}
+          >
+            <View
+              style={[
+                styles.modalContent,
+                { backgroundColor: colors.card, borderColor: colors.border },
+              ]}
+            >
+              <Text style={[styles.modalTitle, { color: colors.text }]}>
+                Visão do cliente
+              </Text>
+              <Text
+                style={[styles.modalHint, { color: colors.textSecondary }]}
+              >
+                Escolha a tela que o cliente vê no app
+              </Text>
+              <ScrollView style={styles.clientViewList}>
+                <TouchableOpacity
+                  style={[
+                    styles.clientViewItem,
+                    { borderColor: colors.border },
+                  ]}
+                  onPress={() => openClientView("consumo")}
+                >
+                  <Text
+                    style={[styles.clientViewItemText, { color: colors.text }]}
+                  >
+                    Consumo Moderado
+                  </Text>
+                  <Ionicons
+                    name="chevron-forward"
+                    size={16}
+                    color={colors.textSecondary}
+                  />
+                </TouchableOpacity>
+                {trackedTitles.map((title) => (
+                  <TouchableOpacity
+                    key={title}
+                    style={[
+                      styles.clientViewItem,
+                      { borderColor: colors.border },
+                    ]}
+                    onPress={() => openClientView("acompanhamento", title)}
+                  >
+                    <Text
+                      style={[
+                        styles.clientViewItemText,
+                        { color: colors.text },
+                      ]}
+                    >
+                      {title}
+                    </Text>
+                    <Ionicons
+                      name="chevron-forward"
+                      size={16}
+                      color={colors.textSecondary}
+                    />
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+              <TouchableOpacity
+                style={[
+                  styles.modalCancelButton,
+                  { backgroundColor: colors.border },
+                ]}
+                onPress={() => setClientViewPickerVisible(false)}
+              >
+                <Text style={{ color: colors.text }}>Cancelar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+        </>
       )}
     </Layout>
   );
@@ -641,8 +1026,8 @@ const styles = StyleSheet.create({
   summaryLabel: {
     fontSize: 12,
   },
-  summaryValue: {
-    fontSize: 22,
+  summarySplitValue: {
+    fontSize: 18,
     fontWeight: "700",
   },
   summaryCount: {
@@ -789,5 +1174,60 @@ const styles = StyleSheet.create({
   expenseValue: {
     fontSize: 14,
     fontWeight: "700",
+  },
+  clientViewButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+  },
+  clientViewButtonText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 14,
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalContent: {
+    width: "90%",
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    marginBottom: 4,
+  },
+  modalHint: {
+    fontSize: 12,
+    marginBottom: 8,
+  },
+  clientViewList: {
+    maxHeight: 280,
+    marginBottom: 12,
+  },
+  clientViewItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+    borderBottomWidth: 1,
+  },
+  clientViewItemText: {
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  modalCancelButton: {
+    alignSelf: "flex-end",
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
   },
 });

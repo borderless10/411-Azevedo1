@@ -26,7 +26,6 @@ import incomeServices from "../../services/incomeServices";
 import expenseServices from "../../services/expenseServices";
 import {
   budgetServices,
-  getMonthYearFromDate,
   type ConsumoModeradoPerformance,
 } from "../../services/budgetServices";
 import { planningServices } from "../../services/planningServices";
@@ -800,7 +799,7 @@ export const HomeScreen = () => {
 
       await activityServices.logActivity(user.id, {
         type: "budget_updated",
-        title: "✅ Zero na planilha confirmado",
+        title: "✅ Zero no app confirmado",
         description: `Parabéns! O dia ${zeroConfirmDayLabel} foi registrado com ${formatCurrency(0)}.`,
       });
 
@@ -809,13 +808,13 @@ export const HomeScreen = () => {
       setShowConfetti(true);
       Alert.alert(
         "Parabéns! 🎉",
-        "Zero na planilha confirmado. Você ganhou 2 pontos no ranking!",
+        "Zero no app confirmado. Você ganhou 2 pontos no ranking!",
       );
     } catch (error) {
       console.error("❌ [HOME] Erro ao confirmar zero na planilha:", error);
       Alert.alert(
         "Erro",
-        "Não foi possível confirmar o zero na planilha agora.",
+        "Não foi possível confirmar o zero no app agora.",
       );
     } finally {
       setConfirmingZero(false);
@@ -830,9 +829,6 @@ export const HomeScreen = () => {
 
     try {
       setConfirmingZero(true);
-      const day = zeroConfirmDate.getDate();
-      const monthYear = getMonthYearFromDate(zeroConfirmDate);
-
       await expenseServices.createExpense(user.id, {
         value: amount,
         description: "Gasto do dia",
@@ -842,11 +838,9 @@ export const HomeScreen = () => {
         isConsumoModerado: true,
       });
 
-      await budgetServices.updateDailyExpense(
+      await budgetServices.reconcileConsumoModeradoDay(
         user.id,
-        monthYear,
-        day,
-        amount,
+        zeroConfirmDate,
       );
       markYesterdayPromptResolved();
 

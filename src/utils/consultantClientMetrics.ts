@@ -445,6 +445,7 @@ export const computeConsultantScopeDailyMetrics = (
   scope: ConsultantExpenseScope,
   filteredExpenses: Expense[],
   trackedTitle?: string,
+  zeroDateKeys: string[] = [],
   referenceDate = new Date(),
 ): ScopeDailyMetrics => {
   const plannedBudget = resolveScopePlannedBudget(
@@ -480,6 +481,12 @@ export const computeConsultantScopeDailyMetrics = (
     if (date < period.start || date > elapsedEnd) return;
     if (expense.value <= 0) return;
     countedDayKeys.add(formatDateToString(getStartOfDay(date)));
+  });
+  zeroDateKeys.forEach((dateKey) => {
+    const date = new Date(`${dateKey}T12:00:00`);
+    if (Number.isNaN(date.getTime())) return;
+    if (date < period.start || date > elapsedEnd) return;
+    countedDayKeys.add(dateKey);
   });
 
   const countedDays = countedDayKeys.size;

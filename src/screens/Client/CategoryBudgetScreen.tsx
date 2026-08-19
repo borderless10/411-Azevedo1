@@ -18,6 +18,8 @@ import { Layout } from "../../components/Layout/Layout";
 import { useAuth } from "../../hooks/useAuth";
 import expenseServices from "../../services/expenseServices";
 import budgetServices, {
+  getMonthYearFromDate,
+  listMonthYearsInRange,
   normalizeTrackedTitleKey,
 } from "../../services/budgetServices";
 import { formatCurrency } from "../../utils/currencyUtils";
@@ -55,12 +57,17 @@ export const CategoryBudgetScreen = () => {
   const trackedTitle = String(
     params?.trackedTitle || params?.categoryName || "",
   ).trim();
+  const clientId = String(params?.clientId || "");
+  const isSpectator =
+    !!clientId &&
+    (user?.role === "consultor" || user?.role === "admin" || !!user?.isAdmin);
+  const ownerId = isSpectator ? clientId : user?.id || "";
   const [loading, setLoading] = useState(true);
   const [days, setDays] = useState<DaySummary[]>([]);
   const [expenseHistory, setExpenseHistory] = useState<Expense[]>([]);
   const [plannedAmount, setPlannedAmount] = useState<number>(0);
   const [cycleLabel, setCycleLabel] = useState<string>("");
-  const [zeroConfirmedDays, setZeroConfirmedDays] = useState<number[]>([]);
+  const [zeroConfirmedDateKeys, setZeroConfirmedDateKeys] = useState<string[]>([]);
   const [zeroConfirmVisible, setZeroConfirmVisible] = useState(false);
   const [zeroConfirmDate, setZeroConfirmDate] = useState<Date | null>(null);
   const [zeroConfirmDayLabel, setZeroConfirmDayLabel] = useState("");
@@ -92,7 +99,7 @@ export const CategoryBudgetScreen = () => {
   };
 
   const loadData = async () => {
-    if (!user?.id || !trackedTitle) {
+    if (!ownerId || !trackedTitle) {
       setLoading(false);
       return;
     }
@@ -100,7 +107,7 @@ export const CategoryBudgetScreen = () => {
     setLoading(true);
     try {
       const today = new Date();
-      const planning = await planningServices.getPlanning(user.id);
+      const planning = await planningServices.getPlanning(ownerId);
       setCycleLabel(getPlanningCycleLabel(planning) || "");
 
       const targetTitleKey = normalizeTitle(trackedTitle);
@@ -158,7 +165,7 @@ export const CategoryBudgetScreen = () => {
       setCycleDateStart(start);
       setCycleDateEnd(end);
 
-      const expenses = await expenseServices.getExpenses(user.id, {
+      const expenses = await expenseServices.getExpenses(ownerId, {
         startDate: start,
         endDate: end,
         createdAtFrom: cycleStartedAtRaw || undefined,
@@ -200,14 +207,23 @@ export const CategoryBudgetScreen = () => {
 
       setDays(list);
 
-      const budget = await budgetServices.getCurrentBudget(user.id);
+      const monthYears = listMonthYearsInRange(start, end);
       const titleKey = normalizeTrackedTitleKey(trackedTitle);
-      setZeroConfirmedDays(
-        (budget?.trackedZeroConfirmedDays?.[titleKey] || [])
-          .map((day) => Number(day))
-          .filter((day) => Number.isFinite(day))
-          .sort((a, b) => a - b),
+      const zerosByMonth = await Promise.all(
+        monthYears.map(async (monthYear) => {
+          const monthBudget = await budgetServices.getBudget(ownerId, monthYear);
+          const confirmedDays =
+            monthBudget?.trackedZeroConfirmedDays?.[titleKey] || [];
+          return list
+            .filter(
+              (daySummary) =>
+                getMonthYearFromDate(daySummary.date) === monthYear &&
+                confirmedDays.includes(daySummary.date.getDate()),
+            )
+            .map((daySummary) => formatDateToString(daySummary.date));
+        }),
       );
+      setZeroConfirmedDateKeys(Array.from(new Set(zerosByMonth.flat())));
     } catch (error) {
       console.error("❌ [CATEGORY BUDGET] Erro ao carregar dados:", error);
       Alert.alert("Erro", "Não foi possível carregar o acompanhamento agora.");
@@ -235,9 +251,10 @@ export const CategoryBudgetScreen = () => {
   useEffect(() => {
     if (currentScreen !== "CategoryBudget") return;
     loadData();
-  }, [currentScreen, user?.id, trackedTitle]);
+  }, [currentScreen, ownerId, trackedTitle]);
 
   const handleAddTrackedExpense = () => {
+    if (isSpectator) return;
     navigate("AddExpense", {
       prefillExpenseType: "tracked",
       prefillTrackedTitle: trackedTitle,
@@ -279,9 +296,10 @@ export const CategoryBudgetScreen = () => {
   const overPlannedAmount = Math.max(0, totalSpent - budgetValue);
 
   const countedDays = days.filter((daySummary) => {
-    const day = daySummary.date.getDate();
     const hasExpense = daySummary.total > 0;
-    const isZeroConfirmed = zeroConfirmedDays.includes(day);
+    const isZeroConfirmed = zeroConfirmedDateKeys.includes(
+      formatDateToString(daySummary.date),
+    );
     return hasExpense || isZeroConfirmed;
   }).length;
 
@@ -357,6 +375,7 @@ export const CategoryBudgetScreen = () => {
   };
 
   const handleOpenNoRecordActions = (date: Date) => {
+    if (isSpectator) return;
     const label = date.toLocaleDateString("pt-BR", {
       day: "2-digit",
       month: "2-digit",
@@ -368,7 +387,7 @@ export const CategoryBudgetScreen = () => {
   };
 
   const handleConfirmZero = async () => {
-    if (!user?.id || !zeroConfirmDate) {
+    if (isSpectator || !user?.id || !zeroConfirmDate) {
       setZeroConfirmVisible(false);
       return;
     }
@@ -381,9 +400,9 @@ export const CategoryBudgetScreen = () => {
         trackedTitle,
       );
 
-      const day = zeroConfirmDate.getDate();
-      setZeroConfirmedDays((previous) =>
-        Array.from(new Set([...previous, day])).sort((a, b) => a - b),
+      const dateKey = formatDateToString(zeroConfirmDate);
+      setZeroConfirmedDateKeys((previous) =>
+        Array.from(new Set([...previous, dateKey])),
       );
       setZeroConfirmVisible(false);
       setZeroConfirmDate(null);
@@ -398,7 +417,7 @@ export const CategoryBudgetScreen = () => {
   };
 
   const handleConfirmExpense = async (amount: number) => {
-    if (!user?.id || !zeroConfirmDate || !trackedTitle) {
+    if (isSpectator || !user?.id || !zeroConfirmDate || !trackedTitle) {
       setZeroConfirmVisible(false);
       return;
     }
@@ -430,8 +449,8 @@ export const CategoryBudgetScreen = () => {
     return (
       <Layout
         title="Acompanhamento Diario"
-        showBackButton={false}
-        showSidebar={true}
+        showBackButton={isSpectator}
+        showSidebar={!isSpectator}
       >
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#8c52ff" />
@@ -444,8 +463,8 @@ export const CategoryBudgetScreen = () => {
   return (
     <Layout
       title={trackedTitle || "Acompanhamento"}
-      showBackButton={false}
-      showSidebar={true}
+      showBackButton={isSpectator}
+      showSidebar={!isSpectator}
     >
       <ScrollView style={styles.container}>
         <Animated.View
@@ -463,6 +482,11 @@ export const CategoryBudgetScreen = () => {
             <Text style={styles.subtitle}>
               Acompanhe os gastos diarios desse titulo personalizado
             </Text>
+            {isSpectator ? (
+              <Text style={styles.spectatorHint}>
+                Visualização do cliente (somente leitura)
+              </Text>
+            ) : null}
             {cycleLabel ? (
               <Text style={styles.cycleLabel}>{cycleLabel}</Text>
             ) : null}
@@ -562,7 +586,7 @@ export const CategoryBudgetScreen = () => {
                   Zeros confirmados
                 </Text>
                 <Text style={styles.performanceMetaValue}>
-                  {zeroConfirmedDays.length}
+                  {zeroConfirmedDateKeys.length}
                 </Text>
               </View>
             </View>
@@ -580,9 +604,10 @@ export const CategoryBudgetScreen = () => {
 
             <View style={styles.daysList}>
               {days.map((daySummary) => {
-                const day = daySummary.date.getDate();
                 const dateKey = formatDateToString(daySummary.date);
-                const isZeroConfirmed = zeroConfirmedDays.includes(day);
+                const isZeroConfirmed =
+                  daySummary.total <= 0 &&
+                  zeroConfirmedDateKeys.includes(dateKey);
                 const isEditing = editingDateKey === dateKey;
                 const dayItems = getExpensesForDate(daySummary.date);
 
@@ -625,7 +650,8 @@ export const CategoryBudgetScreen = () => {
                       ) : null}
                     </View>
 
-                    {isEditing ? (
+                    {!isSpectator &&
+                      (isEditing ? (
                       <View style={styles.editItemsWrap}>
                         {dayItems.map((item) => (
                           <TouchableOpacity
@@ -683,7 +709,7 @@ export const CategoryBudgetScreen = () => {
                       >
                         <Ionicons name="pencil" size={18} color="#8c52ff" />
                       </TouchableOpacity>
-                    )}
+                    ))}
                   </View>
                 );
               })}
@@ -704,13 +730,15 @@ export const CategoryBudgetScreen = () => {
                   Gastos registrados em {trackedTitle} neste ciclo
                 </Text>
               </View>
-              <TouchableOpacity
-                style={styles.addExpenseButton}
-                onPress={handleAddTrackedExpense}
-              >
-                <Ionicons name="add-circle" size={18} color="#fff" />
-                <Text style={styles.addExpenseButtonText}>Adicionar</Text>
-              </TouchableOpacity>
+              {!isSpectator ? (
+                <TouchableOpacity
+                  style={styles.addExpenseButton}
+                  onPress={handleAddTrackedExpense}
+                >
+                  <Ionicons name="add-circle" size={18} color="#fff" />
+                  <Text style={styles.addExpenseButtonText}>Adicionar</Text>
+                </TouchableOpacity>
+              ) : null}
             </View>
 
             {expenseHistory.length === 0 ? (
@@ -795,6 +823,13 @@ const styles = StyleSheet.create({
     color: "#999",
     textAlign: "center",
     marginTop: 4,
+  },
+  spectatorHint: {
+    marginTop: 8,
+    color: "#b89aff",
+    fontSize: 12,
+    fontWeight: "600",
+    textAlign: "center",
   },
   cycleLabel: {
     marginTop: 10,

@@ -24,7 +24,12 @@ import {
   DailyExpense,
 } from "../types/budget";
 import expenseServices from "./expenseServices";
-import { getEndOfDay, getStartOfDay, addDays } from "../utils/dateUtils";
+import {
+  getEndOfDay,
+  getStartOfDay,
+  addDays,
+  formatDateToString,
+} from "../utils/dateUtils";
 import rankingPlanilhaService from "./rankingPlanilhaService";
 import {
   isConsumoModeradoExpense,
@@ -799,6 +804,62 @@ export const budgetServices = {
           : 0,
     };
   },
+};
+
+export const listConfirmedZeroDays = async (
+  userId: string,
+  start: Date,
+  end: Date,
+): Promise<{
+  consumoDateKeys: string[];
+  trackedByTitleKey: Record<string, string[]>;
+}> => {
+  const rangeStart = getStartOfDay(start);
+  const rangeEnd = getEndOfDay(end);
+  const consumoDateKeys: string[] = [];
+  const trackedByTitleKey: Record<string, string[]> = {};
+
+  const monthYears = listMonthYearsInRange(rangeStart, rangeEnd);
+  await Promise.all(
+    monthYears.map(async (monthYear) => {
+      const budget = await budgetServices.getBudget(userId, monthYear);
+      if (!budget) return;
+
+      const [year, month] = monthYear.split("-").map(Number);
+      const toDateKey = (day: number): string | null => {
+        const date = new Date(year, month - 1, day, 12);
+        if (date.getFullYear() !== year || date.getMonth() !== month - 1) {
+          return null;
+        }
+        if (date < rangeStart || date > rangeEnd) return null;
+        return formatDateToString(date);
+      };
+
+      const consumoDays = new Set<number>([
+        ...(budget.zeroConfirmedDays || []),
+        ...(budget.zeroConfirmedDaysNoRanking || []),
+      ]);
+      consumoDays.forEach((day) => {
+        const dateKey = toDateKey(day);
+        if (dateKey) consumoDateKeys.push(dateKey);
+      });
+
+      Object.entries(budget.trackedZeroConfirmedDays || {}).forEach(
+        ([titleKey, days]) => {
+          days.forEach((day) => {
+            const dateKey = toDateKey(day);
+            if (!dateKey) return;
+            if (!trackedByTitleKey[titleKey]) {
+              trackedByTitleKey[titleKey] = [];
+            }
+            trackedByTitleKey[titleKey].push(dateKey);
+          });
+        },
+      );
+    }),
+  );
+
+  return { consumoDateKeys, trackedByTitleKey };
 };
 
 export default budgetServices;

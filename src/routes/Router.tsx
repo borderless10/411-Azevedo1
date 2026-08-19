@@ -26,6 +26,7 @@ import { AdminUsersScreen } from "../screens/Admin/AdminUsersScreen";
 import { ClientPlanningScreen } from "../screens/Consultor/ClientPlanningScreen";
 import { ClientDetail } from "../screens/Consultor/ClientDetail";
 import { ClientExpenseRecordsScreen } from "../screens/Consultor/ClientExpenseRecordsScreen";
+import { ClientIncomeRecordsScreen } from "../screens/Consultor/ClientIncomeRecordsScreen";
 import { ClientInvestments } from "../screens/Consultor/ClientInvestments";
 import { ClientInvestmentsView } from "../screens/Consultor/ClientInvestmentsView";
 import { ClientList } from "../screens/Consultor/ClientList";
@@ -162,6 +163,8 @@ export const Router = () => {
         return <ClientDetail />;
       case "ClientExpenseRecords":
         return <ClientExpenseRecordsScreen />;
+      case "ClientIncomeRecords":
+        return <ClientIncomeRecordsScreen />;
       case "PlanningView":
         return <PlanningViewScreen />;
       case "CategoryBudget":
