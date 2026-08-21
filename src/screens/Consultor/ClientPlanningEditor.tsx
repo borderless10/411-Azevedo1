@@ -18,6 +18,7 @@ import {
   DECIMAL_INPUT_KEYBOARD,
   sanitizeDecimalInput,
 } from "../../utils/currencyUtils";
+import { profileDisplayName } from "../../utils/chatDisplayNames";
 
 export default function ClientPlanningEditor() {
   const [clients, setClients] = useState<User[]>([]);
@@ -122,7 +123,9 @@ export default function ClientPlanningEditor() {
           if (!term) return true;
           const t = term.toLowerCase();
           return (
-            (c.displayName || c.name || "").toLowerCase().includes(t) ||
+            (c.nickname || c.displayName || c.name || "")
+              .toLowerCase()
+              .includes(t) ||
             (c.email || "").toLowerCase().includes(t)
           );
         })}
@@ -132,7 +135,7 @@ export default function ClientPlanningEditor() {
             onPress={() => onSelectClient(item)}
             style={styles.clientRow}
           >
-            <Text>{item.displayName || item.name || item.email}</Text>
+            <Text>{profileDisplayName(item, item.email)}</Text>
           </TouchableOpacity>
         )}
       />
@@ -141,7 +144,7 @@ export default function ClientPlanningEditor() {
         <View style={styles.editor}>
           <Text style={styles.subtitle}>
             Planejamento de:{" "}
-            {selectedClient.displayName || selectedClient.email}
+            {profileDisplayName(selectedClient, selectedClient.email)}
           </Text>
           <TextInput
             style={styles.input}

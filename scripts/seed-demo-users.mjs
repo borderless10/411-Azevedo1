@@ -127,6 +127,9 @@ const upsertUser = async (
       isAdmin: role === "admin",
       isActive: true,
       currency: "BRL",
+      ...(role === "user"
+        ? { rankingPreference: "participate", showInRanking: true }
+        : {}),
       updatedAt: now,
       ...(role === "user" && consultantId ? { consultantId } : {}),
       ...(!existing.exists() ? { createdAt: now } : {}),

@@ -1,5 +1,6 @@
 /**
- * Minhas Rendas — layout espelhado do Consumo Moderado (BudgetScreen)
+ * Rendas acompanhadas — hub no mesmo espírito de Gastos acompanhados.
+ * Lista apenas rendas com dailyTracking no planejamento; cada item abre TrackedIncomeScreen.
  */
 
 import React, { useEffect, useRef, useState } from "react";
@@ -12,32 +13,22 @@ import {
   Animated,
   Alert,
   ActivityIndicator,
-  Modal,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Layout } from "../../components/Layout/Layout";
 import { formatCurrency } from "../../utils/currencyUtils";
 import { useAuth } from "../../hooks/useAuth";
 import { useNavigation } from "../../routes/NavigationContext";
-import incomeServices from "../../services/incomeServices";
 import {
   getPlanningCycleLabel,
   planningServices,
 } from "../../services/planningServices";
-import {
-  addDays,
-  formatDateForDisplay,
-  formatDateToString,
-  getEndOfDay,
-  getStartOfDay,
-} from "../../utils/dateUtils";
-import { Income } from "../../types/income";
-import { ExpectedItem, Planning } from "../../types/planning";
+import { ExpectedItem } from "../../types/planning";
+import { normalizeExpenseTitleKey } from "../../utils/expenseScopeUtils";
 
-type CycleDailyIncome = {
-  dateKey: string;
-  day: number;
-  amount: number;
+type TrackedIncomeItem = {
+  title: string;
+  plannedAmount: number;
 };
 
 const getPlannedAmount = (item: ExpectedItem) => {
@@ -53,16 +44,32 @@ const getPlannedAmount = (item: ExpectedItem) => {
   return Number(item?.amount) || 0;
 };
 
-const getGeneralPlannedIncome = (planning: Planning | null): number => {
-  if (!planning) return 0;
-  const monthly = Number(planning.monthlyIncome) || 0;
-  const expected = (planning.expectedIncomes || [])
-    .filter((item) => !item.dailyTracking)
-    .reduce((sum, item) => sum + getPlannedAmount(item), 0);
-  return monthly + expected;
-};
+const buildTrackedIncomeItems = (
+  expectedIncomes: ExpectedItem[] = [],
+): TrackedIncomeItem[] => {
+  const byKey = new Map<string, TrackedIncomeItem>();
 
-const isGeneralIncome = (income: Income) => !income.dailyTracking;
+  expectedIncomes.forEach((item) => {
+    if (!item.dailyTracking) return;
+    const title = String(item.source || "").trim();
+    if (!title) return;
+
+    const key = normalizeExpenseTitleKey(title);
+    const existing = byKey.get(key);
+    const amount = getPlannedAmount(item);
+
+    if (existing) {
+      existing.plannedAmount += amount;
+      return;
+    }
+
+    byKey.set(key, { title, plannedAmount: amount });
+  });
+
+  return Array.from(byKey.values()).sort((a, b) =>
+    a.title.localeCompare(b.title, "pt-BR"),
+  );
+};
 
 export const IncomeListScreen = () => {
   const { user } = useAuth();
@@ -76,110 +83,13 @@ export const IncomeListScreen = () => {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
 
-  const [plannedMonthlyIncome, setPlannedMonthlyIncome] = useState(0);
-  const [dailyIncomes, setDailyIncomes] = useState<CycleDailyIncome[]>([]);
-  const [incomesByDate, setIncomesByDate] = useState<Record<string, Income[]>>(
-    {},
-  );
-  const [dailyIncomeDates, setDailyIncomeDates] = useState<Date[]>([]);
-  const [editingDateKey, setEditingDateKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [zeroConfirmedDateKeys, setZeroConfirmedDateKeys] = useState<string[]>(
-    [],
-  );
-  const [choiceModalVisible, setChoiceModalVisible] = useState(false);
-  const [choiceModalDayLabel, setChoiceModalDayLabel] = useState("");
-  const [choiceModalDate, setChoiceModalDate] = useState<Date | null>(null);
-  const [planningLoaded, setPlanningLoaded] = useState(false);
+  const [trackedItems, setTrackedItems] = useState<TrackedIncomeItem[]>([]);
   const [planningCycleLabel, setPlanningCycleLabel] = useState("");
-  const [cycleDateStart, setCycleDateStart] = useState<Date | null>(null);
-  const [cycleDateEnd, setCycleDateEnd] = useState<Date | null>(null);
-  const [plannedCycleDurationDays, setPlannedCycleDurationDays] = useState(0);
-
-  const calculateDaysInCycle = (): number => {
-    if (!cycleDateStart || !cycleDateEnd) return 30;
-    const start = getStartOfDay(cycleDateStart);
-    const end = getStartOfDay(cycleDateEnd);
-    const diffTime = end.getTime() - start.getTime();
-    return Math.max(1, Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1);
-  };
-
-  const daysInCycle = calculateDaysInCycle();
-  const daysForIdealTarget =
-    plannedCycleDurationDays > 0 ? plannedCycleDurationDays : daysInCycle;
-
-  const budgetValue = plannedMonthlyIncome || 0;
-  const idealDailyAverage =
-    daysForIdealTarget > 0 ? budgetValue / daysForIdealTarget : 0;
-
-  const totalReceived = dailyIncomes.reduce((sum, item) => sum + item.amount, 0);
-  const remainingToReceive = Math.max(0, budgetValue - totalReceived);
-  const overExpectedAmount = Math.max(0, totalReceived - budgetValue);
-
-  const countedDays = dailyIncomeDates.filter((date) => {
-    const dateKey = formatDateToString(date);
-    const hasIncome = dailyIncomes.some(
-      (item) => item.dateKey === dateKey && item.amount > 0,
-    );
-    const isZeroConfirmed = zeroConfirmedDateKeys.includes(dateKey);
-    return hasIncome || isZeroConfirmed;
-  }).length;
-
-  const actualDailyAverage = countedDays > 0 ? totalReceived / countedDays : 0;
-  const isOverBudget =
-    actualDailyAverage > idealDailyAverage && budgetValue > 0;
-
-  const getPerformanceIndicator = () => {
-    if (budgetValue <= 0) {
-      return {
-        label: "Sem planejamento definido",
-        detail:
-          "Peça ao consultor para preencher as rendas esperadas no planejamento.",
-        color: "#999",
-        icon: "information-circle-outline" as const,
-      };
-    }
-
-    const difference = actualDailyAverage - idealDailyAverage;
-    const tolerance = 0.01;
-
-    if (difference > tolerance) {
-      return {
-        label: "Acima da meta",
-        detail: `${formatCurrency(Math.abs(difference))} acima da meta diária.`,
-        color: "#8c52ff",
-        icon: "trending-up" as const,
-      };
-    }
-
-    if (difference < -tolerance) {
-      return {
-        label: "Abaixo da meta",
-        detail: `${formatCurrency(Math.abs(difference))} abaixo da meta diária.`,
-        color: "#ff4d6d",
-        icon: "trending-down" as const,
-      };
-    }
-
-    return {
-      label: "Dentro da meta",
-      detail: "Sua média diária está alinhada com a meta definida.",
-      color: "#c084fc",
-      icon: "checkmark-circle" as const,
-    };
-  };
-
-  const performanceIndicator = getPerformanceIndicator();
-
-  const formatDayMonthLabel = (date: Date) =>
-    date.toLocaleDateString("pt-BR", {
-      day: "2-digit",
-      month: "2-digit",
-    });
 
   useEffect(() => {
     if (currentScreen === "IncomeList" && ownerId) {
-      loadIncomeData();
+      loadTrackedIncomes();
     }
   }, [currentScreen, ownerId]);
 
@@ -201,7 +111,7 @@ export const IncomeListScreen = () => {
     }
   }, [loading]);
 
-  const loadIncomeData = async () => {
+  const loadTrackedIncomes = async () => {
     if (!ownerId) {
       setLoading(false);
       return;
@@ -209,134 +119,30 @@ export const IncomeListScreen = () => {
 
     try {
       setLoading(true);
-
       const planning = await planningServices.getPlanning(ownerId);
       setPlanningCycleLabel(getPlanningCycleLabel(planning) || "");
-      setPlannedCycleDurationDays(
-        Number(planning?.consumoModeradoCycleDurationDays || 0),
-      );
-
-      const generalPlanned = getGeneralPlannedIncome(planning);
-      setPlannedMonthlyIncome(generalPlanned);
-      setPlanningLoaded(generalPlanned > 0);
-
-      const today = new Date();
-      const cycleStartDate = planning?.consumoModeradoCycleStartedAt
-        ? getStartOfDay(new Date(planning.consumoModeradoCycleStartedAt))
-        : null;
-      const cycleEndDate = planning?.consumoModeradoCycleEndedAt
-        ? getEndOfDay(new Date(planning.consumoModeradoCycleEndedAt))
-        : null;
-
-      const start = cycleStartDate || getStartOfDay(today);
-      const end = cycleEndDate || getEndOfDay(today);
-
-      setCycleDateStart(start);
-      setCycleDateEnd(end);
-
-      const cycleDates: Date[] = [];
-      let dateCursor = getStartOfDay(start);
-      const lastDate = getStartOfDay(end);
-      while (dateCursor <= lastDate) {
-        cycleDates.push(new Date(dateCursor));
-        dateCursor = addDays(dateCursor, 1);
-      }
-      setDailyIncomeDates(cycleDates);
-
-      const incomes = await incomeServices.getIncomes(ownerId, {
-        startDate: start,
-        endDate: end,
-      });
-
-      const generalIncomes = incomes.filter(isGeneralIncome);
-
-      const amountByDateKey = new Map<string, number>();
-      const grouped: Record<string, Income[]> = {};
-      cycleDates.forEach((date) => {
-        amountByDateKey.set(formatDateToString(date), 0);
-      });
-
-      generalIncomes.forEach((income) => {
-        const dateKey = formatDateToString(new Date(income.date));
-        if (!amountByDateKey.has(dateKey)) return;
-        const prev = amountByDateKey.get(dateKey) ?? 0;
-        const amount =
-          typeof income.value === "number"
-            ? income.value
-            : parseFloat(String(income.value)) || 0;
-        amountByDateKey.set(dateKey, prev + amount);
-        if (!grouped[dateKey]) grouped[dateKey] = [];
-        grouped[dateKey].push(income);
-      });
-
-      const merged: CycleDailyIncome[] = [];
-      amountByDateKey.forEach((amount, dateKey) => {
-        merged.push({
-          dateKey,
-          day: Number(dateKey.slice(-2)),
-          amount: amount > 0 ? amount : 0,
-        });
-      });
-      merged.sort((a, b) => a.dateKey.localeCompare(b.dateKey));
-
-      setDailyIncomes(merged);
-      setIncomesByDate(grouped);
-      setZeroConfirmedDateKeys((previous) =>
-        previous.filter((key) => (amountByDateKey.get(key) ?? 0) <= 0),
+      setTrackedItems(
+        buildTrackedIncomeItems(planning?.expectedIncomes || []),
       );
     } catch (error) {
-      console.error("❌ Erro ao carregar rendas:", error);
-      Alert.alert("Erro", "Não foi possível carregar as rendas");
+      console.error("Erro ao carregar rendas acompanhadas:", error);
+      Alert.alert("Erro", "Não foi possível carregar as rendas acompanhadas");
     } finally {
       setLoading(false);
     }
   };
 
-  const getDayIncome = (date: Date): number => {
-    const dateKey = formatDateToString(date);
-    const income = dailyIncomes.find((item) => item.dateKey === dateKey);
-    return income ? income.amount : 0;
-  };
-
-  const handleOpenNoRecordActions = (date: Date) => {
-    if (isSpectator) return;
-    setChoiceModalDayLabel(formatDayMonthLabel(date));
-    setChoiceModalDate(date);
-    setChoiceModalVisible(true);
-  };
-
-  const handleChooseRegister = () => {
-    if (isSpectator || !choiceModalDate) return;
-    setChoiceModalVisible(false);
-    navigate("AddIncome", {
-      prefillDate: choiceModalDate.toISOString(),
-      returnTo: "IncomeList",
-      returnParams: { clientId: clientId || undefined },
-    });
-  };
-
-  const handleChooseMarkZero = () => {
-    if (isSpectator || !choiceModalDate) return;
-    setChoiceModalVisible(false);
-    const dateKey = formatDateToString(choiceModalDate);
-    setZeroConfirmedDateKeys((previous) =>
-      Array.from(new Set([...previous, dateKey])),
-    );
-  };
-
-  const openIncomeEditor = (incomeId: string) => {
-    if (isSpectator) return;
-    navigate("EditIncome", {
-      id: incomeId,
-      returnTo: "IncomeList",
-      returnParams: { clientId: clientId || undefined },
+  const openTrackedIncome = (title: string) => {
+    navigate("TrackedIncome", {
+      trackedTitle: title,
+      clientId: clientId || undefined,
     });
   };
 
   if (loading) {
     return (
       <Layout
-        title="Minhas Rendas"
+        title="Rendas Acompanhadas"
         showBackButton={isSpectator}
         showSidebar={!isSpectator}
       >
@@ -350,7 +156,7 @@ export const IncomeListScreen = () => {
 
   return (
     <Layout
-      title="Minhas Rendas"
+      title="Rendas Acompanhadas"
       showBackButton={isSpectator}
       showSidebar={!isSpectator}
     >
@@ -365,10 +171,10 @@ export const IncomeListScreen = () => {
           ]}
         >
           <View style={styles.header}>
-            <Ionicons name="wallet-outline" size={64} color="#8c52ff" />
-            <Text style={styles.title}>Renda Mensal</Text>
+            <Ionicons name="analytics-outline" size={64} color="#8c52ff" />
+            <Text style={styles.title}>Rendas Acompanhadas</Text>
             <Text style={styles.subtitle}>
-              Controle quanto você recebe por dia
+              Selecione uma renda para registrar e acompanhar dia a dia
             </Text>
             {isSpectator ? (
               <Text style={styles.spectatorHint}>
@@ -380,288 +186,50 @@ export const IncomeListScreen = () => {
             ) : null}
           </View>
 
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>💰 Quanto falta no ciclo</Text>
-            <View style={styles.inputContainerReadOnly}>
-              <Text style={styles.readOnlyBudgetValue}>
-                {formatCurrency(remainingToReceive)}
-              </Text>
-            </View>
-            {overExpectedAmount > 0 ? (
-              <Text style={styles.overExpectedText}>
-                Você passou {formatCurrency(overExpectedAmount)} do planejado.
-              </Text>
-            ) : null}
-            <Text style={styles.helperText}>
-              {planningLoaded
-                ? "Cálculo: renda esperada do ciclo menos total recebido até agora."
-                : "Planejamento não encontrado. O valor ficará em R$ 0,00 até o consultor preencher o planejamento."}
-            </Text>
-            <View style={styles.infoContainer}>
-              <Ionicons
-                name="information-circle-outline"
-                size={16}
-                color="#999"
-              />
-              <Text style={styles.infoText}>
-                Quando ultrapassar o previsto, o valor exibido fica em R$ 0,00.
-              </Text>
-            </View>
-            {budgetValue > 0 ? (
-              <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>Média diária ideal:</Text>
-                <Text style={styles.infoValue}>
-                  {formatCurrency(idealDailyAverage)}
-                </Text>
-              </View>
-            ) : null}
-          </View>
-
-          {budgetValue > 0 ? (
-            <View style={styles.statsContainer}>
-              <View style={styles.statCard}>
-                <Ionicons name="calendar-outline" size={24} color="#8c52ff" />
-                <Text style={styles.statLabel}>Dias no ciclo</Text>
-                <Text style={styles.statValue}>{daysInCycle}</Text>
-              </View>
-              <View style={styles.statCard}>
-                <Ionicons name="cash-outline" size={24} color="#8c52ff" />
-                <Text style={styles.statLabel}>Total recebido</Text>
-                <Text style={styles.statValue}>
-                  {formatCurrency(totalReceived)}
-                </Text>
-              </View>
-              <View
-                style={[
-                  styles.statCard,
-                  isOverBudget && styles.statCardWarning,
-                ]}
-              >
-                <Ionicons
-                  name={isOverBudget ? "trending-up" : "trending-down"}
-                  size={24}
-                  color={isOverBudget ? "#8c52ff" : "#ff4d6d"}
-                />
-                <Text style={styles.statLabel}>Média real/dia</Text>
-                <Text
-                  style={[
-                    styles.statValue,
-                    isOverBudget && styles.statValueWarning,
-                  ]}
-                >
-                  {formatCurrency(actualDailyAverage)}
-                </Text>
-              </View>
-            </View>
-          ) : null}
-
-          {budgetValue > 0 ? (
-            <View style={styles.performanceCard}>
-              <View style={styles.performanceHeader}>
-                <Ionicons
-                  name={performanceIndicator.icon}
-                  size={22}
-                  color={performanceIndicator.color}
-                />
-                <Text
-                  style={[
-                    styles.performanceTitle,
-                    { color: performanceIndicator.color },
-                  ]}
-                >
-                  {performanceIndicator.label}
-                </Text>
-              </View>
-              <Text style={styles.performanceDetail}>
-                {performanceIndicator.detail}
-              </Text>
-              <View style={styles.performanceMetaRow}>
-                <Text style={styles.performanceMetaLabel}>Meta diária</Text>
-                <Text style={styles.performanceMetaValue}>
-                  {formatCurrency(idealDailyAverage)}
-                </Text>
-              </View>
-              <View style={styles.performanceMetaRow}>
-                <Text style={styles.performanceMetaLabel}>
-                  Zeros confirmados
-                </Text>
-                <Text style={styles.performanceMetaValue}>
-                  {zeroConfirmedDateKeys.length}
-                </Text>
-              </View>
-            </View>
-          ) : null}
-
-          {budgetValue > 0 ? (
-            <View style={styles.daysCard}>
-              <Text style={styles.cardTitle}>📅 Rendas Diárias</Text>
-              <Text style={styles.cardSubtitle}>
-                Registre quanto recebeu em cada dia
-              </Text>
-
-              <View style={styles.daysList}>
-                {dailyIncomeDates.map((date) => {
-                  const dateKey = formatDateToString(date);
-                  const income = getDayIncome(date);
-                  const isEditing = editingDateKey === dateKey;
-                  const isZeroConfirmed =
-                    income === 0 && zeroConfirmedDateKeys.includes(dateKey);
-
-                  return (
-                    <View
-                      key={dateKey}
-                      style={[
-                        styles.dayRow,
-                        isZeroConfirmed && styles.dayRowZeroConfirmed,
-                        isEditing && styles.dayRowEditing,
-                      ]}
-                    >
-                      <View style={styles.dayInfo}>
-                        <Text style={styles.dayNumber}>
-                          {formatDayMonthLabel(date)}
-                        </Text>
-                        {!isEditing && income > 0 ? (
-                          <Text style={styles.dayIncome}>
-                            {formatCurrency(income)}
-                          </Text>
-                        ) : null}
-                        {!isEditing && income === 0 && !isZeroConfirmed ? (
-                          <Text style={styles.dayEmpty}>Sem registro</Text>
-                        ) : null}
-                        {!isEditing && isZeroConfirmed ? (
-                          <View style={styles.zeroConfirmedBadge}>
-                            <Ionicons
-                              name="checkmark-circle"
-                              size={14}
-                              color="#8c52ff"
-                            />
-                            <Text style={styles.zeroConfirmedText}>
-                              Zero confirmado
-                            </Text>
-                          </View>
-                        ) : null}
-                      </View>
-
-                      {!isSpectator &&
-                        (isEditing ? (
-                          <View style={styles.editItemsWrap}>
-                            {(incomesByDate[dateKey] || []).map((item) => (
-                              <TouchableOpacity
-                                key={item.id}
-                                style={styles.editItemRow}
-                                onPress={() => openIncomeEditor(item.id)}
-                              >
-                                <View style={{ flex: 1 }}>
-                                  <Text style={styles.editItemTitle}>
-                                    {item.description || "Renda"}
-                                  </Text>
-                                  {item.category ? (
-                                    <Text style={styles.editItemMeta}>
-                                      {item.category}
-                                    </Text>
-                                  ) : null}
-                                </View>
-                                <Text style={styles.editItemAmount}>
-                                  {formatCurrency(item.value)}
-                                </Text>
-                                <Ionicons
-                                  name="pencil"
-                                  size={16}
-                                  color="#8c52ff"
-                                />
-                              </TouchableOpacity>
-                            ))}
-                            <TouchableOpacity
-                              style={styles.addItemButton}
-                              onPress={() =>
-                                navigate("AddIncome", {
-                                  prefillDate: dateKey,
-                                  returnTo: "IncomeList",
-                                  returnParams: {
-                                    clientId: clientId || undefined,
-                                  },
-                                })
-                              }
-                            >
-                              <Ionicons name="add" size={16} color="#fff" />
-                              <Text style={styles.addItemButtonText}>
-                                Adicionar lançamento
-                              </Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                              style={styles.cancelEditButton}
-                              onPress={() => setEditingDateKey(null)}
-                            >
-                              <Ionicons name="close" size={18} color="#fff" />
-                            </TouchableOpacity>
-                          </View>
-                        ) : income === 0 && !isZeroConfirmed ? (
-                          <TouchableOpacity
-                            style={styles.alertIconButton}
-                            onPress={() => handleOpenNoRecordActions(date)}
-                          >
-                            <Ionicons
-                              name="alert-circle"
-                              size={24}
-                              color="#ff4d6d"
-                            />
-                          </TouchableOpacity>
-                        ) : (
-                          <TouchableOpacity
-                            style={styles.editIconButton}
-                            onPress={() => setEditingDateKey(dateKey)}
-                          >
-                            <Ionicons
-                              name="pencil"
-                              size={18}
-                              color="#8c52ff"
-                            />
-                          </TouchableOpacity>
-                        ))}
-                    </View>
-                  );
-                })}
-              </View>
-            </View>
-          ) : (
+          {trackedItems.length === 0 ? (
             <View style={styles.emptyState}>
               <Ionicons
                 name="information-circle-outline"
                 size={48}
                 color="#666"
               />
-              <Text style={styles.emptyText}>
-                Aguarde o planejamento do consultor para acompanhar suas rendas
+              <Text style={styles.emptyTitle}>
+                Nenhuma renda acompanhada configurada
               </Text>
+              <Text style={styles.emptyText}>
+                Apenas rendas marcadas com acompanhamento diário no planejamento
+                aparecem aqui. Rendas avulsas ou sem acompanhamento não entram
+                nesta lista.
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.list}>
+              {trackedItems.map((item) => (
+                <TouchableOpacity
+                  key={item.title}
+                  style={styles.card}
+                  onPress={() => openTrackedIncome(item.title)}
+                  activeOpacity={0.85}
+                >
+                  <View style={styles.cardLeft}>
+                    <View style={styles.iconWrap}>
+                      <Ionicons name="cash-outline" size={22} color="#8c52ff" />
+                    </View>
+                    <View style={styles.cardTextWrap}>
+                      <Text style={styles.cardTitle}>{item.title}</Text>
+                      <Text style={styles.cardMeta}>
+                        Previsto no ciclo:{" "}
+                        {formatCurrency(item.plannedAmount)}
+                      </Text>
+                    </View>
+                  </View>
+                  <Ionicons name="chevron-forward" size={22} color="#8c52ff" />
+                </TouchableOpacity>
+              ))}
             </View>
           )}
         </Animated.View>
       </ScrollView>
-
-      <Modal transparent visible={choiceModalVisible} animationType="fade">
-        <View style={modalStyles.backdrop}>
-          <View style={modalStyles.container}>
-            <Text style={modalStyles.title}>Dia sem registro</Text>
-            <Text style={modalStyles.message}>{choiceModalDayLabel}</Text>
-            <View style={modalStyles.actionsRow}>
-              <TouchableOpacity
-                style={modalStyles.buttonPurple}
-                onPress={handleChooseMarkZero}
-              >
-                <Text style={modalStyles.buttonWhiteLabel}>Marcar zero</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={modalStyles.buttonPink}
-                onPress={handleChooseRegister}
-              >
-                <Text style={modalStyles.buttonWhiteLabel}>
-                  Registrar renda
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </Layout>
   );
 };
@@ -669,30 +237,29 @@ export const IncomeListScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#000",
+    backgroundColor: "#0a0a0a",
+  },
+  content: {
+    padding: 16,
+    paddingBottom: 32,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#000",
+    backgroundColor: "#0a0a0a",
   },
   loadingText: {
-    marginTop: 16,
-    fontSize: 16,
     color: "#999",
-  },
-  content: {
-    padding: 16,
-    gap: 16,
+    marginTop: 12,
   },
   header: {
     alignItems: "center",
-    marginBottom: 8,
+    marginBottom: 24,
   },
   title: {
     fontSize: 24,
-    fontWeight: "bold",
+    fontWeight: "700",
     color: "#fff",
     marginTop: 12,
   },
@@ -700,355 +267,83 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#999",
     textAlign: "center",
-    marginTop: 4,
+    marginTop: 8,
+    lineHeight: 20,
+    paddingHorizontal: 12,
   },
   spectatorHint: {
-    marginTop: 8,
-    color: "#b89aff",
-    fontSize: 12,
-    fontWeight: "600",
+    marginTop: 10,
+    fontSize: 13,
+    color: "#c084fc",
     textAlign: "center",
   },
   cycleLabel: {
-    marginTop: 10,
-    color: "#b89aff",
+    marginTop: 8,
     fontSize: 13,
-    fontWeight: "700",
-    textAlign: "center",
+    color: "#8c52ff",
+  },
+  list: {
+    gap: 12,
   },
   card: {
-    backgroundColor: "#1a1a1a",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#141414",
     borderRadius: 12,
-    padding: 16,
     borderWidth: 1,
-    borderColor: "#333",
+    borderColor: "#2a2a2a",
+    padding: 16,
+  },
+  cardLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+    marginRight: 12,
+  },
+  iconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "rgba(140, 82, 255, 0.15)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+  cardTextWrap: {
+    flex: 1,
   },
   cardTitle: {
+    color: "#fff",
     fontSize: 16,
     fontWeight: "600",
-    color: "#fff",
-    marginBottom: 12,
   },
-  cardSubtitle: {
-    fontSize: 12,
+  cardMeta: {
     color: "#999",
-    marginBottom: 16,
-  },
-  inputContainerReadOnly: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#0a0a0a",
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#333",
-    paddingHorizontal: 12,
-    paddingVertical: 14,
-  },
-  readOnlyBudgetValue: {
-    fontSize: 26,
-    fontWeight: "800",
-    color: "#fff",
-  },
-  helperText: {
-    fontSize: 12,
-    color: "#999",
-    marginTop: 10,
-    lineHeight: 18,
-  },
-  overExpectedText: {
-    marginTop: 10,
-    color: "#ff4d6d",
-    fontSize: 15,
-    fontWeight: "700",
-    lineHeight: 20,
-  },
-  infoContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    marginTop: 10,
-  },
-  infoText: {
-    fontSize: 12,
-    color: "#999",
-    flex: 1,
-  },
-  infoRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: "#333",
-  },
-  infoLabel: {
-    fontSize: 14,
-    color: "#999",
-  },
-  infoValue: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#8c52ff",
-  },
-  statsContainer: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: "#1a1a1a",
-    borderRadius: 12,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: "#333",
-    alignItems: "center",
-  },
-  statCardWarning: {
-    borderColor: "#ff4d6d",
-    backgroundColor: "#2a1a1a",
-  },
-  statLabel: {
-    fontSize: 10,
-    color: "#999",
+    fontSize: 13,
     marginTop: 4,
-    textAlign: "center",
-  },
-  statValue: {
-    fontSize: 14,
-    fontWeight: "bold",
-    color: "#fff",
-    marginTop: 4,
-  },
-  statValueWarning: {
-    color: "#ff4d6d",
-  },
-  performanceCard: {
-    backgroundColor: "#1a1a1a",
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: "#333",
-    gap: 8,
-  },
-  performanceHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  performanceTitle: {
-    fontSize: 17,
-    fontWeight: "700",
-  },
-  performanceDetail: {
-    color: "#ccc",
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  performanceMetaRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingTop: 4,
-  },
-  performanceMetaLabel: {
-    color: "#aaa",
-    fontSize: 13,
-  },
-  performanceMetaValue: {
-    color: "#fff",
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  daysCard: {
-    backgroundColor: "#1a1a1a",
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: "#333",
-  },
-  daysList: {
-    gap: 8,
-  },
-  dayRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    backgroundColor: "#0a0a0a",
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#333",
-  },
-  dayRowZeroConfirmed: {
-    backgroundColor: "rgba(76, 175, 80, 0.08)",
-    borderColor: "rgba(76, 175, 80, 0.45)",
-  },
-  dayRowEditing: {
-    flexDirection: "column",
-    alignItems: "stretch",
-  },
-  editItemsWrap: {
-    width: "100%",
-    marginTop: 8,
-  },
-  editItemRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#000",
-    borderWidth: 1,
-    borderColor: "#333",
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    marginBottom: 6,
-  },
-  editItemTitle: {
-    color: "#fff",
-    fontSize: 13,
-    fontWeight: "600",
-  },
-  editItemMeta: {
-    color: "#999",
-    fontSize: 11,
-    marginTop: 2,
-  },
-  editItemAmount: {
-    color: "#8c52ff",
-    fontWeight: "700",
-    marginRight: 8,
-  },
-  addItemButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#8c52ff",
-    borderRadius: 8,
-    paddingVertical: 8,
-    marginBottom: 6,
-  },
-  addItemButtonText: {
-    color: "#fff",
-    fontWeight: "600",
-    marginLeft: 6,
-    fontSize: 13,
-  },
-  cancelEditButton: {
-    alignSelf: "flex-end",
-    backgroundColor: "#333",
-    borderRadius: 8,
-    padding: 8,
-  },
-  dayInfo: {
-    flex: 1,
-  },
-  dayNumber: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#fff",
-  },
-  dayIncome: {
-    fontSize: 12,
-    color: "#8c52ff",
-    marginTop: 2,
-  },
-  dayEmpty: {
-    fontSize: 12,
-    color: "#666",
-    marginTop: 2,
-  },
-  zeroConfirmedBadge: {
-    marginTop: 4,
-    alignSelf: "flex-start",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: "rgba(76, 175, 80, 0.18)",
-    borderRadius: 999,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-  },
-  zeroConfirmedText: {
-    fontSize: 11,
-    color: "#8CF397",
-    fontWeight: "700",
-  },
-  editIconButton: {
-    padding: 8,
-  },
-  alertIconButton: {
-    padding: 6,
-    alignItems: "center",
-    justifyContent: "center",
   },
   emptyState: {
     alignItems: "center",
-    padding: 40,
-    backgroundColor: "#1a1a1a",
+    padding: 24,
+    backgroundColor: "#141414",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#333",
+    borderColor: "#2a2a2a",
   },
-  emptyText: {
-    fontSize: 14,
-    color: "#999",
+  emptyTitle: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "600",
     marginTop: 12,
     textAlign: "center",
   },
-});
-
-const modalStyles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.65)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 24,
-  },
-  container: {
-    width: "100%",
-    maxWidth: 460,
-    backgroundColor: "#0e0c14",
-    borderRadius: 12,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: "#2a2040",
-  },
-  title: {
-    color: "#fff",
-    fontSize: 18,
-    fontWeight: "700",
-    marginBottom: 6,
-  },
-  message: {
-    color: "#a89fc0",
+  emptyText: {
+    color: "#999",
     fontSize: 14,
-    marginBottom: 12,
-  },
-  actionsRow: {
-    flexDirection: "row",
-    gap: 12,
-  },
-  buttonPurple: {
-    flex: 1,
-    backgroundColor: "#8c52ff",
-    borderRadius: 10,
-    minHeight: 44,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  buttonPink: {
-    flex: 1,
-    backgroundColor: "#ff4d6d",
-    borderRadius: 10,
-    minHeight: 44,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  buttonWhiteLabel: {
-    color: "#fff",
-    fontWeight: "700",
+    textAlign: "center",
+    marginTop: 8,
+    lineHeight: 20,
   },
 });
 

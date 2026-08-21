@@ -473,6 +473,38 @@ export const expenseServices = {
   },
 
   /**
+   * Remove todos os gastos de consumo moderado de um dia e reconcilia uma vez.
+   */
+  async deleteConsumoModeradoExpensesForDay(
+    userId: string,
+    date: Date,
+  ): Promise<number> {
+    const { getStartOfDay, getEndOfDay } = await import("../utils/dateUtils");
+    const { isConsumoModeradoHistoryExpense } = await import(
+      "../utils/expenseScopeUtils"
+    );
+
+    const expenses = await this.getExpenses(userId, {
+      startDate: getStartOfDay(date),
+      endDate: getEndOfDay(date),
+    });
+    const cmExpenses = expenses.filter(isConsumoModeradoHistoryExpense);
+
+    for (const expense of cmExpenses) {
+      if (!expense.id) continue;
+      const docRef = getExpenseDoc(expense.id);
+      await deleteDoc(docRef);
+    }
+
+    if (cmExpenses.length > 0) {
+      const { budgetServices } = await import("./budgetServices");
+      await budgetServices.reconcileConsumoModeradoDay(userId, date);
+    }
+
+    return cmExpenses.length;
+  },
+
+  /**
    * Deletar gasto
    */
   async deleteExpense(id: string): Promise<void> {
@@ -561,6 +593,24 @@ export const expenseServices = {
       );
       throw error;
     }
+  },
+
+  /**
+   * IDs de contas/gastos esperados que já têm lançamento de pagamento.
+   */
+  async getPaidSourceBillIds(userId: string): Promise<Set<string>> {
+    const q = query(getExpensesCollection(), where("userId", "==", userId));
+    const snapshot = await getDocs(q);
+    const ids = new Set<string>();
+
+    snapshot.docs.forEach((docSnap) => {
+      const sourceBillId = String(
+        (docSnap.data() as any)?.sourceBillId || "",
+      ).trim();
+      if (sourceBillId) ids.add(sourceBillId);
+    });
+
+    return ids;
   },
 
   /**

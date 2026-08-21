@@ -26,6 +26,14 @@ import { Layout } from "../../components/Layout/Layout";
 import { authServices } from "../../services/authServices";
 import { userService } from "../../services/userServices";
 import { RankingPreference } from "../../types/auth";
+import {
+  cancelDailyExpenseReminder,
+  listScheduledNotifications,
+  requestNotificationPermissions,
+  scheduleDailyExpenseReminder,
+  sendImmediateNotification,
+} from "../../services/notificationServices";
+import * as Notifications from "expo-notifications";
 
 export const SettingsScreen = () => {
   const { user, signOut, refreshUser } = useAuth();
@@ -34,7 +42,8 @@ export const SettingsScreen = () => {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
 
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [isTogglingNotifications, setIsTogglingNotifications] = useState(false);
   const [isPasswordModalVisible, setIsPasswordModalVisible] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -72,6 +81,23 @@ export const SettingsScreen = () => {
   }, [user]);
 
   useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { status } = await Notifications.getPermissionsAsync();
+        if (!cancelled) {
+          setNotificationsEnabled(status === "granted");
+        }
+      } catch {
+        // ignore
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
@@ -86,6 +112,60 @@ export const SettingsScreen = () => {
       }),
     ]).start();
   }, []);
+
+  const handleNotificationsToggle = async (enabled: boolean) => {
+    if (isTogglingNotifications) return;
+    setIsTogglingNotifications(true);
+    try {
+      if (enabled) {
+        const granted = await requestNotificationPermissions();
+        setNotificationsEnabled(granted);
+        if (!granted) {
+          Alert.alert(
+            "Permissão necessária",
+            "Ative as notificações nas configurações do celular para receber alertas fora do app.",
+          );
+          return;
+        }
+        await scheduleDailyExpenseReminder();
+        Alert.alert(
+          "Notificações ativas",
+          "Lembretes e alertas do sistema foram habilitados. Use “Testar notificação” e saia do app para validar a bandeja.",
+        );
+      } else {
+        await cancelDailyExpenseReminder();
+        setNotificationsEnabled(false);
+      }
+    } catch (error) {
+      console.error("Erro ao alternar notificações:", error);
+      Alert.alert("Erro", "Não foi possível atualizar as notificações agora.");
+    } finally {
+      setIsTogglingNotifications(false);
+    }
+  };
+
+  const handleTestNotification = async () => {
+    const granted = await requestNotificationPermissions();
+    if (!granted) {
+      Alert.alert(
+        "Permissão necessária",
+        "Ative as notificações nas configurações do celular primeiro.",
+      );
+      return;
+    }
+
+    Alert.alert(
+      "Teste em 8 segundos",
+      "Saia do app agora (Home ou apps recentes). Em ~8s deve aparecer na bandeja do sistema.",
+    );
+    await sendImmediateNotification(
+      "🔔 Teste Visão",
+      "Se você está vendo isto fora do app, as notificações do sistema estão ok.",
+      { type: "notification_test" },
+      { delaySeconds: 8 },
+    );
+    await listScheduledNotifications();
+  };
 
   const handleLogout = () => {
     Alert.alert("Confirmar Logout", "Tem certeza que deseja sair?", [
@@ -222,11 +302,22 @@ export const SettingsScreen = () => {
                 rightComponent={
                   <Switch
                     value={notificationsEnabled}
-                    onValueChange={setNotificationsEnabled}
+                    onValueChange={handleNotificationsToggle}
+                    disabled={isTogglingNotifications}
                     trackColor={{ false: colors.border, true: "#8c52ff" }}
                     thumbColor="#fff"
                   />
                 }
+              />
+              <View
+                style={[styles.divider, { backgroundColor: colors.border }]}
+              />
+              <SettingItem
+                icon="notifications-outline"
+                iconColor="#8c52ff"
+                title="Testar notificação"
+                subtitle="Agenda alerta em 8s — saia do app para validar"
+                onPress={handleTestNotification}
               />
               <View
                 style={[styles.divider, { backgroundColor: colors.border }]}

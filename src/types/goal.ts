@@ -7,7 +7,7 @@ import { Timestamp } from "firebase/firestore";
 /**
  * Status da Meta
  */
-export type GoalStatus = "active" | "completed" | "cancelled";
+export type GoalStatus = "active" | "completed" | "cancelled" | "out_of_plans";
 
 /**
  * Categoria da Meta
@@ -86,7 +86,8 @@ export interface GoalFirestore {
 export interface CreateGoalData {
   title: string;
   description?: string;
-  targetAmount: number;
+  targetAmount?: number;
+  hasFinancialTarget?: boolean;
   category: GoalCategory;
   deadline?: Date;
   prazo?: "curto" | "medio" | "longo";

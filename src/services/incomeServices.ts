@@ -31,6 +31,7 @@ import {
 } from "../types/income";
 import { formatDateToString } from "../utils/dateUtils";
 import { formatCurrency } from "../utils/currencyUtils";
+import { isExpenseCreatedFrom } from "../utils/expenseScopeUtils";
 import { activityServices } from "./activityServices";
 
 /**
@@ -230,6 +231,12 @@ export const incomeServices = {
         incomes = incomes.filter((income) => Boolean(income.dailyTracking));
       }
 
+      if (filters?.createdAtFrom) {
+        incomes = incomes.filter((income) =>
+          isExpenseCreatedFrom(income, filters.createdAtFrom),
+        );
+      }
+
       // Ordenar por data (mais recente primeiro)
       incomes.sort((a, b) => b.date.getTime() - a.date.getTime());
 
@@ -379,6 +386,7 @@ export const incomeServices = {
     userId: string,
     startDate?: Date,
     endDate?: Date,
+    extraFilters?: Pick<IncomeFilters, "createdAtFrom" | "dailyTrackingOnly">,
   ): Promise<number> {
     console.log("💰 [INCOME SERVICE] Calculando total de rendas...");
 
@@ -386,6 +394,7 @@ export const incomeServices = {
       const incomes = await this.getIncomes(userId, {
         startDate,
         endDate,
+        ...extraFilters,
       });
 
       const total = incomes.reduce((sum, income) => sum + income.value, 0);

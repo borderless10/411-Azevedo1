@@ -1,5 +1,6 @@
 import React from "react";
 import { View, Text, Image, StyleSheet } from "react-native";
+import { profilePhotoUri } from "../../utils/chatDisplayNames";
 
 export interface ChatMessageBubbleProps {
   msg: { id?: string; text: string; createdAt: Date };
@@ -31,9 +32,9 @@ export const MessageBubble = React.memo(function MessageBubble({
       >
         {showAvatar && !isOwn && (
           <View style={styles.msgAvatarContainer}>
-            {senderPhotoBase64 ? (
+            {profilePhotoUri(senderPhotoBase64) ? (
               <Image
-                source={{ uri: `data:image/png;base64,${senderPhotoBase64}` }}
+                source={{ uri: profilePhotoUri(senderPhotoBase64) as string }}
                 style={styles.msgAvatar}
               />
             ) : (

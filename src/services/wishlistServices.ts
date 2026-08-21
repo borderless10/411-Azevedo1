@@ -32,16 +32,16 @@ export const wishlistServices = {
     if (!data.name || data.name.trim().length === 0) {
       throw new Error("Nome é obrigatório");
     }
-    if (!data.value || data.value <= 0) {
-      throw new Error("Valor deve ser maior que zero");
-    }
+    const value = Number(data.value);
+    const normalizedValue =
+      Number.isFinite(value) && value > 0 ? value : 0;
 
     try {
       const now = new Date();
       const docData: any = {
         userId,
         name: data.name.trim(),
-        value: data.value,
+        value: normalizedValue,
         description: data.description?.trim() || "",
         createdAt: Timestamp.fromDate(now),
         updatedAt: Timestamp.fromDate(now),
@@ -53,7 +53,7 @@ export const wishlistServices = {
         id: docRef.id,
         userId,
         name: data.name.trim(),
-        value: data.value,
+        value: normalizedValue,
         description: data.description?.trim(),
         createdAt: now,
         updatedAt: now,
@@ -62,8 +62,11 @@ export const wishlistServices = {
       await activityServices.logActivity(userId, {
         type: "wishlist_created",
         title: `Desejo criado: ${data.name}`,
-        description: `Valor: ${formatCurrency(data.value)}`,
-        metadata: { name: data.name, value: data.value },
+        description:
+          normalizedValue > 0
+            ? `Valor: ${formatCurrency(normalizedValue)}`
+            : "Sem valor definido",
+        metadata: { name: data.name, value: normalizedValue },
       });
 
       return item;
@@ -132,7 +135,10 @@ export const wishlistServices = {
         await activityServices.logActivity(existing.userId, {
           type: "wishlist_deleted",
           title: `Desejo removido: ${existing.name}`,
-          description: `Valor: ${formatCurrency(existing.value)}`,
+          description:
+            existing.value > 0
+              ? `Valor: ${formatCurrency(existing.value)}`
+              : "Sem valor definido",
           metadata: { name: existing.name, value: existing.value },
         });
       }

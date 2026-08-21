@@ -10,6 +10,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   Image,
+  Modal,
+  Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -25,6 +27,8 @@ import { useNavigation } from "../../routes/NavigationContext";
 import { MessageBubble } from "../../components/Chat/MessageBubble";
 import {
   profileDisplayName,
+  profileInitial,
+  profilePhotoUri,
   resolveChatDisplayName,
 } from "../../utils/chatDisplayNames";
 
@@ -41,6 +45,17 @@ export const ChatScreen: React.FC = () => {
   const [inputText, setInputText] = useState("");
   const [globalChat, setGlobalChat] = useState<any>(null);
   const [primaryAdminId, setPrimaryAdminId] = useState<string | null>(null);
+  const [startChatVisible, setStartChatVisible] = useState(false);
+  const [startChatRole, setStartChatRole] = useState<"cliente" | "consultor">(
+    "cliente",
+  );
+  const [startChatQuery, setStartChatQuery] = useState("");
+  const [startChatUsers, setStartChatUsers] = useState<any[]>([]);
+  const [startChatLoading, setStartChatLoading] = useState(false);
+  const [startingChat, setStartingChat] = useState(false);
+
+  const isAdminUser =
+    String(user?.role || "").toLowerCase() === "admin" || user?.isAdmin === true;
 
   const { messages, sendMessage } = useChatMessages(
     selectedChatId || "",
@@ -155,6 +170,14 @@ export const ChatScreen: React.FC = () => {
       return bTime.getTime() - aTime.getTime();
     });
   }, [chats, globalChat]);
+
+  const visibleChats = useMemo(() => {
+    if (!isAdminUser) return processedChats;
+    return processedChats.filter((chat: any) => {
+      if (chat?.id === "global" || chat?.type === "global") return true;
+      return Boolean(String(chat?.lastMessage?.text || "").trim());
+    });
+  }, [isAdminUser, processedChats]);
 
   const loadProfiles = useCallback(async (ids: string[]) => {
     const uniqueIds = Array.from(
@@ -487,6 +510,97 @@ export const ChatScreen: React.FC = () => {
     }
   };
 
+  const getStartChatLabel = (person: any): string =>
+    profileDisplayName(person, person?.email || "Usuário");
+
+  const renderUserAvatar = (
+    person: any,
+    size: number,
+    fallbackIcon?: keyof typeof Ionicons.glyphMap,
+  ) => {
+    const uri = profilePhotoUri(person?.photoBase64);
+    if (uri) {
+      return (
+        <Image
+          source={{ uri }}
+          style={{ width: size, height: size, borderRadius: size / 2 }}
+        />
+      );
+    }
+    if (!person && fallbackIcon) {
+      return <Ionicons name={fallbackIcon} size={Math.round(size * 0.66)} color="#8c52ff" />;
+    }
+    return (
+      <Text style={[styles.listAvatarInitial, { fontSize: Math.round(size * 0.38) }]}>
+        {profileInitial(person)}
+      </Text>
+    );
+  };
+
+  const filteredStartChatUsers = useMemo(() => {
+    const q = startChatQuery.trim().toLowerCase();
+    const isClientRole = (role?: string) =>
+      ["user", "cliente", "cliente_premium"].includes(
+        String(role || "").toLowerCase(),
+      );
+    const isConsultorRole = (role?: string) =>
+      String(role || "").toLowerCase() === "consultor";
+
+    return startChatUsers
+      .filter((person) => person?.id && person.id !== user?.id)
+      .filter((person) =>
+        startChatRole === "consultor"
+          ? isConsultorRole(person.role)
+          : isClientRole(person.role),
+      )
+      .filter((person) => {
+        if (!q) return true;
+        return (
+          getStartChatLabel(person).toLowerCase().includes(q) ||
+          String(person?.email || "")
+            .toLowerCase()
+            .includes(q)
+        );
+      });
+  }, [startChatQuery, startChatRole, startChatUsers, user?.id]);
+
+  const openStartChat = async () => {
+    setStartChatVisible(true);
+    setStartChatQuery("");
+    setStartChatRole("cliente");
+    if (startChatUsers.length > 0) return;
+
+    setStartChatLoading(true);
+    try {
+      const list = await userService.getAllUsers();
+      setStartChatUsers(list || []);
+    } catch (error) {
+      console.error("Erro ao carregar usuários para o chat:", error);
+      Alert.alert("Erro", "Não foi possível carregar os usuários.");
+    } finally {
+      setStartChatLoading(false);
+    }
+  };
+
+  const handleStartChatWithUser = async (person: any) => {
+    if (!user?.id || !person?.id || startingChat) return;
+    setStartingChat(true);
+    try {
+      const chat = await chatService.createChatIfNotExists(
+        user.id,
+        person.id,
+        "direct",
+      );
+      setStartChatVisible(false);
+      setSelectedChatId(chat.id);
+    } catch (error) {
+      console.error("Erro ao iniciar bate-papo:", error);
+      Alert.alert("Erro", "Não foi possível iniciar o bate-papo.");
+    } finally {
+      setStartingChat(false);
+    }
+  };
+
   if (!canAccess) {
     return (
       <Layout>
@@ -513,14 +627,29 @@ export const ChatScreen: React.FC = () => {
     return (
       <Layout>
         <View style={styles.container}>
-          {processedChats.length === 0 ? (
+          {isAdminUser ? (
+            <TouchableOpacity
+              style={styles.startChatButton}
+              onPress={openStartChat}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="chatbubble-ellipses-outline" size={18} color="#fff" />
+              <Text style={styles.startChatButtonText}>Iniciar bate-papo</Text>
+            </TouchableOpacity>
+          ) : null}
+
+          {visibleChats.length === 0 ? (
             <View style={styles.centerContainer}>
               <Ionicons name="chatbubble-outline" size={48} color="#ccc" />
-              <Text style={styles.emptyText}>Nenhum chat disponível</Text>
+              <Text style={styles.emptyText}>
+                {isAdminUser
+                  ? "Nenhuma conversa com mensagens"
+                  : "Nenhum chat disponível"}
+              </Text>
             </View>
           ) : (
             <FlatList
-              data={processedChats}
+              data={visibleChats}
               keyExtractor={(item) => item.id}
               renderItem={({ item: chat }) => (
                 <TouchableOpacity
@@ -529,11 +658,17 @@ export const ChatScreen: React.FC = () => {
                   activeOpacity={0.7}
                 >
                   <View style={styles.avatarContainer}>
-                    <Ionicons
-                      name={isGroupChat(chat) ? "people" : "person"}
-                      size={32}
-                      color="#8c52ff"
-                    />
+                    {isGroupChat(chat)
+                      ? renderUserAvatar(null, 48, "people")
+                      : renderUserAvatar(
+                          userMap[
+                            (chat.participants || []).find(
+                              (id: string) => id !== user?.id,
+                            )
+                          ],
+                          48,
+                          "person",
+                        )}
                   </View>
                   <View style={styles.chatInfo}>
                     <Text style={styles.chatTitle} numberOfLines={1}>
@@ -552,6 +687,116 @@ export const ChatScreen: React.FC = () => {
               scrollEnabled={true}
             />
           )}
+
+          <Modal
+            visible={startChatVisible}
+            animationType="slide"
+            transparent
+            onRequestClose={() => setStartChatVisible(false)}
+          >
+            <View style={styles.startChatBackdrop}>
+              <View style={styles.startChatCard}>
+                <Text style={styles.startChatTitle}>Iniciar bate-papo</Text>
+                <Text style={styles.startChatSubtitle}>
+                  Escolha se quer conversar com um cliente ou um consultor
+                </Text>
+
+                <View style={styles.startChatTabs}>
+                  <TouchableOpacity
+                    style={[
+                      styles.startChatTab,
+                      startChatRole === "cliente" && styles.startChatTabActive,
+                    ]}
+                    onPress={() => setStartChatRole("cliente")}
+                  >
+                    <Text
+                      style={[
+                        styles.startChatTabText,
+                        startChatRole === "cliente" &&
+                          styles.startChatTabTextActive,
+                      ]}
+                    >
+                      Cliente
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.startChatTab,
+                      startChatRole === "consultor" && styles.startChatTabActive,
+                    ]}
+                    onPress={() => setStartChatRole("consultor")}
+                  >
+                    <Text
+                      style={[
+                        styles.startChatTabText,
+                        startChatRole === "consultor" &&
+                          styles.startChatTabTextActive,
+                      ]}
+                    >
+                      Consultor
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                <TextInput
+                  placeholder={
+                    startChatRole === "consultor"
+                      ? "Buscar consultor..."
+                      : "Buscar cliente..."
+                  }
+                  placeholderTextColor="#777"
+                  value={startChatQuery}
+                  onChangeText={setStartChatQuery}
+                  style={styles.startChatSearch}
+                />
+
+                {startChatLoading ? (
+                  <ActivityIndicator color="#8c52ff" style={{ marginTop: 24 }} />
+                ) : (
+                  <FlatList
+                    data={filteredStartChatUsers}
+                    keyExtractor={(item) => item.id}
+                    keyboardShouldPersistTaps="handled"
+                    ListEmptyComponent={
+                      <Text style={styles.startChatEmpty}>
+                        Nenhum {startChatRole} encontrado
+                      </Text>
+                    }
+                    renderItem={({ item }) => (
+                      <TouchableOpacity
+                        style={styles.startChatItem}
+                        onPress={() => handleStartChatWithUser(item)}
+                        disabled={startingChat}
+                      >
+                        <View style={styles.startChatItemRow}>
+                          <View style={styles.startChatAvatar}>
+                            {renderUserAvatar(item, 40, "person")}
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.startChatItemName}>
+                              {getStartChatLabel(item)}
+                            </Text>
+                            {item.email ? (
+                              <Text style={styles.startChatItemEmail}>
+                                {item.email}
+                              </Text>
+                            ) : null}
+                          </View>
+                        </View>
+                      </TouchableOpacity>
+                    )}
+                  />
+                )}
+
+                <TouchableOpacity
+                  style={styles.startChatClose}
+                  onPress={() => setStartChatVisible(false)}
+                >
+                  <Text style={styles.startChatCloseText}>Fechar</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </Modal>
         </View>
       </Layout>
     );
@@ -580,31 +825,28 @@ export const ChatScreen: React.FC = () => {
               style={{ flexDirection: "row", alignItems: "center", flex: 1 }}
             >
               <View style={styles.msgAvatarContainer}>
-                {userMap[otherParticipantId]?.photoBase64 ? (
+                {profilePhotoUri(userMap[otherParticipantId]?.photoBase64) ? (
                   <Image
                     source={{
-                      uri: `data:image/png;base64,${userMap[otherParticipantId].photoBase64}`,
+                      uri: profilePhotoUri(
+                        userMap[otherParticipantId]?.photoBase64,
+                      ) as string,
                     }}
                     style={styles.msgAvatar}
                   />
                 ) : (
                   <View style={styles.msgAvatarFallback}>
                     <Text style={styles.msgAvatarInitial}>
-                      {(
-                        (
-                          userMap[otherParticipantId]?.name ||
-                          userMap[otherParticipantId]?.nickname ||
-                          "U"
-                        ).charAt(0) || "U"
-                      ).toUpperCase()}
+                      {profileInitial(userMap[otherParticipantId])}
                     </Text>
                   </View>
                 )}
               </View>
               <Text style={styles.conversationTitle}>
-                {userMap[otherParticipantId]?.nickname ||
-                  userMap[otherParticipantId]?.name ||
-                  getChatTitle(selectedChat)}
+                {profileDisplayName(
+                  userMap[otherParticipantId],
+                  getChatTitle(selectedChat),
+                )}
               </Text>
             </View>
           ) : (
@@ -709,6 +951,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     marginRight: 12,
+    overflow: "hidden",
+  },
+  listAvatarInitial: {
+    color: "#fff",
+    fontWeight: "700",
   },
   chatInfo: { flex: 1, minWidth: 0 },
   chatTitle: {
@@ -796,6 +1043,121 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   sendButtonDisabled: { opacity: 0.5 },
+  startChatButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 8,
+    backgroundColor: "#8c52ff",
+    borderRadius: 10,
+    minHeight: 44,
+  },
+  startChatButtonText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 15,
+  },
+  startChatBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.65)",
+    justifyContent: "flex-end",
+  },
+  startChatCard: {
+    backgroundColor: "#0e0c14",
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    padding: 16,
+    maxHeight: "85%",
+    borderWidth: 1,
+    borderColor: "#2a2040",
+  },
+  startChatTitle: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "700",
+  },
+  startChatSubtitle: {
+    color: "#a89fc0",
+    fontSize: 13,
+    marginTop: 4,
+    marginBottom: 12,
+  },
+  startChatTabs: {
+    flexDirection: "row",
+    backgroundColor: "#161221",
+    borderRadius: 10,
+    padding: 4,
+    marginBottom: 10,
+  },
+  startChatTab: {
+    flex: 1,
+    minHeight: 38,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 8,
+  },
+  startChatTabActive: {
+    backgroundColor: "#8c52ff",
+  },
+  startChatTabText: {
+    color: "#a89fc0",
+    fontWeight: "700",
+  },
+  startChatTabTextActive: {
+    color: "#fff",
+  },
+  startChatSearch: {
+    backgroundColor: "#111",
+    color: "#fff",
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  startChatEmpty: {
+    color: "#999",
+    textAlign: "center",
+    marginTop: 24,
+  },
+  startChatItem: {
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#1f1a2b",
+  },
+  startChatItemRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  startChatAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#1a1a1a",
+    justifyContent: "center",
+    alignItems: "center",
+    overflow: "hidden",
+  },
+  startChatItemName: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  startChatItemEmail: {
+    color: "#999",
+    fontSize: 13,
+    marginTop: 2,
+  },
+  startChatClose: {
+    alignItems: "center",
+    paddingVertical: 12,
+  },
+  startChatCloseText: {
+    color: "#ccc",
+    fontWeight: "600",
+  },
 });
 
 export default ChatScreen;

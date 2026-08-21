@@ -13,7 +13,9 @@ export interface DailyExpense {
 }
 
 export type RankingPlanilhaType =
+  | "zero_same_day"
   | "zero_next_day"
+  | "zero_after_expense"
   | "expense_same_day"
   | "expense_next_day"
   | "missed";

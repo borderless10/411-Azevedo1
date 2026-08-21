@@ -4,9 +4,14 @@
 
 import * as Notifications from "expo-notifications";
 import * as Device from "expo-device";
-import { Platform } from "react-native";
+import { AppState, Platform } from "react-native";
 
 const canUseNativeNotifications = Platform.OS !== "web";
+
+/** Canal padrão Android — obrigatório para aparecer na bandeja fora do app. */
+export const NOTIFICATION_CHANNEL_DEFAULT = "default";
+export const NOTIFICATION_CHANNEL_CHAT = "chat_messages";
+export const NOTIFICATION_CHANNEL_REMINDERS = "reminders";
 
 type BillNotificationInput = {
   id: string;
@@ -24,7 +29,8 @@ type ExpectedIncomeNotificationInput = {
 };
 
 /**
- * Configurar comportamento padrão das notificações
+ * Configurar comportamento padrão das notificações (foreground).
+ * shouldShowBanner/shouldShowList são obrigatórios no SDK 54+.
  */
 if (canUseNativeNotifications) {
   Notifications.setNotificationHandler({
@@ -32,12 +38,53 @@ if (canUseNativeNotifications) {
       shouldShowAlert: true,
       shouldPlaySound: true,
       shouldSetBadge: true,
+      shouldShowBanner: true,
+      shouldShowList: true,
     }),
   });
 }
 
+const ensureAndroidChannels = async (): Promise<void> => {
+  if (Platform.OS !== "android") return;
+
+  await Notifications.setNotificationChannelAsync(NOTIFICATION_CHANNEL_DEFAULT, {
+    name: "Geral",
+    importance: Notifications.AndroidImportance.MAX,
+    vibrationPattern: [0, 250, 250, 250],
+    lightColor: "#8c52ff",
+    sound: "default",
+    enableVibrate: true,
+    showBadge: true,
+  });
+
+  await Notifications.setNotificationChannelAsync(NOTIFICATION_CHANNEL_CHAT, {
+    name: "Mensagens",
+    importance: Notifications.AndroidImportance.MAX,
+    vibrationPattern: [0, 250, 250, 250],
+    lightColor: "#8c52ff",
+    sound: "default",
+    enableVibrate: true,
+    showBadge: true,
+  });
+
+  await Notifications.setNotificationChannelAsync(
+    NOTIFICATION_CHANNEL_REMINDERS,
+    {
+      name: "Lembretes",
+      importance: Notifications.AndroidImportance.HIGH,
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: "#8c52ff",
+      sound: "default",
+      enableVibrate: true,
+      showBadge: true,
+    },
+  );
+};
+
 /**
  * Solicitar permissões de notificação
+ *
+ * No Android 13+, o prompt do SO só aparece depois de criar ao menos um canal.
  */
 export const requestNotificationPermissions = async (): Promise<boolean> => {
   try {
@@ -45,12 +92,21 @@ export const requestNotificationPermissions = async (): Promise<boolean> => {
       return false;
     }
 
+    // Canal ANTES da permissão (requisito Android 13+)
+    await ensureAndroidChannels();
+
     const { status: existingStatus } =
       await Notifications.getPermissionsAsync();
     let finalStatus = existingStatus;
 
     if (existingStatus !== "granted") {
-      const { status } = await Notifications.requestPermissionsAsync();
+      const { status } = await Notifications.requestPermissionsAsync({
+        ios: {
+          allowAlert: true,
+          allowBadge: true,
+          allowSound: true,
+        },
+      });
       finalStatus = status;
     }
 
@@ -59,21 +115,19 @@ export const requestNotificationPermissions = async (): Promise<boolean> => {
       return false;
     }
 
-    // Configurar canal de notificação para Android
-    if (Platform.OS === "android") {
-      await Notifications.setNotificationChannelAsync("default", {
-        name: "default",
-        importance: Notifications.AndroidImportance.MAX,
-        vibrationPattern: [0, 250, 250, 250],
-        lightColor: "#FF231F7C",
-      });
-    }
-
     return true;
   } catch (error) {
     console.error("Erro ao solicitar permissões de notificação:", error);
     return false;
   }
+};
+
+const withChannel = (
+  content: Notifications.NotificationContentInput,
+  channelId: string,
+): Notifications.NotificationContentInput => {
+  if (Platform.OS !== "android") return content;
+  return { ...content, channelId };
 };
 
 /**
@@ -90,7 +144,9 @@ export const scheduleBillNotification = async (
   }
 
   try {
-    // Cancelar notificação anterior se existir
+    const hasPermission = await requestNotificationPermissions();
+    if (!hasPermission) return null;
+
     await cancelBillNotification(billId);
 
     const now = new Date();
@@ -134,19 +190,23 @@ export const scheduleBillNotification = async (
       }
 
       const notificationId = await Notifications.scheduleNotificationAsync({
-        content: {
-          title: reminder.titleText,
-          body: reminder.bodyText,
-          data: {
-            billId,
-            type: "bill_due_reminder",
-            stage: reminder.stage,
+        content: withChannel(
+          {
+            title: reminder.titleText,
+            body: reminder.bodyText,
+            data: {
+              billId,
+              type: "bill_due_reminder",
+              stage: reminder.stage,
+            },
+            sound: true,
           },
-          sound: true,
-        },
+          NOTIFICATION_CHANNEL_REMINDERS,
+        ),
         trigger: {
           date: triggerDate,
           type: Notifications.SchedulableTriggerInputTypes.DATE,
+          channelId: NOTIFICATION_CHANNEL_REMINDERS,
         },
       });
       scheduledIds.push(notificationId);
@@ -302,6 +362,9 @@ export const scheduleExpectedIncomeNotification = async (
   }
 
   try {
+    const hasPermission = await requestNotificationPermissions();
+    if (!hasPermission) return null;
+
     await cancelExpectedIncomeNotification(incomeId);
 
     const parsedDate = parseExpectedIncomeDate(expectedMonth);
@@ -326,19 +389,23 @@ export const scheduleExpectedIncomeNotification = async (
     }
 
     return await Notifications.scheduleNotificationAsync({
-      content: {
-        title: "💵 Renda prevista para hoje",
-        body: `${source} está prevista para hoje. Confirme o recebimento no app.`,
-        data: {
-          userId,
-          incomeId,
-          type: "income_expected_day",
+      content: withChannel(
+        {
+          title: "💵 Renda prevista para hoje",
+          body: `${source} está prevista para hoje. Confirme o recebimento no app.`,
+          data: {
+            userId,
+            incomeId,
+            type: "income_expected_day",
+          },
+          sound: true,
         },
-        sound: true,
-      },
+        NOTIFICATION_CHANNEL_REMINDERS,
+      ),
       trigger: {
         date: triggerDate,
         type: Notifications.SchedulableTriggerInputTypes.DATE,
+        channelId: NOTIFICATION_CHANNEL_REMINDERS,
       },
     });
   } catch (error) {
@@ -404,31 +471,34 @@ export const scheduleDailyExpenseReminder = async (): Promise<
   }
 
   try {
-    // Cancelar lembretes anteriores
+    const hasPermission = await requestNotificationPermissions();
+    if (!hasPermission) return null;
+
     await cancelDailyExpenseReminder();
 
-    // Calcular próxima ocorrência das 21h
     const now = new Date();
     const trigger = new Date();
     trigger.setHours(21, 0, 0, 0);
 
-    // Se já passou das 21h hoje, agendar para amanhã
     if (trigger <= now) {
       trigger.setDate(trigger.getDate() + 1);
     }
 
-    // Agendar notificação diária às 21h
     const notificationId = await Notifications.scheduleNotificationAsync({
-      content: {
-        title: "📝 Lembrete de Gastos",
-        body: "Não se esqueça de registrar seus gastos do dia!",
-        data: { type: "daily_expense_reminder" },
-        sound: true,
-      },
+      content: withChannel(
+        {
+          title: "📝 Lembrete de Gastos",
+          body: "Não se esqueça de registrar seus gastos do dia!",
+          data: { type: "daily_expense_reminder" },
+          sound: true,
+        },
+        NOTIFICATION_CHANNEL_REMINDERS,
+      ),
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DAILY,
         hour: 21,
         minute: 0,
+        channelId: NOTIFICATION_CHANNEL_REMINDERS,
       },
     });
 
@@ -474,26 +544,46 @@ export const cancelDailyExpenseReminder = async (): Promise<void> => {
 };
 
 /**
- * Enviar notificação imediata (para testes)
+ * Enviar notificação imediata (ou com atraso em segundos, para testar fora do app)
  */
 export const sendImmediateNotification = async (
   title: string,
   body: string,
   data?: Record<string, unknown>,
+  options?: { channelId?: string; delaySeconds?: number },
 ): Promise<void> => {
   if (!canUseNativeNotifications) {
     return;
   }
 
   try {
+    const hasPermission = await requestNotificationPermissions();
+    if (!hasPermission) {
+      console.warn("⚠️ Notificação ignorada: sem permissão do sistema");
+      return;
+    }
+
+    const channelId = options?.channelId || NOTIFICATION_CHANNEL_DEFAULT;
+    const delaySeconds = options?.delaySeconds ?? 0;
+
     await Notifications.scheduleNotificationAsync({
-      content: {
-        title,
-        body,
-        sound: true,
-        data,
-      },
-      trigger: null, // Imediata
+      content: withChannel(
+        {
+          title,
+          body,
+          sound: true,
+          data,
+        },
+        channelId,
+      ),
+      trigger:
+        delaySeconds > 0
+          ? {
+              type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+              seconds: delaySeconds,
+              channelId,
+            }
+          : null,
     });
   } catch (error) {
     console.error("Erro ao enviar notificação imediata:", error);
@@ -501,7 +591,9 @@ export const sendImmediateNotification = async (
 };
 
 /**
- * Notificação imediata de nova mensagem de chat.
+ * Notificação de nova mensagem de chat.
+ * Em foreground: o banner in-app cobre a UX.
+ * Em background: dispara notificação do sistema na bandeja.
  */
 export const showChatMessageNotification = async (
   senderName: string,
@@ -511,13 +603,18 @@ export const showChatMessageNotification = async (
   const preview = String(messageText || "").trim();
   if (!preview) return;
 
+  // App aberto: banner in-app já avisa; evita duplicar na bandeja.
+  if (AppState.currentState === "active") {
+    return;
+  }
+
   const body =
     preview.length > 120 ? `${preview.slice(0, 117)}...` : preview;
 
   await sendImmediateNotification(`💬 ${senderName}`, body, {
     type: "chat_message",
     chatId,
-  });
+  }, { channelId: NOTIFICATION_CHANNEL_CHAT });
 };
 
 /**
@@ -526,16 +623,13 @@ export const showChatMessageNotification = async (
 export const shouldSendDailyReminder = async (
   hasExpenseToday: boolean,
 ): Promise<boolean> => {
-  // Se já registrou gasto hoje, não enviar lembrete
   if (hasExpenseToday) {
     return false;
   }
 
-  // Verificar se já enviou lembrete hoje
   const today = new Date();
   const hour = today.getHours();
 
-  // Só enviar após as 21h
   return hour >= 21;
 };
 

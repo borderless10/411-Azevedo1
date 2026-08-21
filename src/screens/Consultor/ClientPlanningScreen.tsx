@@ -48,6 +48,7 @@ import {
 import { CurrencyInput } from "../../components/CurrencyInput";
 import DatePicker from "../../components/DatePicker";
 import { CreditCardFormModal } from "../../components/Cards/CreditCardFormModal";
+import { profileDisplayName } from "../../utils/chatDisplayNames";
 
 export const ClientPlanningScreen = () => {
   const { user } = useAuth();
@@ -80,6 +81,11 @@ export const ClientPlanningScreen = () => {
   >({});
   const [bills, setBills] = useState<Bill[]>([]);
   const [expectedIncomes, setExpectedIncomes] = useState<ExpectedItem[]>([]);
+  const [availableInAccount, setAvailableInAccount] = useState(0);
+  const [availableInAccountInput, setAvailableInAccountInput] = useState("");
+  const [savingAvailableInAccount, setSavingAvailableInAccount] =
+    useState(false);
+  const [showEmContaInfo, setShowEmContaInfo] = useState(false);
   const [expectedExpenses, setExpectedExpenses] = useState<ExpectedItem[]>([]);
   const [newBillName, setNewBillName] = useState("");
   const [newBillAmount, setNewBillAmount] = useState("");
@@ -127,6 +133,9 @@ export const ClientPlanningScreen = () => {
   const [savingCardInvoiceId, setSavingCardInvoiceId] = useState<string | null>(
     null,
   );
+  const [cardInvoiceFeedback, setCardInvoiceFeedback] = useState<
+    Record<string, { type: "success" | "error"; message: string }>
+  >({});
   const [loadingCardsTab, setLoadingCardsTab] = useState(false);
   const [isCardModalVisible, setIsCardModalVisible] = useState(false);
   const [editingClientCard, setEditingClientCard] = useState<CreditCard | null>(
@@ -248,6 +257,13 @@ export const ClientPlanningScreen = () => {
           );
           setBills(planning.bills || []);
           setExpectedIncomes(planning.expectedIncomes || []);
+          const emConta = Number(
+            planning.availableInAccount ?? planning.monthlyIncome ?? 0,
+          );
+          setAvailableInAccount(emConta);
+          setAvailableInAccountInput(
+            emConta > 0 ? formatCurrencyValue(emConta) : "",
+          );
           setExpectedExpenses(planning.expectedExpenses || []);
           const rootCard = Number(planning.consumoModeradoCard || 0);
           const rootCash = Number(planning.consumoModeradoCash || 0);
@@ -392,11 +408,26 @@ export const ClientPlanningScreen = () => {
   };
 
   const handleSaveCardInvoice = async (cardId: string) => {
-    if (!user?.id || !selectedClient) return;
+    if (!user?.id || !selectedClient) {
+      setCardInvoiceFeedback((previous) => ({
+        ...previous,
+        [cardId]: {
+          type: "error",
+          message: "Selecione um cliente antes de salvar.",
+        },
+      }));
+      return;
+    }
 
     try {
       setSavingCardInvoiceId(cardId);
-      await planningServices.upsertConsultantCardInvoice(
+      setCardInvoiceFeedback((previous) => {
+        const next = { ...previous };
+        delete next[cardId];
+        return next;
+      });
+
+      const updatedInvoices = await planningServices.upsertConsultantCardInvoice(
         user.id,
         selectedClient.id,
         {
@@ -406,10 +437,38 @@ export const ClientPlanningScreen = () => {
           expectedAmount: cardExpectedInvoiceInputs[cardId] ?? 0,
         },
       );
-      Alert.alert("Sucesso", "Valores da fatura registrados.");
-    } catch (error) {
+
+      setConsultantCardInvoices(updatedInvoices);
+
+      const successMessage = "Faturas salvas com sucesso.";
+      setCardInvoiceFeedback((previous) => ({
+        ...previous,
+        [cardId]: { type: "success", message: successMessage },
+      }));
+
+      if (Platform.OS !== "web") {
+        Alert.alert("Sucesso", successMessage);
+      }
+
+      await reloadClientCards();
+
+      setTimeout(() => {
+        setCardInvoiceFeedback((previous) => {
+          if (previous[cardId]?.type !== "success") return previous;
+          const next = { ...previous };
+          delete next[cardId];
+          return next;
+        });
+      }, 5000);
+    } catch (error: any) {
       console.error("Erro ao salvar fatura do cartão:", error);
-      Alert.alert("Erro", "Não foi possível salvar o valor da fatura.");
+      const message =
+        error?.message || "Não foi possível salvar o valor da fatura.";
+      setCardInvoiceFeedback((previous) => ({
+        ...previous,
+        [cardId]: { type: "error", message },
+      }));
+      Alert.alert("Erro", message);
     } finally {
       setSavingCardInvoiceId(null);
     }
@@ -592,8 +651,10 @@ export const ClientPlanningScreen = () => {
 
     const totalConsumoModerado = consumptionBreakdown.total;
     const totalExpectedIncomes = sum(expectedIncomes);
+    const totalResources = (Number(availableInAccount) || 0) + totalExpectedIncomes;
     const totalSpending = totalCashExpenses + totalCardExpenses;
-    const expectedSavings = totalExpectedIncomes - totalSpending;
+    // Poupança = recursos menos o que sai do caixa (dinheiro/pix). Cartão não reduz recursos disponíveis.
+    const expectedSavings = totalResources - totalCashExpenses;
     const dailyTrackedCount =
       (bills || []).filter((bill) => bill.dailyTracking).length +
       (expectedExpenses || []).filter((item) => item.dailyTracking).length;
@@ -603,6 +664,7 @@ export const ClientPlanningScreen = () => {
       totalCashExpenses,
       totalConsumoModerado,
       totalExpectedIncomes,
+      totalResources,
       totalSpending,
       expectedSavings,
       dailyTrackedCount,
@@ -615,6 +677,7 @@ export const ClientPlanningScreen = () => {
     consumoModeradoValue,
     consumoModeradoAmountCard,
     consumoModeradoAmountCash,
+    availableInAccount,
   ]);
 
   const fixedBills = useMemo(
@@ -1103,6 +1166,26 @@ export const ClientPlanningScreen = () => {
     setDeleteTarget(null);
   };
 
+  const handleSaveAvailableInAccount = async () => {
+    if (!user || !selectedClient) return;
+    try {
+      setSavingAvailableInAccount(true);
+      const parsed = parseCurrencyInput(availableInAccountInput);
+      const value = Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
+      await planningServices.updatePlanning(user.id, selectedClient.id, {
+        availableInAccount: value,
+      });
+      setAvailableInAccount(value);
+      setAvailableInAccountInput(value > 0 ? formatCurrencyValue(value) : "");
+      Alert.alert("Sucesso", "Valor em conta atualizado.");
+    } catch (error) {
+      console.error("Erro ao salvar em conta:", error);
+      Alert.alert("Erro", "Não foi possível salvar o valor em conta.");
+    } finally {
+      setSavingAvailableInAccount(false);
+    }
+  };
+
   const handleSaveConsumoModerado = async () => {
     if (!user || !selectedClient) return;
     try {
@@ -1198,7 +1281,11 @@ export const ClientPlanningScreen = () => {
   if (loading) {
     return (
       <Layout
-        title="Planejamento do Cliente"
+        title={
+          selectedClient
+            ? profileDisplayName(selectedClient, "Planejamento do Cliente")
+            : "Planejamento do Cliente"
+        }
         showBackButton={true}
         showSidebar={false}
       >
@@ -1212,7 +1299,11 @@ export const ClientPlanningScreen = () => {
   if (!selectedClient) {
     return (
       <Layout
-        title="Planejamento do Cliente"
+        title={
+          selectedClient
+            ? profileDisplayName(selectedClient, "Planejamento do Cliente")
+            : "Planejamento do Cliente"
+        }
         showBackButton={true}
         showSidebar={false}
       >
@@ -1225,7 +1316,7 @@ export const ClientPlanningScreen = () => {
 
   return (
     <Layout
-      title="Planejamento do Cliente"
+      title={profileDisplayName(selectedClient, "Planejamento do Cliente")}
       showBackButton={true}
       showSidebar={false}
     >
@@ -1338,19 +1429,11 @@ export const ClientPlanningScreen = () => {
               <View style={styles.highlightCardFull}>
                 <Text style={styles.highlightLabel}>Total Gastos</Text>
                 <Text style={styles.highlightValue}>
-                  {formatCurrency(totals.totalSpending)}
+                  {formatCurrency(totals.totalCashExpenses)}
                 </Text>
               </View>
 
               <View style={{ flexDirection: "row", marginTop: 8, gap: 8 }}>
-                <View style={[styles.highlightCardSmall, { flex: 1 }]}>
-                  <Text style={styles.highlightLabelSmall}>
-                    Gastos no Dinheiro
-                  </Text>
-                  <Text style={styles.highlightValueSmall}>
-                    {formatCurrency(totals.totalCashExpenses)}
-                  </Text>
-                </View>
                 <View style={[styles.highlightCardSmall, { flex: 1 }]}>
                   <Text style={styles.highlightLabelSmall}>
                     Gastos no Cartão
@@ -1874,16 +1957,36 @@ export const ClientPlanningScreen = () => {
                     style={[
                       styles.saveButton,
                       { marginTop: 12, alignSelf: "flex-start" },
+                      cardInvoiceFeedback[card.id]?.type === "success" &&
+                        styles.saveButtonSuccess,
                     ]}
                     onPress={() => handleSaveCardInvoice(card.id)}
                     disabled={savingCardInvoiceId === card.id}
                   >
                     {savingCardInvoiceId === card.id ? (
                       <ActivityIndicator color="#fff" />
+                    ) : cardInvoiceFeedback[card.id]?.type === "success" ? (
+                      <View style={styles.saveButtonSuccessContent}>
+                        <Ionicons name="checkmark-circle" size={18} color="#fff" />
+                        <Text style={styles.saveButtonText}>Salvo</Text>
+                      </View>
                     ) : (
                       <Text style={styles.saveButtonText}>Salvar faturas</Text>
                     )}
                   </TouchableOpacity>
+
+                  {cardInvoiceFeedback[card.id] ? (
+                    <Text
+                      style={[
+                        styles.cardInvoiceFeedback,
+                        cardInvoiceFeedback[card.id].type === "success"
+                          ? styles.cardInvoiceFeedbackSuccess
+                          : styles.cardInvoiceFeedbackError,
+                      ]}
+                    >
+                      {cardInvoiceFeedback[card.id].message}
+                    </Text>
+                  ) : null}
                 </View>
               ))
             )}
@@ -1892,13 +1995,66 @@ export const ClientPlanningScreen = () => {
 
         {activeTab === "rendas" && (
           <View style={styles.tabPanel}>
-            <View style={styles.highlightCard}>
-              <Text style={styles.highlightLabel}>Rendas esperadas</Text>
+            <View style={styles.highlightCardFull}>
+              <Text style={styles.highlightLabel}>Recursos Disponíveis</Text>
               <Text style={styles.highlightValue}>
-                {formatCurrency(totals.totalExpectedIncomes)}
+                {formatCurrency(totals.totalResources)}
               </Text>
             </View>
-            <View style={{ marginBottom: 8 }}>
+
+            <View style={{ flexDirection: "row", marginTop: 8, gap: 8 }}>
+              <View style={[styles.highlightCardSmall, { flex: 1 }]}>
+                <View
+                  style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
+                >
+                  <Text style={styles.highlightLabelSmall}>Em conta</Text>
+                  <TouchableOpacity onPress={() => setShowEmContaInfo(true)}>
+                    <Ionicons
+                      name="information-circle-outline"
+                      size={16}
+                      color="#8c52ff"
+                    />
+                  </TouchableOpacity>
+                </View>
+                <Text style={styles.highlightValueSmall}>
+                  {formatCurrency(availableInAccount)}
+                </Text>
+              </View>
+              <View style={[styles.highlightCardSmall, { flex: 1 }]}>
+                <Text style={styles.highlightLabelSmall}>Rendas esperadas</Text>
+                <Text style={styles.highlightValueSmall}>
+                  {formatCurrency(totals.totalExpectedIncomes)}
+                </Text>
+              </View>
+            </View>
+
+            <Text style={[styles.label, { marginTop: 12 }]}>
+              Atualizar valor em conta
+            </Text>
+            <TextInput
+              style={styles.input}
+              value={availableInAccountInput}
+              onChangeText={setAvailableInAccountInput}
+              placeholder="R$ 0,00"
+              placeholderTextColor="#777"
+              keyboardType="numeric"
+            />
+            <TouchableOpacity
+              style={[
+                styles.saveButton,
+                savingAvailableInAccount && styles.primarySaveButtonDisabled,
+              ]}
+              onPress={handleSaveAvailableInAccount}
+              disabled={savingAvailableInAccount}
+            >
+              {savingAvailableInAccount ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.saveButtonText}>Salvar em conta</Text>
+              )}
+            </TouchableOpacity>
+
+            <View style={{ marginBottom: 8, marginTop: 12 }}>
               <TouchableOpacity
                 style={styles.saveButton}
                 onPress={() => {
@@ -2015,15 +2171,15 @@ export const ClientPlanningScreen = () => {
         <View style={styles.fixedFooter}>
           <View style={styles.summaryRow}>
             <View style={styles.summaryBlock}>
-              <Text style={styles.summaryLabel}>Rendas esperadas</Text>
+              <Text style={styles.summaryLabel}>Recursos disponíveis</Text>
               <Text style={styles.summaryValue}>
-                {formatCurrency(totals.totalExpectedIncomes)}
+                {formatCurrency(totals.totalResources)}
               </Text>
             </View>
             <View style={styles.summaryBlock}>
               <Text style={styles.summaryLabel}>Gastos esperados</Text>
               <Text style={styles.summaryValue}>
-                {formatCurrency(totals.totalSpending)}
+                {formatCurrency(totals.totalCashExpenses)}
               </Text>
             </View>
             <View style={styles.summaryBlock}>
@@ -2825,6 +2981,29 @@ export const ClientPlanningScreen = () => {
           </View>
         </View>
       </Modal>
+      <Modal
+        visible={showEmContaInfo}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowEmContaInfo(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxWidth: 420 }]}>
+            <Text style={styles.modalTitle}>Em conta</Text>
+            <Text style={{ color: "#ccc", lineHeight: 22 }}>
+              Valor que o cliente já possui disponível na conta bancária, fora
+              das rendas previstas. Entra no total de Recursos Disponíveis junto
+              com as rendas esperadas.
+            </Text>
+            <TouchableOpacity
+              style={[styles.saveButton, { marginTop: 16 }]}
+              onPress={() => setShowEmContaInfo(false)}
+            >
+              <Text style={styles.saveButtonText}>Entendi</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </Layout>
   );
 };
@@ -2992,6 +3171,26 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "700",
     marginTop: 2,
+  },
+  saveButtonSuccess: {
+    backgroundColor: "#22c55e",
+  },
+  saveButtonSuccessContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  cardInvoiceFeedback: {
+    marginTop: 8,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "600",
+  },
+  cardInvoiceFeedbackSuccess: {
+    color: "#22c55e",
+  },
+  cardInvoiceFeedbackError: {
+    color: "#ff6b6b",
   },
   highlightLabel: {
     color: "#b89aff",

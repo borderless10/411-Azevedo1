@@ -223,8 +223,11 @@ export const TrackedIncomeScreen = () => {
       setPlanningLoaded(totalTrackedExpectedIncome > 0);
 
       const today = new Date();
-      const cycleStartDate = planning?.consumoModeradoCycleStartedAt
-        ? getStartOfDay(new Date(planning.consumoModeradoCycleStartedAt))
+      const cycleStartedAtRaw = planning?.consumoModeradoCycleStartedAt
+        ? new Date(planning.consumoModeradoCycleStartedAt)
+        : null;
+      const cycleStartDate = cycleStartedAtRaw
+        ? getStartOfDay(cycleStartedAtRaw)
         : null;
       const cycleEndDate = planning?.consumoModeradoCycleEndedAt
         ? getEndOfDay(new Date(planning.consumoModeradoCycleEndedAt))
@@ -247,6 +250,7 @@ export const TrackedIncomeScreen = () => {
       const incomes = await incomeServices.getIncomes(ownerId, {
         startDate: start,
         endDate: end,
+        createdAtFrom: cycleStartedAtRaw || undefined,
       });
 
       const filteredIncomes = incomes.filter(

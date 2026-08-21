@@ -74,6 +74,32 @@ const getMonthYearFromDate = (date: Date): string => {
   return `${year}-${month}`;
 };
 
+/** Trimestre civil (jan-mar, abr-jun, jul-set, out-dez) — igual para todos os usuários. */
+export const getCurrentRankingQuarterRange = (
+  referenceDate: Date = new Date(),
+): { start: Date; end: Date } => {
+  const year = referenceDate.getFullYear();
+  const quarterStartMonth = Math.floor(referenceDate.getMonth() / 3) * 3;
+  const start = getStartOfDay(new Date(year, quarterStartMonth, 1));
+  const end = new Date(year, quarterStartMonth + 3, 0, 23, 59, 59, 999);
+  return { start, end };
+};
+
+const parseRankingEntryDate = (dateKey: string): Date | null => {
+  const parsed = new Date(`${dateKey}T12:00:00`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const isRankingEntryInQuarter = (
+  entry: RankingPlanilhaEntry,
+  referenceDate: Date = new Date(),
+): boolean => {
+  const entryDate = parseRankingEntryDate(entry.dateKey);
+  if (!entryDate) return false;
+  const { start, end } = getCurrentRankingQuarterRange(referenceDate);
+  return entryDate >= start && entryDate <= end;
+};
+
 const markMissedDay = async (
   userId: string,
   targetDate: Date,
@@ -98,6 +124,17 @@ const markMissedDay = async (
 
   await persistEntries(userId, monthYear, budget, entries);
 };
+
+const isZeroRankingEntry = (entry: RankingPlanilhaEntry): boolean =>
+  entry.type === "zero_same_day" ||
+  entry.type === "zero_next_day" ||
+  entry.type === "zero_after_expense" ||
+  (entry.points === RANKING_PLANILHA_POINTS.ZERO_NEXT_DAY &&
+    entry.type !== "expense_same_day" &&
+    entry.type !== "expense_next_day");
+
+const isExpenseRankingEntry = (entry: RankingPlanilhaEntry): boolean =>
+  entry.type === "expense_same_day" || entry.type === "expense_next_day";
 
 export const rankingPlanilhaService = {
   calendarDaysBetween,
@@ -145,19 +182,35 @@ export const rankingPlanilhaService = {
     const monthYear = getMonthYearFromDate(targetDate);
     const budget = await budgetServices.getBudget(userId, monthYear);
     const dateKey = formatDateToString(targetDate);
-    const entries = [...(budget?.rankingPlanilhaEntries || [])];
+    let entries = [...(budget?.rankingPlanilhaEntries || [])];
     const existing = entries.find((entry) => entry.dateKey === dateKey);
+    let replacingExpenseWithZero = false;
 
     if (existing) {
-      return { points: existing.points, applied: false, type: existing.type };
+      if (kind === "expense" && (isZeroRankingEntry(existing) || existing.type === "missed")) {
+        entries = entries.filter((entry) => entry.dateKey !== dateKey);
+      } else if (kind === "zero" && isExpenseRankingEntry(existing)) {
+        entries = entries.filter((entry) => entry.dateKey !== dateKey);
+        replacingExpenseWithZero = true;
+      } else {
+        return { points: existing.points, applied: false, type: existing.type };
+      }
     }
 
     const diff = calendarDaysBetween(targetDate, registeredAt);
-    let points = RANKING_PLANILHA_POINTS.MISSED;
+    let points: number = RANKING_PLANILHA_POINTS.MISSED;
     let type: RankingPlanilhaEntry["type"] = "missed";
 
     if (kind === "zero") {
-      if (diff === 1) {
+      if (replacingExpenseWithZero) {
+        if (diff === 0 || diff === 1) {
+          points = RANKING_PLANILHA_POINTS.EXPENSE;
+          type = "zero_after_expense";
+        }
+      } else if (diff === 0) {
+        points = RANKING_PLANILHA_POINTS.ZERO_NEXT_DAY;
+        type = "zero_same_day";
+      } else if (diff === 1) {
         points = RANKING_PLANILHA_POINTS.ZERO_NEXT_DAY;
         type = "zero_next_day";
       }
@@ -181,12 +234,63 @@ export const rankingPlanilhaService = {
     return { points, applied: true, type };
   },
 
-  getTotalPointsFromBudgets(budgets: Budget[]): number {
+  getTotalPointsFromBudgets(
+    budgets: Budget[],
+    referenceDate: Date = new Date(),
+  ): number {
     return budgets.reduce((total, budget) => {
       const entries = budget.rankingPlanilhaEntries || [];
-      return total + entries.reduce((sum, entry) => sum + entry.points, 0);
+      return (
+        total +
+        entries.reduce((sum, entry) => {
+          if (!isRankingEntryInQuarter(entry, referenceDate)) return sum;
+          return sum + entry.points;
+        }, 0)
+      );
     }, 0);
   },
+};
+
+export type RankingRegistrationResult = {
+  points: number;
+  applied: boolean;
+  type?: RankingPlanilhaEntry["type"];
+};
+
+export const getRankingRegistrationFeedback = (
+  ranking: RankingRegistrationResult,
+  kind: PlanilhaRegistrationKind,
+): { title: string; message: string; celebrate: boolean } => {
+  if (ranking.type === "zero_after_expense" && ranking.points > 0) {
+    return {
+      title: "Zero confirmado",
+      message:
+        "Correção registrada. Você ganhou 1 ponto no ranking (pontuação reduzida por ter registrado gasto antes).",
+      celebrate: true,
+    };
+  }
+
+  if (ranking.points <= 0) {
+    return {
+      title: "Registro salvo",
+      message:
+        kind === "zero"
+          ? "Zero confirmado no app. Este preenchimento não gerou pontos no ranking."
+          : "Gasto registrado. Este preenchimento não gerou pontos no ranking.",
+      celebrate: false,
+    };
+  }
+
+  const label =
+    kind === "zero"
+      ? "Zero confirmado no app"
+      : "Consumo moderado registrado";
+
+  return {
+    title: "Parabéns! 🎉",
+    message: `${label}. Você ganhou ${ranking.points} ponto(s) no ranking!`,
+    celebrate: true,
+  };
 };
 
 export default rankingPlanilhaService;

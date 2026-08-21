@@ -2,6 +2,7 @@ export interface WishlistItem {
   id: string;
   userId: string;
   name: string;
+  /** 0 = sem valor definido */
   value: number;
   description?: string;
   createdAt: Date;
@@ -19,7 +20,8 @@ export interface WishlistFirestore {
 
 export interface CreateWishlistData {
   name: string;
-  value: number;
+  /** Opcional; omitido ou 0 = sem valor */
+  value?: number;
   description?: string;
 }
 

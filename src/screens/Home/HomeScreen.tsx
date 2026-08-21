@@ -35,6 +35,7 @@ import {
   syncExpectedIncomeNotifications,
 } from "../../services/notificationServices";
 import { formatCurrency } from "../../utils/currencyUtils";
+import { computePlanningTotals } from "../../utils/planningDisplayUtils";
 import MaskedAmount from "../../components/ui/MaskedAmount";
 import {
   formatDateForDisplay,
@@ -59,9 +60,11 @@ import {
 } from "../../components/Charts";
 import { DEFAULT_EXPENSE_CATEGORIES } from "../../types/category";
 import ZeroPlanilhaConfirmModal from "../../components/ui/ZeroPlanilhaConfirmModal";
+import { getRankingRegistrationFeedback } from "../../services/rankingPlanilhaService";
 import ConfirmDeleteModal from "../../components/ui/ConfirmDeleteModal";
 import ConfettiCelebration from "../../components/ui/ConfettiCelebration";
 import ExpectedDetails from "../../components/ui/ExpectedDetails";
+import { profileDisplayName } from "../../utils/chatDisplayNames";
 import {
   getExpenseScopeLabel,
   shouldShowExpenseCategoryTag,
@@ -269,7 +272,9 @@ export const HomeScreen = () => {
         last7DaysExpenses,
       ] = await Promise.all([
         incomeServices
-          .getIncomesTotal(user.id, activeStartDate, activeEndDate)
+          .getIncomesTotal(user.id, activeStartDate, activeEndDate, {
+            createdAtFrom,
+          })
           .catch((err) => {
             console.error("❌ [HOME] Erro ao buscar totais de renda:", err);
             return 0;
@@ -287,6 +292,7 @@ export const HomeScreen = () => {
           .getIncomes(user.id, {
             startDate: activeStartDate,
             endDate: activeEndDate,
+            createdAtFrom,
           })
           .catch((err) => {
             console.error("❌ [HOME] Erro ao buscar rendas:", err);
@@ -321,6 +327,7 @@ export const HomeScreen = () => {
               .getIncomes(user.id, {
                 startDate: lineChartStartDate,
                 endDate: activeEndDate,
+                createdAtFrom,
               })
               .catch((err) => {
                 console.error(
@@ -360,67 +367,11 @@ export const HomeScreen = () => {
           "🏠 [HOME] planning.expectedExpenses:",
           planning.expectedExpenses,
         );
-        const isCardPayment = (method?: string) => {
-          const normalized = String(method || "")
-            .trim()
-            .toLowerCase()
-            .normalize("NFD")
-            .replace(/[\u0300-\u036f]/g, "");
-          return (
-            normalized === "card" ||
-            normalized === "credit_card" ||
-            normalized === "debit_card" ||
-            normalized === "cart" ||
-            normalized === "cartao" ||
-            normalized === "credito" ||
-            normalized === "credit"
-          );
-        };
-        const getNonCardPortion = (item: any) => {
-          const cashAmount = Number(item?.amountCash);
-          if (Number.isFinite(cashAmount) && cashAmount > 0) {
-            return cashAmount;
-          }
 
-          if (isCardPayment(item?.paymentMethod)) {
-            return 0;
-          }
-
-          const amount = Number(item?.amount);
-          return Number.isFinite(amount) ? amount : 0;
-        };
-        const sumExpected = (arr: any[] | undefined) =>
-          (arr || []).reduce((s, it) => {
-            const n = Number(it?.amount);
-            return s + (Number.isFinite(n) ? n : 0);
-          }, 0);
-
-        const sumExpExpenses = (planning.expectedExpenses || []).reduce(
-          (sum: number, item: any) => sum + getNonCardPortion(item),
-          0,
-        );
-        const sumExpIncomes = sumExpected(planning.expectedIncomes);
-        const monthly = Number(planning.monthlyIncome) || 0;
-
-        // sum of bills considering only non-card portion
-        const sumBills = (planning.bills || []).reduce((s: number, b: any) => {
-          return s + getNonCardPortion(b);
-        }, 0);
-
-        // sum of plannedByCategory values
-        const sumByCategory = planning.plannedByCategory
-          ? Object.values(planning.plannedByCategory).reduce(
-              (s: number, v: any) =>
-                s + (Number.isFinite(Number(v)) ? Number(v) : 0),
-              0,
-            )
-          : 0;
-
-        // gasto esperado no mês = bills + plannedByCategory + expectedExpenses
-        calcExpectedExpenses = sumBills + sumByCategory + sumExpExpenses;
-        calcExpectedIncomes = monthly + sumExpIncomes;
-        calcExpectedSavings =
-          (calcExpectedIncomes ?? 0) - (calcExpectedExpenses ?? 0);
+        const planningTotals = computePlanningTotals(planning);
+        calcExpectedExpenses = planningTotals.totalCashExpenses;
+        calcExpectedIncomes = planningTotals.totalResources;
+        calcExpectedSavings = planningTotals.expectedSavings;
       }
 
       setExpectedExpenses(calcExpectedExpenses);
@@ -794,7 +745,10 @@ export const HomeScreen = () => {
 
     try {
       setConfirmingZero(true);
-      await budgetServices.confirmZeroExpenseDay(user.id, zeroConfirmDate);
+      const { ranking } = await budgetServices.confirmZeroExpenseDay(
+        user.id,
+        zeroConfirmDate,
+      );
       markYesterdayPromptResolved();
 
       await activityServices.logActivity(user.id, {
@@ -805,11 +759,11 @@ export const HomeScreen = () => {
 
       setZeroConfirmVisible(false);
       setZeroConfirmDate(null);
-      setShowConfetti(true);
-      Alert.alert(
-        "Parabéns! 🎉",
-        "Zero no app confirmado. Você ganhou 2 pontos no ranking!",
-      );
+      const feedback = getRankingRegistrationFeedback(ranking, "zero");
+      if (feedback.celebrate) {
+        setShowConfetti(true);
+      }
+      Alert.alert(feedback.title, feedback.message);
     } catch (error) {
       console.error("❌ [HOME] Erro ao confirmar zero na planilha:", error);
       Alert.alert(
@@ -1336,7 +1290,7 @@ export const HomeScreen = () => {
           <View style={styles.pageGreeting}>
             <Text style={styles.pageGreetingHello}>Olá,</Text>
             <Text style={styles.pageGreetingName} numberOfLines={1}>
-              {user?.name || user?.email || "Usuário"}
+              {profileDisplayName(user, user?.email || "Usuário")}
             </Text>
           </View>
           {/* Cards de resumo rápido */}
@@ -1382,7 +1336,7 @@ export const HomeScreen = () => {
                           <Ionicons name="cash" size={18} color="#8c52ff" />
                         </View>
                         <Text style={styles.summaryLabelIncome}>
-                          Renda Esperada
+                          Recursos Disponíveis
                         </Text>
                         {expectedIncomes === null ? (
                           <Text style={styles.summaryValueSquare}>-</Text>
@@ -1835,7 +1789,7 @@ export const HomeScreen = () => {
               />
               <ActionCard
                 icon="cash-outline"
-                label="Ver Todas as Rendas"
+                label="Rendas Acompanhadas"
                 color="#a47aff"
                 onPress={() => navigate("IncomeList")}
                 delay={200}

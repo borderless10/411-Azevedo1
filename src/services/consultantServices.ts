@@ -17,10 +17,20 @@ export async function getClientsByConsultant(
   const usersRef = collection(db, "users");
   const q = query(usersRef, where("consultantId", "==", consultantId));
   const snap = await getDocs(q);
-  const results = snap.docs.map((d) => ({
-    id: d.id,
-    ...(d.data() as any),
-  })) as User[];
+  const results = snap.docs.map((d) => {
+    const data: any = d.data();
+    return {
+      id: d.id,
+      ...data,
+      name: data.name || "",
+      nickname: String(data.nickname || data.username || "").trim(),
+      email: data.email || "",
+      phone: data.phone || "",
+      photoBase64: data.photoBase64 || "",
+      consultantId: data.consultantId || undefined,
+      role: data.role || "user",
+    } as User;
+  });
   console.log(
     "[CONSULTANT SERVICE] Query results:",
     results.length,
@@ -53,7 +63,9 @@ export async function getClientsByConsultant(
   if (!term) return results;
   const t = term.trim().toLowerCase();
   return results.filter((u) => {
-    const name = (u.displayName || u.name || "").toString().toLowerCase();
+    const name = (u.nickname || u.displayName || u.name || "")
+      .toString()
+      .toLowerCase();
     const email = (u.email || "").toString().toLowerCase();
     return name.includes(t) || email.includes(t);
   });

@@ -37,6 +37,10 @@ import {
   resolveClientMovementPeriod,
 } from "../../utils/consultantClientMetrics";
 import { filterExpensesByConsultantScope } from "../../utils/expenseScopeUtils";
+import {
+  profileDisplayName,
+  profileRegisteredName,
+} from "../../utils/chatDisplayNames";
 
 export const ClientDetail: React.FC = () => {
   const { params, navigate } = useNavigation() as any;
@@ -139,6 +143,7 @@ export const ClientDetail: React.FC = () => {
           clientId,
           period.start,
           period.end,
+          { createdAtFrom: period.createdAtFrom },
         );
 
         const ex = await expenseServices.getExpenses(clientId, {
@@ -149,6 +154,7 @@ export const ClientDetail: React.FC = () => {
         const inc = await incomeServices.getIncomes(clientId, {
           startDate: period.start,
           endDate: period.end,
+          createdAtFrom: period.createdAtFrom,
         });
         setExpenses(ex);
         setIncomes(inc);
@@ -274,7 +280,11 @@ export const ClientDetail: React.FC = () => {
   const balanceMonth = monthlyIncomes - monthlyExpenses;
 
   return (
-    <Layout title="Dados do Cliente" showBackButton={true} showSidebar={false}>
+    <Layout
+      title={profileDisplayName(clientDoc, "Dados do Cliente")}
+      showBackButton={true}
+      showSidebar={false}
+    >
       <ScrollView
         style={[styles.container, { backgroundColor: colors.background }]}
         contentContainerStyle={{
@@ -282,9 +292,22 @@ export const ClientDetail: React.FC = () => {
           paddingBottom: 16 + insets.bottom + 96,
         }}
       >
-        <Text style={[styles.heading, { color: colors.text }]}>
-          Visão Geral
-        </Text>
+        {clientDoc ? (
+          <View style={{ marginBottom: 16 }}>
+            <Text style={[styles.heading, { color: colors.text }]}>
+              {profileDisplayName(clientDoc, "Cliente")}
+            </Text>
+            {profileRegisteredName(clientDoc) ? (
+              <Text style={{ color: colors.textSecondary, marginTop: 4 }}>
+                {profileRegisteredName(clientDoc)}
+              </Text>
+            ) : null}
+          </View>
+        ) : (
+          <Text style={[styles.heading, { color: colors.text }]}>
+            Visão Geral
+          </Text>
+        )}
         <View style={styles.actionColumn}>
           <TouchableOpacity
             style={[
@@ -317,6 +340,30 @@ export const ClientDetail: React.FC = () => {
               onPress={() => navigate("ClientIncomeRecords", { clientId })}
             >
               <Text style={styles.actionButtonText}>Registros de Rendas</Text>
+            </TouchableOpacity>
+          )}
+
+          {clientDoc && (
+            <TouchableOpacity
+              style={[
+                styles.actionButtonFull,
+                { backgroundColor: colors.primary },
+              ]}
+              onPress={() => navigate("Budget", { clientId })}
+            >
+              <Text style={styles.actionButtonText}>Consumo Moderado</Text>
+            </TouchableOpacity>
+          )}
+
+          {clientDoc && (
+            <TouchableOpacity
+              style={[
+                styles.actionButtonFull,
+                { backgroundColor: colors.primary },
+              ]}
+              onPress={() => navigate("IncomeList", { clientId })}
+            >
+              <Text style={styles.actionButtonText}>Rendas do Cliente</Text>
             </TouchableOpacity>
           )}
 

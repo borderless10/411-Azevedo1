@@ -351,7 +351,7 @@ export const CadastrarClienteScreen = () => {
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>Apelido</Text>
+                <Text style={styles.label}>Usuário</Text>
                 <View style={styles.inputContainer}>
                   <Ionicons
                     name="pricetag-outline"
@@ -361,7 +361,7 @@ export const CadastrarClienteScreen = () => {
                   />
                   <TextInput
                     style={styles.input}
-                    placeholder="Digite um apelido (opcional)"
+                    placeholder="Como a pessoa quer ser chamada no app"
                     placeholderTextColor="#666"
                     value={nickname}
                     onChangeText={setNickname}

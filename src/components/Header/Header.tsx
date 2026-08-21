@@ -17,6 +17,10 @@ import { useShowValues } from "../../contexts/ShowValuesContext";
 import { useAuth } from "../../hooks/useAuth";
 import { useNavigation } from "../../routes/NavigationContext";
 import { useTheme } from "../../contexts/ThemeContext";
+import {
+  profileInitial,
+  profilePhotoUri,
+} from "../../utils/chatDisplayNames";
 
 interface HeaderProps {
   title?: string;
@@ -60,6 +64,7 @@ export const Header: React.FC<HeaderProps> = ({
       navigate(
         params.returnTo,
         params.returnToParams ??
+          params.returnParams ??
           (params.clientId ? { clientId: params.clientId } : undefined),
       );
       return;
@@ -156,10 +161,10 @@ export const Header: React.FC<HeaderProps> = ({
                 style={styles.profileButton}
               >
                 <View style={styles.profileWrapper}>
-                  {user?.photoBase64 ? (
+                  {profilePhotoUri(user?.photoBase64) ? (
                     <Image
                       source={{
-                        uri: `data:image/png;base64,${user.photoBase64}`,
+                        uri: profilePhotoUri(user?.photoBase64) as string,
                       }}
                       style={styles.avatar}
                     />
@@ -174,11 +179,7 @@ export const Header: React.FC<HeaderProps> = ({
                       ]}
                     >
                       <Text style={[styles.avatarText, { color: colors.text }]}>
-                        {(
-                          user?.name?.[0] ||
-                          user?.email?.[0] ||
-                          "U"
-                        ).toUpperCase()}
+                        {profileInitial(user, user?.email?.[0] || "U")}
                       </Text>
                     </View>
                   )}

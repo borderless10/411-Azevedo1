@@ -83,13 +83,20 @@ export const ConsultorHome: React.FC = () => {
             >
               <View style={styles.cardLeft}>
                 <Text style={[styles.name, { color: colors.text }]}>
-                  {item.name || item.displayName || item.email}
+                  {(item.nickname || "").trim() || "—"}
                 </Text>
                 <Text
                   style={[styles.subtitle, { color: colors.textSecondary }]}
                 >
-                  {item.username || item.email}
+                  Nome: {item.name || "—"}
                 </Text>
+                {item.email ? (
+                  <Text
+                    style={[styles.subtitle, { color: colors.textSecondary }]}
+                  >
+                    {item.email}
+                  </Text>
+                ) : null}
               </View>
               <View style={styles.cardRight}>
                 <TouchableOpacity

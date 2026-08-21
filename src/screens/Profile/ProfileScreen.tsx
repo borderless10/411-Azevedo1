@@ -20,6 +20,11 @@ import { useAuth } from "../../hooks/useAuth";
 import { userService } from "../../services/userServices";
 import { useNavigation } from "../../routes/NavigationContext";
 import { Layout } from "../../components/Layout/Layout";
+import {
+  profileDisplayName,
+  profileInitial,
+  profilePhotoUri,
+} from "../../utils/chatDisplayNames";
 
 export const ProfileScreen = () => {
   const { user, refreshUser } = useAuth();
@@ -120,17 +125,17 @@ export const ProfileScreen = () => {
               onPress={() => setShowPhotoModal(true)}
               style={styles.avatarContainer}
             >
-              {editingPhotoBase64 ? (
+              {profilePhotoUri(editingPhotoBase64) ? (
                 <Image
                   source={{
-                    uri: `data:image/jpeg;base64,${editingPhotoBase64}`,
+                    uri: profilePhotoUri(editingPhotoBase64) as string,
                   }}
                   style={styles.avatarImage}
                 />
               ) : (
                 <View style={styles.avatar}>
                   <Text style={styles.avatarText}>
-                    {(user?.name?.[0] || user?.email?.[0] || "A").toUpperCase()}
+                    {profileInitial(user, user?.email?.[0] || "A")}
                   </Text>
                 </View>
               )}
@@ -148,7 +153,9 @@ export const ProfileScreen = () => {
               )}
             </TouchableOpacity>
 
-            <Text style={styles.userName}>{user?.name || "Usuário"}</Text>
+            <Text style={styles.userName}>
+              {profileDisplayName(user, "Usuário")}
+            </Text>
             <Text style={styles.userEmail}>{user?.email || ""}</Text>
           </View>
 
@@ -173,12 +180,12 @@ export const ProfileScreen = () => {
             </View>
 
             <View style={{ marginBottom: 12 }}>
-              <Text style={styles.infoLabel}>Apelido</Text>
+              <Text style={styles.infoLabel}>Usuário</Text>
               <TextInput
                 style={[styles.input, { marginTop: 6 }]}
                 value={editingNickname}
                 onChangeText={setEditingNickname}
-                placeholder="Apelido (opcional)"
+                placeholder="Como você quer ser chamado no app"
                 placeholderTextColor="#999"
                 editable={editingMode}
                 selectTextOnFocus={editingMode}

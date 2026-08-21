@@ -17,6 +17,7 @@ import { userService } from "../../services/userServices";
 import { useAuth } from "../../hooks/useAuth";
 import { useNavigation } from "../../routes/NavigationContext";
 import { RankingPreference } from "../../types/auth";
+import { profilePhotoUri } from "../../utils/chatDisplayNames";
 
 type Row = {
   position: number;
@@ -206,8 +207,17 @@ export const RankingScreen = () => {
               • Gasto do dia anterior registrado no dia seguinte: 1 pt
             </Text>
             <Text style={styles.infoBullet}>
-              • Ao abrir o app, confirmar que não houve gasto ontem: 2 pts (zero
-              só pode ser registrado no dia seguinte)
+              • Zero no mesmo dia ou zero de ontem confirmado hoje: 2 pts
+            </Text>
+            <Text style={styles.infoBullet}>
+              • Preenchimentos com 2+ dias de atraso: 0 pt
+            </Text>
+
+            <Text style={styles.infoSubtitle}>Período do ranking</Text>
+            <Text style={styles.infoText}>
+              A pontuação acumula por trimestre civil (jan–mar, abr–jun, jul–set,
+              out–dez), igual para todos. Reiniciar o ciclo de planejamento não
+              zera o ranking.
             </Text>
 
             <Text style={styles.infoSubtitle}>Atenção</Text>
@@ -246,9 +256,9 @@ export const RankingScreen = () => {
               </View>
 
               <View style={styles.avatarWrapper}>
-                {r.photoBase64 ? (
+                {profilePhotoUri(r.photoBase64) ? (
                   <Image
-                    source={{ uri: `data:image/png;base64,${r.photoBase64}` }}
+                    source={{ uri: profilePhotoUri(r.photoBase64) as string }}
                     style={[
                       styles.avatar,
                       r.position <= 3 ? styles.avatarTop : null,

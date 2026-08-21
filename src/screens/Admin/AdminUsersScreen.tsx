@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Alert,
   TextInput,
+  Image,
 } from "react-native";
 
 import { Layout } from "../../components/Layout/Layout";
@@ -15,6 +16,10 @@ import { userService } from "../../services/userServices";
 import { useAuth } from "../../hooks/useAuth";
 import { useNavigation } from "../../routes/NavigationContext";
 import { Ionicons } from "@expo/vector-icons";
+import {
+  profileInitial,
+  profilePhotoUri,
+} from "../../utils/chatDisplayNames";
 
 export const AdminUsersScreen: React.FC = () => {
   const { user } = useAuth();
@@ -67,10 +72,24 @@ export const AdminUsersScreen: React.FC = () => {
   };
 
   const renderItem = ({ item }: { item: any }) => {
+    const displayUser = (item.nickname || "").trim() || item.name || "—";
     return (
       <View style={styles.item}>
+        <View style={styles.avatar}>
+          {profilePhotoUri(item.photoBase64) ? (
+            <Image
+              source={{ uri: profilePhotoUri(item.photoBase64) as string }}
+              style={styles.avatarImage}
+            />
+          ) : (
+            <Text style={styles.avatarInitial}>{profileInitial(item)}</Text>
+          )}
+        </View>
         <View style={styles.info}>
-          <Text style={styles.name}>{item.name || "—"}</Text>
+          <Text style={styles.name}>{displayUser}</Text>
+          <Text style={styles.meta}>
+            Nome: {item.name || "—"}
+          </Text>
           <Text style={styles.email}>{item.email}</Text>
           <Text style={styles.meta}>
             {item.phone ? `Telefone: ${item.phone}` : "Telefone: —"}
@@ -126,6 +145,7 @@ export const AdminUsersScreen: React.FC = () => {
       if (!query.trim()) return true;
       const q = query.toLowerCase();
       return (
+        (u.nickname || "").toLowerCase().includes(q) ||
         (u.name || "").toLowerCase().includes(q) ||
         (u.email || "").toLowerCase().includes(q) ||
         (u.phone || "").toLowerCase().includes(q)
@@ -314,6 +334,25 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingVertical: 12,
     backgroundColor: "#000",
+  },
+  avatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "#1a1a1a",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+    overflow: "hidden",
+  },
+  avatarImage: {
+    width: 44,
+    height: 44,
+  },
+  avatarInitial: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 16,
   },
   info: {
     flex: 1,

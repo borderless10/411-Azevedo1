@@ -29,6 +29,7 @@ import { Expense } from "../../types/expense";
 import { creditCardServices } from "../../services/creditCardServices";
 import { CreditCard } from "../../types/creditCard";
 import { budgetServices } from "../../services/budgetServices";
+import { getRankingRegistrationFeedback } from "../../services/rankingPlanilhaService";
 
 export const EditExpenseScreen = () => {
   const { user } = useAuth();
@@ -240,12 +241,21 @@ export const EditExpenseScreen = () => {
 
       await expenseServices.updateExpense(expenseId, expenseData);
       console.log("✅ Gasto atualizado");
-      await budgetServices.reconcileConsumoModeradoDay(user.id, date);
+      const ranking = await budgetServices.reconcileConsumoModeradoDay(
+        user.id,
+        date,
+      );
 
-      // Mostrar mensagem de confirmação e navegar para Home
+      const rankingFeedback =
+        ranking?.applied && ranking.points > 0
+          ? getRankingRegistrationFeedback(ranking, "expense")
+          : null;
+
       Alert.alert(
         "Sucesso! ✅",
-        `Gasto de ${formatCurrency(savedValue)} atualizado com sucesso!`,
+        rankingFeedback
+          ? `Gasto de ${formatCurrency(savedValue)} atualizado.\n\n${rankingFeedback.message}`
+          : `Gasto de ${formatCurrency(savedValue)} atualizado com sucesso!`,
         [
           {
             text: "OK",

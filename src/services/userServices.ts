@@ -34,6 +34,16 @@ const resolveRankingPreference = (data: any): RankingPreference => {
   return "unset";
 };
 
+export const resolveRankingPreferenceFromData = resolveRankingPreference;
+
+export const userParticipatesInRanking = (user: User | null): boolean => {
+  if (!user || user.isActive === false) return false;
+  if (user.isAdmin || user.role === "admin" || user.role === "consultor") {
+    return false;
+  }
+  return user.rankingPreference === "participate";
+};
+
 export const userService = {
   // Buscar dados de um usuário por ID
   async getUserById(userId: string): Promise<User | null> {

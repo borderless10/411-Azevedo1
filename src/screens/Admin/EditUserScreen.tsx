@@ -114,11 +114,13 @@ export const EditUserScreen: React.FC = ({}: any) => {
               onChangeText={setName}
             />
 
-            <Text style={styles.label}>Apelido</Text>
+            <Text style={styles.label}>Usuário</Text>
             <TextInput
               style={styles.input}
               value={nickname}
               onChangeText={setNickname}
+              placeholder="Como a pessoa quer ser chamada no app"
+              placeholderTextColor="#999"
             />
 
             <Text style={styles.label}>Telefone</Text>

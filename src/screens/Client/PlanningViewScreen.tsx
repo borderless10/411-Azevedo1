@@ -21,6 +21,10 @@ import { planningServices, sumConsultantExpectedInvoicesForKey, sumEffectiveInvo
 import { creditCardServices } from "../../services/creditCardServices";
 import { activityServices } from "../../services/activityServices";
 import { formatCurrency } from "../../utils/currencyUtils";
+import {
+  computePlanningTotals,
+  formatPlannedSplitLabel,
+} from "../../utils/planningDisplayUtils";
 import { toInvoiceKey } from "../../utils/creditCardUtils";
 import { addMonths, formatExpectedMonthLabel } from "../../utils/dateUtils";
 import { CreditCard } from "../../types/creditCard";
@@ -40,65 +44,7 @@ export const PlanningViewScreen = () => {
   const currentInvoiceKey = toInvoiceKey(new Date());
   const nextInvoiceKey = toInvoiceKey(addMonths(new Date(), 1));
 
-  const totals = useMemo(() => {
-    const sum = (arr?: any[]) =>
-      (arr || []).reduce((s, a) => s + (Number(a?.amount) || 0), 0);
-
-    const isCardPayment = (raw: any) => {
-      const pm = String(raw || "").toLowerCase();
-      return (
-        pm.includes("card") ||
-        pm.includes("cart") ||
-        pm.includes("cartão") ||
-        pm.includes("credito") ||
-        pm.includes("credit")
-      );
-    };
-
-    const sumExpectedNonCard = (arr?: any[]) =>
-      (arr || []).reduce((s, a) => {
-        if (isCardPayment(a?.paymentMethod)) return s;
-        return s + (Number(a?.amount) || 0);
-      }, 0);
-
-    const totalBills = (planning?.bills || []).reduce((s, a) => {
-      if (isCardPayment(a?.paymentMethod)) return s;
-      return s + (Number(a?.amount) || 0);
-    }, 0);
-    const totalCardBills = (planning?.bills || []).reduce((s, a) => {
-      if (isCardPayment(a?.paymentMethod)) return s + (Number(a?.amount) || 0);
-      return s;
-    }, 0);
-    const totalExpectedExpenses = sumExpectedNonCard(
-      planning?.expectedExpenses,
-    );
-    const totalExpectedIncomes = sum(planning?.expectedIncomes);
-    const totalByCategory = planning?.plannedByCategory
-      ? Object.values(planning.plannedByCategory).reduce(
-          (s: number, v: any) => s + (Number(v) || 0),
-          0,
-        )
-      : 0;
-    const totalCardExpenses =
-      totalCardBills +
-      (planning?.expectedExpenses || []).reduce((s, a) => {
-        if (isCardPayment(a?.paymentMethod))
-          return s + (Number(a?.amount) || 0);
-        return s;
-      }, 0);
-    const totalSpending = totalBills + totalExpectedExpenses + totalByCategory;
-    const expectedSavings = totalExpectedIncomes - totalSpending;
-
-    return {
-      totalBills,
-      totalCardExpenses,
-      totalExpectedExpenses,
-      totalExpectedIncomes,
-      totalByCategory,
-      totalSpending,
-      expectedSavings,
-    };
-  }, [planning]);
+  const totals = useMemo(() => computePlanningTotals(planning), [planning]);
 
   const { colors } = useTheme();
 
@@ -236,13 +182,13 @@ export const PlanningViewScreen = () => {
 
   const summaryCards = [
     {
-      title: "Renda Esperada",
-      value: totals.totalExpectedIncomes,
+      title: "Recursos Disponíveis",
+      value: totals.totalResources,
       color: colors.primary,
     },
     {
       title: "Gastos Esperados",
-      value: totals.totalSpending,
+      value: totals.totalCashExpenses,
       color: colors.warning,
     },
     {
@@ -336,11 +282,20 @@ export const PlanningViewScreen = () => {
                 <Text style={styles.title}>
                   Planejamento criado por consultor
                 </Text>
-                {planning.monthlyIncome !== undefined && (
+                {(planning.availableInAccount !== undefined ||
+                  planning.monthlyIncome !== undefined) && (
                   <View style={styles.row}>
-                    <Text style={styles.label}>Renda Mensal:</Text>
+                    <Text style={styles.label}>Em conta:</Text>
                     <Text style={styles.value}>
-                      {formatCurrency(planning.monthlyIncome)}
+                      {formatCurrency(totals.availableInAccount)}
+                    </Text>
+                  </View>
+                )}
+                {totals.totalExpectedIncomes > 0 && (
+                  <View style={styles.row}>
+                    <Text style={styles.label}>Rendas esperadas:</Text>
+                    <Text style={styles.value}>
+                      {formatCurrency(totals.totalExpectedIncomes)}
                     </Text>
                   </View>
                 )}
@@ -394,8 +349,8 @@ export const PlanningViewScreen = () => {
                               <DetailCard
                                 key={entry.id}
                                 title={entry.name || entry.source || "Outros"}
-                                value={formatCurrency(Number(entry.amount) || 0)}
-                                note={`Acompanhamento diário\nMétodo: ${formatPaymentMethodLabel(entry.paymentMethod)}${entry.notes ? `\n${entry.notes}` : ""}`}
+                                value={formatPlannedSplitLabel(entry)}
+                                note={`Acompanhamento diário\n${formatPlannedSplitLabel(entry)}${entry.notes ? `\n${entry.notes}` : ""}`}
                               />
                             ))}
                           </View>
@@ -410,8 +365,8 @@ export const PlanningViewScreen = () => {
                               <DetailCard
                                 key={b.id}
                                 title={b.name}
-                                value={formatCurrency(Number(b.amount) || 0)}
-                                note={`Método: ${formatPaymentMethodLabel(b.paymentMethod)}\nData: ${formatItemDateLabel(b)}${b.notes ? `\n${b.notes}` : ""}`}
+                                value={formatPlannedSplitLabel(b)}
+                                note={`${formatPlannedSplitLabel(b)}\nData: ${formatItemDateLabel(b)}${b.notes ? `\n${b.notes}` : ""}`}
                               />
                             ))}
                           </View>
@@ -426,8 +381,8 @@ export const PlanningViewScreen = () => {
                               <DetailCard
                                 key={it.id}
                                 title={it.source || "Outros"}
-                                value={formatCurrency(it.amount)}
-                                note={`Método: ${formatPaymentMethodLabel(it.paymentMethod)}\nData: ${formatItemDateLabel(it)}${it.notes ? `\n${it.notes}` : ""}`}
+                                value={formatPlannedSplitLabel(it)}
+                                note={`${formatPlannedSplitLabel(it)}\nData: ${formatItemDateLabel(it)}${it.notes ? `\n${it.notes}` : ""}`}
                               />
                             ))}
                           </View>
@@ -479,7 +434,7 @@ export const PlanningViewScreen = () => {
                         <DetailCard
                           key={it.id}
                           title={it.source || "Outros"}
-                          value={formatCurrency(it.amount)}
+                          value={formatPlannedSplitLabel(it)}
                           note={it.notes}
                         />
                       ))}

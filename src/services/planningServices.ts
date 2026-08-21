@@ -275,6 +275,13 @@ export const planningServices = {
       return {
         id: snap.id,
         consultantId: data.consultantId,
+        availableInAccount:
+          data.availableInAccount !== undefined &&
+          data.availableInAccount !== null
+            ? Number(data.availableInAccount)
+            : data.monthlyIncome !== undefined && data.monthlyIncome !== null
+              ? Number(data.monthlyIncome)
+              : undefined,
         monthlyIncome: data.monthlyIncome,
         consumoModerado: data.consumoModerado,
         consumoModeradoCycleStartedAt: data.consumoModeradoCycleStartedAt
@@ -542,6 +549,9 @@ export const planningServices = {
       const existingSnap = await getDoc(docRef);
       if (!existingSnap.exists()) payload.createdAt = now;
 
+      if (data.availableInAccount !== undefined && data.availableInAccount !== null) {
+        payload.availableInAccount = Number(data.availableInAccount);
+      }
       if (data.monthlyIncome !== undefined && data.monthlyIncome !== null) {
         payload.monthlyIncome = data.monthlyIncome;
       }
@@ -673,6 +683,8 @@ export const planningServices = {
         updatedAt: now,
       };
 
+      if (data.availableInAccount !== undefined)
+        updatePayload.availableInAccount = Number(data.availableInAccount);
       if (data.monthlyIncome !== undefined)
         updatePayload.monthlyIncome = data.monthlyIncome;
       if (data.consumoModerado !== undefined)

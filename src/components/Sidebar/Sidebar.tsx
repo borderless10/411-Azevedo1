@@ -236,7 +236,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           },
           {
             id: "IncomeList",
-            label: "Minhas Rendas",
+            label: "Rendas Acompanhadas",
             icon: "cash",
             color: "#8c52ff",
           },

@@ -57,6 +57,8 @@ export const MetasScreen = () => {
   const [newGoalTitle, setNewGoalTitle] = useState<string>("");
   const [newGoalDescription, setNewGoalDescription] = useState<string>("");
   const [newGoalTarget, setNewGoalTarget] = useState<string>("");
+  const [newGoalHasFinancialTarget, setNewGoalHasFinancialTarget] =
+    useState<boolean>(true);
   const [newGoalCategory, setNewGoalCategory] =
     useState<GoalCategory>("savings");
   const [newGoalPrazo, setNewGoalPrazo] = useState<"curto" | "medio" | "longo">(
@@ -122,7 +124,7 @@ export const MetasScreen = () => {
       return;
     }
 
-    if (!targetAmount || targetAmount <= 0) {
+    if (newGoalHasFinancialTarget && (!targetAmount || targetAmount <= 0)) {
       Alert.alert("Erro", "Digite um valor válido para a meta");
       return;
     }
@@ -133,7 +135,8 @@ export const MetasScreen = () => {
       const goalData: CreateGoalData = {
         title: newGoalTitle,
         description: newGoalDescription,
-        targetAmount,
+        targetAmount: newGoalHasFinancialTarget ? targetAmount : 0,
+        hasFinancialTarget: newGoalHasFinancialTarget,
         category: newGoalCategory,
         prazo: newGoalPrazo,
       };
@@ -143,7 +146,7 @@ export const MetasScreen = () => {
         const updateData: any = {
           title: newGoalTitle,
           description: newGoalDescription,
-          targetAmount,
+          targetAmount: newGoalHasFinancialTarget ? targetAmount : 0,
           category: newGoalCategory,
           prazo: newGoalPrazo,
         };
@@ -158,6 +161,7 @@ export const MetasScreen = () => {
       setNewGoalTitle("");
       setNewGoalDescription("");
       setNewGoalTarget("");
+      setNewGoalHasFinancialTarget(true);
       setNewGoalCategory("savings");
       setNewGoalPrazo("medio");
       setShowCreateModal(false);
@@ -244,11 +248,39 @@ export const MetasScreen = () => {
     setShowContributionModal(true);
   };
 
+  const handleMarkOutOfPlans = (goal: Goal) => {
+    Alert.alert(
+      "Fora dos planos",
+      `Deseja marcar "${goal.title}" como fora dos planos? O histórico será preservado.`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Confirmar",
+          onPress: async () => {
+            try {
+              await goalServices.updateGoal(goal.id, {
+                status: "out_of_plans",
+              });
+              Alert.alert("Sucesso", "Meta marcada como fora dos planos.");
+              await loadGoals();
+            } catch (error) {
+              console.error("Erro ao marcar meta:", error);
+              Alert.alert("Erro", "Não foi possível atualizar a meta.");
+            }
+          },
+        },
+      ],
+    );
+  };
+
   const openEditModal = (goal: Goal) => {
     setSelectedGoal(goal);
     setNewGoalTitle(goal.title || "");
     setNewGoalDescription(goal.description || "");
-    setNewGoalTarget(String(goal.targetAmount || ""));
+    setNewGoalHasFinancialTarget((goal.targetAmount || 0) > 0);
+    setNewGoalTarget(
+      (goal.targetAmount || 0) > 0 ? String(goal.targetAmount || "") : "",
+    );
     setNewGoalCategory(goal.category || "savings");
     setNewGoalPrazo((goal as any).prazo || "medio");
     setIsEditing(true);
@@ -261,10 +293,11 @@ export const MetasScreen = () => {
 
   const activeGoals = goals.filter((g) => g.status === "active");
   const completedGoals = goals.filter((g) => g.status === "completed");
+  const goalsWithTarget = goals.filter((g) => g.targetAmount > 0);
   const totalProgress =
-    goals.length > 0
-      ? (goals.reduce((sum, g) => sum + g.currentAmount, 0) /
-          goals.reduce((sum, g) => sum + g.targetAmount, 0)) *
+    goalsWithTarget.length > 0
+      ? (goalsWithTarget.reduce((sum, g) => sum + g.currentAmount, 0) /
+          goalsWithTarget.reduce((sum, g) => sum + g.targetAmount, 0)) *
         100
       : 0;
 
@@ -412,6 +445,22 @@ export const MetasScreen = () => {
                 Concluídas
               </Text>
             </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.filterButton,
+                filter === "out_of_plans" && styles.filterButtonActive,
+              ]}
+              onPress={() => setFilter("out_of_plans")}
+            >
+              <Text
+                style={[
+                  styles.filterText,
+                  filter === "out_of_plans" && styles.filterTextActive,
+                ]}
+              >
+                Fora dos planos
+              </Text>
+            </TouchableOpacity>
           </View>
 
           {/* Lista de Metas */}
@@ -421,7 +470,11 @@ export const MetasScreen = () => {
               <Text style={styles.emptyText}>
                 {filter === "all"
                   ? "Nenhuma meta cadastrada"
-                  : `Nenhuma meta ${filter === "active" ? "ativa" : "concluída"}`}
+                  : filter === "active"
+                    ? "Nenhuma meta ativa"
+                    : filter === "completed"
+                      ? "Nenhuma meta concluída"
+                      : "Nenhuma meta fora dos planos"}
               </Text>
               <Text style={styles.emptySubtext}>
                 Crie sua primeira meta financeira
@@ -431,8 +484,12 @@ export const MetasScreen = () => {
             <View style={styles.goalsList}>
               {filteredGoals.map((goal) => {
                 const categoryInfo = getCategoryInfo(goal.category);
-                const progress = (goal.currentAmount / goal.targetAmount) * 100;
+                const hasTarget = goal.targetAmount > 0;
+                const progress = hasTarget
+                  ? (goal.currentAmount / goal.targetAmount) * 100
+                  : 0;
                 const isCompleted = goal.status === "completed";
+                const isOutOfPlans = goal.status === "out_of_plans";
 
                 return (
                   <View key={goal.id} style={styles.goalCard}>
@@ -466,6 +523,18 @@ export const MetasScreen = () => {
                           />
                         </View>
                       )}
+                      {isOutOfPlans && (
+                        <View
+                          style={[
+                            styles.completedBadge,
+                            { backgroundColor: "#333" },
+                          ]}
+                        >
+                          <Text style={{ color: "#ccc", fontSize: 11 }}>
+                            Fora dos planos
+                          </Text>
+                        </View>
+                      )}
                     </View>
 
                     {goal.description && (
@@ -490,11 +559,17 @@ export const MetasScreen = () => {
                       <Text style={styles.currentAmount}>
                         {formatCurrency(goal.currentAmount)}
                       </Text>
-                      <Text style={styles.targetAmount}>
-                        de {formatCurrency(goal.targetAmount)}
-                      </Text>
+                      {hasTarget ? (
+                        <Text style={styles.targetAmount}>
+                          de {formatCurrency(goal.targetAmount)}
+                        </Text>
+                      ) : (
+                        <Text style={styles.targetAmount}>Sem valor definido</Text>
+                      )}
                     </View>
 
+                    {hasTarget && (
+                      <>
                     <View style={styles.progressBarContainer}>
                       <View
                         style={[
@@ -512,11 +587,13 @@ export const MetasScreen = () => {
                     <Text style={styles.progressText}>
                       {progress.toFixed(1)}% concluído
                     </Text>
+                      </>
+                    )}
 
                     <View style={styles.goalActions}>
                       {user?.role === "consultor" && (
                         <>
-                          {!isCompleted && (
+                          {!isCompleted && !isOutOfPlans && hasTarget && (
                             <TouchableOpacity
                               style={[styles.actionButton, styles.addButton]}
                               onPress={() => openContributionModal(goal)}
@@ -546,6 +623,25 @@ export const MetasScreen = () => {
                             <Ionicons name="pencil" size={18} color="#fff" />
                             <Text style={styles.actionButtonText}>Editar</Text>
                           </TouchableOpacity>
+
+                          {!isOutOfPlans && goal.status === "active" && (
+                            <TouchableOpacity
+                              style={[
+                                styles.actionButton,
+                                { backgroundColor: "#666" },
+                              ]}
+                              onPress={() => handleMarkOutOfPlans(goal)}
+                            >
+                              <Ionicons
+                                name="archive-outline"
+                                size={18}
+                                color="#fff"
+                              />
+                              <Text style={styles.actionButtonText}>
+                                Fora dos planos
+                              </Text>
+                            </TouchableOpacity>
+                          )}
                         </>
                       )}
                     </View>
@@ -605,6 +701,47 @@ export const MetasScreen = () => {
                 numberOfLines={3}
               />
 
+              <Text style={styles.label}>Possui valor financeiro?</Text>
+              <View style={{ flexDirection: "row", gap: 8, marginBottom: 12 }}>
+                <TouchableOpacity
+                  style={[
+                    styles.filterButton,
+                    newGoalHasFinancialTarget && styles.filterButtonActive,
+                  ]}
+                  onPress={() => setNewGoalHasFinancialTarget(true)}
+                >
+                  <Text
+                    style={[
+                      styles.filterText,
+                      newGoalHasFinancialTarget && styles.filterTextActive,
+                    ]}
+                  >
+                    Com valor
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.filterButton,
+                    !newGoalHasFinancialTarget && styles.filterButtonActive,
+                  ]}
+                  onPress={() => {
+                    setNewGoalHasFinancialTarget(false);
+                    setNewGoalTarget("");
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.filterText,
+                      !newGoalHasFinancialTarget && styles.filterTextActive,
+                    ]}
+                  >
+                    Sem valor
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {newGoalHasFinancialTarget && (
+                <>
               <Text style={styles.label}>Valor da Meta</Text>
               <View style={styles.inputContainer}>
                 <Text style={styles.currencySymbol}>R$</Text>
@@ -619,6 +756,8 @@ export const MetasScreen = () => {
                   }
                 />
               </View>
+                </>
+              )}
 
               <Text style={styles.label}>Categoria</Text>
               <View style={styles.categoryGrid}>

@@ -13,6 +13,7 @@ import { Layout } from "../../components/Layout/Layout";
 import { useNavigation } from "../../routes/NavigationContext";
 import { useAuth } from "../../hooks/useAuth";
 import { userService } from "../../services/userServices";
+import { profileDisplayName } from "../../utils/chatDisplayNames";
 import { incomeServices } from "../../services/incomeServices";
 import {
   getPlanningCycleLabel,
@@ -80,7 +81,7 @@ export const ClientIncomeRecordsScreen: React.FC = () => {
         navigate("ConsultorHome");
         return;
       }
-      setClientName(client?.name || "Cliente");
+      setClientName(profileDisplayName(client, "Cliente"));
 
       const today = new Date();
       const planning = await planningServices.getPlanning(clientId);
@@ -116,8 +117,11 @@ export const ClientIncomeRecordsScreen: React.FC = () => {
         plannedItems.reduce((sum, item) => sum + getPlannedAmount(item), 0),
       );
 
-      const cycleStartDate = planning?.consumoModeradoCycleStartedAt
-        ? getStartOfDay(new Date(planning.consumoModeradoCycleStartedAt))
+      const cycleStartedAtRaw = planning?.consumoModeradoCycleStartedAt
+        ? new Date(planning.consumoModeradoCycleStartedAt)
+        : null;
+      const cycleStartDate = cycleStartedAtRaw
+        ? getStartOfDay(cycleStartedAtRaw)
         : null;
       const cycleEndDate = planning?.consumoModeradoCycleEndedAt
         ? getEndOfDay(new Date(planning.consumoModeradoCycleEndedAt))
@@ -140,6 +144,7 @@ export const ClientIncomeRecordsScreen: React.FC = () => {
       const incomes = await incomeServices.getIncomes(clientId, {
         startDate: start,
         endDate: end,
+        createdAtFrom: cycleStartedAtRaw || undefined,
       });
 
       const filtered = incomes.filter((income) => {

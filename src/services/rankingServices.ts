@@ -7,7 +7,7 @@ import {
   convertBudgetFromFirestore,
   getDocData,
 } from "../lib/firestore";
-import { userService } from "./userServices";
+import { userService, userParticipatesInRanking } from "./userServices";
 import rankingPlanilhaService from "./rankingPlanilhaService";
 
 /**
@@ -22,17 +22,23 @@ export type RankingEntry = {
 
 export const rankingServices = {
   /**
-   * Calcular ranking somando pontos da planilha
+   * Ranking: todos os clientes com preferência "participar", ordenados por pontos
+   * do trimestre civil. Quem ainda não pontuou aparece com 0 pts (final da lista).
    */
   async getRanking(topN: number = 20): Promise<RankingEntry[]> {
     try {
-      const q = query(getBudgetsCollection());
-      const snapshot = await getDocs(q);
+      const [allUsers, snapshot] = await Promise.all([
+        userService.getAllUsers(),
+        getDocs(query(getBudgetsCollection())),
+      ]);
 
-      const budgetsByUser: Record<string, ReturnType<typeof convertBudgetFromFirestore>[]> = {};
+      const budgetsByUser: Record<
+        string,
+        ReturnType<typeof convertBudgetFromFirestore>[]
+      > = {};
 
-      snapshot.docs.forEach((doc) => {
-        const data: any = getDocData(doc);
+      snapshot.docs.forEach((docSnap) => {
+        const data: any = getDocData(docSnap);
         const budget = convertBudgetFromFirestore(data);
         const uid = budget.userId;
         if (!budgetsByUser[uid]) {
@@ -41,33 +47,28 @@ export const rankingServices = {
         budgetsByUser[uid].push(budget);
       });
 
-      const arr: RankingEntry[] = Object.entries(budgetsByUser).map(
-        ([userId, budgets]) => ({
+      const pointsByUser = new Map<string, number>();
+      Object.entries(budgetsByUser).forEach(([userId, budgets]) => {
+        pointsByUser.set(
           userId,
-          rankingPoints: rankingPlanilhaService.getTotalPointsFromBudgets(budgets),
-          zeroDays: rankingPlanilhaService.getTotalPointsFromBudgets(budgets),
-        }),
-      );
+          rankingPlanilhaService.getTotalPointsFromBudgets(budgets),
+        );
+      });
 
-      const filtered: RankingEntry[] = [];
-      for (const entry of arr) {
-        if (entry.rankingPoints <= 0) continue;
-        try {
-          const user = await userService.getUserById(entry.userId);
-          if (user?.rankingPreference === "participate") {
-            filtered.push(entry);
-          }
-        } catch (error) {
-          console.error(
-            `❌ [RANKING SERVICE] Erro ao validar usuário ${entry.userId}:`,
-            error,
-          );
-        }
-      }
+      const arr: RankingEntry[] = allUsers
+        .filter(userParticipatesInRanking)
+        .map((user) => {
+          const rankingPoints = pointsByUser.get(user.id) ?? 0;
+          return {
+            userId: user.id,
+            rankingPoints,
+            zeroDays: rankingPoints,
+          };
+        });
 
-      filtered.sort((a, b) => b.rankingPoints - a.rankingPoints);
+      arr.sort((a, b) => b.rankingPoints - a.rankingPoints);
 
-      return filtered.slice(0, topN);
+      return arr.slice(0, topN);
     } catch (error) {
       console.error("❌ [RANKING SERVICE] Erro ao calcular ranking:", error);
       return [];

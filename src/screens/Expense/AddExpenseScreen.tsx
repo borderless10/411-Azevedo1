@@ -35,6 +35,7 @@ import { isPayablePlanningBill } from "../../types/planning";
 import { CreditCard } from "../../types/creditCard";
 import { Bill } from "../../types/planning";
 import { budgetServices } from "../../services/budgetServices";
+import { getRankingRegistrationFeedback } from "../../services/rankingPlanilhaService";
 
 const parsePrefillDate = (value?: string): Date | null => {
   if (!value) return null;
@@ -63,6 +64,12 @@ export const AddExpenseScreen = () => {
   const { navigate, params } = useNavigation() as any;
   const skipPrefillAfterAddAnother = useRef(false);
   const initialPrefillDate = parsePrefillDate(params?.prefillDate);
+  const isConsumptionOnlyMode =
+    params?.consumptionOnly === true ||
+    (params?.returnTo === "Budget" &&
+      String(params?.prefillExpenseType || "") === "consumption");
+  const lockedConsumoDate =
+    isConsumptionOnlyMode && initialPrefillDate ? initialPrefillDate : null;
 
   const navigateToReturnScreen = () => {
     navigate(params?.returnTo || "Home", params?.returnParams);
@@ -71,7 +78,7 @@ export const AddExpenseScreen = () => {
   // Tipo de gasto
   const [expenseType, setExpenseType] = useState<
     "consumption" | "tracked" | "bill"
-  >("consumption");
+  >(isConsumptionOnlyMode ? "consumption" : "consumption");
 
   // Estado para dados de planejamento
   const [trackedExpenses, setTrackedExpenses] = useState<
@@ -155,15 +162,20 @@ export const AddExpenseScreen = () => {
           setTrackedExpenses(tracked);
 
           // Extrair contas a serem pagas
+          const paidSourceBillIds =
+            await expenseServices.getPaidSourceBillIds(user.id);
           const planningBills = (planning.bills || [])
             .filter(isBillUnpaid)
             .filter(isPayablePlanningBill);
           const expectedAsBills = (planning.expectedExpenses || [])
             .filter(isPayablePlanningBill)
+            .filter((exp) => !exp.id || !paidSourceBillIds.has(exp.id))
             .map(
-              (exp) =>
+              (exp, index) =>
                 ({
-                  id: exp.id,
+                  id:
+                    exp.id ||
+                    `expected-exp-${index}-${String(exp.source || "item").replace(/\s+/g, "-")}`,
                   name: exp.source || "Gasto esperado",
                   amount: Number(exp.amount) || 0,
                   paymentMethod: exp.paymentMethod,
@@ -220,11 +232,17 @@ export const AddExpenseScreen = () => {
       return;
     }
     setConsumoDate(prefillDate);
-    setTrackedDate(prefillDate);
-    setBillDueDate(prefillDate);
-  }, [params?.prefillDate]);
+    if (!isConsumptionOnlyMode) {
+      setTrackedDate(prefillDate);
+      setBillDueDate(prefillDate);
+    }
+  }, [isConsumptionOnlyMode, params?.prefillDate]);
 
   useEffect(() => {
+    if (isConsumptionOnlyMode) {
+      setExpenseType("consumption");
+      return;
+    }
     const prefillExpenseType = String(params?.prefillExpenseType || "");
     if (skipPrefillAfterAddAnother.current) {
       return;
@@ -236,7 +254,7 @@ export const AddExpenseScreen = () => {
     } else if (prefillExpenseType === "consumption") {
       setExpenseType("consumption");
     }
-  }, [params?.prefillExpenseType]);
+  }, [isConsumptionOnlyMode, params?.prefillExpenseType]);
 
   useEffect(() => {
     if (skipPrefillAfterAddAnother.current) {
@@ -252,6 +270,9 @@ export const AddExpenseScreen = () => {
     if (skipPrefillAfterAddAnother.current) {
       return;
     }
+    if (isConsumptionOnlyMode) {
+      return;
+    }
     const prefillBillId = String(params?.prefillBillId || "");
     if (!prefillBillId || bills.length === 0) {
       return;
@@ -264,7 +285,7 @@ export const AddExpenseScreen = () => {
 
     setExpenseType("bill");
     selectPlannedBill(selectedBill);
-  }, [bills, params?.prefillBillId]);
+  }, [bills, isConsumptionOnlyMode, params?.prefillBillId]);
 
   const resetFormForAddAnother = () => {
     skipPrefillAfterAddAnother.current = true;
@@ -273,6 +294,12 @@ export const AddExpenseScreen = () => {
     setConsumoDescription("");
     setConsumoPayment("cash");
     setConsumoSelectedCardId("");
+    if (lockedConsumoDate) {
+      setConsumoDate(lockedConsumoDate);
+    }
+    if (isConsumptionOnlyMode) {
+      return;
+    }
     setTrackedTitle("");
     setTrackedValue(0);
     setTrackedPayment("cash");
@@ -419,7 +446,14 @@ export const AddExpenseScreen = () => {
         };
 
         await expenseServices.createExpense(user.id, expenseData);
-        await budgetServices.reconcileConsumoModeradoDay(user.id, consumoDate);
+        const ranking = await budgetServices.reconcileConsumoModeradoDay(
+          user.id,
+          consumoDate,
+        );
+        if (ranking?.applied) {
+          const feedback = getRankingRegistrationFeedback(ranking, "expense");
+          Alert.alert(feedback.title, feedback.message);
+        }
         setSavedValueForModal(consumoValue);
         setLastSavedExpenseType("consumption");
         setLastSavedTrackedTitle("");
@@ -570,7 +604,11 @@ export const AddExpenseScreen = () => {
         : "Ver gastos";
 
   return (
-    <Layout title="Adicionar Gasto" showBackButton={true} showSidebar={false}>
+    <Layout
+      title={isConsumptionOnlyMode ? "Consumo Moderado" : "Adicionar Gasto"}
+      showBackButton={true}
+      showSidebar={false}
+    >
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         keyboardVerticalOffset={Platform.OS === "ios" ? 64 : 0}
@@ -581,74 +619,75 @@ export const AddExpenseScreen = () => {
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.content}>
-            {/* Seletor de Tipo */}
-            <View style={styles.typeSelector}>
-              <TouchableOpacity
-                style={[
-                  styles.typeTab,
-                  expenseType === "consumption" && styles.typeTabActive,
-                ]}
-                onPress={() => setExpenseType("consumption")}
-              >
-                <Ionicons
-                  name="wallet"
-                  size={20}
-                  color={expenseType === "consumption" ? "#8c52ff" : "#999"}
-                />
-                <Text
+            {!isConsumptionOnlyMode && (
+              <View style={styles.typeSelector}>
+                <TouchableOpacity
                   style={[
-                    styles.typeTabText,
-                    expenseType === "consumption" && styles.typeTabTextActive,
+                    styles.typeTab,
+                    expenseType === "consumption" && styles.typeTabActive,
                   ]}
+                  onPress={() => setExpenseType("consumption")}
                 >
-                  Consumo Moderado
-                </Text>
-              </TouchableOpacity>
+                  <Ionicons
+                    name="wallet"
+                    size={20}
+                    color={expenseType === "consumption" ? "#8c52ff" : "#999"}
+                  />
+                  <Text
+                    style={[
+                      styles.typeTabText,
+                      expenseType === "consumption" && styles.typeTabTextActive,
+                    ]}
+                  >
+                    Consumo Moderado
+                  </Text>
+                </TouchableOpacity>
 
-              <TouchableOpacity
-                style={[
-                  styles.typeTab,
-                  expenseType === "tracked" && styles.typeTabActive,
-                ]}
-                onPress={() => setExpenseType("tracked")}
-              >
-                <Ionicons
-                  name="analytics"
-                  size={20}
-                  color={expenseType === "tracked" ? "#8c52ff" : "#999"}
-                />
-                <Text
+                <TouchableOpacity
                   style={[
-                    styles.typeTabText,
-                    expenseType === "tracked" && styles.typeTabTextActive,
+                    styles.typeTab,
+                    expenseType === "tracked" && styles.typeTabActive,
                   ]}
+                  onPress={() => setExpenseType("tracked")}
                 >
-                  Gasto Acompanhado
-                </Text>
-              </TouchableOpacity>
+                  <Ionicons
+                    name="analytics"
+                    size={20}
+                    color={expenseType === "tracked" ? "#8c52ff" : "#999"}
+                  />
+                  <Text
+                    style={[
+                      styles.typeTabText,
+                      expenseType === "tracked" && styles.typeTabTextActive,
+                    ]}
+                  >
+                    Gasto Acompanhado
+                  </Text>
+                </TouchableOpacity>
 
-              <TouchableOpacity
-                style={[
-                  styles.typeTab,
-                  expenseType === "bill" && styles.typeTabActive,
-                ]}
-                onPress={() => setExpenseType("bill")}
-              >
-                <Ionicons
-                  name="document-text"
-                  size={20}
-                  color={expenseType === "bill" ? "#8c52ff" : "#999"}
-                />
-                <Text
+                <TouchableOpacity
                   style={[
-                    styles.typeTabText,
-                    expenseType === "bill" && styles.typeTabTextActive,
+                    styles.typeTab,
+                    expenseType === "bill" && styles.typeTabActive,
                   ]}
+                  onPress={() => setExpenseType("bill")}
                 >
-                  Conta
-                </Text>
-              </TouchableOpacity>
-            </View>
+                  <Ionicons
+                    name="document-text"
+                    size={20}
+                    color={expenseType === "bill" ? "#8c52ff" : "#999"}
+                  />
+                  <Text
+                    style={[
+                      styles.typeTabText,
+                      expenseType === "bill" && styles.typeTabTextActive,
+                    ]}
+                  >
+                    Conta
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
 
             {loadingData ? (
               <View style={styles.centerContainer}>
@@ -712,13 +751,27 @@ export const AddExpenseScreen = () => {
 
                     <View style={styles.inputGroup}>
                       <Text style={styles.label}>Data</Text>
-                      <DatePicker
-                        label=""
-                        date={consumoDate}
-                        onChangeDate={setConsumoDate}
-                        maxDate={new Date()}
-                        editable={!loading}
-                      />
+                      {lockedConsumoDate ? (
+                        <View style={styles.lockedDateBox}>
+                          <Ionicons name="calendar" size={18} color="#8c52ff" />
+                          <Text style={styles.lockedDateText}>
+                            {consumoDate.toLocaleDateString("pt-BR")}
+                          </Text>
+                        </View>
+                      ) : (
+                        <DatePicker
+                          label=""
+                          date={consumoDate}
+                          onChangeDate={setConsumoDate}
+                          maxDate={new Date()}
+                          editable={!loading}
+                        />
+                      )}
+                      {lockedConsumoDate ? (
+                        <Text style={styles.lockedDateHint}>
+                          O lançamento será salvo neste dia do ciclo.
+                        </Text>
+                      ) : null}
                     </View>
 
                     <CurrencyInput
@@ -1551,6 +1604,26 @@ const styles = StyleSheet.create({
   },
   button: {
     flex: 1,
+  },
+  lockedDateBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "#1a1a1a",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#333",
+    padding: 14,
+  },
+  lockedDateText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  lockedDateHint: {
+    color: "#999",
+    fontSize: 12,
+    marginTop: 6,
   },
 });
 

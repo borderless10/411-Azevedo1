@@ -45,8 +45,10 @@ const validateCreateGoalData = (data: CreateGoalData): string[] => {
     errors.push("Título deve ter pelo menos 3 caracteres");
   }
 
-  if (!data.targetAmount || data.targetAmount <= 0) {
-    errors.push("Valor da meta deve ser maior que zero");
+  if (data.hasFinancialTarget !== false) {
+    if (!data.targetAmount || data.targetAmount <= 0) {
+      errors.push("Valor da meta deve ser maior que zero");
+    }
   }
 
   if (data.deadline && data.deadline < new Date()) {
@@ -76,11 +78,13 @@ export const goalServices = {
 
     try {
       const now = new Date();
+      const hasTarget = data.hasFinancialTarget !== false;
+      const targetAmount = hasTarget ? Number(data.targetAmount || 0) : 0;
       const goalData: any = {
         userId,
         title: data.title.trim(),
         description: data.description?.trim() || "",
-        targetAmount: data.targetAmount,
+        targetAmount,
         currentAmount: 0,
         category: data.category,
         ...(data.prazo && { prazo: data.prazo }),
@@ -103,7 +107,7 @@ export const goalServices = {
         userId,
         title: data.title.trim(),
         description: data.description?.trim(),
-        targetAmount: data.targetAmount,
+        targetAmount,
         currentAmount: 0,
         category: data.category,
         deadline: data.deadline,
@@ -118,11 +122,14 @@ export const goalServices = {
       await activityServices.logActivity(userId, {
         type: "goal_created",
         title: `Meta criada: ${data.title.trim()}`,
-        description: `Meta de ${formatCurrency(data.targetAmount)}`,
+        description: hasTarget
+          ? `Meta de ${formatCurrency(targetAmount)}`
+          : "Meta sem valor financeiro definido",
         metadata: {
           goalTitle: data.title.trim(),
-          amount: data.targetAmount,
+          amount: targetAmount,
           category: data.category,
+          hasFinancialTarget: hasTarget,
         },
       });
 

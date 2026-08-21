@@ -12,6 +12,7 @@ import {
 type User = {
   id: string;
   name?: string;
+  nickname?: string;
   email?: string;
 };
 
@@ -21,6 +22,9 @@ type Props = {
   onChange: (id: string | null) => void;
   placeholder?: string;
 };
+
+const getConsultantLabel = (user: User): string =>
+  (user.nickname || "").trim() || user.name || user.email || "Consultor";
 
 export const ConsultantPicker: React.FC<Props> = ({
   consultants,
@@ -35,9 +39,10 @@ export const ConsultantPicker: React.FC<Props> = ({
     const q = query.trim().toLowerCase();
     if (!q) return consultants;
     return consultants.filter((c) => {
+      const nickname = (c.nickname || "").toLowerCase();
       const name = (c.name || "").toLowerCase();
       const email = (c.email || "").toLowerCase();
-      return name.includes(q) || email.includes(q);
+      return nickname.includes(q) || name.includes(q) || email.includes(q);
     });
   }, [consultants, query]);
 
@@ -47,7 +52,11 @@ export const ConsultantPicker: React.FC<Props> = ({
       "[CONSULTANT PICKER] Consultants recebidos:",
       consultants.length,
       "consultores loaded",
-      consultants.map((c) => ({ id: c.id, name: c.name })),
+      consultants.map((c) => ({
+        id: c.id,
+        nickname: c.nickname,
+        name: c.name,
+      })),
     );
   }, [consultants]);
 
@@ -57,7 +66,7 @@ export const ConsultantPicker: React.FC<Props> = ({
     <View>
       <TouchableOpacity style={styles.trigger} onPress={() => setOpen(true)}>
         <Text style={styles.triggerText}>
-          {selected ? selected.name || selected.email : placeholder}
+          {selected ? getConsultantLabel(selected) : placeholder}
         </Text>
       </TouchableOpacity>
 
@@ -96,14 +105,14 @@ export const ConsultantPicker: React.FC<Props> = ({
                     console.log(
                       "[CONSULTANT PICKER] Consultor selecionado:",
                       item.id,
-                      item.name,
+                      getConsultantLabel(item),
                     );
                     onChange(item.id);
                     setOpen(false);
                     setQuery("");
                   }}
                 >
-                  <Text style={styles.itemText}>{item.name || item.email}</Text>
+                  <Text style={styles.itemText}>{getConsultantLabel(item)}</Text>
                 </TouchableOpacity>
               )}
             />

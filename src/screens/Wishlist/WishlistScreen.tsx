@@ -100,14 +100,14 @@ export const WishlistScreen = () => {
 
   const handleSave = async () => {
     if (!user) return;
-    const numericValue = parseFloat(
-      value.replace(/[^0-9.,]/g, "").replace(",", "."),
-    );
+    const rawValue = value.replace(/[^0-9.,]/g, "").replace(",", ".").trim();
+    const numericValue = rawValue ? parseFloat(rawValue) : 0;
+
     if (!name.trim()) {
       Alert.alert("Erro", "Digite um nome");
       return;
     }
-    if (!numericValue || numericValue <= 0) {
+    if (rawValue && (!Number.isFinite(numericValue) || numericValue < 0)) {
       Alert.alert("Erro", "Digite um valor válido");
       return;
     }
@@ -116,7 +116,7 @@ export const WishlistScreen = () => {
       setSaving(true);
       const data: CreateWishlistData = {
         name: name.trim(),
-        value: numericValue,
+        value: Number.isFinite(numericValue) && numericValue > 0 ? numericValue : 0,
         description: description.trim() || undefined,
       };
       if (isEditing && editingItem) {
@@ -210,7 +210,9 @@ export const WishlistScreen = () => {
                     <Text style={styles.itemName}>{item.name}</Text>
                     <Text style={styles.itemDesc}>{item.description}</Text>
                     <Text style={styles.itemValue}>
-                      {formatCurrency(item.value)}
+                      {item.value > 0
+                        ? formatCurrency(item.value)
+                        : "Sem valor definido"}
                     </Text>
                   </View>
 
@@ -273,12 +275,12 @@ export const WishlistScreen = () => {
                 placeholderTextColor="#666"
               />
 
-              <Text style={styles.label}>Valor</Text>
+              <Text style={styles.label}>Valor (opcional)</Text>
               <TextInput
                 style={styles.input}
                 value={value}
                 onChangeText={(text) => setValue(sanitizeDecimalInput(text))}
-                placeholder="0,00"
+                placeholder="Deixe em branco se ainda não souber"
                 placeholderTextColor="#666"
                 keyboardType={DECIMAL_INPUT_KEYBOARD}
               />

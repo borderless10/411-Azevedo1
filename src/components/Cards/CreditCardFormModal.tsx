@@ -5,6 +5,7 @@ import {
   KeyboardAvoidingView,
   Modal,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -35,6 +36,61 @@ const toMonthYearMask = (value: string): string => {
 const toDayMask = (value: string): string =>
   value.replace(/\D/g, "").slice(0, 2);
 
+const validateCreditCardForm = (params: {
+  userId: string;
+  bank: string;
+  last4: string;
+  bestDay: string;
+  cardDueDay: string;
+  invoiceDueDay: string;
+  limit: string;
+}): string | null => {
+  if (!params.userId) {
+    return "Cliente não selecionado. Selecione um cliente e tente novamente.";
+  }
+  if (!params.bank.trim() || params.bank.trim().length < 2) {
+    return "Informe o banco do cartão.";
+  }
+  if (!/^\d{4}$/.test(params.last4)) {
+    return "Informe os 4 dígitos finais do cartão.";
+  }
+
+  const bestDayValue = toDay(params.bestDay);
+  if (bestDayValue < 1 || bestDayValue > 31) {
+    return "Informe o melhor dia (de 1 a 31).";
+  }
+
+  const parts = params.cardDueDay.replace(/\s/g, "").split("/");
+  const parsedExpiryMonth = Number(parts[0]);
+  const parsedExpiryYear = Number(parts[1]);
+  if (
+    !Number.isInteger(parsedExpiryMonth) ||
+    parsedExpiryMonth < 1 ||
+    parsedExpiryMonth > 12
+  ) {
+    return "Informe o vencimento do cartão no formato MM/AAAA.";
+  }
+  if (
+    !Number.isInteger(parsedExpiryYear) ||
+    parsedExpiryYear < 2000 ||
+    parsedExpiryYear > 2100
+  ) {
+    return "Informe um ano válido para o vencimento do cartão.";
+  }
+
+  const invoiceDay = toDay(params.invoiceDueDay);
+  if (invoiceDay < 1 || invoiceDay > 28) {
+    return "Informe o vencimento da fatura (dia de 1 a 28).";
+  }
+
+  const limitValue = parseCurrency(params.limit);
+  if (!Number.isFinite(limitValue) || limitValue <= 0) {
+    return "Informe um limite maior que zero.";
+  }
+
+  return null;
+};
+
 interface CreditCardFormModalProps {
   visible: boolean;
   userId: string;
@@ -57,9 +113,11 @@ export const CreditCardFormModal: React.FC<CreditCardFormModalProps> = ({
   const [invoiceDueDay, setInvoiceDueDay] = useState("");
   const [limit, setLimit] = useState("R$ 0,00");
   const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!visible) return;
+    setFormError(null);
 
     if (editingCard) {
       setBank(editingCard.bank);
@@ -82,10 +140,27 @@ export const CreditCardFormModal: React.FC<CreditCardFormModalProps> = ({
   }, [visible, editingCard]);
 
   const handleSave = async () => {
-    if (!userId) return;
+    const validationError = validateCreditCardForm({
+      userId,
+      bank,
+      last4,
+      bestDay,
+      cardDueDay,
+      invoiceDueDay,
+      limit,
+    });
+
+    if (validationError) {
+      setFormError(validationError);
+      if (Platform.OS !== "web") {
+        Alert.alert("Verifique os dados", validationError);
+      }
+      return;
+    }
 
     try {
       setSaving(true);
+      setFormError(null);
       const parts = cardDueDay.replace(/\s/g, "").split("/");
       const parsedExpiryMonth = Number(parts[0]) || 1;
       const parsedExpiryYear = Number(parts[1]) || new Date().getFullYear();
@@ -109,7 +184,9 @@ export const CreditCardFormModal: React.FC<CreditCardFormModalProps> = ({
         onSaved(created);
       }
     } catch (error: any) {
-      Alert.alert("Erro", error?.message || "Não foi possível salvar o cartão");
+      const message = error?.message || "Não foi possível salvar o cartão";
+      setFormError(message);
+      Alert.alert("Erro", message);
     } finally {
       setSaving(false);
     }
@@ -126,26 +203,21 @@ export const CreditCardFormModal: React.FC<CreditCardFormModalProps> = ({
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.modalOverlay}
       >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={onClose}
-        >
-          <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
-            <View style={styles.modalContent}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>
-                  {editingCard ? "Editar cartão" : "Cadastrar cartão"}
-                </Text>
-                <TouchableOpacity onPress={onClose}>
-                  <Ionicons name="close" size={24} color="#bbb" />
-                </TouchableOpacity>
-              </View>
+        <Pressable style={styles.modalBackdrop} onPress={onClose} />
+        <View style={styles.modalContent}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>
+              {editingCard ? "Editar cartão" : "Cadastrar cartão"}
+            </Text>
+            <TouchableOpacity onPress={onClose}>
+              <Ionicons name="close" size={24} color="#bbb" />
+            </TouchableOpacity>
+          </View>
 
-              <ScrollView
-                showsVerticalScrollIndicator={false}
-                keyboardShouldPersistTaps="handled"
-              >
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
                 <View style={styles.inputGroup}>
                   <Text style={styles.inputLabel}>Banco *</Text>
                   <TextInput
@@ -226,24 +298,26 @@ export const CreditCardFormModal: React.FC<CreditCardFormModalProps> = ({
                     editable={!saving}
                   />
                 </View>
-              </ScrollView>
+          </ScrollView>
 
-              <TouchableOpacity
-                style={[styles.saveButton, saving && styles.saveButtonDisabled]}
-                onPress={handleSave}
-                disabled={saving}
-              >
-                {saving ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={styles.saveButtonText}>
-                    {editingCard ? "Salvar alterações" : "Cadastrar cartão"}
-                  </Text>
-                )}
-              </TouchableOpacity>
-            </View>
+          {formError ? (
+            <Text style={styles.formError}>{formError}</Text>
+          ) : null}
+
+          <TouchableOpacity
+            style={[styles.saveButton, saving && styles.saveButtonDisabled]}
+            onPress={handleSave}
+            disabled={saving}
+          >
+            {saving ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.saveButtonText}>
+                {editingCard ? "Salvar alterações" : "Cadastrar cartão"}
+              </Text>
+            )}
           </TouchableOpacity>
-        </TouchableOpacity>
+        </View>
       </KeyboardAvoidingView>
     </Modal>
   );
@@ -252,15 +326,19 @@ export const CreditCardFormModal: React.FC<CreditCardFormModalProps> = ({
 const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.65)",
     justifyContent: "center",
     padding: 16,
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.65)",
   },
   modalContent: {
     backgroundColor: "#0a0a0a",
     borderRadius: 16,
     padding: 16,
     maxHeight: "90%",
+    zIndex: 1,
   },
   modalHeader: {
     flexDirection: "row",
@@ -299,6 +377,12 @@ const styles = StyleSheet.create({
   },
   saveButtonDisabled: { opacity: 0.7 },
   saveButtonText: { color: "#fff", fontWeight: "700" },
+  formError: {
+    marginTop: 8,
+    color: "#ff6b6b",
+    fontSize: 13,
+    lineHeight: 18,
+  },
 });
 
 export default CreditCardFormModal;

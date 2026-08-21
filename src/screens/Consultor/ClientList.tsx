@@ -63,6 +63,7 @@ export const ClientList: React.FC = () => {
               if (!term) return true;
               const t = term.toLowerCase();
               return (
+                (c.nickname || "").toLowerCase().includes(t) ||
                 (c.name || "").toLowerCase().includes(t) ||
                 (c.email || "").toLowerCase().includes(t)
               );
@@ -75,11 +76,16 @@ export const ClientList: React.FC = () => {
               >
                 <View>
                   <Text style={[styles.name, { color: colors.text }]}>
-                    {item.name || item.email}
+                    {(item.nickname || "").trim() || "—"}
                   </Text>
                   <Text style={{ color: colors.textSecondary }}>
-                    {item.email}
+                    Nome: {item.name || "—"}
                   </Text>
+                  {item.email ? (
+                    <Text style={{ color: colors.textSecondary }}>
+                      {item.email}
+                    </Text>
+                  ) : null}
                 </View>
                 <Text style={{ color: colors.primary }}>Planejar</Text>
               </TouchableOpacity>

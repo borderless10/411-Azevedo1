@@ -6,7 +6,6 @@ import React, { useState, useRef, useEffect } from "react";
 import {
   View,
   Text,
-  TextInput,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
@@ -16,16 +15,11 @@ import {
   Modal,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Layout } from "../../components/Layout/Layout";
-import {
-  DECIMAL_INPUT_KEYBOARD,
-  formatCurrency,
-  formatCurrencyWithoutSymbol,
-  parseCurrency,
-  sanitizeDecimalInput,
-} from "../../utils/currencyUtils";
+import { formatCurrency } from "../../utils/currencyUtils";
 import { useAuth } from "../../contexts/AuthContext";
 import { useNavigation } from "../../routes/NavigationContext";
 import {
@@ -46,6 +40,7 @@ import {
   scheduleDailyExpenseReminder,
   cancelDailyExpenseReminder,
 } from "../../services/notificationServices";
+import { getRankingRegistrationFeedback } from "../../services/rankingPlanilhaService";
 import ConfettiCelebration from "../../components/ui/ConfettiCelebration";
 import {
   isConsumoModeradoHistoryExpense,
@@ -73,13 +68,17 @@ export const BudgetScreen = () => {
   );
   const [dailyExpenseDates, setDailyExpenseDates] = useState<Date[]>([]);
   const [editingDateKey, setEditingDateKey] = useState<string | null>(null);
-  const [tempValue, setTempValue] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(true);
   const [saving, setSaving] = useState<boolean>(false);
   const [zeroConfirmedDateKeys, setZeroConfirmedDateKeys] = useState<string[]>([]);
   const [choiceModalVisible, setChoiceModalVisible] = useState(false);
   const [choiceModalDayLabel, setChoiceModalDayLabel] = useState("");
   const [choiceModalDate, setChoiceModalDate] = useState<Date | null>(null);
+  const [correctZeroModalVisible, setCorrectZeroModalVisible] = useState(false);
+  const [correctZeroModalDayLabel, setCorrectZeroModalDayLabel] = useState("");
+  const [correctZeroModalDate, setCorrectZeroModalDate] = useState<Date | null>(
+    null,
+  );
   const [planningLoaded, setPlanningLoaded] = useState<boolean>(false);
   const [planningTotals, setPlanningTotals] = useState<any>(null);
   const [planningItems, setPlanningItems] = useState<any>(null);
@@ -305,6 +304,12 @@ export const BudgetScreen = () => {
 
       // Use the explicit field configured by the consultant for Consumo moderado.
       const consumoModerado = Number(planning?.consumoModerado ?? 0);
+      const consumoCard = Number(planning?.consumoModeradoCard) || 0;
+      const consumoCash = Number(planning?.consumoModeradoCash) || 0;
+      const consumoModeradoSplit =
+        consumoCard !== 0 || consumoCash !== 0
+          ? { card: consumoCard, cash: consumoCash }
+          : { card: 0, cash: consumoModerado };
 
       const totalPlannedSpending =
         totalPlannedByCategory + totalBills + totalExpectedExpenses;
@@ -315,6 +320,8 @@ export const BudgetScreen = () => {
         totalExpectedExpenses,
         totalCardExpenses,
         consumoModerado,
+        consumoModeradoCard: consumoModeradoSplit.card,
+        consumoModeradoCash: consumoModeradoSplit.cash,
         totalPlannedByCategory,
         totalPlannedSpending,
       });
@@ -485,80 +492,6 @@ export const BudgetScreen = () => {
     }
   };
 
-  const handleSaveExpense = async (day: number, date: Date) => {
-    if (!user || isSpectator) return;
-    const dateKey = formatDateToString(date);
-
-    const value = parseCurrency(tempValue);
-
-    if (value < 0) {
-      Alert.alert("Erro", "O valor não pode ser negativo");
-      return;
-    }
-
-    if (value === 0) {
-      try {
-        setSaving(true);
-        await budgetServices.confirmZeroExpenseDay(user.id, date);
-        await loadBudgetData({ silent: true });
-        setEditingDateKey(null);
-        setTempValue("");
-        setShowConfetti(true);
-        Alert.alert(
-          "Parabéns! 🎉",
-          "Zero no app confirmado. Você ganhou 2 pontos no ranking!",
-        );
-      } catch (error) {
-        console.error("❌ Erro ao confirmar zero na planilha:", error);
-        Alert.alert("Erro", "Não foi possível confirmar o zero agora.");
-      } finally {
-        setSaving(false);
-      }
-      return;
-    }
-
-    const todayKey = formatDateToString(new Date());
-    const isFirstExpenseToday =
-      dateKey === todayKey &&
-      !dailyExpenses.some((e) => e.dateKey === todayKey && e.amount > 0);
-
-    try {
-      setSaving(true);
-
-      const existingAmount = getDayExpense(date);
-      if (existingAmount <= 0) {
-        await expenseServices.createExpense(user.id, {
-          value,
-          description: "Consumo Moderado",
-          date,
-          category: "Consumo Moderado",
-          paymentMethod: "other",
-          isConsumoModerado: true,
-        });
-      }
-
-      await budgetServices.reconcileConsumoModeradoDay(user.id, date);
-      await loadBudgetData({ silent: true });
-
-      if (value > 0) {
-        setZeroConfirmedDateKeys((prev) => prev.filter((key) => key !== dateKey));
-      }
-
-      if (isFirstExpenseToday) {
-        await cancelDailyExpenseReminder();
-        console.log("🔕 Lembrete diário cancelado (gasto registrado)");
-      }
-
-      setEditingDateKey(null);
-      setTempValue("");
-    } catch (error) {
-      console.error("❌ Erro ao salvar gasto diário:", error);
-      Alert.alert("Erro", "Não foi possível salvar o gasto");
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const getExpensePaymentLabel = (raw?: string) => {
     const method = String(raw || "").toLowerCase();
     if (method.includes("credit") || method === "card") return "Crédito";
@@ -576,18 +509,28 @@ export const BudgetScreen = () => {
     });
   };
 
+  const openAddExpenseForDay = (date: Date) => {
+    navigate("AddExpense", {
+      prefillDate: formatDateToString(date),
+      prefillExpenseType: "consumption",
+      consumptionOnly: true,
+      returnTo: "Budget",
+      returnParams: { clientId: clientId || undefined },
+    });
+  };
+
   const handleEditDay = (date: Date) => {
     const dateKey = formatDateToString(date);
-    const existing = dailyExpenses.find((item) => item.dateKey === dateKey);
     const items = expensesByDate[dateKey] || [];
+    const isZeroConfirmed =
+      getDayExpense(date) === 0 && zeroConfirmedDateKeys.includes(dateKey);
+
+    if (items.length === 0 || isZeroConfirmed) {
+      openAddExpenseForDay(date);
+      return;
+    }
+
     setEditingDateKey(dateKey);
-    setTempValue(
-      items.length > 0
-        ? ""
-        : existing
-          ? formatCurrencyWithoutSymbol(existing.amount)
-          : "",
-    );
   };
 
   const handleOpenNoRecordActions = (date: Date) => {
@@ -599,15 +542,21 @@ export const BudgetScreen = () => {
     setChoiceModalVisible(true);
   };
 
+  const handleCloseChoiceModal = () => {
+    setChoiceModalVisible(false);
+    setChoiceModalDate(null);
+  };
+
   const handleChooseRegister = () => {
     if (isSpectator || !choiceModalDate) return;
+    const date = choiceModalDate;
     setChoiceModalVisible(false);
-    // informar origem para retornar corretamente após cadastro
-    navigate("AddExpense", {
-      prefillDate: formatDateToString(choiceModalDate),
-      prefillExpenseType: "consumption",
-      returnTo: "Budget",
-    });
+    setChoiceModalDate(null);
+    // iOS: o Modal nativo pode ficar preso se a tela trocar no mesmo tick
+    setTimeout(
+      () => openAddExpenseForDay(date),
+      Platform.OS === "ios" ? 350 : 0,
+    );
   };
 
   const handleChooseMarkZero = async () => {
@@ -615,16 +564,62 @@ export const BudgetScreen = () => {
     setChoiceModalVisible(false);
     try {
       setSaving(true);
-      await budgetServices.confirmZeroExpenseDay(user.id, choiceModalDate);
-      await loadBudgetData({ silent: true });
-      setShowConfetti(true);
-      Alert.alert(
-        "Parabéns! 🎉",
-        "Zero no app confirmado. Você ganhou 2 pontos no ranking!",
+      const { ranking } = await budgetServices.confirmZeroExpenseDay(
+        user.id,
+        choiceModalDate,
       );
+      await loadBudgetData({ silent: true });
+      const feedback = getRankingRegistrationFeedback(ranking, "zero");
+      if (feedback.celebrate) {
+        setShowConfetti(true);
+      }
+      Alert.alert(feedback.title, feedback.message);
     } catch (err) {
       console.error("❌ [BUDGET] Erro ao confirmar zero:", err);
       Alert.alert("Erro", "Não foi possível confirmar o zero agora.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCorrectDayToZero = (date: Date) => {
+    if (!user || isSpectator) return;
+    setCorrectZeroModalDayLabel(formatDayMonthLabel(date));
+    setCorrectZeroModalDate(date);
+    setCorrectZeroModalVisible(true);
+  };
+
+  const handleCancelCorrectZero = () => {
+    setCorrectZeroModalVisible(false);
+    setCorrectZeroModalDate(null);
+  };
+
+  const executeCorrectDayToZero = async () => {
+    if (!user || isSpectator || !correctZeroModalDate) return;
+
+    const date = correctZeroModalDate;
+    setCorrectZeroModalVisible(false);
+
+    try {
+      setSaving(true);
+      const { ranking } = await budgetServices.correctConsumoModeradoDayToZero(
+        user.id,
+        date,
+      );
+      setEditingDateKey(null);
+      setCorrectZeroModalDate(null);
+      await loadBudgetData({ silent: true });
+      const feedback = getRankingRegistrationFeedback(ranking, "zero");
+      if (feedback.celebrate) {
+        setShowConfetti(true);
+      }
+      Alert.alert(feedback.title, feedback.message);
+    } catch (err: any) {
+      console.error("❌ [BUDGET] Erro ao corrigir dia para zero:", err);
+      Alert.alert(
+        "Erro",
+        err?.message || "Não foi possível corrigir o dia agora.",
+      );
     } finally {
       setSaving(false);
     }
@@ -731,6 +726,30 @@ export const BudgetScreen = () => {
                 </Text>
               </View>
             )}
+
+            {budgetValue > 0 && planningTotals ? (
+              <View style={styles.plannedSplitSection}>
+                <Text style={styles.plannedSplitTitle}>
+                  Planejado no ciclo
+                </Text>
+                <View style={styles.plannedSplitRow}>
+                  <View style={styles.plannedSplitItem}>
+                    <Ionicons name="cash-outline" size={18} color="#8c52ff" />
+                    <Text style={styles.plannedSplitLabel}>Dinheiro</Text>
+                    <Text style={styles.plannedSplitValue}>
+                      {formatCurrency(planningTotals.consumoModeradoCash || 0)}
+                    </Text>
+                  </View>
+                  <View style={styles.plannedSplitItem}>
+                    <Ionicons name="card-outline" size={18} color="#8c52ff" />
+                    <Text style={styles.plannedSplitLabel}>Cartão</Text>
+                    <Text style={styles.plannedSplitValue}>
+                      {formatCurrency(planningTotals.consumoModeradoCard || 0)}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            ) : null}
           </View>
 
           {/* Estatísticas */}
@@ -868,76 +887,55 @@ export const BudgetScreen = () => {
                       {!isSpectator &&
                         (isEditing ? (
                         <View style={styles.editItemsWrap}>
-                          {(expensesByDate[dateKey] || []).length > 0 ? (
-                            <>
-                              {(expensesByDate[dateKey] || []).map((item) => (
-                                <TouchableOpacity
-                                  key={item.id}
-                                  style={styles.editItemRow}
-                                  onPress={() => openExpenseEditor(item.id)}
-                                >
-                                  <View style={{ flex: 1 }}>
-                                    <Text style={styles.editItemTitle}>
-                                      {item.description || "Gasto"}
-                                    </Text>
-                                    <Text style={styles.editItemMeta}>
-                                      {getExpensePaymentLabel(item.paymentMethod)}
-                                    </Text>
-                                  </View>
-                                  <Text style={styles.editItemAmount}>
-                                    {formatCurrency(item.value)}
-                                  </Text>
-                                  <Ionicons
-                                    name="pencil"
-                                    size={16}
-                                    color="#8c52ff"
-                                  />
-                                </TouchableOpacity>
-                              ))}
-                              <TouchableOpacity
-                                style={styles.addItemButton}
-                                onPress={() =>
-                                  navigate("AddExpense", {
-                                    prefillDate: dateKey,
-                                    prefillExpenseType: "consumption",
-                                    returnTo: "Budget",
-                                  })
-                                }
-                              >
-                                <Ionicons name="add" size={16} color="#fff" />
-                                <Text style={styles.addItemButtonText}>
-                                  Adicionar lançamento
+                          {(expensesByDate[dateKey] || []).map((item) => (
+                            <TouchableOpacity
+                              key={item.id}
+                              style={styles.editItemRow}
+                              onPress={() => openExpenseEditor(item.id)}
+                            >
+                              <View style={{ flex: 1 }}>
+                                <Text style={styles.editItemTitle}>
+                                  {item.description || "Gasto"}
                                 </Text>
-                              </TouchableOpacity>
-                            </>
-                          ) : (
-                            <View style={styles.editContainer}>
-                              <Text style={styles.currencySymbol}>R$</Text>
-                              <TextInput
-                                style={styles.dayInput}
-                                placeholder="0,00"
-                                placeholderTextColor="#666"
-                                keyboardType={DECIMAL_INPUT_KEYBOARD}
-                                value={tempValue}
-                                onChangeText={(text) =>
-                                  setTempValue(sanitizeDecimalInput(text))
-                                }
-                                autoFocus
+                                <Text style={styles.editItemMeta}>
+                                  {getExpensePaymentLabel(item.paymentMethod)}
+                                </Text>
+                              </View>
+                              <Text style={styles.editItemAmount}>
+                                {formatCurrency(item.value)}
+                              </Text>
+                              <Ionicons
+                                name="pencil"
+                                size={16}
+                                color="#8c52ff"
                               />
-                              <TouchableOpacity
-                                style={styles.saveButton}
-                                onPress={() => handleSaveExpense(day, date)}
-                              >
-                                <Ionicons name="checkmark" size={20} color="#fff" />
-                              </TouchableOpacity>
-                            </View>
-                          )}
+                            </TouchableOpacity>
+                          ))}
+                          <TouchableOpacity
+                            style={styles.addItemButton}
+                            onPress={() => openAddExpenseForDay(date)}
+                          >
+                            <Ionicons name="add" size={16} color="#fff" />
+                            <Text style={styles.addItemButtonText}>
+                              Adicionar lançamento
+                            </Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.correctZeroButton}
+                            onPress={() => handleCorrectDayToZero(date)}
+                          >
+                            <Ionicons
+                              name="checkmark-circle-outline"
+                              size={16}
+                              color="#8c52ff"
+                            />
+                            <Text style={styles.correctZeroButtonText}>
+                              Corrigir: marcar como zero
+                            </Text>
+                          </TouchableOpacity>
                           <TouchableOpacity
                             style={styles.cancelButton}
-                            onPress={() => {
-                              setEditingDateKey(null);
-                              setTempValue("");
-                            }}
+                            onPress={() => setEditingDateKey(null)}
                           >
                             <Ionicons name="close" size={20} color="#fff" />
                           </TouchableOpacity>
@@ -984,10 +982,20 @@ export const BudgetScreen = () => {
         </Animated.View>
       </ScrollView>
       </KeyboardAvoidingView>
-      {/* Modal de escolha: Registrar gasto ou Marcar zero (apenas duas ações) */}
-      <Modal transparent visible={choiceModalVisible} animationType="fade">
-        <View style={modalStyles.backdrop}>
-          <View style={modalStyles.container}>
+      <Modal
+        transparent
+        visible={choiceModalVisible}
+        animationType="fade"
+        onRequestClose={handleCloseChoiceModal}
+      >
+        <Pressable
+          style={modalStyles.backdrop}
+          onPress={handleCloseChoiceModal}
+        >
+          <Pressable
+            style={modalStyles.container}
+            onPress={(event) => event.stopPropagation()}
+          >
             <Text style={modalStyles.title}>Dia sem registro</Text>
             <Text style={modalStyles.message}>{choiceModalDayLabel}</Text>
             <View style={modalStyles.actionsRow}>
@@ -1008,6 +1016,47 @@ export const BudgetScreen = () => {
                 </Text>
               </TouchableOpacity>
             </View>
+            <TouchableOpacity
+              style={modalStyles.dismissButton}
+              onPress={handleCloseChoiceModal}
+            >
+              <Text style={modalStyles.dismissLabel}>Voltar</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal
+        transparent
+        visible={correctZeroModalVisible}
+        animationType="fade"
+      >
+        <View style={modalStyles.backdrop}>
+          <View style={modalStyles.container}>
+            <Text style={modalStyles.title}>Corrigir para zero</Text>
+            <Text style={modalStyles.message}>
+              Isso remove os gastos de {correctZeroModalDayLabel} e marca o dia
+              como zero confirmado. No ranking você ganha 1 ponto (em vez de 2),
+              pois havia gasto registrado antes.
+            </Text>
+            <View style={modalStyles.actionsRow}>
+              <TouchableOpacity
+                style={modalStyles.buttonPurple}
+                onPress={handleCancelCorrectZero}
+                disabled={saving}
+              >
+                <Text style={modalStyles.buttonWhiteLabel}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={modalStyles.buttonPink}
+                onPress={executeCorrectDayToZero}
+                disabled={saving}
+              >
+                <Text style={modalStyles.buttonWhiteLabel}>
+                  {saving ? "Corrigindo..." : "Confirmar correção"}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -1016,8 +1065,6 @@ export const BudgetScreen = () => {
         active={showConfetti}
         onComplete={() => setShowConfetti(false)}
       />
-
-      {/* confirmation now happens directly when choosing 'Marcar zero' */}
     </Layout>
   );
 };
@@ -1207,6 +1254,43 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     color: "#8c52ff",
   },
+  plannedSplitSection: {
+    marginTop: 14,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: "#333",
+  },
+  plannedSplitTitle: {
+    color: "#bbb",
+    fontSize: 12,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  plannedSplitRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  plannedSplitItem: {
+    flex: 1,
+    backgroundColor: "#121212",
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    alignItems: "center",
+    gap: 4,
+  },
+  plannedSplitLabel: {
+    color: "#999",
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  plannedSplitValue: {
+    color: "#fff",
+    fontSize: 15,
+    fontWeight: "700",
+  },
   statsContainer: {
     flexDirection: "row",
     gap: 8,
@@ -1348,6 +1432,24 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginLeft: 6,
     fontSize: 13,
+  },
+  correctZeroButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    marginTop: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#8c52ff",
+    backgroundColor: "rgba(140, 82, 255, 0.08)",
+  },
+  correctZeroButtonText: {
+    color: "#8c52ff",
+    fontSize: 13,
+    fontWeight: "600",
   },
   dayInfo: {
     flex: 1,
@@ -1515,6 +1617,15 @@ const modalStyles = StyleSheet.create({
   buttonWhiteLabel: {
     color: "#fff",
     fontWeight: "700",
+  },
+  dismissButton: {
+    alignItems: "center",
+    paddingVertical: 8,
+  },
+  dismissLabel: {
+    color: "#a89fc0",
+    fontSize: 14,
+    fontWeight: "600",
   },
 });
 

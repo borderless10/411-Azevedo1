@@ -67,6 +67,12 @@ export const AddIncomeScreen = () => {
   const [trackedIncomeHintVisible, setTrackedIncomeHintVisible] =
     useState(false);
 
+  const lockedTrackedTitle =
+    params?.trackedMode && params?.prefillDescription
+      ? String(params.prefillDescription).trim()
+      : "";
+  const isLockedTrackedFlow = Boolean(lockedTrackedTitle);
+
   const navigateToReturnScreen = () => {
     navigate(params?.returnTo || "Home", params?.returnParams);
   };
@@ -95,6 +101,13 @@ export const AddIncomeScreen = () => {
       setIncomeType("tracked");
     }
   }, [params?.trackedMode]);
+
+  useEffect(() => {
+    if (!lockedTrackedTitle) return;
+    setIncomeType("tracked");
+    setTrackedIncomeTitle(lockedTrackedTitle);
+    setDescription(lockedTrackedTitle);
+  }, [lockedTrackedTitle]);
 
   useEffect(() => {
     const loadPlanningIncomes = async () => {
@@ -340,7 +353,11 @@ export const AddIncomeScreen = () => {
   };
 
   return (
-    <Layout title="Nova Renda" showBackButton={true} showSidebar={false}>
+    <Layout
+      title={isLockedTrackedFlow ? lockedTrackedTitle : "Nova Renda"}
+      showBackButton={true}
+      showSidebar={false}
+    >
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.container}
@@ -356,7 +373,9 @@ export const AddIncomeScreen = () => {
                 <Ionicons name="add-circle" size={64} color="#8c52ff" />
               </View>
               <Text style={styles.subtitle}>
-                Registre uma entrada de dinheiro
+                {isLockedTrackedFlow
+                  ? `Registre um recebimento de ${lockedTrackedTitle}`
+                  : "Registre uma entrada de dinheiro"}
               </Text>
             </View>
 
@@ -370,93 +389,111 @@ export const AddIncomeScreen = () => {
 
             {/* Form */}
             <View style={styles.form}>
-              <View style={styles.typeSelector}>
-                <TouchableOpacity
-                  style={[
-                    styles.typeTab,
-                    incomeType === "tracked" && styles.typeTabActive,
-                  ]}
-                  onPress={() => setIncomeType("tracked")}
-                  disabled={loading}
-                >
-                  <Ionicons
-                    name="analytics"
-                    size={18}
-                    color={incomeType === "tracked" ? "#8c52ff" : "#999"}
-                  />
-                  <Text
+              {!isLockedTrackedFlow ? (
+                <View style={styles.typeSelector}>
+                  <TouchableOpacity
                     style={[
-                      styles.typeTabText,
-                      incomeType === "tracked" && styles.typeTabTextActive,
+                      styles.typeTab,
+                      incomeType === "tracked" && styles.typeTabActive,
                     ]}
+                    onPress={() => setIncomeType("tracked")}
+                    disabled={loading}
                   >
-                    Renda acompanhada
-                  </Text>
-                </TouchableOpacity>
+                    <Ionicons
+                      name="analytics"
+                      size={18}
+                      color={incomeType === "tracked" ? "#8c52ff" : "#999"}
+                    />
+                    <Text
+                      style={[
+                        styles.typeTabText,
+                        incomeType === "tracked" && styles.typeTabTextActive,
+                      ]}
+                    >
+                      Renda acompanhada
+                    </Text>
+                  </TouchableOpacity>
 
-                <TouchableOpacity
-                  style={[
-                    styles.typeTab,
-                    incomeType === "general" && styles.typeTabActive,
-                  ]}
-                  onPress={() => setIncomeType("general")}
-                  disabled={loading}
-                >
-                  <Ionicons
-                    name="cash"
-                    size={18}
-                    color={incomeType === "general" ? "#8c52ff" : "#999"}
-                  />
-                  <Text
+                  <TouchableOpacity
                     style={[
-                      styles.typeTabText,
-                      incomeType === "general" && styles.typeTabTextActive,
+                      styles.typeTab,
+                      incomeType === "general" && styles.typeTabActive,
                     ]}
+                    onPress={() => setIncomeType("general")}
+                    disabled={loading}
                   >
-                    Renda geral
-                  </Text>
-                </TouchableOpacity>
-              </View>
+                    <Ionicons
+                      name="cash"
+                      size={18}
+                      color={incomeType === "general" ? "#8c52ff" : "#999"}
+                    />
+                    <Text
+                      style={[
+                        styles.typeTabText,
+                        incomeType === "general" && styles.typeTabTextActive,
+                      ]}
+                    >
+                      Renda geral
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null}
 
               {incomeType === "tracked" ? (
                 <View style={styles.inputContainer}>
-                  <Text style={styles.label}>
-                    <Ionicons name="analytics" size={16} color="#8c52ff" /> Qual
-                    renda acompanhada?
-                  </Text>
-
-                  {trackedIncomeOptions.length === 0 ? (
-                    <View style={styles.emptyTrackedContainer}>
-                      <Text style={styles.emptyTrackedText}>
-                        O consultor ainda não definiu rendas acompanhadas.
+                  {isLockedTrackedFlow ? (
+                    <>
+                      <Text style={styles.label}>
+                        <Ionicons name="analytics" size={16} color="#8c52ff" />{" "}
+                        Renda acompanhada
                       </Text>
-                    </View>
+                      <View style={styles.lockedTrackedBox}>
+                        <Text style={styles.lockedTrackedValue}>
+                          {lockedTrackedTitle}
+                        </Text>
+                      </View>
+                    </>
                   ) : (
-                    <View style={styles.trackedOptionsContainer}>
-                      {trackedIncomeOptions.map((option) => {
-                        const active = trackedIncomeTitle === option;
-                        return (
-                          <TouchableOpacity
-                            key={option}
-                            style={[
-                              styles.trackedOption,
-                              active && styles.trackedOptionActive,
-                            ]}
-                            onPress={() => setTrackedIncomeTitle(option)}
-                            disabled={loading}
-                          >
-                            <Text
-                              style={[
-                                styles.trackedOptionText,
-                                active && styles.trackedOptionTextActive,
-                              ]}
-                            >
-                              {option}
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </View>
+                    <>
+                      <Text style={styles.label}>
+                        <Ionicons name="analytics" size={16} color="#8c52ff" />{" "}
+                        Qual renda acompanhada?
+                      </Text>
+
+                      {trackedIncomeOptions.length === 0 ? (
+                        <View style={styles.emptyTrackedContainer}>
+                          <Text style={styles.emptyTrackedText}>
+                            O consultor ainda não definiu rendas acompanhadas.
+                          </Text>
+                        </View>
+                      ) : (
+                        <View style={styles.trackedOptionsContainer}>
+                          {trackedIncomeOptions.map((option) => {
+                            const active = trackedIncomeTitle === option;
+                            return (
+                              <TouchableOpacity
+                                key={option}
+                                style={[
+                                  styles.trackedOption,
+                                  active && styles.trackedOptionActive,
+                                ]}
+                                onPress={() => setTrackedIncomeTitle(option)}
+                                disabled={loading}
+                              >
+                                <Text
+                                  style={[
+                                    styles.trackedOptionText,
+                                    active && styles.trackedOptionTextActive,
+                                  ]}
+                                >
+                                  {option}
+                                </Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+                      )}
+                    </>
                   )}
 
                   {errors.trackedIncomeTitle ? (
@@ -865,6 +902,19 @@ const styles = StyleSheet.create({
   },
   trackedOptionTextActive: {
     color: "#fff",
+  },
+  lockedTrackedBox: {
+    borderWidth: 1,
+    borderColor: "#8c52ff",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    backgroundColor: "#2b174d",
+  },
+  lockedTrackedValue: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "700",
   },
   sourceModeRow: {
     flexDirection: "row",

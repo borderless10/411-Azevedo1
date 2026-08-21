@@ -50,6 +50,7 @@ export interface IncomeFilters {
   maxValue?: number;
   searchTerm?: string;
   dailyTrackingOnly?: boolean;
+  createdAtFrom?: Date;
 }
 
 /**

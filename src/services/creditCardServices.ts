@@ -57,6 +57,9 @@ const normalizeCreatePayload = (data: CreateCreditCardData) => {
   if (!validateLast4(data.last4)) {
     throw new Error("Os 4 dígitos finais devem conter exatamente 4 números");
   }
+  if (!validateBestDay(data.bestDay)) {
+    throw new Error("Melhor dia deve estar entre 1 e 31");
+  }
   if (!validateCardDay(data.cardDueDay)) {
     throw new Error("Vencimento do cartão (dia) inválido");
   }

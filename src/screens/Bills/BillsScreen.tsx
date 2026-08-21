@@ -74,6 +74,8 @@ export const BillsScreen = () => {
   const [billToDelete, setBillToDelete] = useState<Bill | null>(null);
   const [isPayModalVisible, setIsPayModalVisible] = useState(false);
   const [billToPay, setBillToPay] = useState<Bill | null>(null);
+  const [expectedPayBill, setExpectedPayBill] = useState<Bill | null>(null);
+  const [unpaidConfirmBill, setUnpaidConfirmBill] = useState<Bill | null>(null);
   const [payHow, setPayHow] = useState<"cash" | "credit_card">("cash");
   const [payCards, setPayCards] = useState<CreditCard[]>([]);
   const [payCardId, setPayCardId] = useState("");
@@ -340,6 +342,20 @@ export const BillsScreen = () => {
         });
 
         // Mapear gastos esperados pontuais (somente contas, sem acompanhamento diário)
+        let paidSourceBillIds = new Set<string>();
+        try {
+          paidSourceBillIds =
+            await expenseServices.getPaidSourceBillIds(billsOwnerId);
+        } catch (paidIdsErr) {
+          console.warn(
+            "[BILLS] erro ao carregar pagamentos de gastos esperados:",
+            paidIdsErr,
+          );
+        }
+
+        const todayForExpected = new Date();
+        todayForExpected.setHours(0, 0, 0, 0);
+
         const mappedExpectedExpenses = (planning?.expectedExpenses || [])
           .filter(isPayablePlanningBill)
           .map((exp) => {
@@ -352,6 +368,15 @@ export const BillsScreen = () => {
                 dueDate = new Date(parseInt(year), parseInt(month) - 1, 1);
               }
             }
+            dueDate.setHours(0, 0, 0, 0);
+
+            const isPaid = Boolean(exp.id && paidSourceBillIds.has(exp.id));
+            const status: Bill["status"] = isPaid
+              ? "paid"
+              : dueDate < todayForExpected
+                ? "overdue"
+                : "pending";
+
             return {
               id: exp.id!,
               userId: billsOwnerId,
@@ -360,8 +385,8 @@ export const BillsScreen = () => {
               amount: exp.amount,
               paymentMethod: exp.paymentMethod as any,
               dueDate,
-              status: "pending" as const,
-              paidDate: undefined,
+              status,
+              paidDate: isPaid ? new Date() : undefined,
               notificationId: undefined,
               createdAt: exp.createdAt || new Date(),
               updatedAt: exp.updatedAt || new Date(),
@@ -561,24 +586,7 @@ export const BillsScreen = () => {
 
   const handleMarkAsPaid = async (bill: Bill) => {
     if ((bill as any)._isExpectedExpense) {
-      Alert.alert(
-        "Gasto esperado",
-        "Este item é um gasto esperado do planejamento. Registre o pagamento em Adicionar Gasto > Conta.",
-        [
-          { text: "Cancelar", style: "cancel" },
-          {
-            text: "Ir para pagamento",
-            onPress: () =>
-              navigate("AddExpense", {
-                prefillExpenseType: "bill",
-                prefillBillId: bill.id,
-                prefillDate: new Date().toISOString(),
-                prefillDescription: bill.title,
-                returnTo: "Bills",
-              }),
-          },
-        ],
-      );
+      setExpectedPayBill(bill);
       return;
     }
 
@@ -598,6 +606,23 @@ export const BillsScreen = () => {
         }
       })
       .catch(() => setPayCards([]));
+  };
+
+  const closeExpectedPayModal = () => {
+    setExpectedPayBill(null);
+  };
+
+  const goToExpectedExpensePayment = () => {
+    if (!expectedPayBill) return;
+    const bill = expectedPayBill;
+    setExpectedPayBill(null);
+    navigate("AddExpense", {
+      prefillExpenseType: "bill",
+      prefillBillId: bill.id,
+      prefillDate: new Date().toISOString(),
+      prefillDescription: bill.title,
+      returnTo: "Bills",
+    });
   };
 
   const closePayModal = () => {
@@ -689,49 +714,63 @@ export const BillsScreen = () => {
   };
 
   const handleMarkAsUnpaid = async (bill: Bill) => {
-    Alert.alert("Confirmar ajuste", `Marcar "${bill.title}" como não paga?`, [
-      { text: "Cancelar", style: "cancel" },
-      {
-        text: "Confirmar",
-        onPress: async () => {
-          try {
-            if (isPlanningSource) {
-              await planningServices.markBillAsUnpaidByClient(
-                billsOwnerId,
-                bill.id,
-              );
-            } else {
-              await markBillAsUnpaid(bill.id);
-              await scheduleBillNotification(
-                bill.id,
-                bill.title,
-                Number(bill.amount) || 0,
-                new Date(bill.dueDate),
-              );
-            }
+    setUnpaidConfirmBill(bill);
+  };
 
-            const removedExpense =
-              await expenseServices.deleteExpenseBySourceBillId(
-                billsOwnerId,
-                bill.id,
-              );
+  const closeUnpaidConfirmModal = () => {
+    setUnpaidConfirmBill(null);
+  };
 
-            if (!removedExpense) {
-              console.log(
-                "[BILLS] nenhum gasto vinculado foi encontrado para remover",
-                {
-                  billId: bill.id,
-                },
-              );
-            }
+  const confirmMarkAsUnpaid = async () => {
+    const bill = unpaidConfirmBill;
+    if (!bill) return;
 
-            loadBills();
-          } catch (error) {
-            Alert.alert("Erro", "Não foi possível marcar como não paga");
-          }
-        },
-      },
-    ]);
+    setUnpaidConfirmBill(null);
+
+    try {
+      if ((bill as any)._isExpectedExpense) {
+        await expenseServices.deleteExpenseBySourceBillId(
+          billsOwnerId,
+          bill.id,
+        );
+        loadBills();
+        return;
+      }
+
+      if (isPlanningSource) {
+        await planningServices.markBillAsUnpaidByClient(
+          billsOwnerId,
+          bill.id,
+        );
+      } else {
+        await markBillAsUnpaid(bill.id);
+        await scheduleBillNotification(
+          bill.id,
+          bill.title,
+          Number(bill.amount) || 0,
+          new Date(bill.dueDate),
+        );
+      }
+
+      const removedExpense =
+        await expenseServices.deleteExpenseBySourceBillId(
+          billsOwnerId,
+          bill.id,
+        );
+
+      if (!removedExpense) {
+        console.log(
+          "[BILLS] nenhum gasto vinculado foi encontrado para remover",
+          {
+            billId: bill.id,
+          },
+        );
+      }
+
+      loadBills();
+    } catch (error) {
+      Alert.alert("Erro", "Não foi possível marcar como não paga");
+    }
   };
 
   const cancelDelete = () => {
@@ -1487,6 +1526,107 @@ export const BillsScreen = () => {
         onConfirm={confirmDelete}
         onCancel={cancelDelete}
       />
+
+      <Modal
+        visible={!!expectedPayBill}
+        transparent
+        animationType="fade"
+        onRequestClose={closeExpectedPayModal}
+      >
+        <View style={styles.payModalBackdrop}>
+          <View
+            style={[styles.payModalCard, { backgroundColor: colors.card }]}
+          >
+            <Text style={[styles.payModalTitle, { color: colors.text }]}>
+              Gasto esperado
+            </Text>
+            <Text
+              style={[styles.payModalMessage, { color: colors.textSecondary }]}
+            >
+              "{expectedPayBill?.title}" é um gasto esperado do planejamento.
+              Registre o pagamento em Adicionar Gasto &gt; Conta.
+            </Text>
+            <View style={styles.payActionsRow}>
+              <TouchableOpacity
+                style={[
+                  styles.payActionButton,
+                  {
+                    backgroundColor: colors.inputBackground,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                  },
+                ]}
+                onPress={closeExpectedPayModal}
+              >
+                <Text style={[styles.payActionText, { color: colors.text }]}>
+                  Cancelar
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.payActionButton,
+                  { backgroundColor: colors.success },
+                ]}
+                onPress={goToExpectedExpensePayment}
+              >
+                <Text style={[styles.payActionText, { color: "#fff" }]}>
+                  Ir para pagamento
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={!!unpaidConfirmBill}
+        transparent
+        animationType="fade"
+        onRequestClose={closeUnpaidConfirmModal}
+      >
+        <View style={styles.payModalBackdrop}>
+          <View
+            style={[styles.payModalCard, { backgroundColor: colors.card }]}
+          >
+            <Text style={[styles.payModalTitle, { color: colors.text }]}>
+              Confirmar ajuste
+            </Text>
+            <Text
+              style={[styles.payModalMessage, { color: colors.textSecondary }]}
+            >
+              Marcar "{unpaidConfirmBill?.title}" como não paga?
+            </Text>
+            <View style={styles.payActionsRow}>
+              <TouchableOpacity
+                style={[
+                  styles.payActionButton,
+                  {
+                    backgroundColor: colors.inputBackground,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                  },
+                ]}
+                onPress={closeUnpaidConfirmModal}
+              >
+                <Text style={[styles.payActionText, { color: colors.text }]}>
+                  Cancelar
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.payActionButton,
+                  { backgroundColor: colors.warning },
+                ]}
+                onPress={confirmMarkAsUnpaid}
+              >
+                <Text style={[styles.payActionText, { color: "#fff" }]}>
+                  Confirmar
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </Layout>
   );
 };

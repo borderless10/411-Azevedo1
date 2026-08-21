@@ -30,7 +30,9 @@ import {
   addDays,
   formatDateToString,
 } from "../utils/dateUtils";
-import rankingPlanilhaService from "./rankingPlanilhaService";
+import rankingPlanilhaService, {
+  type RankingRegistrationResult,
+} from "./rankingPlanilhaService";
 import {
   isConsumoModeradoExpense,
   isConsumoModeradoHistoryExpense,
@@ -286,7 +288,8 @@ export const budgetServices = {
       zeroConfirmedDaysNoRanking: [],
       zeroPromptDismissedDays: [],
       trackedZeroConfirmedDays: {},
-      rankingPlanilhaEntries: [],
+      // Ranking não zera no reinício de ciclo — acumula por trimestre civil.
+      rankingPlanilhaEntries: currentBudget?.rankingPlanilhaEntries ?? [],
     });
   },
 
@@ -419,7 +422,15 @@ export const budgetServices = {
     }
   },
 
-  async confirmZeroExpenseDay(userId: string, date: Date): Promise<Budget> {
+  async confirmZeroExpenseDay(
+    userId: string,
+    date: Date,
+  ): Promise<{
+    budget: Budget;
+    ranking: Awaited<
+      ReturnType<typeof rankingPlanilhaService.recordPlanilhaRegistration>
+    >;
+  }> {
     const monthYear = getMonthYearFromDate(date);
     const day = date.getDate();
 
@@ -431,13 +442,13 @@ export const budgetServices = {
         dailyExpenses: [{ day, amount: 0 }],
         zeroConfirmedDays: [day],
       });
-      await rankingPlanilhaService.recordPlanilhaRegistration(
+      const ranking = await rankingPlanilhaService.recordPlanilhaRegistration(
         userId,
         date,
         new Date(),
         "zero",
       );
-      return saved;
+      return { budget: saved, ranking };
     }
 
     const dailyExpenses = [...(budget.dailyExpenses || [])];
@@ -467,21 +478,24 @@ export const budgetServices = {
       ),
     });
 
-    await rankingPlanilhaService.recordPlanilhaRegistration(
+    const ranking = await rankingPlanilhaService.recordPlanilhaRegistration(
       userId,
       date,
       new Date(),
       "zero",
     );
 
-    return saved;
+    return { budget: saved, ranking };
   },
 
-  async reconcileConsumoModeradoDay(userId: string, date: Date): Promise<void> {
+  async reconcileConsumoModeradoDay(
+    userId: string,
+    date: Date,
+  ): Promise<RankingRegistrationResult | null> {
     const monthYear = getMonthYearFromDate(date);
     const day = date.getDate();
     const budget = await this.getBudget(userId, monthYear);
-    if (!budget) return;
+    if (!budget) return null;
 
     const remaining = await expenseServices.getExpenses(userId, {
       startDate: getStartOfDay(date),
@@ -510,6 +524,38 @@ export const budgetServices = {
       zeroConfirmedDays: updatedZeroConfirmedDays,
       zeroConfirmedDaysNoRanking: budget.zeroConfirmedDaysNoRanking || [],
     });
+
+    if (remainingTotal > 0) {
+      return rankingPlanilhaService.recordPlanilhaRegistration(
+        userId,
+        date,
+        new Date(),
+        "expense",
+      );
+    }
+
+    return null;
+  },
+
+  /**
+   * Corrige um dia com gasto registrado por engano: remove os lançamentos
+   * de consumo moderado e marca o dia como zero (ranking com punição).
+   */
+  async correctConsumoModeradoDayToZero(
+    userId: string,
+    date: Date,
+  ): Promise<{
+    budget: Budget;
+    ranking: RankingRegistrationResult;
+  }> {
+    const deletedCount =
+      await expenseServices.deleteConsumoModeradoExpensesForDay(userId, date);
+
+    if (deletedCount === 0) {
+      throw new Error("Não há gastos de consumo moderado neste dia para corrigir.");
+    }
+
+    return this.confirmZeroExpenseDay(userId, date);
   },
 
   async confirmZeroExpenseDayForTracked(

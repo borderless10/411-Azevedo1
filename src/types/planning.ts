@@ -47,6 +47,8 @@ export type CategoryReleasesFirestore = Record<
 export interface Planning {
   id?: string;
   consultantId: string; // quem criou/assinou o plano
+  /** Valor que o cliente já possui em conta no dia do planejamento (#6). */
+  availableInAccount?: number;
   monthlyIncome?: number;
   consumoModerado?: number;
   consumoModeradoCard?: number;
@@ -69,6 +71,7 @@ export interface Planning {
 
 export interface PlanningFirestore {
   consultantId: string;
+  availableInAccount?: number;
   monthlyIncome?: number;
   consumoModerado?: number;
   consumoModeradoCard?: number;
@@ -91,6 +94,7 @@ export interface PlanningFirestore {
 
 export interface CreatePlanningData {
   consultantId: string;
+  availableInAccount?: number;
   monthlyIncome?: number;
   consumoModerado?: number;
   consumoModeradoCard?: number;
@@ -107,6 +111,7 @@ export interface CreatePlanningData {
 }
 
 export interface UpdatePlanningData {
+  availableInAccount?: number;
   monthlyIncome?: number;
   consumoModerado?: number;
   consumoModeradoCard?: number;

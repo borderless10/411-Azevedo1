@@ -15,6 +15,7 @@ import { useNavigation } from "../../routes/NavigationContext";
 import { useAuth } from "../../hooks/useAuth";
 import { useTheme } from "../../contexts/ThemeContext";
 import { userService } from "../../services/userServices";
+import { profileDisplayName } from "../../utils/chatDisplayNames";
 import { expenseServices } from "../../services/expenseServices";
 import { planningServices } from "../../services/planningServices";
 import {
@@ -124,10 +125,10 @@ export const ClientExpenseRecordsScreen: React.FC = () => {
           navigate("ConsultorHome");
           return;
         }
-        setClientName(client?.name || "Cliente");
+        setClientName(profileDisplayName(client, "Cliente"));
       } else {
         const client = await userService.getUserById(clientId);
-        setClientName(client?.name || "Cliente");
+        setClientName(profileDisplayName(client, "Cliente"));
       }
 
       const plan = await planningServices.getPlanning(clientId);
