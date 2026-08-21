@@ -14,6 +14,11 @@ import { useNavigation } from "../../routes/NavigationContext";
 import { useAuth } from "../../hooks/useAuth";
 import { userService } from "../../services/userServices";
 import ConsultantPicker from "../../components/ui/ConsultantPicker";
+import { AccountType } from "../../types/auth";
+import {
+  coupleAccountFieldsFromInput,
+  isCoupleAccount,
+} from "../../utils/coupleAccount";
 
 export const EditUserScreen: React.FC = ({}: any) => {
   const { navigate, params } = useNavigation() as any;
@@ -30,6 +35,9 @@ export const EditUserScreen: React.FC = ({}: any) => {
   >("user");
   const [consultants, setConsultants] = useState<any[]>([]);
   const [consultantId, setConsultantId] = useState<string | null>(null);
+  const [accountType, setAccountType] = useState<AccountType>("individual");
+  const [coupleMember1Name, setCoupleMember1Name] = useState("");
+  const [coupleMember2Name, setCoupleMember2Name] = useState("");
 
   useEffect(() => {
     if (
@@ -62,6 +70,9 @@ export const EditUserScreen: React.FC = ({}: any) => {
         setPhone(u.phone || "");
         setRole((u.role as any) || "user");
         setConsultantId((u as any).consultantId || null);
+        setAccountType(isCoupleAccount(u) ? "couple" : "individual");
+        setCoupleMember1Name(u.coupleMember1Name || "");
+        setCoupleMember2Name(u.coupleMember2Name || "");
       }
     } catch (error) {
       console.error("Erro ao carregar usuário para edição", error);
@@ -81,6 +92,14 @@ export const EditUserScreen: React.FC = ({}: any) => {
         "com consultantId:",
         consultantId,
       );
+      const coupleFields = coupleAccountFieldsFromInput({
+        accountType:
+          role === "user" || role === "cliente_premium"
+            ? accountType
+            : "individual",
+        coupleMember1Name,
+        coupleMember2Name,
+      });
       await userService.updateUser(userId, {
         name: name.trim(),
         nickname: nickname.trim(),
@@ -88,6 +107,7 @@ export const EditUserScreen: React.FC = ({}: any) => {
         role,
         isAdmin: role === "admin",
         consultantId: consultantId === null ? null : consultantId,
+        ...coupleFields,
       });
       console.log("[EDIT USER] ✅ Usuário atualizado com sucesso");
       Alert.alert("Sucesso", "Usuário atualizado.");
@@ -197,6 +217,66 @@ export const EditUserScreen: React.FC = ({}: any) => {
                 </Text>
               </TouchableOpacity>
             </View>
+
+            {(role === "user" || role === "cliente_premium") && (
+              <>
+                <Text style={styles.label}>Tipo de conta</Text>
+                <View style={styles.roleRow}>
+                  <TouchableOpacity
+                    style={[
+                      styles.roleButton,
+                      accountType === "individual" && styles.roleActive,
+                    ]}
+                    onPress={() => setAccountType("individual")}
+                  >
+                    <Text
+                      style={[
+                        styles.roleText,
+                        accountType === "individual" && styles.roleTextActive,
+                      ]}
+                    >
+                      Individual
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.roleButton,
+                      accountType === "couple" && styles.roleActive,
+                    ]}
+                    onPress={() => setAccountType("couple")}
+                  >
+                    <Text
+                      style={[
+                        styles.roleText,
+                        accountType === "couple" && styles.roleTextActive,
+                      ]}
+                    >
+                      ❤️ Casal
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                {accountType === "couple" && (
+                  <>
+                    <Text style={styles.label}>Nome do integrante 1</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={coupleMember1Name}
+                      onChangeText={setCoupleMember1Name}
+                      placeholder="Usuário 1"
+                      placeholderTextColor="#999"
+                    />
+                    <Text style={styles.label}>Nome do integrante 2</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={coupleMember2Name}
+                      onChangeText={setCoupleMember2Name}
+                      placeholder="Usuário 2"
+                      placeholderTextColor="#999"
+                    />
+                  </>
+                )}
+              </>
+            )}
 
             {(role === "user" || role === "cliente_premium") && (
               <>

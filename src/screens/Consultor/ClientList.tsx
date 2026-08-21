@@ -13,6 +13,7 @@ import { useNavigation } from "../../routes/NavigationContext";
 import { useAuth } from "../../hooks/useAuth";
 import consultantServices from "../../services/consultantServices";
 import { useTheme } from "../../contexts/ThemeContext";
+import { isCoupleAccount } from "../../utils/coupleAccount";
 
 export const ClientList: React.FC = () => {
   const { navigate } = useNavigation();
@@ -84,6 +85,11 @@ export const ClientList: React.FC = () => {
                   {item.email ? (
                     <Text style={{ color: colors.textSecondary }}>
                       {item.email}
+                    </Text>
+                  ) : null}
+                  {isCoupleAccount(item) ? (
+                    <Text style={{ color: "#ff8fab", fontWeight: "700" }}>
+                      ❤️ Casal
                     </Text>
                   ) : null}
                 </View>

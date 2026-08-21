@@ -72,7 +72,7 @@ import {
 
 export const HomeScreen = () => {
   const { navigate, currentScreen } = useNavigation();
-  const { user } = useAuth();
+  const { user, activeCoupleMember } = useAuth();
 
   const [totalIncome, setTotalIncome] = useState(0);
   const [totalExpense, setTotalExpense] = useState(0);
@@ -707,11 +707,16 @@ export const HomeScreen = () => {
     zeroPromptCheckInFlightRef.current = true;
 
     try {
-      await budgetServices.syncRankingPenalties(user.id);
+      await budgetServices.syncRankingPenalties(
+        user.id,
+        new Date(),
+        activeCoupleMember,
+      );
 
       const alreadyResolved = await budgetServices.isDayExpensePromptResolved(
         user.id,
         yesterday,
+        activeCoupleMember,
       );
 
       if (alreadyResolved) {
@@ -748,6 +753,7 @@ export const HomeScreen = () => {
       const { ranking } = await budgetServices.confirmZeroExpenseDay(
         user.id,
         zeroConfirmDate,
+        activeCoupleMember,
       );
       markYesterdayPromptResolved();
 
@@ -790,11 +796,15 @@ export const HomeScreen = () => {
         category: "Consumo Moderado",
         paymentMethod: "other",
         isConsumoModerado: true,
+        ...(activeCoupleMember === 1 || activeCoupleMember === 2
+          ? { coupleMember: activeCoupleMember }
+          : {}),
       });
 
       await budgetServices.reconcileConsumoModeradoDay(
         user.id,
         zeroConfirmDate,
+        activeCoupleMember,
       );
       markYesterdayPromptResolved();
 
@@ -821,7 +831,11 @@ export const HomeScreen = () => {
 
     try {
       setConfirmingZero(true);
-      await budgetServices.dismissExpensePromptForDay(user.id, zeroConfirmDate);
+      await budgetServices.dismissExpensePromptForDay(
+        user.id,
+        zeroConfirmDate,
+        activeCoupleMember,
+      );
       markYesterdayPromptResolved();
     } catch (error) {
       console.error("❌ [HOME] Erro ao adiar confirmação de gasto:", error);

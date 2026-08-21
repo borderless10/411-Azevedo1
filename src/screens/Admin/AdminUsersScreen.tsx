@@ -20,6 +20,7 @@ import {
   profileInitial,
   profilePhotoUri,
 } from "../../utils/chatDisplayNames";
+import { isCoupleAccount } from "../../utils/coupleAccount";
 
 export const AdminUsersScreen: React.FC = () => {
   const { user } = useAuth();
@@ -96,6 +97,9 @@ export const AdminUsersScreen: React.FC = () => {
           </Text>
           {item.role === "cliente_premium" && (
             <Text style={[styles.meta, { color: "#c084fc" }]}>Premium</Text>
+          )}
+          {isCoupleAccount(item) && (
+            <Text style={[styles.meta, { color: "#ff8fab" }]}>❤️ Casal</Text>
           )}
         </View>
         <View style={styles.actionsRow}>

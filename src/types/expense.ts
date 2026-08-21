@@ -1,3 +1,5 @@
+import { CoupleMember } from "./auth";
+
 /**
  * Tipos relacionados a Gastos/Despesas
  */
@@ -19,6 +21,7 @@ export interface Expense {
   isConsumoModerado?: boolean; // Marcado quando cadastrado como Consumo Moderado
   isTrackedDaily?: boolean; // Marcado quando cadastrado como Gasto Acompanhado
   sourceBillId?: string; // Vincula o gasto a uma conta paga
+  coupleMember?: CoupleMember;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -38,6 +41,7 @@ export interface CreateExpenseData {
   isConsumoModerado?: boolean; // Marcado quando cadastrado como Consumo Moderado
   isTrackedDaily?: boolean; // Marcado quando cadastrado como Gasto Acompanhado
   sourceBillId?: string;
+  coupleMember?: CoupleMember;
 }
 
 /**
@@ -55,6 +59,7 @@ export interface UpdateExpenseData {
   isConsumoModerado?: boolean;
   isTrackedDaily?: boolean;
   sourceBillId?: string;
+  coupleMember?: CoupleMember;
 }
 
 /**
@@ -73,6 +78,7 @@ export interface ExpenseFilters {
   searchTerm?: string;
   excludeSectionOnly?: boolean;
   createdAtFrom?: Date;
+  coupleMember?: CoupleMember;
 }
 
 /**
@@ -92,6 +98,7 @@ export interface ExpenseFirestore {
   isConsumoModerado?: boolean; // Marcado quando cadastrado como Consumo Moderado
   isTrackedDaily?: boolean; // Marcado quando cadastrado como Gasto Acompanhado
   sourceBillId?: string;
+  coupleMember?: CoupleMember;
   createdAt: any; // Timestamp do Firestore
   updatedAt: any; // Timestamp do Firestore
 }

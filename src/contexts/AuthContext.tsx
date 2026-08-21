@@ -8,7 +8,13 @@ import React, {
 import { authServices } from "../services/authServices";
 import { userService } from "../services/userServices";
 import { updateOverdueBills } from "../services/billServices";
-import { User, LoginCredentials, RegisterCredentials } from "../types/auth";
+import { User, LoginCredentials, RegisterCredentials, CoupleMember } from "../types/auth";
+import {
+  clearStoredCoupleMember,
+  getStoredCoupleMember,
+  isCoupleAccount,
+  persistCoupleMember,
+} from "../utils/coupleAccount";
 
 /**
  * Interface do contexto de autenticação
@@ -21,6 +27,10 @@ interface AuthContextData {
   signOut: () => Promise<void>;
   refreshUser: () => Promise<void>;
   isAuthenticated: boolean;
+  activeCoupleMember: CoupleMember | null;
+  setActiveCoupleMember: (member: CoupleMember) => Promise<void>;
+  clearActiveCoupleMember: () => Promise<void>;
+  needsCoupleSelection: boolean;
 }
 
 /**
@@ -43,6 +53,48 @@ interface AuthProviderProps {
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const [activeCoupleMember, setActiveCoupleMemberState] =
+    useState<CoupleMember | null>(null);
+  const [coupleMemberHydrated, setCoupleMemberHydrated] = useState(false);
+  const skipRestoreCoupleMemberRef = React.useRef(false);
+
+  const hydrateCoupleMember = async (
+    nextUser: User | null,
+    options?: { forcePicker?: boolean },
+  ) => {
+    if (!nextUser || !isCoupleAccount(nextUser)) {
+      setActiveCoupleMemberState(null);
+      setCoupleMemberHydrated(true);
+      return;
+    }
+
+    if (options?.forcePicker) {
+      await clearStoredCoupleMember(nextUser.id);
+      setActiveCoupleMemberState(null);
+      setCoupleMemberHydrated(true);
+      return;
+    }
+
+    const stored = await getStoredCoupleMember(nextUser.id);
+    setActiveCoupleMemberState(stored);
+    setCoupleMemberHydrated(true);
+  };
+
+  const setActiveCoupleMember = async (member: CoupleMember) => {
+    if (!user?.id) {
+      setActiveCoupleMemberState(member);
+      return;
+    }
+    await persistCoupleMember(user.id, member);
+    setActiveCoupleMemberState(member);
+  };
+
+  const clearActiveCoupleMember = async () => {
+    if (user?.id) {
+      await clearStoredCoupleMember(user.id);
+    }
+    setActiveCoupleMemberState(null);
+  };
 
   useEffect(() => {
     // Observar mudanças no estado de autenticação
@@ -134,6 +186,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       } else {
         setUser(null);
       }
+
+      if (firebaseUser) {
+        const profileForCouple = await userService
+          .getUserById(firebaseUser.id)
+          .catch(() => null);
+        await hydrateCoupleMember(
+          profileForCouple
+            ? { ...firebaseUser, ...profileForCouple }
+            : firebaseUser,
+          { forcePicker: skipRestoreCoupleMemberRef.current },
+        );
+        skipRestoreCoupleMemberRef.current = false;
+      } else {
+        setActiveCoupleMemberState(null);
+        setCoupleMemberHydrated(true);
+      }
+
       // Disparar atualização de contas vencidas no cliente (não bloqueante)
       try {
         if (firebaseUser) {
@@ -163,6 +232,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         passwordLength: credentials.password.length,
       });
     try {
+      skipRestoreCoupleMemberRef.current = true;
       // NOTA: não definir `loading` global aqui para evitar que o `Router`
       // volte a `null` enquanto a UI local está controlando o estado de carregamento.
       if (__DEV__)
@@ -310,6 +380,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           message: error?.message,
         });
       }
+      skipRestoreCoupleMemberRef.current = false;
       throw error;
     }
   };
@@ -371,7 +442,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const signOut = async (): Promise<void> => {
     try {
       setLoading(true);
+      const userId = user?.id;
       setUser(null);
+      setActiveCoupleMemberState(null);
+      await clearStoredCoupleMember(userId);
       await authServices.logout();
     } catch (error: any) {
       if (__DEV__) {
@@ -415,6 +489,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         signOut,
         refreshUser,
         isAuthenticated: !!user,
+        activeCoupleMember,
+        setActiveCoupleMember,
+        clearActiveCoupleMember,
+        needsCoupleSelection:
+          !!user &&
+          isCoupleAccount(user) &&
+          !activeCoupleMember &&
+          coupleMemberHydrated,
       }}
     >
       {children}

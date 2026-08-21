@@ -11,6 +11,7 @@ import {
 } from "firebase/firestore";
 import { db, auth } from "../lib/firebase";
 import { RankingPreference, User } from "../types/auth";
+import { resolveAccountType } from "../utils/coupleAccount";
 
 const resolveRankingPreference = (data: any): RankingPreference => {
   const pref = data?.rankingPreference;
@@ -36,6 +37,38 @@ const resolveRankingPreference = (data: any): RankingPreference => {
 
 export const resolveRankingPreferenceFromData = resolveRankingPreference;
 
+const toDateValue = (value: any, fallback = new Date()): Date => {
+  if (!value) return fallback;
+  if (value.toDate && typeof value.toDate === "function") return value.toDate();
+  if (value instanceof Date) return value;
+  if (value.seconds) return new Date(value.seconds * 1000);
+  return new Date(value);
+};
+
+export const mapUserDocument = (id: string, data: any): User => ({
+  id,
+  name: data?.name || "",
+  nickname: data?.nickname || "",
+  consultantId: data?.consultantId || undefined,
+  photoBase64: data?.photoBase64 || "",
+  email: data?.email || "",
+  username: data?.username || "",
+  bio: data?.bio || "",
+  phone: data?.phone || "",
+  role: data?.role || "user",
+  isAdmin: data?.isAdmin === true || data?.role === "admin",
+  isActive: data?.isActive === undefined ? true : data?.isActive === true,
+  currency: data?.currency || "BRL",
+  showInRanking:
+    data?.showInRanking === undefined ? undefined : data?.showInRanking === true,
+  rankingPreference: resolveRankingPreference(data),
+  accountType: resolveAccountType(data?.accountType),
+  coupleMember1Name: data?.coupleMember1Name || "",
+  coupleMember2Name: data?.coupleMember2Name || "",
+  createdAt: toDateValue(data?.createdAt),
+  updatedAt: toDateValue(data?.updatedAt),
+});
+
 export const userParticipatesInRanking = (user: User | null): boolean => {
   if (!user || user.isActive === false) return false;
   if (user.isAdmin || user.role === "admin" || user.role === "consultor") {
@@ -56,82 +89,7 @@ export const userService = {
 
       const userData = userDoc.data();
       console.log("Dados do usuário encontrados:", userData);
-
-      // Converter datas - pode ser Timestamp do Firestore ou Date do JavaScript
-      let createdAt: Date;
-      let updatedAt: Date;
-
-      if (userData.createdAt) {
-        // Se for Timestamp do Firestore
-        if (
-          userData.createdAt.toDate &&
-          typeof userData.createdAt.toDate === "function"
-        ) {
-          createdAt = userData.createdAt.toDate();
-        }
-        // Se for Date do JavaScript
-        else if (userData.createdAt instanceof Date) {
-          createdAt = userData.createdAt;
-        }
-        // Se for Timestamp (objeto com seconds e nanoseconds)
-        else if (userData.createdAt.seconds) {
-          createdAt = new Date(userData.createdAt.seconds * 1000);
-        }
-        // Se for string ou número
-        else {
-          createdAt = new Date(userData.createdAt);
-        }
-      } else {
-        createdAt = new Date();
-      }
-
-      if (userData.updatedAt) {
-        // Se for Timestamp do Firestore
-        if (
-          userData.updatedAt.toDate &&
-          typeof userData.updatedAt.toDate === "function"
-        ) {
-          updatedAt = userData.updatedAt.toDate();
-        }
-        // Se for Date do JavaScript
-        else if (userData.updatedAt instanceof Date) {
-          updatedAt = userData.updatedAt;
-        }
-        // Se for Timestamp (objeto com seconds e nanoseconds)
-        else if (userData.updatedAt.seconds) {
-          updatedAt = new Date(userData.updatedAt.seconds * 1000);
-        }
-        // Se for string ou número
-        else {
-          updatedAt = new Date(userData.updatedAt);
-        }
-      } else {
-        updatedAt = new Date();
-      }
-
-      return {
-        id: userDoc.id,
-        name: userData.name || "",
-        nickname: userData.nickname || "",
-        consultantId: userData.consultantId || undefined,
-        photoBase64: userData.photoBase64 || "",
-        email: userData.email || "",
-        username: userData.username || "",
-        bio: userData.bio || "",
-        phone: userData.phone || "",
-        role: userData.role || "user",
-        isAdmin: userData.isAdmin === true || userData.role === "admin",
-        isActive:
-          userData.isActive === undefined ? true : userData.isActive === true,
-        currency: userData.currency || "BRL",
-        showInRanking:
-          userData.showInRanking === undefined
-            ? undefined
-            : userData.showInRanking === true,
-        rankingPreference: resolveRankingPreference(userData),
-        createdAt,
-        updatedAt,
-      };
+      return mapUserDocument(userDoc.id, userData);
     } catch (error) {
       console.error("Erro ao buscar usuário:", error);
       console.error("userId tentado:", userId);
@@ -355,6 +313,7 @@ export const userService = {
           role: userData.role || "user", // Use provided role or default to user
           isAdmin: false, // Garantir que não é admin
           isActive: true, // Conta ativa por padrão
+          accountType: "individual",
           createdAt: now,
           updatedAt: now,
         });
@@ -395,35 +354,7 @@ export const userService = {
       const snapshot = await getDocs(usersRef);
       const results: User[] = [];
       snapshot.forEach((docSnap) => {
-        const data: any = docSnap.data();
-        results.push({
-          id: docSnap.id,
-          name: data.name || "",
-          nickname: data.nickname || "",
-          consultantId: data.consultantId || undefined,
-          photoBase64: data.photoBase64 || "",
-          email: data.email || "",
-          username: data.username || "",
-          bio: data.bio || "",
-          phone: data.phone || "",
-          role: data.role || "user",
-          isAdmin: data.isAdmin === true || data.role === "admin",
-          isActive: data.isActive === undefined ? true : data.isActive === true,
-          currency: data.currency || "BRL",
-          showInRanking:
-            data.showInRanking === undefined
-              ? undefined
-              : data.showInRanking === true,
-          rankingPreference: resolveRankingPreference(data),
-          createdAt:
-            data.createdAt && data.createdAt.toDate
-              ? data.createdAt.toDate()
-              : new Date(),
-          updatedAt:
-            data.updatedAt && data.updatedAt.toDate
-              ? data.updatedAt.toDate()
-              : new Date(),
-        });
+        results.push(mapUserDocument(docSnap.id, docSnap.data()));
       });
       return results;
     } catch (error) {
@@ -444,35 +375,7 @@ export const userService = {
       );
       const results: User[] = [];
       snapshot.forEach((docSnap) => {
-        const data: any = docSnap.data();
-        results.push({
-          id: docSnap.id,
-          name: data.name || "",
-          nickname: data.nickname || "",
-          consultantId: data.consultantId || undefined,
-          photoBase64: data.photoBase64 || "",
-          email: data.email || "",
-          username: data.username || "",
-          bio: data.bio || "",
-          phone: data.phone || "",
-          role: data.role || "user",
-          isAdmin: data.isAdmin === true || data.role === "admin",
-          isActive: data.isActive === undefined ? true : data.isActive === true,
-          currency: data.currency || "BRL",
-          showInRanking:
-            data.showInRanking === undefined
-              ? undefined
-              : data.showInRanking === true,
-          rankingPreference: resolveRankingPreference(data),
-          createdAt:
-            data.createdAt && data.createdAt.toDate
-              ? data.createdAt.toDate()
-              : new Date(),
-          updatedAt:
-            data.updatedAt && data.updatedAt.toDate
-              ? data.updatedAt.toDate()
-              : new Date(),
-        });
+        results.push(mapUserDocument(docSnap.id, docSnap.data()));
       });
       return results;
     } catch (error) {
@@ -490,34 +393,7 @@ export const userService = {
       const snapshot = await getDocs(q);
       if (snapshot.empty) return null;
       const docSnap = snapshot.docs[0];
-      const data: any = docSnap.data();
-      return {
-        id: docSnap.id,
-        name: data.name || "",
-        nickname: data.nickname || "",
-        photoBase64: data.photoBase64 || "",
-        email: data.email || "",
-        username: data.username || "",
-        bio: data.bio || "",
-        phone: data.phone || "",
-        role: data.role || "user",
-        isAdmin: data.isAdmin === true || data.role === "admin",
-        isActive: data.isActive === undefined ? true : data.isActive === true,
-        currency: data.currency || "BRL",
-        showInRanking:
-          data.showInRanking === undefined
-            ? undefined
-            : data.showInRanking === true,
-        rankingPreference: resolveRankingPreference(data),
-        createdAt:
-          data.createdAt && data.createdAt.toDate
-            ? data.createdAt.toDate()
-            : new Date(),
-        updatedAt:
-          data.updatedAt && data.updatedAt.toDate
-            ? data.updatedAt.toDate()
-            : new Date(),
-      };
+      return mapUserDocument(docSnap.id, docSnap.data());
     } catch (error) {
       console.error("❌ Erro ao buscar usuário por email:", error);
       throw error;
@@ -536,6 +412,9 @@ export const userService = {
       role?: string;
       isAdmin?: boolean;
       consultantId?: string | null;
+      accountType?: "individual" | "couple";
+      coupleMember1Name?: string;
+      coupleMember2Name?: string;
     },
   ): Promise<void> {
     try {
@@ -553,6 +432,12 @@ export const userService = {
         updatePayload.isAdmin = payload.isAdmin;
       if (payload.consultantId !== undefined)
         updatePayload.consultantId = payload.consultantId;
+      if (payload.accountType !== undefined)
+        updatePayload.accountType = payload.accountType;
+      if (payload.coupleMember1Name !== undefined)
+        updatePayload.coupleMember1Name = payload.coupleMember1Name;
+      if (payload.coupleMember2Name !== undefined)
+        updatePayload.coupleMember2Name = payload.coupleMember2Name;
       await updateDoc(userRef, updatePayload);
       console.log(`✅ Usuário ${userId} atualizado`, updatePayload);
     } catch (error) {

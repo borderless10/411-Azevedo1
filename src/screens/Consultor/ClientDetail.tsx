@@ -41,6 +41,7 @@ import {
   profileDisplayName,
   profileRegisteredName,
 } from "../../utils/chatDisplayNames";
+import { isCoupleAccount } from "../../utils/coupleAccount";
 
 export const ClientDetail: React.FC = () => {
   const { params, navigate } = useNavigation() as any;
@@ -300,6 +301,11 @@ export const ClientDetail: React.FC = () => {
             {profileRegisteredName(clientDoc) ? (
               <Text style={{ color: colors.textSecondary, marginTop: 4 }}>
                 {profileRegisteredName(clientDoc)}
+              </Text>
+            ) : null}
+            {isCoupleAccount(clientDoc) ? (
+              <Text style={{ color: "#ff8fab", marginTop: 6, fontWeight: "700" }}>
+                ❤️ Conta de casal — planejamento único, CM separado
               </Text>
             ) : null}
           </View>

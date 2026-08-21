@@ -38,10 +38,11 @@ import { ConsultorHome } from "../screens/Consultor/ConsultorHome";
 import { EditUserScreen } from "../screens/Admin/EditUserScreen";
 import { CardsScreen } from "../screens/Cards";
 import CustomModal from "../components/ui/CustomModal";
+import { CoupleMemberPickerScreen } from "../screens/Auth/CoupleMemberPickerScreen";
 
 export const Router = () => {
   const { currentScreen, navigate } = useNavigation();
-  const { isAuthenticated, loading, user } = useAuth();
+  const { isAuthenticated, loading, user, needsCoupleSelection } = useAuth();
   const isBasicUser = user?.role === "user";
 
   const renderAdvancedConsultingOnlyModal = () => (
@@ -98,6 +99,10 @@ export const Router = () => {
         default:
           return <LoginScreen />;
       }
+    }
+
+    if (needsCoupleSelection) {
+      return <CoupleMemberPickerScreen />;
     }
 
     // Se autenticado, mostrar telas protegidas

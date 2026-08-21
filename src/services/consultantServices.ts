@@ -1,6 +1,7 @@
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import type { User } from "../types/auth";
+import { mapUserDocument } from "./userServices";
 
 /**
  * Retorna a lista de usuários que têm `consultantId === consultantId`.
@@ -17,20 +18,7 @@ export async function getClientsByConsultant(
   const usersRef = collection(db, "users");
   const q = query(usersRef, where("consultantId", "==", consultantId));
   const snap = await getDocs(q);
-  const results = snap.docs.map((d) => {
-    const data: any = d.data();
-    return {
-      id: d.id,
-      ...data,
-      name: data.name || "",
-      nickname: String(data.nickname || data.username || "").trim(),
-      email: data.email || "",
-      phone: data.phone || "",
-      photoBase64: data.photoBase64 || "",
-      consultantId: data.consultantId || undefined,
-      role: data.role || "user",
-    } as User;
-  });
+  const results = snap.docs.map((d) => mapUserDocument(d.id, d.data()));
   console.log(
     "[CONSULTANT SERVICE] Query results:",
     results.length,
@@ -63,9 +51,7 @@ export async function getClientsByConsultant(
   if (!term) return results;
   const t = term.trim().toLowerCase();
   return results.filter((u) => {
-    const name = (u.nickname || u.displayName || u.name || "")
-      .toString()
-      .toLowerCase();
+    const name = (u.nickname || u.name || "").toString().toLowerCase();
     const email = (u.email || "").toString().toLowerCase();
     return name.includes(t) || email.includes(t);
   });

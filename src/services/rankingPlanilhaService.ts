@@ -3,6 +3,7 @@
  */
 
 import { Budget, RankingPlanilhaEntry } from "../types/budget";
+import { CoupleMember } from "../types/auth";
 import {
   formatDateToString,
   getStartOfDay,
@@ -56,16 +57,22 @@ const persistEntries = async (
   monthYear: string,
   budget: Budget | null,
   entries: RankingPlanilhaEntry[],
+  coupleMember?: CoupleMember | null,
 ): Promise<void> => {
   const { budgetServices } = await import("./budgetServices");
-  await budgetServices.saveBudget(userId, monthYear, {
-    monthlyBudget: budget?.monthlyBudget ?? 0,
-    dailyExpenses: budget?.dailyExpenses ?? [],
-    zeroConfirmedDays: budget?.zeroConfirmedDays ?? [],
-    zeroConfirmedDaysNoRanking: budget?.zeroConfirmedDaysNoRanking ?? [],
-    zeroPromptDismissedDays: budget?.zeroPromptDismissedDays ?? [],
-    rankingPlanilhaEntries: entries,
-  });
+  await budgetServices.saveBudget(
+    userId,
+    monthYear,
+    {
+      monthlyBudget: budget?.monthlyBudget ?? 0,
+      dailyExpenses: budget?.dailyExpenses ?? [],
+      zeroConfirmedDays: budget?.zeroConfirmedDays ?? [],
+      zeroConfirmedDaysNoRanking: budget?.zeroConfirmedDaysNoRanking ?? [],
+      zeroPromptDismissedDays: budget?.zeroPromptDismissedDays ?? [],
+      rankingPlanilhaEntries: entries,
+    },
+    coupleMember,
+  );
 };
 
 const getMonthYearFromDate = (date: Date): string => {
@@ -104,10 +111,15 @@ const markMissedDay = async (
   userId: string,
   targetDate: Date,
   registeredAt: Date,
+  coupleMember?: CoupleMember | null,
 ): Promise<void> => {
   const { budgetServices } = await import("./budgetServices");
   const monthYear = getMonthYearFromDate(targetDate);
-  const budget = await budgetServices.getBudget(userId, monthYear);
+  const budget = await budgetServices.getBudget(
+    userId,
+    monthYear,
+    coupleMember,
+  );
   const dateKey = formatDateToString(targetDate);
   const entries = [...(budget?.rankingPlanilhaEntries || [])];
 
@@ -122,7 +134,7 @@ const markMissedDay = async (
     registeredAt: formatDateToString(registeredAt),
   });
 
-  await persistEntries(userId, monthYear, budget, entries);
+  await persistEntries(userId, monthYear, budget, entries, coupleMember);
 };
 
 const isZeroRankingEntry = (entry: RankingPlanilhaEntry): boolean =>
@@ -142,6 +154,7 @@ export const rankingPlanilhaService = {
   async applyMissedPenalties(
     userId: string,
     asOfDate: Date = new Date(),
+    coupleMember?: CoupleMember | null,
   ): Promise<void> {
     const { budgetServices } = await import("./budgetServices");
     const today = getStartOfDay(asOfDate);
@@ -152,10 +165,10 @@ export const rankingPlanilhaService = {
     const monthYearSecond = getMonthYearFromDate(secondDay);
 
     const [budgetFirst, budgetSecond] = await Promise.all([
-      budgetServices.getBudget(userId, monthYearFirst),
+      budgetServices.getBudget(userId, monthYearFirst, coupleMember),
       monthYearFirst === monthYearSecond
         ? Promise.resolve(null)
-        : budgetServices.getBudget(userId, monthYearSecond),
+        : budgetServices.getBudget(userId, monthYearSecond, coupleMember),
     ]);
 
     const budgetForSecond =
@@ -165,8 +178,8 @@ export const rankingPlanilhaService = {
     const secondRegistered = hasPlanilhaRegistration(budgetForSecond, secondDay);
 
     if (!firstRegistered && !secondRegistered) {
-      await markMissedDay(userId, firstDay, today);
-      await markMissedDay(userId, secondDay, today);
+      await markMissedDay(userId, firstDay, today, coupleMember);
+      await markMissedDay(userId, secondDay, today, coupleMember);
     }
   },
 
@@ -175,12 +188,17 @@ export const rankingPlanilhaService = {
     targetDate: Date,
     registeredAt: Date = new Date(),
     kind: PlanilhaRegistrationKind,
+    coupleMember?: CoupleMember | null,
   ): Promise<{ points: number; applied: boolean; type?: RankingPlanilhaEntry["type"] }> {
-    await this.applyMissedPenalties(userId, registeredAt);
+    await this.applyMissedPenalties(userId, registeredAt, coupleMember);
 
     const { budgetServices } = await import("./budgetServices");
     const monthYear = getMonthYearFromDate(targetDate);
-    const budget = await budgetServices.getBudget(userId, monthYear);
+    const budget = await budgetServices.getBudget(
+      userId,
+      monthYear,
+      coupleMember,
+    );
     const dateKey = formatDateToString(targetDate);
     let entries = [...(budget?.rankingPlanilhaEntries || [])];
     const existing = entries.find((entry) => entry.dateKey === dateKey);
@@ -229,7 +247,7 @@ export const rankingPlanilhaService = {
     };
 
     entries.push(entry);
-    await persistEntries(userId, monthYear, budget, entries);
+    await persistEntries(userId, monthYear, budget, entries, coupleMember);
 
     return { points, applied: true, type };
   },

@@ -21,6 +21,10 @@ import {
   profileInitial,
   profilePhotoUri,
 } from "../../utils/chatDisplayNames";
+import {
+  getCoupleMemberLabel,
+  isCoupleAccount,
+} from "../../utils/coupleAccount";
 
 interface HeaderProps {
   title?: string;
@@ -37,7 +41,7 @@ export const Header: React.FC<HeaderProps> = ({
   rightAction,
   style,
 }) => {
-  const { user } = useAuth();
+  const { user, activeCoupleMember, clearActiveCoupleMember } = useAuth();
   const { navigate, currentScreen, params } = useNavigation();
   const { colors } = useTheme();
   const { showValues, toggleShowValues } = useShowValues();
@@ -142,6 +146,20 @@ export const Header: React.FC<HeaderProps> = ({
       <View style={styles.right}>
         {rightAction || (
           <>
+            {isCoupleAccount(user) && activeCoupleMember ? (
+              <TouchableOpacity
+                onPress={() => {
+                  void clearActiveCoupleMember();
+                }}
+                style={styles.coupleChip}
+              >
+                <Text style={styles.coupleChipText}>
+                  ❤️ {getCoupleMemberLabel(user, activeCoupleMember)}
+                </Text>
+                <Text style={styles.coupleSwitchText}>Trocar</Text>
+              </TouchableOpacity>
+            ) : null}
+
             {currentScreen === "Home" && (
               <TouchableOpacity
                 onPress={toggleShowValues}
@@ -239,6 +257,23 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
+  },
+  coupleChip: {
+    maxWidth: 140,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    backgroundColor: "rgba(255, 77, 109, 0.16)",
+    alignItems: "flex-end",
+  },
+  coupleChipText: {
+    color: "#ff8fab",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  coupleSwitchText: {
+    color: "#ccc",
+    fontSize: 10,
   },
   titleRow: {
     flex: 1,

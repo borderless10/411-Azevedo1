@@ -60,7 +60,7 @@ const parsePrefillDate = (value?: string): Date | null => {
 };
 
 export const AddExpenseScreen = () => {
-  const { user } = useAuth();
+  const { user, activeCoupleMember } = useAuth();
   const { navigate, params } = useNavigation() as any;
   const skipPrefillAfterAddAnother = useRef(false);
   const initialPrefillDate = parsePrefillDate(params?.prefillDate);
@@ -430,6 +430,10 @@ export const AddExpenseScreen = () => {
 
     try {
       setLoading(true);
+      const coupleExpenseFields =
+        activeCoupleMember === 1 || activeCoupleMember === 2
+          ? { coupleMember: activeCoupleMember as 1 | 2 }
+          : {};
 
       if (expenseType === "consumption") {
         // Criar expense como Consumo Moderado
@@ -438,17 +442,22 @@ export const AddExpenseScreen = () => {
           description: consumoDescription.trim(),
           date: consumoDate,
           category: "Consumo Moderado",
-          paymentMethod: consumoPayment === "card" ? "credit_card" : "cash",
+          paymentMethod:
+            consumoPayment === "card"
+              ? ("credit_card" as const)
+              : ("cash" as const),
           ...(consumoPayment === "card" && consumoSelectedCardId
             ? { cardId: consumoSelectedCardId }
             : {}),
           isConsumoModerado: true,
+          ...coupleExpenseFields,
         };
 
         await expenseServices.createExpense(user.id, expenseData);
         const ranking = await budgetServices.reconcileConsumoModeradoDay(
           user.id,
           consumoDate,
+          coupleExpenseFields.coupleMember,
         );
         if (ranking?.applied) {
           const feedback = getRankingRegistrationFeedback(ranking, "expense");
@@ -466,6 +475,7 @@ export const AddExpenseScreen = () => {
           category: "Acompanhamento Diário",
           paymentMethod: trackedPayment,
           isTrackedDaily: true,
+          ...coupleExpenseFields,
           ...(trackedPayment === "credit_card" && trackedSelectedCardId
             ? { cardId: trackedSelectedCardId }
             : {}),
@@ -510,6 +520,7 @@ export const AddExpenseScreen = () => {
             category: "Conta",
             paymentMethod: billPaymentMethod,
             sourceBillId: newBillId,
+            ...coupleExpenseFields,
             ...(billPaymentMethod === "credit_card" && billSelectedCardId
               ? { cardId: billSelectedCardId }
               : {}),
@@ -527,6 +538,7 @@ export const AddExpenseScreen = () => {
             category: "Conta",
             paymentMethod: billPaymentMethod,
             sourceBillId: selectedBill.id,
+            ...coupleExpenseFields,
             ...(billPaymentMethod === "credit_card" && billSelectedCardId
               ? { cardId: billSelectedCardId }
               : {}),

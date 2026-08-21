@@ -36,6 +36,7 @@ import { activityServices } from "./activityServices";
 import { creditCardServices } from "./creditCardServices";
 import { toExpenseCategoryLookupKey } from "../types/category";
 import { filterGeneralHistoryExpenses, isConsumoModeradoHistoryExpense, isExpenseCreatedFrom } from "../utils/expenseScopeUtils";
+import { belongsToCoupleMember } from "../utils/coupleAccount";
 
 /**
  * Validar dados de criação de gasto
@@ -164,6 +165,10 @@ export const expenseServices = {
         expenseData.sourceBillId = data.sourceBillId;
       }
 
+      if (data.coupleMember === 1 || data.coupleMember === 2) {
+        expenseData.coupleMember = data.coupleMember;
+      }
+
       if (paymentMethod === "credit_card" && data.cardId) {
         expenseData.cardId = data.cardId;
         expenseData.cardLast4 = cardLast4;
@@ -201,6 +206,9 @@ export const expenseServices = {
         ...(data.isConsumoModerado ? { isConsumoModerado: true } : {}),
         ...(data.isTrackedDaily ? { isTrackedDaily: true } : {}),
         ...(data.sourceBillId ? { sourceBillId: data.sourceBillId } : {}),
+        ...(data.coupleMember === 1 || data.coupleMember === 2
+          ? { coupleMember: data.coupleMember }
+          : {}),
         createdAt: now,
         updatedAt: now,
       };
@@ -307,6 +315,12 @@ export const expenseServices = {
       if (filters?.invoiceYearMonth) {
         expenses = expenses.filter(
           (expense) => expense.invoiceYearMonth === filters.invoiceYearMonth,
+        );
+      }
+
+      if (filters?.coupleMember === 1 || filters?.coupleMember === 2) {
+        expenses = expenses.filter((expense) =>
+          belongsToCoupleMember(expense, filters.coupleMember!),
         );
       }
 
@@ -478,6 +492,7 @@ export const expenseServices = {
   async deleteConsumoModeradoExpensesForDay(
     userId: string,
     date: Date,
+    coupleMember?: 1 | 2,
   ): Promise<number> {
     const { getStartOfDay, getEndOfDay } = await import("../utils/dateUtils");
     const { isConsumoModeradoHistoryExpense } = await import(
@@ -487,6 +502,7 @@ export const expenseServices = {
     const expenses = await this.getExpenses(userId, {
       startDate: getStartOfDay(date),
       endDate: getEndOfDay(date),
+      coupleMember,
     });
     const cmExpenses = expenses.filter(isConsumoModeradoHistoryExpense);
 
@@ -498,7 +514,11 @@ export const expenseServices = {
 
     if (cmExpenses.length > 0) {
       const { budgetServices } = await import("./budgetServices");
-      await budgetServices.reconcileConsumoModeradoDay(userId, date);
+      await budgetServices.reconcileConsumoModeradoDay(
+        userId,
+        date,
+        coupleMember,
+      );
     }
 
     return cmExpenses.length;

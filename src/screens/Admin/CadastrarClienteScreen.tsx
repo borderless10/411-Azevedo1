@@ -29,6 +29,8 @@ import { doc, setDoc, getDoc, Timestamp } from "firebase/firestore";
 import { auth, db, firebaseConfig } from "../../lib/firebase";
 import { userService } from "../../services/userServices";
 import ConsultantPicker from "../../components/ui/ConsultantPicker";
+import { AccountType } from "../../types/auth";
+import { coupleAccountFieldsFromInput } from "../../utils/coupleAccount";
 
 export const CadastrarClienteScreen = () => {
   const { navigate } = useNavigation();
@@ -45,6 +47,9 @@ export const CadastrarClienteScreen = () => {
   const [role, setRole] = useState<"user" | "consultor" | "cliente_premium">(
     "user",
   );
+  const [accountType, setAccountType] = useState<AccountType>("individual");
+  const [coupleMember1Name, setCoupleMember1Name] = useState("");
+  const [coupleMember2Name, setCoupleMember2Name] = useState("");
   const [consultants, setConsultants] = useState<Array<any>>([]);
   const [consultantId, setConsultantId] = useState<string | null>(null);
 
@@ -185,6 +190,11 @@ export const CadastrarClienteScreen = () => {
         const shouldPersistConsultant =
           role === "user" || role === "cliente_premium";
         const normalizedConsultantId = consultantId || null;
+        const coupleFields = coupleAccountFieldsFromInput({
+          accountType: shouldPersistConsultant ? accountType : "individual",
+          coupleMember1Name,
+          coupleMember2Name,
+        });
 
         const docData = {
           name,
@@ -197,6 +207,7 @@ export const CadastrarClienteScreen = () => {
             : {}),
           isAdmin: false,
           isActive: true,
+          ...coupleFields,
           createdAt: now,
           updatedAt: now,
         };
@@ -328,6 +339,74 @@ export const CadastrarClienteScreen = () => {
                 </Text>
               </TouchableOpacity>
             </View>
+
+            {(role === "user" || role === "cliente_premium") && (
+              <>
+                <Text style={styles.accountTypeLabel}>Tipo de conta</Text>
+                <View style={styles.roleRow}>
+                  <TouchableOpacity
+                    style={[
+                      styles.roleButton,
+                      accountType === "individual" && styles.roleActive,
+                    ]}
+                    onPress={() => setAccountType("individual")}
+                  >
+                    <Text
+                      style={[
+                        styles.roleText,
+                        accountType === "individual" && styles.roleTextActive,
+                      ]}
+                    >
+                      Individual
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.roleButton,
+                      accountType === "couple" && styles.roleActive,
+                    ]}
+                    onPress={() => setAccountType("couple")}
+                  >
+                    <Text
+                      style={[
+                        styles.roleText,
+                        accountType === "couple" && styles.roleTextActive,
+                      ]}
+                    >
+                      ❤️ Casal
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                {accountType === "couple" && (
+                  <View style={styles.form}>
+                    <View style={styles.inputGroup}>
+                      <Text style={styles.label}>Nome do integrante 1</Text>
+                      <View style={styles.inputContainer}>
+                        <TextInput
+                          style={styles.input}
+                          placeholder="Usuário 1"
+                          placeholderTextColor="#999"
+                          value={coupleMember1Name}
+                          onChangeText={setCoupleMember1Name}
+                        />
+                      </View>
+                    </View>
+                    <View style={styles.inputGroup}>
+                      <Text style={styles.label}>Nome do integrante 2</Text>
+                      <View style={styles.inputContainer}>
+                        <TextInput
+                          style={styles.input}
+                          placeholder="Usuário 2"
+                          placeholderTextColor="#999"
+                          value={coupleMember2Name}
+                          onChangeText={setCoupleMember2Name}
+                        />
+                      </View>
+                    </View>
+                  </View>
+                )}
+              </>
+            )}
 
             <View style={styles.form}>
               <View style={styles.inputGroup}>
@@ -632,6 +711,12 @@ const styles = StyleSheet.create({
   },
   roleTextActive: {
     color: "#fff",
+  },
+  accountTypeLabel: {
+    color: "#fff",
+    fontWeight: "600",
+    textAlign: "center",
+    marginBottom: 8,
   },
 });
 

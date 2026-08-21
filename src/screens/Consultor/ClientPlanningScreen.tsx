@@ -49,6 +49,7 @@ import { CurrencyInput } from "../../components/CurrencyInput";
 import DatePicker from "../../components/DatePicker";
 import { CreditCardFormModal } from "../../components/Cards/CreditCardFormModal";
 import { profileDisplayName } from "../../utils/chatDisplayNames";
+import { isCoupleAccount } from "../../utils/coupleAccount";
 
 export const ClientPlanningScreen = () => {
   const { user } = useAuth();
@@ -1243,10 +1244,17 @@ export const ClientPlanningScreen = () => {
 
       if (cycleDurationAction === "restart") {
         try {
-          await budgetServices.resetBudgetForDate(
-            selectedClient.id,
-            cycleDateStart,
-          );
+          if (isCoupleAccount(selectedClient)) {
+            await budgetServices.resetCoupleBudgetsForDate(
+              selectedClient.id,
+              cycleDateStart,
+            );
+          } else {
+            await budgetServices.resetBudgetForDate(
+              selectedClient.id,
+              cycleDateStart,
+            );
+          }
         } catch (budgetError) {
           console.warn("Falha ao resetar orçamento do ciclo:", budgetError);
         }
@@ -1327,6 +1335,15 @@ export const ClientPlanningScreen = () => {
           keyboardShouldPersistTaps="handled"
         >
         <View style={styles.cycleCard}>
+          {isCoupleAccount(selectedClient) ? (
+            <View style={styles.coupleBadge}>
+              <Text style={styles.coupleBadgeText}>❤️ Planejamento do casal</Text>
+              <Text style={styles.coupleBadgeHint}>
+                O plano, a meta de Consumo Moderado e o ciclo são únicos para a
+                conta. Os gastos diários continuam separados por integrante.
+              </Text>
+            </View>
+          ) : null}
           <Text style={styles.cycleCardTitle}>Ciclo de Consumo Moderado</Text>
           <Text style={styles.cycleCardText}>
             {consumptionCycleLabel
@@ -3034,6 +3051,24 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 14,
     marginBottom: 14,
+  },
+  coupleBadge: {
+    marginBottom: 12,
+    padding: 10,
+    borderRadius: 10,
+    backgroundColor: "rgba(255, 77, 109, 0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 77, 109, 0.35)",
+  },
+  coupleBadgeText: {
+    color: "#ff8fab",
+    fontWeight: "700",
+    marginBottom: 4,
+  },
+  coupleBadgeHint: {
+    color: "#ccc",
+    fontSize: 12,
+    lineHeight: 18,
   },
   cycleCardTitle: {
     color: "#fff",

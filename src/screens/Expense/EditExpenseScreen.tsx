@@ -47,6 +47,9 @@ export const EditExpenseScreen = () => {
   >("cash");
   const [selectedCardId, setSelectedCardId] = useState<string>("");
   const [cards, setCards] = useState<CreditCard[]>([]);
+  const [loadedCoupleMember, setLoadedCoupleMember] = useState<1 | 2 | undefined>(
+    undefined,
+  );
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState({
@@ -87,6 +90,11 @@ export const EditExpenseScreen = () => {
         setCategory(expense.category || "Alimentação");
         setPaymentMethod(expense.paymentMethod || "cash");
         setSelectedCardId(expense.cardId || "");
+        setLoadedCoupleMember(
+          expense.coupleMember === 1 || expense.coupleMember === 2
+            ? expense.coupleMember
+            : undefined,
+        );
       } catch (error: any) {
         console.error("❌ Erro ao carregar gasto:", error);
         Alert.alert("Erro", "Erro ao carregar gasto. Tente novamente.");
@@ -244,6 +252,7 @@ export const EditExpenseScreen = () => {
       const ranking = await budgetServices.reconcileConsumoModeradoDay(
         user.id,
         date,
+        loadedCoupleMember,
       );
 
       const rankingFeedback =

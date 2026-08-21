@@ -4,6 +4,9 @@ export type RankingPreference =
   | "hidden"
   | "unset";
 
+export type AccountType = "individual" | "couple";
+export type CoupleMember = 1 | 2;
+
 export interface User {
   id: string;
   name: string;
@@ -20,6 +23,9 @@ export interface User {
   showInRanking?: boolean;
   rankingPreference?: RankingPreference;
   photoBase64?: string;
+  accountType?: AccountType;
+  coupleMember1Name?: string;
+  coupleMember2Name?: string;
   createdAt: Date;
   updatedAt: Date;
 }

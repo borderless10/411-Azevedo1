@@ -21,6 +21,12 @@ import { Ionicons } from "@expo/vector-icons";
 import { Layout } from "../../components/Layout/Layout";
 import { formatCurrency } from "../../utils/currencyUtils";
 import { useAuth } from "../../contexts/AuthContext";
+import { userService } from "../../services/userServices";
+import { User } from "../../types/auth";
+import {
+  getCoupleMemberLabel,
+  isCoupleAccount,
+} from "../../utils/coupleAccount";
 import { useNavigation } from "../../routes/NavigationContext";
 import {
   budgetServices,
@@ -49,13 +55,24 @@ import {
 type CycleDailyExpense = DailyExpense & { dateKey: string };
 
 export const BudgetScreen = () => {
-  const { user } = useAuth();
+  const { user, activeCoupleMember } = useAuth();
   const { currentScreen, navigate, params } = useNavigation() as any;
   const clientId = String(params?.clientId || "");
   const isSpectator =
     !!clientId &&
     (user?.role === "consultor" || user?.role === "admin" || !!user?.isAdmin);
   const ownerId = isSpectator ? clientId : user?.id || "";
+  const [ownerProfile, setOwnerProfile] = useState<User | null>(null);
+  const [spectatorMember, setSpectatorMember] = useState<1 | 2>(1);
+  const coupleMember: 1 | 2 | undefined = isCoupleAccount(
+    isSpectator ? ownerProfile : user,
+  )
+    ? isSpectator
+      ? spectatorMember
+      : activeCoupleMember === 1 || activeCoupleMember === 2
+        ? activeCoupleMember
+        : undefined
+    : undefined;
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
 
@@ -88,6 +105,7 @@ export const BudgetScreen = () => {
   const [plannedCycleDurationDays, setPlannedCycleDurationDays] =
     useState<number>(0);
   const [showConfetti, setShowConfetti] = useState(false);
+  const [coupleTotalSpent, setCoupleTotalSpent] = useState(0);
 
   // Calcular dias do mês atual
   const today = new Date();
@@ -117,8 +135,11 @@ export const BudgetScreen = () => {
 
   // Calcular total gasto e média real
   const totalSpent = dailyExpenses.reduce((sum, item) => sum + item.amount, 0);
-  const remainingToSpend = Math.max(0, budgetValue - totalSpent);
-  const overPlannedAmount = Math.max(0, totalSpent - budgetValue);
+  const spentForRemaining = isCoupleAccount(isSpectator ? ownerProfile : user)
+    ? coupleTotalSpent
+    : totalSpent;
+  const remainingToSpend = Math.max(0, budgetValue - spentForRemaining);
+  const overPlannedAmount = Math.max(0, spentForRemaining - budgetValue);
   // Contar apenas dias DENTRO DO CICLO com gasto (>0) ou que foram marcados como zero
   const countedDays = dailyExpenseDates.filter((date) => {
     const dateKey = formatDateToString(date);
@@ -222,13 +243,26 @@ export const BudgetScreen = () => {
 
   // Carregar dados do Firebase ao montar componente
   useEffect(() => {
+    if (!ownerId) return;
+    if (isSpectator) {
+      userService
+        .getUserById(ownerId)
+        .then((profile) => setOwnerProfile(profile))
+        .catch(() => setOwnerProfile(null));
+      return;
+    }
+    setOwnerProfile(user);
+  }, [ownerId, isSpectator, user]);
+
+  useEffect(() => {
     if (currentScreen === "Budget" && ownerId) {
       loadBudgetData();
       if (!isSpectator) {
         setupNotifications();
       }
     }
-  }, [currentScreen, ownerId, isSpectator]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentScreen, ownerId, coupleMember]);
 
   // Animações de entrada
   useEffect(() => {
@@ -257,7 +291,7 @@ export const BudgetScreen = () => {
         setLoading(true);
       }
       if (!isSpectator) {
-        await budgetServices.syncRankingPenalties(ownerId);
+        await budgetServices.syncRankingPenalties(ownerId, new Date(), coupleMember);
       }
 
       // 1) Buscar valor mensal esperado do planejamento do consultor
@@ -384,7 +418,11 @@ export const BudgetScreen = () => {
       const budgetsByMonth = new Map<string, Awaited<ReturnType<typeof budgetServices.getBudget>>>();
       await Promise.all(
         monthYears.map(async (monthYear) => {
-          const monthBudget = await budgetServices.getBudget(ownerId, monthYear);
+          const monthBudget = await budgetServices.getBudget(
+            ownerId,
+            monthYear,
+            coupleMember,
+          );
           budgetsByMonth.set(monthYear, monthBudget);
         }),
       );
@@ -409,6 +447,22 @@ export const BudgetScreen = () => {
         const expensesForModerado = expenses.filter(
           isConsumoModeradoHistoryExpense,
         );
+        const coupleSpent = expensesForModerado.reduce(
+          (sum, exp) =>
+            sum +
+            (typeof exp.value === "number"
+              ? exp.value
+              : parseFloat(String(exp.value)) || 0),
+          0,
+        );
+        setCoupleTotalSpent(coupleSpent);
+        const memberExpenses = coupleMember
+          ? expensesForModerado.filter(
+              (exp) =>
+                exp.coupleMember === coupleMember ||
+                (coupleMember === 1 && exp.coupleMember == null),
+            )
+          : expensesForModerado;
 
         const amountByDateKey = new Map<string, number>();
         const grouped: Record<string, Expense[]> = {};
@@ -416,7 +470,7 @@ export const BudgetScreen = () => {
           amountByDateKey.set(formatDateToString(date), 0);
         });
 
-        expensesForModerado.forEach((exp) => {
+        memberExpenses.forEach((exp) => {
           const dateKey = formatDateToString(new Date(exp.date));
           if (!amountByDateKey.has(dateKey)) return;
           const prev = amountByDateKey.get(dateKey) ?? 0;
@@ -567,6 +621,7 @@ export const BudgetScreen = () => {
       const { ranking } = await budgetServices.confirmZeroExpenseDay(
         user.id,
         choiceModalDate,
+        coupleMember,
       );
       await loadBudgetData({ silent: true });
       const feedback = getRankingRegistrationFeedback(ranking, "zero");
@@ -605,6 +660,7 @@ export const BudgetScreen = () => {
       const { ranking } = await budgetServices.correctConsumoModeradoDayToZero(
         user.id,
         date,
+        coupleMember,
       );
       setEditingDateKey(null);
       setCorrectZeroModalDate(null);
@@ -631,10 +687,16 @@ export const BudgetScreen = () => {
     return expense ? expense.amount : 0;
   };
 
+  const coupleOwner = isSpectator ? ownerProfile : user;
+  const coupleTitleSuffix =
+    isCoupleAccount(coupleOwner) && coupleMember
+      ? ` — ${getCoupleMemberLabel(coupleOwner, coupleMember)}`
+      : "";
+
   if (loading) {
     return (
       <Layout
-        title="Controle de Orçamento"
+        title={`Consumo Moderado${coupleTitleSuffix}`}
         showBackButton={isSpectator}
         showSidebar={!isSpectator}
       >
@@ -648,7 +710,7 @@ export const BudgetScreen = () => {
 
   return (
     <Layout
-      title="Consumo Moderado"
+      title={`Consumo Moderado${coupleTitleSuffix}`}
       showBackButton={isSpectator}
       showSidebar={!isSpectator}
     >
@@ -679,6 +741,32 @@ export const BudgetScreen = () => {
                 Visualização do cliente (somente leitura)
               </Text>
             ) : null}
+            {isCoupleAccount(coupleOwner) && isSpectator ? (
+              <View style={styles.memberToggleRow}>
+                <TouchableOpacity
+                  style={[
+                    styles.memberToggle,
+                    spectatorMember === 1 && styles.memberToggleActive,
+                  ]}
+                  onPress={() => setSpectatorMember(1)}
+                >
+                  <Text style={styles.memberToggleText}>
+                    {getCoupleMemberLabel(coupleOwner, 1)}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.memberToggle,
+                    spectatorMember === 2 && styles.memberToggleActive,
+                  ]}
+                  onPress={() => setSpectatorMember(2)}
+                >
+                  <Text style={styles.memberToggleText}>
+                    {getCoupleMemberLabel(coupleOwner, 2)}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            ) : null}
             {planningCycleLabel ? (
               <Text style={styles.cycleLabel}>{planningCycleLabel}</Text>
             ) : null}
@@ -705,7 +793,9 @@ export const BudgetScreen = () => {
             )}
             <Text style={styles.helperText}>
               {planningLoaded
-                ? "Cálculo: gasto esperado do ciclo menos total gasto até agora."
+                ? isCoupleAccount(coupleOwner)
+                  ? "Cálculo: planejado do casal menos o gasto dos dois integrantes."
+                  : "Cálculo: gasto esperado do ciclo menos total gasto até agora."
                 : "Planejamento não encontrado. O valor ficará em R$ 0,00 até o consultor preencher o planejamento."}
             </Text>
             <View style={styles.infoContainer}>
@@ -1140,6 +1230,28 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "600",
     textAlign: "center",
+  },
+  memberToggleRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 12,
+  },
+  memberToggle: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: "#1a1a1a",
+    borderWidth: 1,
+    borderColor: "#333",
+  },
+  memberToggleActive: {
+    backgroundColor: "#8c52ff",
+    borderColor: "#8c52ff",
+  },
+  memberToggleText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 12,
   },
   cycleLabel: {
     marginTop: 10,

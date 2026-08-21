@@ -12,6 +12,7 @@ import consultantServices from "../../services/consultantServices";
 import { User } from "../../types/auth";
 import { useNavigation } from "../../routes/NavigationContext";
 import { useTheme } from "../../contexts/ThemeContext";
+import { isCoupleAccount } from "../../utils/coupleAccount";
 
 export const ConsultorHome: React.FC = () => {
   const { user } = useAuth();
@@ -95,6 +96,11 @@ export const ConsultorHome: React.FC = () => {
                     style={[styles.subtitle, { color: colors.textSecondary }]}
                   >
                     {item.email}
+                  </Text>
+                ) : null}
+                {isCoupleAccount(item) ? (
+                  <Text style={[styles.subtitle, { color: "#ff8fab" }]}>
+                    ❤️ Casal
                   </Text>
                 ) : null}
               </View>
