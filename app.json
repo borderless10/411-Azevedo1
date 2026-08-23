@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "411-Azevedo",
+    "name": "Visão",
     "slug": "411-Azevedo",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -11,17 +11,22 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#000000"
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.borderlesspc2.plan411azevedo"
+      "bundleIdentifier": "com.borderlesspc2.visao411",
+      "buildNumber": "2",
+      "infoPlist": {
+        "CFBundleDisplayName": "Visão",
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.borderlesspc2.plan411azevedo",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#000000"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,

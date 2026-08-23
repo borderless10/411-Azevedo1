@@ -6,6 +6,7 @@ android/build/
 .gradle-local/
 
 # Expo
+credentials.json
 .expo/
 dist/
 npm-debug.*
@@ -54,6 +55,10 @@ logs/
 firebase-debug.log
 firestore-debug.log
 ui-debug.log
+
+# App Store Connect / signing secrets
+secrets/
+AuthKey_*.p8
 
 # Misc
 .cache/

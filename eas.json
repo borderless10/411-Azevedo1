@@ -27,9 +27,21 @@
       "android": {
         "buildType": "app-bundle"
       }
+    },
+    "ios-appstore": {
+      "extends": "production",
+      "credentialsSource": "local"
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "ios": {
+        "appleTeamId": "X9DG8ZSAUP",
+        "ascAppId": "6804344987",
+        "ascApiKeyPath": "./secrets/AuthKey_368P79H8BN.p8",
+        "ascApiKeyId": "368P79H8BN",
+        "ascApiKeyIssuerId": "611ffa7f-efe9-47c2-8770-cf2efe9d5660"
+      }
+    }
   }
 }
