@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Tela de Controle de Orçamento Mensal
  */
 
@@ -32,6 +32,7 @@ import {
   budgetServices,
   getMonthYearFromDate,
   listMonthYearsInRange,
+  ConsumoModeradoPerformance,
 } from "../../services/budgetServices";
 import expenseServices from "../../services/expenseServices";
 import {
@@ -106,6 +107,12 @@ export const BudgetScreen = () => {
     useState<number>(0);
   const [showConfetti, setShowConfetti] = useState(false);
   const [coupleTotalSpent, setCoupleTotalSpent] = useState(0);
+  const [coupleSpentByDate, setCoupleSpentByDate] = useState<
+    Record<string, number>
+  >({});
+  const [coupleZeroDateKeys, setCoupleZeroDateKeys] = useState<string[]>([]);
+  const [sharedPerformance, setSharedPerformance] =
+    useState<ConsumoModeradoPerformance | null>(null);
 
   // Calcular dias do mês atual
   const today = new Date();
@@ -129,27 +136,43 @@ export const BudgetScreen = () => {
   const daysForIdealTarget =
     plannedCycleDurationDays > 0 ? plannedCycleDurationDays : daysInCycle;
 
-  // Calcular média diária ideal
-  const budgetValue = plannedMonthlySpending || 0;
-  const idealDailyAverage = budgetValue / daysForIdealTarget;
-
-  // Calcular total gasto e média real
-  const totalSpent = dailyExpenses.reduce((sum, item) => sum + item.amount, 0);
-  const spentForRemaining = isCoupleAccount(isSpectator ? ownerProfile : user)
-    ? coupleTotalSpent
-    : totalSpent;
-  const remainingToSpend = Math.max(0, budgetValue - spentForRemaining);
-  const overPlannedAmount = Math.max(0, spentForRemaining - budgetValue);
-  // Contar apenas dias DENTRO DO CICLO com gasto (>0) ou que foram marcados como zero
+  const isCoupleView = isCoupleAccount(isSpectator ? ownerProfile : user);
+  const memberSpent = dailyExpenses.reduce((sum, item) => sum + item.amount, 0);
+  const totalSpent = sharedPerformance
+    ? sharedPerformance.totalSpent
+    : isCoupleView
+      ? coupleTotalSpent
+      : memberSpent;
+  const remainingToSpend = Math.max(
+    0,
+    (sharedPerformance?.budgetValue || plannedMonthlySpending || 0) - totalSpent,
+  );
+  const overPlannedAmount = Math.max(
+    0,
+    totalSpent - (sharedPerformance?.budgetValue || plannedMonthlySpending || 0),
+  );
+  const budgetValue = sharedPerformance?.budgetValue || plannedMonthlySpending || 0;
+  const idealDailyAverage =
+    sharedPerformance?.idealDailyAverage ||
+    (budgetValue > 0 && daysForIdealTarget > 0
+      ? budgetValue / daysForIdealTarget
+      : 0);
   const countedDays = dailyExpenseDates.filter((date) => {
     const dateKey = formatDateToString(date);
+    if (isCoupleView) {
+      const coupleDaySpent = coupleSpentByDate[dateKey] || 0;
+      return coupleDaySpent > 0 || coupleZeroDateKeys.includes(dateKey);
+    }
     const hasExpense = dailyExpenses.some(
       (d) => d.dateKey === dateKey && d.amount > 0,
     );
-    const isZeroConfirmed = zeroConfirmedDateKeys.includes(dateKey);
-    return hasExpense || isZeroConfirmed;
+    return hasExpense || zeroConfirmedDateKeys.includes(dateKey);
   }).length;
-  const actualDailyAverage = countedDays > 0 ? totalSpent / countedDays : 0;
+  const actualDailyAverage = sharedPerformance
+    ? sharedPerformance.actualDailyAverage
+    : countedDays > 0
+      ? totalSpent / countedDays
+      : 0;
 
   // Status da média (se está acima ou abaixo do ideal)
   const isOverBudget =
@@ -195,7 +218,14 @@ export const BudgetScreen = () => {
     };
   };
 
-  const performanceIndicator = getPerformanceIndicator();
+  const performanceIndicator = sharedPerformance
+    ? {
+        label: sharedPerformance.label,
+        detail: sharedPerformance.detail,
+        color: sharedPerformance.color,
+        icon: sharedPerformance.icon,
+      }
+    : getPerformanceIndicator();
 
   const formatPaymentMethodLabel = (raw: any) => {
     const pm = String(raw || "").toLowerCase();
@@ -365,6 +395,9 @@ export const BudgetScreen = () => {
         plannedByCategory: planning?.plannedByCategory || {},
       });
       setPlanningLoaded(!!planning);
+      const performance =
+        await budgetServices.getConsumoModeradoPerformance(ownerId);
+      setSharedPerformance(performance);
 
       if (__DEV__) {
         console.log("[BUDGET] planejamento carregado para consumo moderado", {
@@ -415,7 +448,14 @@ export const BudgetScreen = () => {
       setDailyExpenseDates(cycleDates);
 
       const monthYears = listMonthYearsInRange(start, end);
-      const budgetsByMonth = new Map<string, Awaited<ReturnType<typeof budgetServices.getBudget>>>();
+      const budgetsByMonth = new Map<
+        string,
+        Awaited<ReturnType<typeof budgetServices.getBudget>>
+      >();
+      const coupleBudgetsByMonth = new Map<
+        string,
+        Array<Awaited<ReturnType<typeof budgetServices.getBudget>>>
+      >();
       await Promise.all(
         monthYears.map(async (monthYear) => {
           const monthBudget = await budgetServices.getBudget(
@@ -424,10 +464,19 @@ export const BudgetScreen = () => {
             coupleMember,
           );
           budgetsByMonth.set(monthYear, monthBudget);
+
+          if (coupleMember) {
+            const [budgetOne, budgetTwo] = await Promise.all([
+              budgetServices.getBudget(ownerId, monthYear, 1),
+              budgetServices.getBudget(ownerId, monthYear, 2),
+            ]);
+            coupleBudgetsByMonth.set(monthYear, [budgetOne, budgetTwo]);
+          }
         }),
       );
 
       const zeroKeys: string[] = [];
+      const coupleZeros: string[] = [];
       cycleDates.forEach((date) => {
         const monthYear = getMonthYearFromDate(date);
         const monthBudget = budgetsByMonth.get(monthYear);
@@ -435,8 +484,14 @@ export const BudgetScreen = () => {
         if ((monthBudget?.zeroConfirmedDays || []).includes(day)) {
           zeroKeys.push(formatDateToString(date));
         }
+        (coupleBudgetsByMonth.get(monthYear) || []).forEach((budget) => {
+          if ((budget?.zeroConfirmedDays || []).includes(day)) {
+            coupleZeros.push(formatDateToString(date));
+          }
+        });
       });
       setZeroConfirmedDateKeys(zeroKeys);
+      setCoupleZeroDateKeys(Array.from(new Set(coupleZeros)));
 
       try {
         const expenses = await expenseServices.getExpenses(ownerId, {
@@ -456,6 +511,20 @@ export const BudgetScreen = () => {
           0,
         );
         setCoupleTotalSpent(coupleSpent);
+        const coupleByDate: Record<string, number> = {};
+        cycleDates.forEach((date) => {
+          coupleByDate[formatDateToString(date)] = 0;
+        });
+        expensesForModerado.forEach((exp) => {
+          const dateKey = formatDateToString(new Date(exp.date));
+          if (!(dateKey in coupleByDate)) return;
+          const val =
+            typeof exp.value === "number"
+              ? exp.value
+              : parseFloat(String(exp.value)) || 0;
+          coupleByDate[dateKey] = (coupleByDate[dateKey] || 0) + val;
+        });
+        setCoupleSpentByDate(coupleByDate);
         const memberExpenses = coupleMember
           ? expensesForModerado.filter(
               (exp) =>
@@ -502,6 +571,8 @@ export const BudgetScreen = () => {
         console.error("❌ [BUDGET] Erro ao agregar gastos do mês:", err);
         setDailyExpenses([]);
         setExpensesByDate({});
+        setCoupleTotalSpent(0);
+        setCoupleSpentByDate({});
       }
 
       console.log("✅ Orçamento carregado do Firebase");
@@ -688,15 +759,11 @@ export const BudgetScreen = () => {
   };
 
   const coupleOwner = isSpectator ? ownerProfile : user;
-  const coupleTitleSuffix =
-    isCoupleAccount(coupleOwner) && coupleMember
-      ? ` — ${getCoupleMemberLabel(coupleOwner, coupleMember)}`
-      : "";
 
   if (loading) {
     return (
       <Layout
-        title={`Consumo Moderado${coupleTitleSuffix}`}
+        title="Consumo Moderado"
         showBackButton={isSpectator}
         showSidebar={!isSpectator}
       >
@@ -710,7 +777,7 @@ export const BudgetScreen = () => {
 
   return (
     <Layout
-      title={`Consumo Moderado${coupleTitleSuffix}`}
+      title="Consumo Moderado"
       showBackButton={isSpectator}
       showSidebar={!isSpectator}
     >
@@ -732,7 +799,11 @@ export const BudgetScreen = () => {
           {/* Header */}
           <View style={styles.header}>
             <Ionicons name="wallet-outline" size={64} color="#8c52ff" />
-            <Text style={styles.title}>Orçamento Mensal</Text>
+            <Text style={styles.title}>
+              {isCoupleAccount(coupleOwner) && coupleMember
+                ? `Planilha — ${getCoupleMemberLabel(coupleOwner, coupleMember)}`
+                : "Orçamento Mensal"}
+            </Text>
             <Text style={styles.subtitle}>
               Controle quanto você pode gastar por dia
             </Text>

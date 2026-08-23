@@ -21,10 +21,6 @@ import {
   profileInitial,
   profilePhotoUri,
 } from "../../utils/chatDisplayNames";
-import {
-  getCoupleMemberLabel,
-  isCoupleAccount,
-} from "../../utils/coupleAccount";
 
 interface HeaderProps {
   title?: string;
@@ -41,7 +37,7 @@ export const Header: React.FC<HeaderProps> = ({
   rightAction,
   style,
 }) => {
-  const { user, activeCoupleMember, clearActiveCoupleMember } = useAuth();
+  const { user } = useAuth();
   const { navigate, currentScreen, params } = useNavigation();
   const { colors } = useTheme();
   const { showValues, toggleShowValues } = useShowValues();
@@ -124,15 +120,16 @@ export const Header: React.FC<HeaderProps> = ({
           </TouchableOpacity>
         )}
 
-        {!title ? (
-          // keep left area for back button but render logo centered absolutely below
-          <></>
-        ) : (
-          <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
-        )}
+        {title ? (
+          <Text
+            style={[styles.title, { color: colors.text }]}
+            numberOfLines={1}
+          >
+            {title}
+          </Text>
+        ) : null}
       </View>
 
-      {/* Centered logo when there's no title */}
       {!title && (
         <View style={styles.centerLogo} pointerEvents="none">
           <Image
@@ -146,24 +143,10 @@ export const Header: React.FC<HeaderProps> = ({
       <View style={styles.right}>
         {rightAction || (
           <>
-            {isCoupleAccount(user) && activeCoupleMember ? (
-              <TouchableOpacity
-                onPress={() => {
-                  void clearActiveCoupleMember();
-                }}
-                style={styles.coupleChip}
-              >
-                <Text style={styles.coupleChipText}>
-                  ❤️ {getCoupleMemberLabel(user, activeCoupleMember)}
-                </Text>
-                <Text style={styles.coupleSwitchText}>Trocar</Text>
-              </TouchableOpacity>
-            ) : null}
-
             {currentScreen === "Home" && (
               <TouchableOpacity
                 onPress={toggleShowValues}
-                style={{ padding: 6 }}
+                style={styles.eyeButton}
               >
                 <Ionicons
                   name={showValues ? "eye" : "eye-off"}
@@ -228,7 +211,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: 8,
     paddingVertical: 6,
-    borderBottomWidth: 1,
+    borderBottomWidth: 0,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
@@ -238,42 +221,27 @@ const styles = StyleSheet.create({
   logo: {
     width: 180,
     height: 72,
-    marginRight: 0,
   },
   left: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
+    zIndex: 2,
   },
   backButton: {
     padding: 4,
   },
   title: {
+    flex: 1,
     fontSize: 20,
     fontWeight: "bold",
   },
   right: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-  },
-  coupleChip: {
-    maxWidth: 140,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    backgroundColor: "rgba(255, 77, 109, 0.16)",
-    alignItems: "flex-end",
-  },
-  coupleChipText: {
-    color: "#ff8fab",
-    fontSize: 11,
-    fontWeight: "700",
-  },
-  coupleSwitchText: {
-    color: "#ccc",
-    fontSize: 10,
+    gap: 8,
+    zIndex: 3,
   },
   titleRow: {
     flex: 1,
@@ -284,17 +252,16 @@ const styles = StyleSheet.create({
   },
   eyeButton: {
     padding: 6,
-    marginLeft: 8,
   },
   centerLogo: {
     position: "absolute",
-    left: -50,
+    left: -48,
     right: 0,
     top: 0,
     bottom: 0,
     justifyContent: "center",
     alignItems: "center",
-    zIndex: 2,
+    zIndex: 1,
   },
   profileButton: {
     padding: 4,

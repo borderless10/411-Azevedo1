@@ -17,6 +17,11 @@ import { Header } from "../Header/Header";
 import { Sidebar } from "../Sidebar/Sidebar";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useUnreadChatCount } from "../../hooks/useUnreadChatCount";
+import { useAuth } from "../../hooks/useAuth";
+import {
+  getCoupleMemberLabel,
+  isCoupleAccount,
+} from "../../utils/coupleAccount";
 
 interface LayoutProps {
   children: ReactNode;
@@ -43,6 +48,10 @@ export const Layout: React.FC<LayoutProps> = ({
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const { colors } = useTheme();
   const unreadChatCount = useUnreadChatCount();
+  const { user, activeCoupleMember, clearActiveCoupleMember } = useAuth();
+  const showCoupleBar =
+    isCoupleAccount(user) &&
+    (activeCoupleMember === 1 || activeCoupleMember === 2);
 
   useEffect(() => {
     Animated.timing(fadeAnim, {
@@ -61,32 +70,50 @@ export const Layout: React.FC<LayoutProps> = ({
         {showHeader && (
           <View
             style={[
-              styles.headerWrapper,
-              { backgroundColor: colors.background },
+              styles.headerBlock,
+              { backgroundColor: colors.background, borderBottomColor: colors.border },
             ]}
           >
-            {showSidebar && (
+            <View style={styles.headerWrapper}>
+              {showSidebar && (
+                <TouchableOpacity
+                  onPress={() => setSidebarVisible(true)}
+                  style={styles.menuButton}
+                >
+                  <Ionicons name="menu" size={24} color={colors.text} />
+                  {unreadChatCount > 0 ? (
+                    <View style={styles.menuBadge}>
+                      <Text style={styles.menuBadgeText}>
+                        {unreadChatCount > 9 ? "9+" : unreadChatCount}
+                      </Text>
+                    </View>
+                  ) : null}
+                </TouchableOpacity>
+              )}
+              <Header
+                title={title}
+                showBackButton={showBackButton}
+                showProfile={true}
+                rightAction={rightAction}
+                style={styles.header}
+              />
+            </View>
+            {showCoupleBar ? (
               <TouchableOpacity
-                onPress={() => setSidebarVisible(true)}
-                style={styles.menuButton}
+                style={styles.coupleBar}
+                onPress={() => {
+                  void clearActiveCoupleMember();
+                }}
+                activeOpacity={0.8}
               >
-                <Ionicons name="menu" size={24} color={colors.text} />
-                {unreadChatCount > 0 ? (
-                  <View style={styles.menuBadge}>
-                    <Text style={styles.menuBadgeText}>
-                      {unreadChatCount > 9 ? "9+" : unreadChatCount}
-                    </Text>
-                  </View>
-                ) : null}
+                <Ionicons name="heart" size={13} color="#ff6b8a" />
+                <Text style={styles.coupleBarName} numberOfLines={1}>
+                  {getCoupleMemberLabel(user, activeCoupleMember as 1 | 2)}
+                </Text>
+                <View style={styles.coupleBarDivider} />
+                <Text style={styles.coupleBarAction}>Trocar integrante</Text>
               </TouchableOpacity>
-            )}
-            <Header
-              title={title}
-              showBackButton={showBackButton}
-              showProfile={true}
-              rightAction={rightAction}
-              style={styles.header}
-            />
+            ) : null}
           </View>
         )}
 
@@ -115,9 +142,36 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  headerBlock: {
+    borderBottomWidth: 1,
+  },
   headerWrapper: {
     flexDirection: "row",
     alignItems: "center",
+  },
+  coupleBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+  },
+  coupleBarName: {
+    color: "#ffb1c1",
+    fontSize: 13,
+    fontWeight: "700",
+    maxWidth: 160,
+  },
+  coupleBarDivider: {
+    width: 1,
+    height: 12,
+    backgroundColor: "#3a3a3a",
+  },
+  coupleBarAction: {
+    color: "#c084fc",
+    fontSize: 13,
+    fontWeight: "600",
   },
   menuButton: {
     padding: 12,
