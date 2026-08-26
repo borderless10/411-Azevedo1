@@ -14,6 +14,7 @@ export function useChatMessages(
   chatId: string,
   currentUserId: string,
   pageSize = 20,
+  senderCoupleMember?: 1 | 2 | null,
 ): UseChatMessagesResult {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -54,9 +55,14 @@ export function useChatMessages(
     async (text: string) => {
       if (!chatId || !currentUserId)
         throw new Error("Missing chatId or userId");
-      await chatService.sendMessage(chatId, currentUserId, text);
+      await chatService.sendMessage(
+        chatId,
+        currentUserId,
+        text,
+        senderCoupleMember,
+      );
     },
-    [chatId, currentUserId],
+    [chatId, currentUserId, senderCoupleMember],
   );
 
   const loadMore = useCallback(async () => {

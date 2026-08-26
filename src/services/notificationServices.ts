@@ -618,6 +618,24 @@ export const showChatMessageNotification = async (
 };
 
 /**
+ * Notificação quando o ciclo de Consumo Moderado termina.
+ */
+export const showCycleEndedConsultationNotification = async (
+  preferredDayLabel?: string | null,
+): Promise<void> => {
+  const body = preferredDayLabel
+    ? `Agende uma consultoria. Melhor dia sugerido: ${preferredDayLabel}.`
+    : "Agende uma consultoria com seu consultor.";
+
+  await sendImmediateNotification(
+    "Seu ciclo acabou!",
+    body,
+    { type: "cycle_ended_consultation" },
+    { channelId: NOTIFICATION_CHANNEL_REMINDERS },
+  );
+};
+
+/**
  * Verificar se já registrou gasto hoje
  */
 export const shouldSendDailyReminder = async (

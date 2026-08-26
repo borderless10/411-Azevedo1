@@ -8,6 +8,7 @@ import { StatusBar } from "expo-status-bar";
 import { Router } from "../routes/Router";
 import { useTheme } from "../contexts/ThemeContext";
 import { ChatMessageNotifier } from "./Chat/ChatMessageNotifier";
+import { CycleConsultationNotifier } from "./Consultation/CycleConsultationNotifier";
 
 export const AppContent = () => {
   const { isDark } = useTheme();
@@ -16,6 +17,7 @@ export const AppContent = () => {
     <>
       <Router />
       <ChatMessageNotifier />
+      <CycleConsultationNotifier />
       <StatusBar style={isDark ? "light" : "dark"} />
     </>
   );

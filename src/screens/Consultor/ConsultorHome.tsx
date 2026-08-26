@@ -13,6 +13,7 @@ import { User } from "../../types/auth";
 import { useNavigation } from "../../routes/NavigationContext";
 import { useTheme } from "../../contexts/ThemeContext";
 import { isCoupleAccount } from "../../utils/coupleAccount";
+import { ConsultationRequestsBanner } from "../../components/Consultation/ConsultationRequestsBanner";
 
 export const ConsultorHome: React.FC = () => {
   const { user } = useAuth();
@@ -69,6 +70,7 @@ export const ConsultorHome: React.FC = () => {
   return (
     <Layout title="Consultor - Painel" showSidebar>
       <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <ConsultationRequestsBanner />
         <Text style={[styles.heading, { color: colors.text }]}>
           Meus Clientes
         </Text>

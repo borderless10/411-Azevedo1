@@ -39,6 +39,7 @@ import { EditUserScreen } from "../screens/Admin/EditUserScreen";
 import { CardsScreen } from "../screens/Cards";
 import CustomModal from "../components/ui/CustomModal";
 import { CoupleMemberPickerScreen } from "../screens/Auth/CoupleMemberPickerScreen";
+import { ConsultationSchedulingScreen } from "../screens/Consultation/ConsultationSchedulingScreen";
 
 export const Router = () => {
   const { currentScreen, navigate } = useNavigation();
@@ -190,6 +191,8 @@ export const Router = () => {
         return <AdminUsersScreen />;
       case "EditUser":
         return <EditUserScreen />;
+      case "ConsultationScheduling":
+        return <ConsultationSchedulingScreen />;
       default:
         return <HomeScreen />;
     }

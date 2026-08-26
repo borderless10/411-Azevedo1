@@ -81,30 +81,13 @@ const getMonthYearFromDate = (date: Date): string => {
   return `${year}-${month}`;
 };
 
-/** Trimestre civil (jan-mar, abr-jun, jul-set, out-dez) — igual para todos os usuários. */
-export const getCurrentRankingQuarterRange = (
-  referenceDate: Date = new Date(),
-): { start: Date; end: Date } => {
-  const year = referenceDate.getFullYear();
-  const quarterStartMonth = Math.floor(referenceDate.getMonth() / 3) * 3;
-  const start = getStartOfDay(new Date(year, quarterStartMonth, 1));
-  const end = new Date(year, quarterStartMonth + 3, 0, 23, 59, 59, 999);
-  return { start, end };
-};
-
-const parseRankingEntryDate = (dateKey: string): Date | null => {
-  const parsed = new Date(`${dateKey}T12:00:00`);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
-};
-
-const isRankingEntryInQuarter = (
+const isRankingEntryInCurrentPeriod = (
   entry: RankingPlanilhaEntry,
-  referenceDate: Date = new Date(),
+  cutoffDateKey: string | null,
 ): boolean => {
-  const entryDate = parseRankingEntryDate(entry.dateKey);
-  if (!entryDate) return false;
-  const { start, end } = getCurrentRankingQuarterRange(referenceDate);
-  return entryDate >= start && entryDate <= end;
+  if (!entry.dateKey) return false;
+  if (!cutoffDateKey) return true;
+  return entry.dateKey > cutoffDateKey;
 };
 
 const markMissedDay = async (
@@ -254,14 +237,14 @@ export const rankingPlanilhaService = {
 
   getTotalPointsFromBudgets(
     budgets: Budget[],
-    referenceDate: Date = new Date(),
+    cutoffDateKey: string | null = null,
   ): number {
     return budgets.reduce((total, budget) => {
       const entries = budget.rankingPlanilhaEntries || [];
       return (
         total +
         entries.reduce((sum, entry) => {
-          if (!isRankingEntryInQuarter(entry, referenceDate)) return sum;
+          if (!isRankingEntryInCurrentPeriod(entry, cutoffDateKey)) return sum;
           return sum + entry.points;
         }, 0)
       );

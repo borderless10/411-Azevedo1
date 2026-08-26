@@ -1,5 +1,18 @@
 {
   "projects": {
     "default": "visao-cce8f"
-  }
+  },
+  "targets": {
+    "visao-cce8f": {
+      "hosting": {
+        "legal": [
+          "visao-cce8f"
+        ],
+        "app": [
+          "visao-cce8f-app"
+        ]
+      }
+    }
+  },
+  "etags": {}
 }

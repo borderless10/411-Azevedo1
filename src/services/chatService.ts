@@ -22,6 +22,8 @@ import {
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { timestampToDate } from "../lib/firestore";
+import { CoupleMember } from "../types/auth";
+import { parseCoupleMember } from "../utils/coupleAccount";
 
 export type ChatType = "direct" | "group" | "global";
 
@@ -29,7 +31,11 @@ export interface Chat {
   id: string;
   type: ChatType;
   participants: string[];
-  lastMessage?: { text: string; senderId: string };
+  lastMessage?: {
+    text: string;
+    senderId: string;
+    senderCoupleMember?: CoupleMember;
+  };
   lastMessageAt?: any; // Firestore Timestamp
   lastReadBy?: Record<string, any>;
   createdAt?: any;
@@ -39,8 +45,17 @@ export interface Message {
   id: string;
   text: string;
   senderId: string;
+  senderCoupleMember?: CoupleMember | null;
   createdAt: Date;
 }
+
+const mapMessage = (id: string, data: any): Message => ({
+  id,
+  text: data.text,
+  senderId: data.senderId,
+  senderCoupleMember: parseCoupleMember(data.senderCoupleMember),
+  createdAt: data.createdAt ? timestampToDate(data.createdAt) : new Date(),
+});
 
 const CHATS_COL = "chats";
 const MESSAGES_SUBCOL = "messages";
@@ -105,10 +120,12 @@ export async function sendMessage(
   chatId: string,
   senderId: string,
   text: string,
+  senderCoupleMember?: CoupleMember | null,
 ): Promise<void> {
   const chatRef = doc(db, CHATS_COL, chatId);
   const messagesCol = collection(chatRef, MESSAGES_SUBCOL);
   const msgRef = doc(messagesCol); // auto-id doc reference
+  const coupleMember = parseCoupleMember(senderCoupleMember);
 
   const batch = writeBatch(db);
 
@@ -116,10 +133,15 @@ export async function sendMessage(
     text,
     senderId,
     createdAt: serverTimestamp(),
+    ...(coupleMember ? { senderCoupleMember: coupleMember } : {}),
   });
 
   batch.update(chatRef, {
-    lastMessage: { text, senderId },
+    lastMessage: {
+      text,
+      senderId,
+      ...(coupleMember ? { senderCoupleMember: coupleMember } : {}),
+    },
     lastMessageAt: serverTimestamp(),
     [`lastReadBy.${senderId}`]: serverTimestamp(),
   });
@@ -175,15 +197,7 @@ export function listenToMessages(
   const unsubscribe = onSnapshot(q, (snap: QuerySnapshot<DocumentData>) => {
     const msgs: Message[] = [];
     snap.docs.forEach((d) => {
-      const data = d.data() as any;
-      msgs.push({
-        id: d.id,
-        text: data.text,
-        senderId: data.senderId,
-        createdAt: data.createdAt
-          ? timestampToDate(data.createdAt)
-          : new Date(),
-      });
+      msgs.push(mapMessage(d.id, d.data()));
     });
 
     // Firestore returns newest first (desc) — reverse for UI chronological order
@@ -212,15 +226,7 @@ export async function loadMoreMessages(
   );
 
   const snap = await getDocs(q);
-  const msgs: Message[] = snap.docs.map((d) => {
-    const data = d.data() as any;
-    return {
-      id: d.id,
-      text: data.text,
-      senderId: data.senderId,
-      createdAt: data.createdAt ? timestampToDate(data.createdAt) : new Date(),
-    };
-  });
+  const msgs: Message[] = snap.docs.map((d) => mapMessage(d.id, d.data()));
 
   return msgs.reverse(); // chronological order
 }

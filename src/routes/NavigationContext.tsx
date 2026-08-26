@@ -37,7 +37,8 @@ export type ScreenName =
   | "CadastrarCliente"
   | "AdminUsers"
   | "EditUser"
-  | "Cartoes";
+  | "Cartoes"
+  | "ConsultationScheduling";
 
 interface NavigationContextType {
   currentScreen: ScreenName;

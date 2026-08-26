@@ -11,6 +11,7 @@
     "clear": "expo start -c",
     "clear-web": "expo start -c --web",
     "build:web": "expo export --platform web",
+    "deploy:web": "expo export --platform web && firebase deploy --only hosting",
     "build:apk": "cd android && ./gradlew assembleRelease",
     "build:apk:clean": "cd android && ./gradlew clean assembleRelease",
     "lint": "tsc --noEmit",

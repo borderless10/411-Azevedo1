@@ -26,6 +26,12 @@ export interface User {
   accountType?: AccountType;
   coupleMember1Name?: string;
   coupleMember2Name?: string;
+  /** Link de agendamento de consultoria definido pelo admin/consultor */
+  consultationSchedulingUrl?: string;
+  /** Melhor dia do mês para consultoria (1–31, armazenado como string) */
+  consultationPreferredDate?: string;
+  consultationSchedulingRequestPending?: boolean;
+  consultationSchedulingRequestedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }

@@ -12,6 +12,7 @@ import {
 import { db, auth } from "../lib/firebase";
 import { RankingPreference, User } from "../types/auth";
 import { resolveAccountType } from "../utils/coupleAccount";
+import { consultationRequestService } from "./consultationRequestService";
 
 const resolveRankingPreference = (data: any): RankingPreference => {
   const pref = data?.rankingPreference;
@@ -65,6 +66,13 @@ export const mapUserDocument = (id: string, data: any): User => ({
   accountType: resolveAccountType(data?.accountType),
   coupleMember1Name: data?.coupleMember1Name || "",
   coupleMember2Name: data?.coupleMember2Name || "",
+  consultationSchedulingUrl: data?.consultationSchedulingUrl || "",
+  consultationPreferredDate: data?.consultationPreferredDate || "",
+  consultationSchedulingRequestPending:
+    data?.consultationSchedulingRequestPending === true,
+  consultationSchedulingRequestedAt: data?.consultationSchedulingRequestedAt
+    ? toDateValue(data.consultationSchedulingRequestedAt)
+    : undefined,
   createdAt: toDateValue(data?.createdAt),
   updatedAt: toDateValue(data?.updatedAt),
 });
@@ -75,6 +83,15 @@ export const userParticipatesInRanking = (user: User | null): boolean => {
     return false;
   }
   return user.rankingPreference === "participate";
+};
+
+/** Cliente comum no app (individual ou casal — não admin/consultor). */
+export const isAppClientUser = (user?: User | null): boolean => {
+  if (!user) return false;
+  if (user.isAdmin || user.role === "admin" || user.role === "consultor") {
+    return false;
+  }
+  return true;
 };
 
 export const userService = {
@@ -415,6 +432,9 @@ export const userService = {
       accountType?: "individual" | "couple";
       coupleMember1Name?: string;
       coupleMember2Name?: string;
+      consultationSchedulingUrl?: string | null;
+      consultationPreferredDate?: string | null;
+      consultationSchedulingRequestPending?: boolean;
     },
   ): Promise<void> {
     try {
@@ -438,7 +458,28 @@ export const userService = {
         updatePayload.coupleMember1Name = payload.coupleMember1Name;
       if (payload.coupleMember2Name !== undefined)
         updatePayload.coupleMember2Name = payload.coupleMember2Name;
+      if (payload.consultationSchedulingUrl !== undefined) {
+        updatePayload.consultationSchedulingUrl =
+          payload.consultationSchedulingUrl || "";
+        if (String(payload.consultationSchedulingUrl || "").trim()) {
+          updatePayload.consultationSchedulingRequestPending = false;
+        }
+      }
+      if (payload.consultationPreferredDate !== undefined) {
+        updatePayload.consultationPreferredDate =
+          payload.consultationPreferredDate || "";
+      }
+      if (payload.consultationSchedulingRequestPending !== undefined) {
+        updatePayload.consultationSchedulingRequestPending =
+          payload.consultationSchedulingRequestPending;
+      }
       await updateDoc(userRef, updatePayload);
+      if (
+        payload.consultationSchedulingUrl !== undefined &&
+        String(payload.consultationSchedulingUrl || "").trim()
+      ) {
+        void consultationRequestService.resolveRequest(userId);
+      }
       console.log(`✅ Usuário ${userId} atualizado`, updatePayload);
     } catch (error) {
       console.error("❌ Erro ao atualizar usuário:", error);

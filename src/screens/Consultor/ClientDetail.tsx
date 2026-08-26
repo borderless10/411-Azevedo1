@@ -42,11 +42,19 @@ import {
   profileRegisteredName,
 } from "../../utils/chatDisplayNames";
 import { isCoupleAccount } from "../../utils/coupleAccount";
+import {
+  defaultConsultationPreferredDay,
+  formatConsultationPreferredDay,
+  parseConsultationPreferredDay,
+  toConsultationPreferredDayStorage,
+} from "../../utils/consultationScheduling";
+import { ConsultationPreferredDayPicker } from "../../components/Consultation/ConsultationPreferredDayPicker";
 
 export const ClientDetail: React.FC = () => {
   const { params, navigate } = useNavigation() as any;
   const { user } = useAuth();
   const clientId: string = params?.clientId || "";
+  const focusConsultation = params?.focusConsultation === true;
   const [loading, setLoading] = useState(false);
   const [clientDoc, setClientDoc] = useState<any | null>(null);
   const [expenses, setExpenses] = useState<any[]>([]);
@@ -63,6 +71,14 @@ export const ClientDetail: React.FC = () => {
   const [messageModalVisible, setMessageModalVisible] = useState(false);
   const [messageText, setMessageText] = useState("");
   const [sendingMessage, setSendingMessage] = useState(false);
+  const [consultationSchedulingUrl, setConsultationSchedulingUrl] =
+    useState("");
+  const [consultationPreferredDay, setConsultationPreferredDay] = useState<
+    number | null
+  >(null);
+  const [hasConsultationPreferredDay, setHasConsultationPreferredDay] =
+    useState(false);
+  const [savingConsultationUrl, setSavingConsultationUrl] = useState(false);
   const insets = useSafeAreaInsets();
 
   const isSameDay = (a: Date | string, b: Date) => {
@@ -96,6 +112,49 @@ export const ClientDetail: React.FC = () => {
       );
     } finally {
       setSendingMessage(false);
+    }
+  };
+
+  useEffect(() => {
+    setConsultationSchedulingUrl(clientDoc?.consultationSchedulingUrl || "");
+    const parsedPreferredDay = parseConsultationPreferredDay(
+      clientDoc?.consultationPreferredDate,
+    );
+    setHasConsultationPreferredDay(parsedPreferredDay !== null);
+    setConsultationPreferredDay(
+      parsedPreferredDay ?? defaultConsultationPreferredDay(),
+    );
+  }, [
+    clientDoc?.consultationPreferredDate,
+    clientDoc?.consultationSchedulingUrl,
+    clientDoc?.id,
+  ]);
+
+  const handleSaveConsultationUrl = async () => {
+    if (!clientId) return;
+
+    try {
+      setSavingConsultationUrl(true);
+      await userService.updateUser(clientId, {
+        consultationSchedulingUrl: consultationSchedulingUrl.trim(),
+        consultationPreferredDate: hasConsultationPreferredDay
+          ? toConsultationPreferredDayStorage(consultationPreferredDay)
+          : "",
+      });
+      const refreshed = await userService.getUserById(clientId);
+      setClientDoc(refreshed);
+      Alert.alert(
+        "Link salvo",
+        "O cliente verá o botão Agende sua consultoria na sidebar.",
+      );
+    } catch (error: any) {
+      console.error("Erro ao salvar link de consultoria:", error);
+      Alert.alert(
+        "Erro",
+        error?.message || "Não foi possível salvar o link agora.",
+      );
+    } finally {
+      setSavingConsultationUrl(false);
     }
   };
 
@@ -314,6 +373,119 @@ export const ClientDetail: React.FC = () => {
             Visão Geral
           </Text>
         )}
+
+        {clientDoc ? (
+          <View
+            style={[
+              styles.consultationCard,
+              {
+                backgroundColor: colors.card,
+                borderColor: focusConsultation ? "#ff4d6d" : colors.border,
+                borderWidth: focusConsultation ? 2 : 1,
+              },
+            ]}
+          >
+            {focusConsultation ? (
+              <Text style={styles.consultationFocusHint}>
+                Cliente solicitou liberação do agendamento
+              </Text>
+            ) : null}
+            <Text style={[styles.consultationCardTitle, { color: colors.text }]}>
+              Agendamento de consultoria
+            </Text>
+            <Text
+              style={[
+                styles.consultationCardHint,
+                { color: colors.textSecondary },
+              ]}
+            >
+              Cole o link do calendário e, se quiser, indique o melhor dia para
+              o cliente agendar.
+            </Text>
+            <TextInput
+              style={[
+                styles.consultationInput,
+                {
+                  backgroundColor: colors.inputBackground,
+                  color: colors.text,
+                  borderColor: colors.border,
+                },
+              ]}
+              value={consultationSchedulingUrl}
+              onChangeText={setConsultationSchedulingUrl}
+              placeholder="https://calendar.app.google/..."
+              placeholderTextColor={colors.placeholder}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="url"
+            />
+
+            <Text
+              style={[
+                styles.consultationFieldLabel,
+                { color: colors.text },
+              ]}
+            >
+              Melhor dia para consultoria
+            </Text>
+            <Text
+              style={[
+                styles.consultationPreview,
+                { color: colors.textSecondary },
+              ]}
+            >
+              Opcional. Dia fixo do mês — aparece na sidebar do cliente.
+            </Text>
+            <ConsultationPreferredDayPicker
+              day={hasConsultationPreferredDay ? consultationPreferredDay : null}
+              onChangeDay={(day) => {
+                setConsultationPreferredDay(day);
+                setHasConsultationPreferredDay(true);
+              }}
+            />
+            {hasConsultationPreferredDay ? (
+              <>
+                <Text
+                  style={[
+                    styles.consultationPreview,
+                    { color: colors.textSecondary },
+                  ]}
+                >
+                  Cliente verá:{" "}
+                  {formatConsultationPreferredDay(
+                    toConsultationPreferredDayStorage(consultationPreferredDay),
+                  )}{" "}
+                  de cada mês
+                </Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    setHasConsultationPreferredDay(false);
+                    setConsultationPreferredDay(null);
+                  }}
+                >
+                  <Text style={styles.consultationClearDate}>Remover melhor dia</Text>
+                </TouchableOpacity>
+              </>
+            ) : null}
+
+            <TouchableOpacity
+              style={[
+                styles.consultationSaveButton,
+                { backgroundColor: colors.primary },
+                savingConsultationUrl && styles.consultationSaveDisabled,
+              ]}
+              onPress={handleSaveConsultationUrl}
+              disabled={savingConsultationUrl}
+            >
+              {savingConsultationUrl ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.consultationSaveText}>Salvar agendamento</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        ) : null}
+
         <View style={styles.actionColumn}>
           <TouchableOpacity
             style={[
@@ -1028,6 +1200,70 @@ const styles = StyleSheet.create({
   modalInput: { minHeight: 100, padding: 8, borderRadius: 8, marginBottom: 12 },
   modalActions: { flexDirection: "row", justifyContent: "space-between" },
   modalButton: { paddingVertical: 10, paddingHorizontal: 16, borderRadius: 8 },
+  consultationCard: {
+    padding: 14,
+    borderWidth: 1,
+    borderRadius: 10,
+    marginBottom: 16,
+    gap: 8,
+  },
+  consultationCardTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  consultationFocusHint: {
+    color: "#ff4d6d",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  consultationCardHint: {
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  consultationInput: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+  },
+  consultationSaveButton: {
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  consultationSaveDisabled: {
+    opacity: 0.7,
+  },
+  consultationSaveText: {
+    color: "#fff",
+    fontWeight: "700",
+  },
+  consultationFieldLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    marginTop: 4,
+  },
+  consultationPreview: {
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  consultationClearDate: {
+    color: "#ff8fab",
+    fontSize: 13,
+    fontWeight: "600",
+    marginTop: 4,
+  },
+  consultationAddDateButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: "center",
+  },
+  consultationAddDateText: {
+    fontWeight: "600",
+  },
 });
 
 export default ClientDetail;

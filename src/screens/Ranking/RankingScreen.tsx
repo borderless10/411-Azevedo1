@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from "react";
+﻿import React, { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -12,12 +12,13 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Layout } from "../../components/Layout/Layout";
-import { rankingServices, RankingEntry } from "../../services/rankingServices";
+import { rankingServices, RankingEntry, RankingLeague } from "../../services/rankingServices";
 import { userService } from "../../services/userServices";
 import { useAuth } from "../../hooks/useAuth";
 import { useNavigation } from "../../routes/NavigationContext";
 import { RankingPreference } from "../../types/auth";
 import { profilePhotoUri } from "../../utils/chatDisplayNames";
+import { getCoupleDisplayName, isCoupleAccount } from "../../utils/coupleAccount";
 
 type Row = {
   position: number;
@@ -27,6 +28,7 @@ type Row = {
   photoBase64?: string | null;
   nickname?: string | null;
   role?: string | null;
+  isCouple?: boolean;
 };
 
 export const RankingScreen = () => {
@@ -39,8 +41,15 @@ export const RankingScreen = () => {
     useState<RankingPreference | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [showRules, setShowRules] = useState(false);
+  const [leagueTab, setLeagueTab] = useState<RankingLeague>("individual");
+  const leagueTabInitialized = useRef(false);
+  const [resetting, setResetting] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [cutoffDateKey, setCutoffDateKey] = useState<string | null>(null);
 
+  const isAdminUser = user?.isAdmin === true || user?.role === "admin";
   const isCommonUser = !user?.isAdmin && user?.role !== "consultor";
+  const activeLeague: RankingLeague = leagueTab;
 
   const getEffectiveRankingPreference = (): RankingPreference => {
     if (!user) return "unset";
@@ -60,6 +69,16 @@ export const RankingScreen = () => {
   };
 
   const rankingPreference = getEffectiveRankingPreference();
+  const showLeagueTabs =
+    !isCommonUser ||
+    rankingPreference === "participate" ||
+    rankingPreference === "view_only";
+
+  useEffect(() => {
+    if (!user?.id || leagueTabInitialized.current) return;
+    setLeagueTab(isCoupleAccount(user) ? "couple" : "individual");
+    leagueTabInitialized.current = true;
+  }, [user?.id, user?.accountType]);
 
   useEffect(() => {
     setSelectedPreference(
@@ -96,7 +115,11 @@ export const RankingScreen = () => {
     const load = async () => {
       setLoading(true);
       try {
-        const ranking = await rankingServices.getRanking(50);
+        const [ranking, config] = await Promise.all([
+          rankingServices.getRanking(50, activeLeague),
+          rankingServices.getRankingConfig(),
+        ]);
+        if (mounted) setCutoffDateKey(config.cutoffDateKey);
         const out: Row[] = [];
 
         for (let i = 0; i < ranking.length; i++) {
@@ -105,11 +128,14 @@ export const RankingScreen = () => {
           let photo: string | null = null;
           let nickname: string | null = null;
           let role: string | null = null;
+          let couple = false;
           try {
             const u = await userService.getUserById(r.userId);
             if (u) {
-              display =
-                u.nickname || u.username || u.name || u.email || display;
+              couple = isCoupleAccount(u);
+              display = couple
+                ? getCoupleDisplayName(u)
+                : u.nickname || u.username || u.name || u.email || display;
               photo = (u as any).photoBase64 ?? null;
               nickname = (u as any).nickname ?? null;
               role = (u as any).role ?? null;
@@ -125,6 +151,7 @@ export const RankingScreen = () => {
             photoBase64: photo,
             nickname,
             role,
+            isCouple: couple,
           });
         }
 
@@ -139,7 +166,36 @@ export const RankingScreen = () => {
     return () => {
       mounted = false;
     };
-  }, [isCommonUser, rankingPreference]);
+  }, [isCommonUser, rankingPreference, activeLeague, reloadKey]);
+
+  const handleResetRanking = () => {
+    if (!user?.id || !isAdminUser) return;
+
+    Alert.alert(
+      "Reiniciar ranking",
+      "Todos os pontos atuais serão zerados. Os participantes voltam a pontuar a partir de amanhã. Esta ação não apaga os registros da planilha.",
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Reiniciar",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setResetting(true);
+              await rankingServices.resetRanking(user.id);
+              setReloadKey((k) => k + 1);
+              Alert.alert("Ranking reiniciado", "A classificação foi zerada.");
+            } catch (error) {
+              console.error("❌ [RANKING SCREEN] Erro ao reiniciar ranking:", error);
+              Alert.alert("Erro", "Não foi possível reiniciar o ranking.");
+            } finally {
+              setResetting(false);
+            }
+          },
+        },
+      ],
+    );
+  };
 
   const handleSelectRankingPreference = (preference: RankingPreference) => {
     setSelectedPreference(preference);
@@ -191,6 +247,60 @@ export const RankingScreen = () => {
           </TouchableOpacity>
         </View>
 
+        {showLeagueTabs ? (
+          <View style={styles.leagueTabs}>
+            <TouchableOpacity
+              style={[
+                styles.leagueTab,
+                activeLeague === "individual" && styles.leagueTabActive,
+              ]}
+              onPress={() => setLeagueTab("individual")}
+            >
+              <Text
+                style={[
+                  styles.leagueTabText,
+                  activeLeague === "individual" && styles.leagueTabTextActive,
+                ]}
+              >
+                Individuais
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.leagueTab,
+                activeLeague === "couple" && styles.leagueTabActive,
+              ]}
+              onPress={() => setLeagueTab("couple")}
+            >
+              <Text
+                style={[
+                  styles.leagueTabText,
+                  activeLeague === "couple" && styles.leagueTabTextActive,
+                ]}
+              >
+                Casais
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+
+        {isAdminUser ? (
+          <TouchableOpacity
+            style={[styles.resetButton, resetting && styles.resetButtonDisabled]}
+            onPress={handleResetRanking}
+            disabled={resetting}
+          >
+            {resetting ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <>
+                <Ionicons name="refresh" size={18} color="#fff" />
+                <Text style={styles.resetButtonText}>Reiniciar ranking</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        ) : null}
+
         {showRules ? (
           <View style={styles.infoCard}>
             <Text style={styles.infoTitle}>Como funciona</Text>
@@ -215,9 +325,13 @@ export const RankingScreen = () => {
 
             <Text style={styles.infoSubtitle}>Período do ranking</Text>
             <Text style={styles.infoText}>
-              A pontuação acumula por trimestre civil (jan–mar, abr–jun, jul–set,
-              out–dez), igual para todos. Reiniciar o ciclo de planejamento não
-              zera o ranking.
+              A pontuação acumula até o administrador reiniciar o ranking.
+              Reiniciar o ciclo de planejamento não zera o ranking. Contas de
+              casal competem só com outros casais; contas individuais competem
+              entre si.
+              {cutoffDateKey
+                ? ` Último reinício: ${cutoffDateKey.split("-").reverse().join("/")}.`
+                : ""}
             </Text>
 
             <Text style={styles.infoSubtitle}>Atenção</Text>
@@ -230,7 +344,11 @@ export const RankingScreen = () => {
           </View>
         ) : null}
 
-        <Text style={styles.sectionTitle}>Classificação</Text>
+        <Text style={styles.sectionTitle}>
+          {activeLeague === "couple"
+            ? "Classificação — Casais"
+            : "Classificação — Individuais"}
+        </Text>
         {loading ? (
           <View style={styles.loadingRow}>
             <ActivityIndicator size="large" color="#8c52ff" />
@@ -294,7 +412,9 @@ export const RankingScreen = () => {
                 >
                   {r.displayName}
                 </Text>
-                <Text style={styles.detail}>{r.zeroDays} pts</Text>
+                <Text style={styles.detail}>
+                  {r.zeroDays} pts{r.isCouple ? " · Casal" : ""}
+                </Text>
               </View>
             </View>
           ))
@@ -396,6 +516,24 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   header: { color: "#fff", fontSize: 20, fontWeight: "700", flex: 1 },
+  resetButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: "#ff4d6d",
+    borderRadius: 10,
+    paddingVertical: 12,
+    marginBottom: 14,
+  },
+  resetButtonDisabled: {
+    opacity: 0.6,
+  },
+  resetButtonText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 15,
+  },
   infoCard: {
     backgroundColor: "#1a1a1a",
     borderRadius: 12,
@@ -433,6 +571,32 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "700",
     marginBottom: 10,
+  },
+  leagueTabs: {
+    flexDirection: "row",
+    backgroundColor: "#161616",
+    borderRadius: 10,
+    padding: 4,
+    marginBottom: 16,
+    gap: 4,
+  },
+  leagueTab: {
+    flex: 1,
+    minHeight: 40,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 8,
+  },
+  leagueTabActive: {
+    backgroundColor: "#8c52ff",
+  },
+  leagueTabText: {
+    color: "#aaa",
+    fontWeight: "700",
+    fontSize: 14,
+  },
+  leagueTabTextActive: {
+    color: "#fff",
   },
   loadingRow: { padding: 40, alignItems: "center" },
   emptyText: { color: "#999", fontSize: 14 },

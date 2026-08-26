@@ -1,4 +1,9 @@
 import { User } from "../types/auth";
+import {
+  getCoupleMemberLabel,
+  isCoupleAccount,
+  parseCoupleMember,
+} from "./coupleAccount";
 
 export const profileDisplayName = (
   profile?: Pick<User, "nickname" | "name"> | null,
@@ -43,4 +48,28 @@ export const resolveChatDisplayName = (
   if (userId === currentUserId) return "Você";
   if (cachedName) return cachedName;
   return profileDisplayName(profile);
+};
+
+export const resolveCoupleChatSenderLabel = (
+  senderId: string | null | undefined,
+  currentUserId: string | null | undefined,
+  senderProfile?: Pick<
+    User,
+    "nickname" | "name" | "accountType" | "coupleMember1Name" | "coupleMember2Name"
+  > | null,
+  senderCoupleMember?: unknown,
+  fallback?: string,
+): string => {
+  const member = parseCoupleMember(senderCoupleMember);
+  if (isCoupleAccount(senderProfile) && member) {
+    const label = getCoupleMemberLabel(senderProfile, member);
+    if (senderId && senderId === currentUserId) {
+      return `${label} (você)`;
+    }
+    return label;
+  }
+
+  if (senderId && senderId === currentUserId) return "Você";
+  if (fallback) return fallback;
+  return profileDisplayName(senderProfile);
 };

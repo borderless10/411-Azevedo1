@@ -21,6 +21,7 @@ import {
   profilePhotoUri,
 } from "../../utils/chatDisplayNames";
 import { isCoupleAccount } from "../../utils/coupleAccount";
+import { ConsultationRequestsBanner } from "../../components/Consultation/ConsultationRequestsBanner";
 
 export const AdminUsersScreen: React.FC = () => {
   const { user } = useAuth();
@@ -167,6 +168,7 @@ export const AdminUsersScreen: React.FC = () => {
       showSidebar={true}
     >
       <View style={styles.container}>
+        <ConsultationRequestsBanner />
         <View style={styles.header}>
           <Text style={styles.title}>Gerenciar Usuários</Text>
           <TouchableOpacity

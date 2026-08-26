@@ -17,6 +17,7 @@ import { formatDateForDisplay } from "../utils/dateUtils";
 
 interface DatePickerProps {
   label?: string;
+  showLabel?: boolean;
   date: Date;
   onChangeDate: (date: Date) => void;
   error?: string;
@@ -28,6 +29,7 @@ interface DatePickerProps {
 
 const DatePicker: React.FC<DatePickerProps> = ({
   label = "Data",
+  showLabel = true,
   date,
   onChangeDate,
   error,
@@ -93,9 +95,11 @@ const DatePicker: React.FC<DatePickerProps> = ({
 
   return (
     <View style={[styles.container, style]}>
-      <Text style={styles.label}>
-        <Ionicons name="calendar" size={16} color="#8c52ff" /> {label}
-      </Text>
+      {showLabel ? (
+        <Text style={styles.label}>
+          <Ionicons name="calendar" size={16} color="#8c52ff" /> {label}
+        </Text>
+      ) : null}
 
       <TouchableOpacity
         style={[

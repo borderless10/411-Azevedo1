@@ -20,6 +20,8 @@ import { useTheme } from "../../contexts/ThemeContext";
 import { planningServices } from "../../services/planningServices";
 import { useUserChats } from "../../hooks/useUserChats";
 import { isChatUnreadForUser } from "../../utils/chatUtils";
+import { useConsultationScheduling } from "../../hooks/useConsultationScheduling";
+import { isAppClientUser } from "../../services/userServices";
 
 interface SidebarProps {
   visible: boolean;
@@ -47,7 +49,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const isConsultor = user?.role === "consultor";
   const isAdminUser = user?.isAdmin === true || user?.role === "admin";
-  const isCommonUser = !user?.isAdmin && user?.role !== "consultor";
+  const isCommonUser = isAppClientUser(user);
   const shouldHideRankingItem =
     isCommonUser && user?.rankingPreference === "hidden";
   const [trackedExpenseTitles, setTrackedExpenseTitles] = useState<string[]>(
@@ -55,6 +57,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   );
   const [trackedIncomeTitles, setTrackedIncomeTitles] = useState<string[]>([]);
   const [trackedExpensesExpanded, setTrackedExpensesExpanded] = useState(false);
+  const consultationPulseAnim = useRef(new Animated.Value(1)).current;
+  const {
+    preferredDayLabel,
+    shouldPulse: shouldPulseConsultation,
+  } = useConsultationScheduling();
 
   const normalizeTitle = (value?: string) =>
     String(value || "")
@@ -97,6 +104,30 @@ export const Sidebar: React.FC<SidebarProps> = ({
       ]).start();
     }
   }, [visible]);
+
+  useEffect(() => {
+    if (!shouldPulseConsultation) {
+      consultationPulseAnim.setValue(1);
+      return;
+    }
+
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(consultationPulseAnim, {
+          toValue: 0.35,
+          duration: 650,
+          useNativeDriver: false,
+        }),
+        Animated.timing(consultationPulseAnim, {
+          toValue: 1,
+          duration: 650,
+          useNativeDriver: false,
+        }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [consultationPulseAnim, shouldPulseConsultation]);
 
   useEffect(() => {
     let cancelled = false;
@@ -340,6 +371,77 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const showTrackedExpensesAsSecond =
     isCommonUser && trackedExpenseTitles.length > 0 && !!homeMenuItem;
 
+  const renderConsultationItem = () => {
+    if (!isCommonUser) return null;
+
+    const pulseBackground = consultationPulseAnim.interpolate({
+      inputRange: [0.35, 1],
+      outputRange: ["rgba(255, 77, 109, 0.28)", "transparent"],
+    });
+
+    return (
+      <TouchableOpacity
+        key="consultation-scheduling"
+        style={[
+          styles.menuItem,
+          styles.consultationMenuItem,
+          { borderBottomColor: colors.border },
+        ]}
+        onPress={() => {
+          handleNavigateWithParams("ConsultationScheduling");
+        }}
+      >
+        <Animated.View
+          style={[
+            styles.consultationPulseBackground,
+            { backgroundColor: pulseBackground },
+          ]}
+        />
+        <View style={styles.menuItemLeft}>
+          <Ionicons
+            name="calendar"
+            size={24}
+            color={shouldPulseConsultation ? "#ff4d6d" : "#8c52ff"}
+          />
+          <View style={styles.consultationTextWrap}>
+            <Text
+              style={[
+                styles.menuItemText,
+                { color: colors.textSecondary },
+                shouldPulseConsultation && styles.consultationMenuTextPulse,
+              ]}
+            >
+              Agende sua consultoria
+            </Text>
+            {preferredDayLabel ? (
+              <Text
+                style={[
+                  styles.consultationDayHint,
+                  {
+                    color: shouldPulseConsultation
+                      ? "#ff8fab"
+                      : colors.textSecondary,
+                  },
+                ]}
+                numberOfLines={2}
+              >
+                Melhor dia: {preferredDayLabel} de cada mês
+              </Text>
+            ) : null}
+          </View>
+          {shouldPulseConsultation ? (
+            <View style={styles.consultationPulseDot} />
+          ) : null}
+        </View>
+        <Ionicons
+          name="open-outline"
+          size={20}
+          color={shouldPulseConsultation ? "#ff4d6d" : colors.textSecondary}
+        />
+      </TouchableOpacity>
+    );
+  };
+
   const renderMenuItem = (item: MenuItem) => {
     if (item.id === "Ranking" && shouldHideRankingItem) {
       return null;
@@ -532,11 +634,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {showTrackedExpensesAsSecond ? (
             <>
               {homeMenuItem ? renderMenuItem(homeMenuItem) : null}
+              {renderConsultationItem()}
               {renderTrackedExpensesSection()}
               {menuItemsWithoutHome.map((item) => renderMenuItem(item))}
             </>
           ) : (
-            menuItems.map((item) => renderMenuItem(item))
+            menuItems.map((item) => (
+              <React.Fragment key={item.id}>
+                {renderMenuItem(item)}
+                {item.id === "Home" ? renderConsultationItem() : null}
+              </React.Fragment>
+            ))
           )}
 
           {isCommonUser && trackedIncomeTitles.length > 0 ? (
@@ -722,6 +830,10 @@ const styles = StyleSheet.create({
     borderLeftWidth: 4,
     borderLeftColor: "#8c52ff",
   },
+  consultationMenuItem: {
+    overflow: "hidden",
+    position: "relative",
+  },
   menuItemLeft: {
     flexDirection: "row",
     alignItems: "center",
@@ -734,6 +846,29 @@ const styles = StyleSheet.create({
   },
   menuItemTextActive: {
     fontWeight: "600",
+  },
+  consultationMenuTextPulse: {
+    color: "#ff4d6d",
+    fontWeight: "700",
+  },
+  consultationTextWrap: {
+    flex: 1,
+    gap: 2,
+  },
+  consultationDayHint: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: "500",
+  },
+  consultationPulseBackground: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  consultationPulseDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#ff4d6d",
+    marginLeft: 8,
   },
   unreadDot: {
     width: 10,

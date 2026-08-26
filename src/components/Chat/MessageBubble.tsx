@@ -1,6 +1,7 @@
 import React from "react";
 import { View, Text, Image, StyleSheet } from "react-native";
 import { profilePhotoUri } from "../../utils/chatDisplayNames";
+import { ChatMessageText } from "./ChatMessageText";
 
 export interface ChatMessageBubbleProps {
   msg: { id?: string; text: string; createdAt: Date };
@@ -52,13 +53,19 @@ export const MessageBubble = React.memo(function MessageBubble({
             showAvatar && { marginLeft: 4 },
           ]}
         >
-          {showSenderName && !isOwn && (
-            <Text style={styles.senderName}>{senderLabel}</Text>
-          )}
+          {showSenderName ? (
+            <Text
+              style={[styles.senderName, isOwn && styles.ownSenderName]}
+            >
+              {senderLabel}
+            </Text>
+          ) : null}
 
-          <Text style={[styles.messageText, isOwn && styles.ownMessageText]}>
-            {msg.text}
-          </Text>
+          <ChatMessageText
+            text={msg.text}
+            isOwn={isOwn}
+            style={styles.messageText}
+          />
 
           <Text
             numberOfLines={1}
@@ -98,13 +105,9 @@ const styles = StyleSheet.create({
   ownMessage: { alignSelf: "flex-end", backgroundColor: "#8c52ff" },
   otherMessage: { alignSelf: "flex-start", backgroundColor: "#f4eaff" },
   messageText: {
-    fontSize: 14,
-    color: "#000",
-    lineHeight: 20,
     paddingRight: 6,
     flexShrink: 1,
   },
-  ownMessageText: { color: "#fff" },
   messageTime: {
     fontSize: 10,
     lineHeight: 10,
@@ -123,6 +126,9 @@ const styles = StyleSheet.create({
     color: "#5a4b7a",
     fontWeight: "600",
     marginBottom: 4,
+  },
+  ownSenderName: {
+    color: "rgba(255,255,255,0.9)",
   },
   msgAvatarContainer: {
     width: 40,

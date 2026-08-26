@@ -25,15 +25,21 @@ import consultantServices from "../../services/consultantServices";
 import { setActiveChatId } from "../../utils/chatActivity";
 import { useNavigation } from "../../routes/NavigationContext";
 import { MessageBubble } from "../../components/Chat/MessageBubble";
+import { EmojiPickerPanel } from "../../components/Chat/EmojiPickerPanel";
 import {
   profileDisplayName,
   profileInitial,
   profilePhotoUri,
   resolveChatDisplayName,
+  resolveCoupleChatSenderLabel,
 } from "../../utils/chatDisplayNames";
+import {
+  isCoupleAccount,
+  parseCoupleMember,
+} from "../../utils/coupleAccount";
 
 export const ChatScreen: React.FC = () => {
-  const { user } = useAuth();
+  const { user, activeCoupleMember } = useAuth();
   const { params } = useNavigation();
   const insets = useSafeAreaInsets();
   const { chats, isLoading } = useUserChats(
@@ -53,6 +59,7 @@ export const ChatScreen: React.FC = () => {
   const [startChatUsers, setStartChatUsers] = useState<any[]>([]);
   const [startChatLoading, setStartChatLoading] = useState(false);
   const [startingChat, setStartingChat] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 
   const isAdminUser =
     String(user?.role || "").toLowerCase() === "admin" || user?.isAdmin === true;
@@ -61,6 +68,7 @@ export const ChatScreen: React.FC = () => {
     selectedChatId || "",
     user?.id || "",
     20,
+    isCoupleAccount(user) ? activeCoupleMember : null,
   );
 
   const [userMap, setUserMap] = useState<Record<string, any>>({});
@@ -427,7 +435,7 @@ export const ChatScreen: React.FC = () => {
       if (isClient) {
         const consultantId = (user as any)?.consultantId;
         if (consultantId && otherUser === consultantId) {
-          return "Seu consultor";
+          return getParticipantDisplayName(otherUser);
         }
 
         if (primaryAdminId && otherUser === primaryAdminId) {
@@ -456,10 +464,11 @@ export const ChatScreen: React.FC = () => {
   const getChatPreview = (chat: any): string => {
     const fromList = chat?.lastMessage?.text;
     const senderId = chat?.lastMessage?.senderId;
-    const senderLabel = resolveChatDisplayName(
+    const senderLabel = resolveCoupleChatSenderLabel(
       senderId,
       user?.id,
       senderId ? userMap[senderId] : null,
+      chat?.lastMessage?.senderCoupleMember,
       senderId ? previewSenderMap[senderId] : undefined,
     );
 
@@ -472,11 +481,12 @@ export const ChatScreen: React.FC = () => {
       const lastMsg = messages[messages.length - 1];
       const text = String(lastMsg?.text || "").trim();
       const liveSenderId = lastMsg?.senderId;
-      const liveSenderLabel = resolveChatDisplayName(
+      const liveSenderLabel = resolveCoupleChatSenderLabel(
         liveSenderId,
         user?.id,
         liveSenderId ? userMap[liveSenderId] : null,
-        liveSenderId ? previewSenderMap[liveSenderId] : undefined,
+        lastMsg?.senderCoupleMember,
+        liveSenderId ? userMap[liveSenderId] ? undefined : previewSenderMap[liveSenderId] : undefined,
       );
       if (text.length > 0) return `${liveSenderLabel}: ${text}`.substring(0, 70);
     }
@@ -505,9 +515,17 @@ export const ChatScreen: React.FC = () => {
     try {
       await sendMessage(inputText.trim());
       setInputText("");
+      setShowEmojiPicker(false);
     } catch (error) {
       console.error("Error sending message:", error);
     }
+  };
+
+  const handleAppendEmoji = (emoji: string) => {
+    setInputText((current) => {
+      const next = `${current}${emoji}`;
+      return next.length > 500 ? next.slice(0, 500) : next;
+    });
   };
 
   const getStartChatLabel = (person: any): string =>
@@ -864,25 +882,37 @@ export const ChatScreen: React.FC = () => {
           data={orderedMessages}
           keyExtractor={(item, idx) => item.id || `msg-${idx}`}
           renderItem={({ item: msg }) => {
-            const isOwn = msg.senderId === user?.id;
+            const sender = userMap[msg.senderId];
+            const senderIsCouple = isCoupleAccount(sender);
+            const senderMember = parseCoupleMember(msg.senderCoupleMember);
+            const ownMember = isCoupleAccount(user)
+              ? parseCoupleMember(activeCoupleMember)
+              : null;
+            const isOwn =
+              msg.senderId === user?.id &&
+              (!senderIsCouple ||
+                senderMember == null ||
+                ownMember == null ||
+                senderMember === ownMember);
             const isGroup =
               selectedChat?.type === "global" ||
               selectedChat?.type === "group" ||
               (selectedChat?.participants &&
                 selectedChat.participants.length > 2);
-            const sender = userMap[msg.senderId];
-            const senderLabel = resolveChatDisplayName(
+            const showCoupleSpeaker = senderIsCouple;
+            const senderLabel = resolveCoupleChatSenderLabel(
               msg.senderId,
               user?.id,
               sender,
+              msg.senderCoupleMember,
               previewSenderMap[msg.senderId],
             );
             return (
               <MessageBubble
                 msg={msg}
                 isOwn={isOwn}
-                showAvatar={isGroup}
-                showSenderName={isGroup}
+                showAvatar={isGroup || showCoupleSpeaker}
+                showSenderName={isGroup || showCoupleSpeaker}
                 senderLabel={senderLabel}
                 senderPhotoBase64={sender?.photoBase64}
               />
@@ -895,33 +925,51 @@ export const ChatScreen: React.FC = () => {
         {/* Input */}
         <View
           style={[
-            styles.inputContainer,
+            styles.inputWrapper,
             { paddingBottom: Math.max(10, insets.bottom) },
           ]}
         >
-          <TextInput
-            style={styles.input}
-            placeholder="Digite sua mensagem..."
-            placeholderTextColor="#999"
-            value={inputText}
-            onChangeText={setInputText}
-            multiline
-            maxLength={500}
-          />
-          <TouchableOpacity
-            style={[
-              styles.sendButton,
-              !inputText.trim() && styles.sendButtonDisabled,
-            ]}
-            onPress={handleSendMessage}
-            disabled={!inputText.trim()}
-          >
-            <Ionicons
-              name="send"
-              size={20}
-              color={inputText.trim() ? "#8c52ff" : "#ccc"}
+          {showEmojiPicker ? (
+            <EmojiPickerPanel onSelect={handleAppendEmoji} />
+          ) : null}
+
+          <View style={styles.inputContainer}>
+            <TouchableOpacity
+              style={styles.emojiToggleButton}
+              onPress={() => setShowEmojiPicker((current) => !current)}
+              accessibilityLabel="Inserir emoji"
+            >
+              <Ionicons
+                name={showEmojiPicker ? "happy" : "happy-outline"}
+                size={24}
+                color={showEmojiPicker ? "#8c52ff" : "#aaa"}
+              />
+            </TouchableOpacity>
+
+            <TextInput
+              style={styles.input}
+              placeholder="Digite sua mensagem..."
+              placeholderTextColor="#999"
+              value={inputText}
+              onChangeText={setInputText}
+              multiline
+              maxLength={500}
             />
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.sendButton,
+                !inputText.trim() && styles.sendButtonDisabled,
+              ]}
+              onPress={handleSendMessage}
+              disabled={!inputText.trim()}
+            >
+              <Ionicons
+                name="send"
+                size={20}
+                color={inputText.trim() ? "#8c52ff" : "#ccc"}
+              />
+            </TouchableOpacity>
+          </View>
         </View>
       </KeyboardAvoidingView>
     </Layout>
@@ -1015,13 +1063,22 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   msgAvatarInitial: { fontSize: 14, fontWeight: "700", color: "#5a4b7a" },
+  inputWrapper: {
+    borderTopWidth: 1,
+    borderTopColor: "#f0f0f0",
+  },
   inputContainer: {
     flexDirection: "row",
     paddingHorizontal: 12,
     paddingVertical: 10,
-    borderTopWidth: 1,
-    borderTopColor: "#f0f0f0",
     alignItems: "flex-end",
+  },
+  emojiToggleButton: {
+    width: 40,
+    height: 44,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 4,
   },
   input: {
     flex: 1,

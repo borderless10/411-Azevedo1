@@ -5,25 +5,34 @@ import {
   TextInput,
   StyleSheet,
   TouchableOpacity,
-  Alert,
   ActivityIndicator,
   ScrollView,
 } from "react-native";
 import { Layout } from "../../components/Layout/Layout";
 import { useNavigation } from "../../routes/NavigationContext";
 import { useAuth } from "../../hooks/useAuth";
+import { useTheme } from "../../contexts/ThemeContext";
 import { userService } from "../../services/userServices";
 import ConsultantPicker from "../../components/ui/ConsultantPicker";
+import { ConsultationPreferredDayPicker } from "../../components/Consultation/ConsultationPreferredDayPicker";
+import CustomModal from "../../components/ui/CustomModal";
 import { AccountType } from "../../types/auth";
 import {
   coupleAccountFieldsFromInput,
   isCoupleAccount,
 } from "../../utils/coupleAccount";
+import {
+  defaultConsultationPreferredDay,
+  parseConsultationPreferredDay,
+  toConsultationPreferredDayStorage,
+} from "../../utils/consultationScheduling";
 
 export const EditUserScreen: React.FC = ({}: any) => {
   const { navigate, params } = useNavigation() as any;
   const { user } = useAuth();
+  const { colors } = useTheme();
   const userId = params?.userId as string | undefined;
+  const focusConsultation = params?.focusConsultation === true;
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -38,6 +47,18 @@ export const EditUserScreen: React.FC = ({}: any) => {
   const [accountType, setAccountType] = useState<AccountType>("individual");
   const [coupleMember1Name, setCoupleMember1Name] = useState("");
   const [coupleMember2Name, setCoupleMember2Name] = useState("");
+  const [consultationSchedulingUrl, setConsultationSchedulingUrl] =
+    useState("");
+  const [consultationPreferredDay, setConsultationPreferredDay] = useState<
+    number | null
+  >(null);
+  const [hasConsultationPreferredDay, setHasConsultationPreferredDay] =
+    useState(false);
+  const [feedback, setFeedback] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+  }>({ visible: false, title: "", message: "" });
 
   useEffect(() => {
     if (
@@ -48,7 +69,6 @@ export const EditUserScreen: React.FC = ({}: any) => {
       return;
     }
     if (userId) fetchUser();
-    // load consultants for selector
     async function load() {
       try {
         const list = await userService.getUsersByRole("consultor");
@@ -73,10 +93,22 @@ export const EditUserScreen: React.FC = ({}: any) => {
         setAccountType(isCoupleAccount(u) ? "couple" : "individual");
         setCoupleMember1Name(u.coupleMember1Name || "");
         setCoupleMember2Name(u.coupleMember2Name || "");
+        setConsultationSchedulingUrl(u.consultationSchedulingUrl || "");
+        const parsedPreferredDay = parseConsultationPreferredDay(
+          u.consultationPreferredDate,
+        );
+        setHasConsultationPreferredDay(parsedPreferredDay !== null);
+        setConsultationPreferredDay(
+          parsedPreferredDay ?? defaultConsultationPreferredDay(),
+        );
       }
     } catch (error) {
       console.error("Erro ao carregar usuário para edição", error);
-      Alert.alert("Erro", "Não foi possível carregar usuário.");
+      setFeedback({
+        visible: true,
+        title: "Erro",
+        message: "Não foi possível carregar usuário.",
+      });
     } finally {
       setLoading(false);
     }
@@ -86,12 +118,6 @@ export const EditUserScreen: React.FC = ({}: any) => {
     if (!userId) return;
     setSaving(true);
     try {
-      console.log(
-        "[EDIT USER] Salvando usuário:",
-        userId,
-        "com consultantId:",
-        consultantId,
-      );
       const coupleFields = coupleAccountFieldsFromInput({
         accountType:
           role === "user" || role === "cliente_premium"
@@ -107,190 +133,300 @@ export const EditUserScreen: React.FC = ({}: any) => {
         role,
         isAdmin: role === "admin",
         consultantId: consultantId === null ? null : consultantId,
+        consultationSchedulingUrl:
+          role === "user" || role === "cliente_premium"
+            ? consultationSchedulingUrl.trim()
+            : null,
+        consultationPreferredDate:
+          role === "user" || role === "cliente_premium"
+            ? hasConsultationPreferredDay
+              ? toConsultationPreferredDayStorage(consultationPreferredDay)
+              : ""
+            : null,
         ...coupleFields,
       });
-      console.log("[EDIT USER] ✅ Usuário atualizado com sucesso");
-      Alert.alert("Sucesso", "Usuário atualizado.");
-      navigate("AdminUsers");
+      setFeedback({
+        visible: true,
+        title: "Sucesso",
+        message: "Usuário atualizado.",
+      });
     } catch (error) {
       console.error("Erro ao salvar usuário", error);
-      Alert.alert("Erro", "Falha ao salvar usuário.");
+      setFeedback({
+        visible: true,
+        title: "Erro",
+        message: "Falha ao salvar usuário.",
+      });
     } finally {
       setSaving(false);
     }
   };
 
+  const isClientRole = role === "user" || role === "cliente_premium";
+
   return (
-    <Layout title="Editar Usuário" showBackButton={true} showSidebar={false}>
-      <View style={styles.container}>
+    <Layout
+      title="Editar Usuário"
+      showBackButton={true}
+      showSidebar={false}
+      contentStyle={{ backgroundColor: colors.background }}
+    >
+      <ScrollView
+        style={[styles.scroll, { backgroundColor: colors.background }]}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { backgroundColor: colors.background },
+        ]}
+        keyboardShouldPersistTaps="handled"
+      >
         {loading ? (
-          <ActivityIndicator color="#8c52ff" />
+          <ActivityIndicator color={colors.primary} style={styles.loader} />
         ) : (
           <>
-            <Text style={styles.label}>Nome</Text>
+            <Text style={[styles.label, { color: colors.text }]}>Nome</Text>
             <TextInput
-              style={styles.input}
+              style={[
+                styles.input,
+                {
+                  backgroundColor: colors.inputBackground,
+                  color: colors.text,
+                  borderColor: colors.border,
+                },
+              ]}
               value={name}
               onChangeText={setName}
             />
 
-            <Text style={styles.label}>Usuário</Text>
+            <Text style={[styles.label, { color: colors.text }]}>Usuário</Text>
             <TextInput
-              style={styles.input}
+              style={[
+                styles.input,
+                {
+                  backgroundColor: colors.inputBackground,
+                  color: colors.text,
+                  borderColor: colors.border,
+                },
+              ]}
               value={nickname}
               onChangeText={setNickname}
               placeholder="Como a pessoa quer ser chamada no app"
-              placeholderTextColor="#999"
+              placeholderTextColor={colors.placeholder}
             />
 
-            <Text style={styles.label}>Telefone</Text>
+            <Text style={[styles.label, { color: colors.text }]}>Telefone</Text>
             <TextInput
-              style={styles.input}
+              style={[
+                styles.input,
+                {
+                  backgroundColor: colors.inputBackground,
+                  color: colors.text,
+                  borderColor: colors.border,
+                },
+              ]}
               value={phone}
               onChangeText={setPhone}
+              placeholderTextColor={colors.placeholder}
             />
 
-            <Text style={styles.label}>Papel</Text>
+            <Text style={[styles.label, { color: colors.text }]}>Papel</Text>
             <View style={styles.roleRow}>
-              <TouchableOpacity
-                style={[
-                  styles.roleButton,
-                  role === "user" && styles.roleActive,
-                ]}
-                onPress={() => setRole("user")}
-              >
-                <Text
+              {(
+                [
+                  ["user", "Cliente"],
+                  ["consultor", "Consultor"],
+                  ["cliente_premium", "Cliente Premium"],
+                  ["admin", "Admin"],
+                ] as const
+              ).map(([value, labelText]) => (
+                <TouchableOpacity
+                  key={value}
                   style={[
-                    styles.roleText,
-                    role === "user" && styles.roleTextActive,
+                    styles.roleButton,
+                    {
+                      backgroundColor:
+                        role === value ? colors.primary : colors.inputBackground,
+                      borderColor: colors.border,
+                    },
                   ]}
+                  onPress={() => setRole(value)}
                 >
-                  Cliente
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.roleButton,
-                  role === "consultor" && styles.roleActive,
-                ]}
-                onPress={() => setRole("consultor")}
-              >
-                <Text
-                  style={[
-                    styles.roleText,
-                    role === "consultor" && styles.roleTextActive,
-                  ]}
-                >
-                  Consultor
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.roleButton,
-                  role === "cliente_premium" && styles.roleActive,
-                ]}
-                onPress={() => setRole("cliente_premium")}
-              >
-                <Text
-                  style={[
-                    styles.roleText,
-                    role === "cliente_premium" && styles.roleTextActive,
-                  ]}
-                >
-                  Cliente Premium
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.roleButton,
-                  role === "admin" && styles.roleActive,
-                ]}
-                onPress={() => setRole("admin")}
-              >
-                <Text
-                  style={[
-                    styles.roleText,
-                    role === "admin" && styles.roleTextActive,
-                  ]}
-                >
-                  Admin
-                </Text>
-              </TouchableOpacity>
+                  <Text
+                    style={[
+                      styles.roleText,
+                      { color: role === value ? "#fff" : colors.textSecondary },
+                    ]}
+                  >
+                    {labelText}
+                  </Text>
+                </TouchableOpacity>
+              ))}
             </View>
 
-            {(role === "user" || role === "cliente_premium") && (
+            {isClientRole && (
               <>
-                <Text style={styles.label}>Tipo de conta</Text>
+                <Text style={[styles.label, { color: colors.text }]}>
+                  Tipo de conta
+                </Text>
                 <View style={styles.roleRow}>
-                  <TouchableOpacity
-                    style={[
-                      styles.roleButton,
-                      accountType === "individual" && styles.roleActive,
-                    ]}
-                    onPress={() => setAccountType("individual")}
-                  >
-                    <Text
+                  {(
+                    [
+                      ["individual", "Individual"],
+                      ["couple", "❤️ Casal"],
+                    ] as const
+                  ).map(([value, labelText]) => (
+                    <TouchableOpacity
+                      key={value}
                       style={[
-                        styles.roleText,
-                        accountType === "individual" && styles.roleTextActive,
+                        styles.roleButton,
+                        {
+                          backgroundColor:
+                            accountType === value
+                              ? colors.primary
+                              : colors.inputBackground,
+                          borderColor: colors.border,
+                        },
                       ]}
+                      onPress={() => setAccountType(value)}
                     >
-                      Individual
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.roleButton,
-                      accountType === "couple" && styles.roleActive,
-                    ]}
-                    onPress={() => setAccountType("couple")}
-                  >
-                    <Text
-                      style={[
-                        styles.roleText,
-                        accountType === "couple" && styles.roleTextActive,
-                      ]}
-                    >
-                      ❤️ Casal
-                    </Text>
-                  </TouchableOpacity>
+                      <Text
+                        style={[
+                          styles.roleText,
+                          {
+                            color:
+                              accountType === value
+                                ? "#fff"
+                                : colors.textSecondary,
+                          },
+                        ]}
+                      >
+                        {labelText}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
                 </View>
                 {accountType === "couple" && (
                   <>
-                    <Text style={styles.label}>Nome do integrante 1</Text>
+                    <Text style={[styles.label, { color: colors.text }]}>
+                      Nome do integrante 1
+                    </Text>
                     <TextInput
-                      style={styles.input}
+                      style={[
+                        styles.input,
+                        {
+                          backgroundColor: colors.inputBackground,
+                          color: colors.text,
+                          borderColor: colors.border,
+                        },
+                      ]}
                       value={coupleMember1Name}
                       onChangeText={setCoupleMember1Name}
                       placeholder="Usuário 1"
-                      placeholderTextColor="#999"
+                      placeholderTextColor={colors.placeholder}
                     />
-                    <Text style={styles.label}>Nome do integrante 2</Text>
+                    <Text style={[styles.label, { color: colors.text }]}>
+                      Nome do integrante 2
+                    </Text>
                     <TextInput
-                      style={styles.input}
+                      style={[
+                        styles.input,
+                        {
+                          backgroundColor: colors.inputBackground,
+                          color: colors.text,
+                          borderColor: colors.border,
+                        },
+                      ]}
                       value={coupleMember2Name}
                       onChangeText={setCoupleMember2Name}
                       placeholder="Usuário 2"
-                      placeholderTextColor="#999"
+                      placeholderTextColor={colors.placeholder}
                     />
                   </>
                 )}
               </>
             )}
 
-            {(role === "user" || role === "cliente_premium") && (
-              <>
-                <Text style={styles.label}>Consultor responsável</Text>
+            {isClientRole && (
+              <View
+                style={[
+                  styles.sectionCard,
+                  {
+                    backgroundColor: colors.card,
+                    borderColor: focusConsultation ? "#ff4d6d" : colors.border,
+                  },
+                ]}
+              >
+                <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                  Agendamento de consultoria
+                </Text>
+
+                <Text style={[styles.label, { color: colors.text }]}>
+                  Consultor responsável
+                </Text>
                 <ConsultantPicker
                   consultants={consultants}
                   value={consultantId}
                   onChange={(id) => setConsultantId(id)}
                 />
-              </>
+
+                <Text style={[styles.label, { color: colors.text }]}>
+                  Link de agendamento de consultoria
+                </Text>
+                {focusConsultation ? (
+                  <Text style={styles.focusHint}>
+                    Cliente solicitou liberação do agendamento
+                  </Text>
+                ) : null}
+                <TextInput
+                  style={[
+                    styles.input,
+                    {
+                      backgroundColor: colors.inputBackground,
+                      color: colors.text,
+                      borderColor: colors.border,
+                    },
+                  ]}
+                  value={consultationSchedulingUrl}
+                  onChangeText={setConsultationSchedulingUrl}
+                  placeholder="https://calendar.app.google/..."
+                  placeholderTextColor={colors.placeholder}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="url"
+                />
+
+                <Text style={[styles.label, { color: colors.text }]}>
+                  Melhor dia para consultoria
+                </Text>
+                <Text style={[styles.fieldHint, { color: colors.textSecondary }]}>
+                  Opcional. Dia fixo do mês (ex.: dia 15) — o cliente verá na sidebar.
+                </Text>
+                <ConsultationPreferredDayPicker
+                  day={hasConsultationPreferredDay ? consultationPreferredDay : null}
+                  onChangeDay={(day) => {
+                    setConsultationPreferredDay(day);
+                    setHasConsultationPreferredDay(true);
+                  }}
+                  style={styles.datePicker}
+                />
+                {hasConsultationPreferredDay ? (
+                  <TouchableOpacity
+                    onPress={() => {
+                      setHasConsultationPreferredDay(false);
+                      setConsultationPreferredDay(null);
+                    }}
+                  >
+                    <Text style={styles.clearDateText}>Remover melhor dia</Text>
+                  </TouchableOpacity>
+                ) : null}
+              </View>
             )}
 
             <TouchableOpacity
-              style={[styles.saveButton, saving && styles.saveDisabled]}
+              style={[
+                styles.saveButton,
+                { backgroundColor: colors.primary },
+                saving && styles.saveDisabled,
+              ]}
               onPress={handleSave}
               disabled={saving}
             >
@@ -300,40 +436,109 @@ export const EditUserScreen: React.FC = ({}: any) => {
             </TouchableOpacity>
           </>
         )}
-      </View>
+      </ScrollView>
+
+      <CustomModal
+        visible={feedback.visible}
+        title={feedback.title}
+        message={feedback.message}
+        primaryLabel="OK"
+        onClose={() => {
+          const wasSuccess = feedback.title === "Sucesso";
+          setFeedback((current) => ({ ...current, visible: false }));
+          if (wasSuccess) navigate("AdminUsers");
+        }}
+      />
     </Layout>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16 },
-  label: { color: "#fff", marginTop: 12, marginBottom: 6 },
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 32,
+  },
+  loader: {
+    marginTop: 24,
+  },
+  label: {
+    marginTop: 12,
+    marginBottom: 6,
+    fontSize: 15,
+    fontWeight: "600",
+  },
   input: {
-    backgroundColor: "#1a1a1a",
-    color: "#fff",
     padding: 12,
     borderRadius: 8,
+    borderWidth: 1,
   },
-  roleRow: { flexDirection: "row", gap: 8, marginTop: 8 },
+  roleRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 4,
+  },
   roleButton: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: "45%",
     padding: 10,
-    backgroundColor: "#0d0d0d",
     borderRadius: 8,
     alignItems: "center",
+    borderWidth: 1,
   },
-  roleActive: { backgroundColor: "#8c52ff" },
-  roleText: { color: "#bbb", fontWeight: "600" },
-  roleTextActive: { color: "#fff" },
+  roleText: {
+    fontWeight: "600",
+    fontSize: 13,
+    textAlign: "center",
+  },
+  sectionCard: {
+    marginTop: 16,
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 4,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    marginBottom: 4,
+  },
+  fieldHint: {
+    fontSize: 12,
+    marginBottom: 4,
+    lineHeight: 18,
+  },
+  focusHint: {
+    color: "#ff8fab",
+    fontSize: 13,
+    fontWeight: "700",
+    marginBottom: 6,
+  },
+  clearDateText: {
+    color: "#ff8fab",
+    fontSize: 13,
+    marginTop: 4,
+    fontWeight: "600",
+  },
+  datePicker: {
+    marginBottom: 0,
+  },
   saveButton: {
-    marginTop: 20,
-    backgroundColor: "#8c52ff",
+    marginTop: 24,
     padding: 14,
     borderRadius: 8,
     alignItems: "center",
   },
-  saveText: { color: "#fff", fontWeight: "700" },
-  saveDisabled: { opacity: 0.6 },
+  saveText: {
+    color: "#fff",
+    fontWeight: "700",
+  },
+  saveDisabled: {
+    opacity: 0.6,
+  },
 });
 
 export default EditUserScreen;

@@ -22,6 +22,23 @@ export const getCoupleMemberLabel = (
   return raw || `Usuário ${member}`;
 };
 
+export const getCoupleDisplayName = (
+  user?: Pick<
+    User,
+    "coupleMember1Name" | "coupleMember2Name" | "nickname" | "name"
+  > | null,
+): string => {
+  const first = String(user?.coupleMember1Name || "").trim();
+  const second = String(user?.coupleMember2Name || "").trim();
+  if (first && second) return `${first} & ${second}`;
+  if (first) return first;
+  if (second) return second;
+  const nick = String(user?.nickname || "").trim();
+  if (nick) return nick;
+  const name = String(user?.name || "").trim();
+  return name || "Casal";
+};
+
 export const parseCoupleMember = (
   value: unknown,
 ): CoupleMember | null => {
