@@ -23,6 +23,7 @@ import { activityServices } from "./activityServices";
 import { resolveExpenseCategoryName } from "../types/category";
 import { CreditCardInvoiceSummary } from "../types/creditCard";
 import { cancelBillNotification } from "./notificationServices";
+import { resolveDueDateFromDay } from "../utils/dueDateFromDay";
 
 const getUserPlanningDoc = (userId: string) =>
   doc(db, "users", userId, "planning", "current");
@@ -472,12 +473,7 @@ export const planningServices = {
                 ? rawDueDate
                 : new Date(rawDueDate);
         } else if (b.dueDay !== undefined && b.dueDay !== null) {
-          const now = new Date();
-          const year = now.getFullYear();
-          const month = now.getMonth();
-          const lastDay = new Date(year, month + 1, 0).getDate();
-          const safeDay = Math.min(Math.max(1, Number(b.dueDay) || 1), lastDay);
-          dueDate = new Date(year, month, safeDay);
+          dueDate = resolveDueDateFromDay(Number(b.dueDay));
         } else if ((b as any).createdAt) {
           // Fallback legado: contas antigas sem dueDate/dueDay
           const rawCreatedAt: any = (b as any).createdAt;

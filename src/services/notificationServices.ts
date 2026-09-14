@@ -5,6 +5,8 @@
 import * as Notifications from "expo-notifications";
 import * as Device from "expo-device";
 import { AppState, Platform } from "react-native";
+import { getActiveChatId } from "../utils/chatActivity";
+import { resolveDueDateFromDay } from "../utils/dueDateFromDay";
 
 const canUseNativeNotifications = Platform.OS !== "web";
 
@@ -34,13 +36,35 @@ type ExpectedIncomeNotificationInput = {
  */
 if (canUseNativeNotifications) {
   Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowAlert: true,
-      shouldPlaySound: true,
-      shouldSetBadge: true,
-      shouldShowBanner: true,
-      shouldShowList: true,
-    }),
+    handleNotification: async (notification) => {
+      const data = (notification.request.content.data || {}) as Record<
+        string,
+        unknown
+      >;
+      const type = String(data.type || "");
+      const chatId = String(data.chatId || "");
+      const isChatPush = type === "chat_message" || type === "chat_mention";
+      const inForeground = AppState.currentState === "active";
+      const viewingChat = Boolean(chatId) && getActiveChatId() === chatId;
+
+      if (inForeground && (viewingChat || isChatPush)) {
+        return {
+          shouldShowAlert: false,
+          shouldPlaySound: false,
+          shouldSetBadge: false,
+          shouldShowBanner: false,
+          shouldShowList: false,
+        };
+      }
+
+      return {
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: true,
+        shouldShowBanner: true,
+        shouldShowList: true,
+      };
+    },
   });
 }
 
@@ -281,14 +305,12 @@ const parseExpectedIncomeDate = (expectedMonth?: string): Date | null => {
     if (!isNaN(parsed.getTime())) return parsed;
   }
 
-  // Dia do mês (1-31) — assume mês/ano atuais
+  // Dia do mês (1-31) — próximo vencimento local (mês atual ou seguinte)
   match = raw.match(/^(\d{1,2})$/);
   if (match) {
     const day = Number(match[1]);
     if (day >= 1 && day <= 31) {
-      const now = new Date();
-      const parsed = new Date(now.getFullYear(), now.getMonth(), day);
-      if (!isNaN(parsed.getTime())) return parsed;
+      return resolveDueDateFromDay(day);
     }
   }
 
@@ -460,12 +482,28 @@ export const syncExpectedIncomeNotifications = async (
   }
 };
 
+const clampHour = (value?: number): number => {
+  const hour = Math.trunc(Number(value));
+  if (!Number.isFinite(hour)) return 21;
+  return Math.min(23, Math.max(0, hour));
+};
+
+const clampMinute = (value?: number): number => {
+  const minute = Math.trunc(Number(value));
+  if (!Number.isFinite(minute)) return 0;
+  return Math.min(59, Math.max(0, minute));
+};
+
+export const formatReminderTime = (hour?: number, minute?: number): string =>
+  `${String(clampHour(hour)).padStart(2, "0")}:${String(clampMinute(minute)).padStart(2, "0")}`;
+
 /**
- * Agendar notificação diária para lembrar de registrar gastos (21h)
+ * Agendar notificação diária para lembrar de registrar gastos no horário local do usuário.
  */
-export const scheduleDailyExpenseReminder = async (): Promise<
-  string | null
-> => {
+export const scheduleDailyExpenseReminder = async (
+  hour = 21,
+  minute = 0,
+): Promise<string | null> => {
   if (!canUseNativeNotifications) {
     return null;
   }
@@ -476,9 +514,11 @@ export const scheduleDailyExpenseReminder = async (): Promise<
 
     await cancelDailyExpenseReminder();
 
+    const localHour = clampHour(hour);
+    const localMinute = clampMinute(minute);
     const now = new Date();
     const trigger = new Date();
-    trigger.setHours(21, 0, 0, 0);
+    trigger.setHours(localHour, localMinute, 0, 0);
 
     if (trigger <= now) {
       trigger.setDate(trigger.getDate() + 1);
@@ -496,13 +536,15 @@ export const scheduleDailyExpenseReminder = async (): Promise<
       ),
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DAILY,
-        hour: 21,
-        minute: 0,
+        hour: localHour,
+        minute: localMinute,
         channelId: NOTIFICATION_CHANNEL_REMINDERS,
       },
     });
 
-    console.log("✅ Lembrete diário agendado para 21h (todos os dias)");
+    console.log(
+      `✅ Lembrete diário agendado para ${formatReminderTime(localHour, localMinute)} (horário local)`,
+    );
     console.log(`   Próxima notificação: ${trigger.toLocaleString("pt-BR")}`);
     console.log(`   ID: ${notificationId}`);
 

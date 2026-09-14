@@ -46,6 +46,11 @@ import {
   syncBillNotifications,
 } from "../../services/notificationServices";
 import { Bill } from "../../types/bill";
+import {
+  billStatusFromDueDate,
+  classifyDueDate,
+  resolveDueDateFromDay,
+} from "../../utils/dueDateFromDay";
 import ConfirmDeleteModal from "../../components/ui/ConfirmDeleteModal";
 import { creditCardServices } from "../../services/creditCardServices";
 import { CreditCard } from "../../types/creditCard";
@@ -208,19 +213,8 @@ export const BillsScreen = () => {
       return "paid";
     }
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    // Prioridade: dueDay (modelo do planning)
     if (bill?.dueDay !== undefined && bill?.dueDay !== null) {
-      const now = new Date();
-      const year = now.getFullYear();
-      const month = now.getMonth();
-      const lastDay = new Date(year, month + 1, 0).getDate();
-      const safeDay = Math.min(Math.max(1, Number(bill.dueDay) || 1), lastDay);
-      const dueDate = new Date(year, month, safeDay);
-      dueDate.setHours(0, 0, 0, 0);
-      return dueDate < today ? "overdue" : "pending";
+      return billStatusFromDueDate(resolveDueDateFromDay(Number(bill.dueDay)));
     }
 
     const rawDueDate = bill?.dueDate;
@@ -233,8 +227,7 @@ export const BillsScreen = () => {
             : new Date(rawDueDate);
 
       if (!isNaN(dueDate.getTime())) {
-        dueDate.setHours(0, 0, 0, 0);
-        return dueDate < today ? "overdue" : "pending";
+        return billStatusFromDueDate(dueDate);
       }
     }
 
@@ -316,12 +309,7 @@ export const BillsScreen = () => {
                 : undefined;
           let dueDate: Date = b.dueDate || b.createdAt || new Date();
           if (dueDay) {
-            const now = new Date();
-            const year = now.getFullYear();
-            const month = now.getMonth();
-            const lastDay = new Date(year, month + 1, 0).getDate();
-            const day = Math.min(Math.max(1, dueDay), lastDay);
-            dueDate = new Date(year, month, day);
+            dueDate = resolveDueDateFromDay(dueDay);
           }
           const status = getPlanningBillStatus(b, cycleStartedAt);
           return {
@@ -828,26 +816,18 @@ export const BillsScreen = () => {
     return `${day}/${month}/${year}`;
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "paid":
-        return colors.success;
-      case "overdue":
-        return colors.danger;
-      default:
-        return colors.warning;
-    }
+  const getStatusColor = (status: string, dueDate?: Date) => {
+    if (status === "paid") return colors.success;
+    if (status === "overdue") return colors.danger;
+    if (dueDate && classifyDueDate(dueDate) === "due_today") return "#d97706";
+    return colors.warning;
   };
 
-  const getStatusLabel = (status: string) => {
-    switch (status) {
-      case "paid":
-        return "Paga";
-      case "overdue":
-        return "Vencida";
-      default:
-        return "Pendente";
-    }
+  const getStatusLabel = (status: string, dueDate?: Date) => {
+    if (status === "paid") return "Paga";
+    if (status === "overdue") return "Vencida";
+    if (dueDate && classifyDueDate(dueDate) === "due_today") return "Vence hoje";
+    return "A vencer";
   };
 
   const filteredBills = getFilteredBills();
@@ -1056,16 +1036,16 @@ export const BillsScreen = () => {
                   <View
                     style={[
                       styles.statusBadge,
-                      { backgroundColor: `${getStatusColor(bill.status)}20` },
+                      { backgroundColor: `${getStatusColor(bill.status, bill.dueDate)}20` },
                     ]}
                   >
                     <Text
                       style={[
                         styles.statusText,
-                        { color: getStatusColor(bill.status) },
+                        { color: getStatusColor(bill.status, bill.dueDate) },
                       ]}
                     >
-                      {getStatusLabel(bill.status)}
+                      {getStatusLabel(bill.status, bill.dueDate)}
                     </Text>
                   </View>
                 </View>
@@ -1091,9 +1071,11 @@ export const BillsScreen = () => {
                       style={[styles.billDate, { color: colors.textSecondary }]}
                     >
                       Vence{" "}
-                      {bill.dueDay
-                        ? `dia ${bill.dueDay}`
-                        : formatDate(bill.dueDate)}
+                      {bill.dueDate
+                        ? formatDate(bill.dueDate)
+                        : bill.dueDay
+                          ? `dia ${bill.dueDay}`
+                          : "—"}
                     </Text>
                   </View>
                   <View style={styles.billDetailItem}>

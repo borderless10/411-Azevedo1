@@ -589,26 +589,14 @@ export const BudgetScreen = () => {
       const hasPermission = await requestNotificationPermissions();
       if (hasPermission) {
         console.log("✅ Permissão de notificações concedida");
-
-        // Verificar se já tem gasto registrado hoje
-        const todayKey = formatDateToString(new Date());
-        const hasExpenseToday = dailyExpenses.some(
-          (expense) => expense.dateKey === todayKey && expense.amount > 0,
-        );
-
-        if (!hasExpenseToday) {
-          // Agendar lembrete diário às 21h
-          const notificationId = await scheduleDailyExpenseReminder();
-          if (notificationId) {
-            console.log("✅ Lembrete diário configurado com sucesso");
-          }
-        } else {
-          console.log(
-            "✅ Já tem gasto registrado hoje, lembrete não necessário",
-          );
-          // Cancelar qualquer lembrete existente
+        if (user?.expenseReminderEnabled === false) {
           await cancelDailyExpenseReminder();
+          return;
         }
+        await scheduleDailyExpenseReminder(
+          user?.expenseReminderHour ?? 21,
+          user?.expenseReminderMinute ?? 0,
+        );
       } else {
         console.log("⚠️ Permissão de notificações negada");
       }

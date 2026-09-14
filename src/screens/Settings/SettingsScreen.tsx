@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Tela de Configurações
  */
 
@@ -17,7 +17,12 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  Linking,
 } from "react-native";
+
+const LEGAL_PRIVACY_URL = "https://visao-cce8f.web.app";
+const LEGAL_EXCLUSAO_URL = "https://visao-cce8f.web.app/exclusao-conta";
+const LEGAL_TERMOS_URL = "https://visao-cce8f.web.app/termos";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../hooks/useAuth";
 import { useNavigation } from "../../routes/NavigationContext";
@@ -28,12 +33,14 @@ import { userService } from "../../services/userServices";
 import { RankingPreference } from "../../types/auth";
 import {
   cancelDailyExpenseReminder,
+  formatReminderTime,
   listScheduledNotifications,
   requestNotificationPermissions,
   scheduleDailyExpenseReminder,
   sendImmediateNotification,
 } from "../../services/notificationServices";
 import * as Notifications from "expo-notifications";
+import { Picker } from "@react-native-picker/picker";
 
 export const SettingsScreen = () => {
   const { user, signOut, refreshUser } = useAuth();
@@ -56,6 +63,15 @@ export const SettingsScreen = () => {
   const [selectedRankingPref, setSelectedRankingPref] =
     useState<RankingPreference | null>(null);
   const [isSavingRankingPref, setIsSavingRankingPref] = useState(false);
+  const [isDeleteModalVisible, setIsDeleteModalVisible] = useState(false);
+  const [deletePassword, setDeletePassword] = useState("");
+  const [showDeletePassword, setShowDeletePassword] = useState(false);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const [expenseReminderEnabled, setExpenseReminderEnabled] = useState(true);
+  const [expenseReminderHour, setExpenseReminderHour] = useState(21);
+  const [expenseReminderMinute, setExpenseReminderMinute] = useState(0);
+  const [isReminderTimeVisible, setIsReminderTimeVisible] = useState(false);
+  const [isSavingReminder, setIsSavingReminder] = useState(false);
 
   const isCommonUser = !user?.isAdmin && user?.role !== "consultor";
   const isRankingHidden = user?.rankingPreference === "hidden";
@@ -78,6 +94,19 @@ export const SettingsScreen = () => {
   useEffect(() => {
     const pref = getEffectiveRankingPreference();
     setSelectedRankingPref(pref === "unset" ? null : pref);
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    setExpenseReminderEnabled(user.expenseReminderEnabled !== false);
+    setExpenseReminderHour(
+      typeof user.expenseReminderHour === "number" ? user.expenseReminderHour : 21,
+    );
+    setExpenseReminderMinute(
+      typeof user.expenseReminderMinute === "number"
+        ? user.expenseReminderMinute
+        : 0,
+    );
   }, [user]);
 
   useEffect(() => {
@@ -127,7 +156,10 @@ export const SettingsScreen = () => {
           );
           return;
         }
-        await scheduleDailyExpenseReminder();
+        await scheduleDailyExpenseReminder(
+          expenseReminderHour,
+          expenseReminderMinute,
+        );
         Alert.alert(
           "Notificações ativas",
           "Lembretes e alertas do sistema foram habilitados. Use “Testar notificação” e saia do app para validar a bandeja.",
@@ -184,6 +216,47 @@ export const SettingsScreen = () => {
     ]);
   };
 
+  const openDeleteAccountFlow = () => {
+    Alert.alert(
+      "Excluir conta",
+      "Isso apaga permanentemente sua conta e remove o acesso ao app. Dados pessoais do perfil serão anonimizados. Esta ação não pode ser desfeita.",
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Continuar",
+          style: "destructive",
+          onPress: () => {
+            setDeletePassword("");
+            setIsDeleteModalVisible(true);
+          },
+        },
+      ],
+    );
+  };
+
+  const handleConfirmDeleteAccount = async () => {
+    if (!deletePassword.trim()) {
+      Alert.alert("Senha obrigatória", "Digite sua senha para confirmar.");
+      return;
+    }
+    setIsDeletingAccount(true);
+    try {
+      await authServices.deleteAccount(deletePassword.trim());
+      setIsDeleteModalVisible(false);
+      setDeletePassword("");
+      await signOut();
+      navigate("Login");
+      Alert.alert("Conta excluída", "Sua conta foi excluída com sucesso.");
+    } catch (error: any) {
+      Alert.alert(
+        "Erro",
+        error?.message || "Não foi possível excluir a conta. Tente novamente.",
+      );
+    } finally {
+      setIsDeletingAccount(false);
+    }
+  };
+
   const handleChangePassword = async () => {
     if (!currentPassword || !newPassword || !confirmPassword) {
       Alert.alert("Erro", "Preencha todos os campos");
@@ -221,6 +294,44 @@ export const SettingsScreen = () => {
       );
     } finally {
       setIsChangingPassword(false);
+    }
+  };
+
+  const persistExpenseReminder = async (payload: {
+    enabled: boolean;
+    hour: number;
+    minute: number;
+  }) => {
+    if (!user?.id) return;
+    setIsSavingReminder(true);
+    try {
+      await userService.updateUserPreferences(user.id, {
+        expenseReminderEnabled: payload.enabled,
+        expenseReminderHour: payload.hour,
+        expenseReminderMinute: payload.minute,
+      });
+      setExpenseReminderEnabled(payload.enabled);
+      setExpenseReminderHour(payload.hour);
+      setExpenseReminderMinute(payload.minute);
+      if (payload.enabled) {
+        const granted = await requestNotificationPermissions();
+        if (!granted) {
+          Alert.alert(
+            "Permissão necessária",
+            "Ative as notificações nas configurações do celular para receber o lembrete.",
+          );
+          return;
+        }
+        await scheduleDailyExpenseReminder(payload.hour, payload.minute);
+      } else {
+        await cancelDailyExpenseReminder();
+      }
+      await refreshUser();
+    } catch (error) {
+      console.error("Erro ao salvar lembrete de gastos:", error);
+      Alert.alert("Erro", "Não foi possível salvar o horário do lembrete.");
+    } finally {
+      setIsSavingReminder(false);
     }
   };
 
@@ -323,6 +434,51 @@ export const SettingsScreen = () => {
                 style={[styles.divider, { backgroundColor: colors.border }]}
               />
               <SettingItem
+                icon="wallet-outline"
+                iconColor="#8c52ff"
+                title="Lembrete para registrar gastos"
+                subtitle={
+                  expenseReminderEnabled
+                    ? `Ativado às ${formatReminderTime(expenseReminderHour, expenseReminderMinute)}`
+                    : "Desativado"
+                }
+                rightComponent={
+                  <Switch
+                    value={expenseReminderEnabled}
+                    onValueChange={(enabled) =>
+                      persistExpenseReminder({
+                        enabled,
+                        hour: expenseReminderHour,
+                        minute: expenseReminderMinute,
+                      })
+                    }
+                    disabled={isSavingReminder}
+                    trackColor={{ false: colors.border, true: "#8c52ff" }}
+                    thumbColor="#fff"
+                  />
+                }
+              />
+              {expenseReminderEnabled ? (
+                <>
+                  <View
+                    style={[styles.divider, { backgroundColor: colors.border }]}
+                  />
+                  <SettingItem
+                    icon="time-outline"
+                    iconColor="#8c52ff"
+                    title="Horário"
+                    subtitle={formatReminderTime(
+                      expenseReminderHour,
+                      expenseReminderMinute,
+                    )}
+                    onPress={() => setIsReminderTimeVisible(true)}
+                  />
+                </>
+              ) : null}
+              <View
+                style={[styles.divider, { backgroundColor: colors.border }]}
+              />
+              <SettingItem
                 icon={isDark ? "moon" : "sunny"}
                 iconColor={isDark ? "#8c52ff" : "#c084fc"}
                 title={isDark ? "Tema Escuro" : "Tema Claro"}
@@ -415,9 +571,27 @@ export const SettingsScreen = () => {
                 icon="document-text"
                 iconColor="#8c52ff"
                 title="Termos e Privacidade"
-                subtitle="Política de privacidade"
+                subtitle="Privacidade, termos e exclusão de conta"
                 onPress={() =>
-                  Alert.alert("Em breve", "Funcionalidade em desenvolvimento")
+                  Alert.alert(
+                    "Termos e Privacidade",
+                    "Escolha o documento legal para abrir.",
+                    [
+                      {
+                        text: "Privacidade",
+                        onPress: () => Linking.openURL(LEGAL_PRIVACY_URL),
+                      },
+                      {
+                        text: "Termos de Uso",
+                        onPress: () => Linking.openURL(LEGAL_TERMOS_URL),
+                      },
+                      {
+                        text: "Exclusão de conta",
+                        onPress: () => Linking.openURL(LEGAL_EXCLUSAO_URL),
+                      },
+                      { text: "Cancelar", style: "cancel" },
+                    ],
+                  )
                 }
               />
               <View
@@ -453,6 +627,40 @@ export const SettingsScreen = () => {
               >
                 <Ionicons name="log-out-outline" size={24} color="#ff4d6d" />
                 <Text style={styles.logoutText}>Sair da Conta</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Exclusão de conta — sempre no final */}
+          <View style={[styles.section, { marginBottom: 40 }]}>
+            <Text
+              style={[styles.sectionTitle, { color: colors.textSecondary }]}
+            >
+              Zona de perigo
+            </Text>
+            <View
+              style={[
+                styles.sectionCard,
+                { backgroundColor: colors.card, borderColor: colors.border },
+              ]}
+            >
+              <TouchableOpacity
+                style={styles.deleteAccountButton}
+                onPress={openDeleteAccountFlow}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="trash-outline" size={22} color="#ff4d6d" />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.deleteAccountText}>Excluir conta</Text>
+                  <Text
+                    style={[
+                      styles.deleteAccountHint,
+                      { color: colors.textSecondary },
+                    ]}
+                  >
+                    Apaga permanentemente sua conta e o acesso ao app
+                  </Text>
+                </View>
               </TouchableOpacity>
             </View>
           </View>
@@ -619,6 +827,117 @@ export const SettingsScreen = () => {
                     )}
                   </TouchableOpacity>
                 </View>
+              </View>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </KeyboardAvoidingView>
+      </Modal>
+      <Modal
+        visible={isReminderTimeVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsReminderTimeVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.modalOverlay}
+        >
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setIsReminderTimeVisible(false)}
+          >
+            <TouchableOpacity
+              activeOpacity={1}
+              onPress={(event) => event.stopPropagation()}
+            >
+              <View
+                style={[styles.modalContent, { backgroundColor: colors.card }]}
+              >
+                <View style={styles.modalHeader}>
+                  <Text style={[styles.modalTitle, { color: colors.text }]}>
+                    Horário do lembrete
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => setIsReminderTimeVisible(false)}
+                    style={styles.closeButton}
+                  >
+                    <Ionicons
+                      name="close"
+                      size={24}
+                      color={colors.textSecondary}
+                    />
+                  </TouchableOpacity>
+                </View>
+                <View style={{ flexDirection: "row", paddingHorizontal: 8 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={[
+                        styles.inputLabel,
+                        { color: colors.text, textAlign: "center" },
+                      ]}
+                    >
+                      Hora
+                    </Text>
+                    <Picker
+                      selectedValue={expenseReminderHour}
+                      onValueChange={(value) =>
+                        setExpenseReminderHour(Number(value))
+                      }
+                    >
+                      {Array.from({ length: 24 }, (_, hour) => (
+                        <Picker.Item
+                          key={hour}
+                          label={String(hour).padStart(2, "0")}
+                          value={hour}
+                          color={colors.text}
+                        />
+                      ))}
+                    </Picker>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={[
+                        styles.inputLabel,
+                        { color: colors.text, textAlign: "center" },
+                      ]}
+                    >
+                      Minuto
+                    </Text>
+                    <Picker
+                      selectedValue={expenseReminderMinute}
+                      onValueChange={(value) =>
+                        setExpenseReminderMinute(Number(value))
+                      }
+                    >
+                      {Array.from({ length: 60 }, (_, minute) => (
+                        <Picker.Item
+                          key={minute}
+                          label={String(minute).padStart(2, "0")}
+                          value={minute}
+                          color={colors.text}
+                        />
+                      ))}
+                    </Picker>
+                  </View>
+                </View>
+                <TouchableOpacity
+                  style={styles.saveButton}
+                  disabled={isSavingReminder}
+                  onPress={() => {
+                    persistExpenseReminder({
+                      enabled: true,
+                      hour: expenseReminderHour,
+                      minute: expenseReminderMinute,
+                    }).then(() => setIsReminderTimeVisible(false));
+                  }}
+                >
+                  {isSavingReminder ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.saveButtonText}>Salvar horário</Text>
+                  )}
+                </TouchableOpacity>
               </View>
             </TouchableOpacity>
           </TouchableOpacity>
@@ -825,6 +1144,128 @@ export const SettingsScreen = () => {
           </TouchableOpacity>
         </KeyboardAvoidingView>
       </Modal>
+
+      <Modal
+        visible={isDeleteModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => !isDeletingAccount && setIsDeleteModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.modalOverlay}
+        >
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => !isDeletingAccount && setIsDeleteModalVisible(false)}
+          >
+            <TouchableOpacity
+              activeOpacity={1}
+              onPress={(e) => e.stopPropagation()}
+            >
+              <View
+                style={[styles.modalContent, { backgroundColor: colors.card }]}
+              >
+                <View style={styles.modalHeader}>
+                  <Text style={[styles.modalTitle, { color: colors.text }]}>
+                    Confirmar exclusão
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => setIsDeleteModalVisible(false)}
+                    style={styles.closeButton}
+                    disabled={isDeletingAccount}
+                  >
+                    <Ionicons
+                      name="close"
+                      size={24}
+                      color={colors.textSecondary}
+                    />
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.modalScroll}>
+                  <Text
+                    style={[
+                      styles.deleteConfirmCopy,
+                      { color: colors.textSecondary },
+                    ]}
+                  >
+                    Digite sua senha para excluir permanentemente a conta.
+                  </Text>
+                  <View style={styles.inputGroup}>
+                    <Text style={[styles.inputLabel, { color: colors.text }]}>
+                      Senha
+                    </Text>
+                    <View
+                      style={[
+                        styles.passwordInput,
+                        {
+                          backgroundColor: colors.inputBackground,
+                          borderColor: colors.border,
+                        },
+                      ]}
+                    >
+                      <TextInput
+                        style={[styles.input, { color: colors.text }]}
+                        value={deletePassword}
+                        onChangeText={setDeletePassword}
+                        placeholder="Sua senha atual"
+                        placeholderTextColor={colors.placeholder}
+                        secureTextEntry={!showDeletePassword}
+                        autoCapitalize="none"
+                        editable={!isDeletingAccount}
+                      />
+                      <TouchableOpacity
+                        onPress={() => setShowDeletePassword(!showDeletePassword)}
+                        style={styles.eyeButton}
+                      >
+                        <Ionicons
+                          name={showDeletePassword ? "eye-off" : "eye"}
+                          size={20}
+                          color={colors.textSecondary}
+                        />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  <View style={styles.modalButtons}>
+                    <TouchableOpacity
+                      style={[
+                        styles.modalButton,
+                        styles.cancelButton,
+                        { borderColor: colors.border },
+                      ]}
+                      onPress={() => setIsDeleteModalVisible(false)}
+                      disabled={isDeletingAccount}
+                    >
+                      <Text
+                        style={[
+                          styles.cancelButtonText,
+                          { color: colors.textSecondary },
+                        ]}
+                      >
+                        Cancelar
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.modalButton, styles.deleteConfirmButton]}
+                      onPress={handleConfirmDeleteAccount}
+                      disabled={isDeletingAccount}
+                    >
+                      {isDeletingAccount ? (
+                        <ActivityIndicator color="#fff" size="small" />
+                      ) : (
+                        <Text style={styles.confirmButtonText}>Excluir</Text>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </KeyboardAvoidingView>
+      </Modal>
     </Layout>
   );
 };
@@ -891,6 +1332,29 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
     color: "#ff4d6d",
+  },
+  deleteAccountButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 16,
+    gap: 14,
+  },
+  deleteAccountText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#ff4d6d",
+    marginBottom: 2,
+  },
+  deleteAccountHint: {
+    fontSize: 12,
+  },
+  deleteConfirmCopy: {
+    fontSize: 14,
+    marginBottom: 16,
+    lineHeight: 20,
+  },
+  deleteConfirmButton: {
+    backgroundColor: "#ff4d6d",
   },
   modalOverlay: {
     flex: 1,

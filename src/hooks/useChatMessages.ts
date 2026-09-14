@@ -1,10 +1,17 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import chatService, { Message } from "../services/chatService";
+import chatService, { ChatReplyTo, Message } from "../services/chatService";
 import { Timestamp } from "firebase/firestore";
+import { ChatMention } from "../utils/chatMentions";
 
 interface UseChatMessagesResult {
   messages: Message[];
-  sendMessage: (text: string) => Promise<void>;
+  sendMessage: (
+    text: string,
+    extras?: {
+      mentions?: ChatMention[];
+      replyTo?: ChatReplyTo | null;
+    },
+  ) => Promise<void>;
   loadMore: () => Promise<void>;
   isLoading: boolean;
   hasMore: boolean;
@@ -52,15 +59,20 @@ export function useChatMessages(
   }, [chatId, pageSize]);
 
   const sendMessage = useCallback(
-    async (text: string) => {
+    async (
+      text: string,
+      extras?: {
+        mentions?: ChatMention[];
+        replyTo?: ChatReplyTo | null;
+      },
+    ) => {
       if (!chatId || !currentUserId)
         throw new Error("Missing chatId or userId");
-      await chatService.sendMessage(
-        chatId,
-        currentUserId,
-        text,
+      await chatService.sendMessage(chatId, currentUserId, text, {
         senderCoupleMember,
-      );
+        mentions: extras?.mentions,
+        replyTo: extras?.replyTo,
+      });
     },
     [chatId, currentUserId, senderCoupleMember],
   );

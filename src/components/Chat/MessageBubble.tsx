@@ -1,16 +1,31 @@
-import React from "react";
-import { View, Text, Image, StyleSheet } from "react-native";
+import React, { useMemo } from "react";
+import { View, Text, Image, StyleSheet, TouchableOpacity } from "react-native";
 import { profilePhotoUri } from "../../utils/chatDisplayNames";
 import { ChatMessageText } from "./ChatMessageText";
+import { ChatMention } from "../../utils/chatMentions";
+import { ChatReplyTo, Message } from "../../services/chatService";
 
 export interface ChatMessageBubbleProps {
-  msg: { id?: string; text: string; createdAt: Date };
+  msg: Message;
   isOwn: boolean;
   showAvatar?: boolean;
   showSenderName?: boolean;
   senderLabel: string;
   senderPhotoBase64?: string;
+  highlighted?: boolean;
+  replySenderLabel?: string;
+  onLongPress?: () => void;
+  onReactionPress?: (emoji: string) => void;
 }
+
+const groupReactions = (reactions?: Record<string, string>) => {
+  const counts = new Map<string, number>();
+  Object.values(reactions || {}).forEach((emoji) => {
+    if (!emoji) return;
+    counts.set(emoji, (counts.get(emoji) || 0) + 1);
+  });
+  return Array.from(counts.entries());
+};
 
 export const MessageBubble = React.memo(function MessageBubble({
   msg,
@@ -19,12 +34,26 @@ export const MessageBubble = React.memo(function MessageBubble({
   showSenderName = false,
   senderLabel,
   senderPhotoBase64,
+  highlighted = false,
+  replySenderLabel,
+  onLongPress,
+  onReactionPress,
 }: ChatMessageBubbleProps) {
   const initial = (senderLabel || "U").charAt(0).toUpperCase();
+  const reactionChips = useMemo(
+    () => groupReactions(msg.reactions),
+    [msg.reactions],
+  );
+  const replyTo = msg.replyTo as ChatReplyTo | null | undefined;
+  const mentions = (msg.mentions || []) as ChatMention[];
 
   return (
     <View style={styles.wrapper}>
-      <View
+      <TouchableOpacity
+        activeOpacity={0.9}
+        onLongPress={onLongPress}
+        delayLongPress={350}
+        disabled={!onLongPress}
         style={{
           flexDirection: "row",
           alignItems: "flex-end",
@@ -51,20 +80,45 @@ export const MessageBubble = React.memo(function MessageBubble({
             styles.messageBubble,
             isOwn ? styles.ownMessage : styles.otherMessage,
             showAvatar && { marginLeft: 4 },
+            highlighted && styles.highlighted,
           ]}
         >
           {showSenderName ? (
-            <Text
-              style={[styles.senderName, isOwn && styles.ownSenderName]}
-            >
+            <Text style={[styles.senderName, isOwn && styles.ownSenderName]}>
               {senderLabel}
             </Text>
+          ) : null}
+
+          {replyTo ? (
+            <View
+              style={[
+                styles.replyBox,
+                isOwn ? styles.replyBoxOwn : styles.replyBoxOther,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.replyAuthor,
+                  isOwn && styles.replyAuthorOwn,
+                ]}
+                numberOfLines={1}
+              >
+                {replySenderLabel || "Mensagem"}
+              </Text>
+              <Text
+                style={[styles.replyText, isOwn && styles.replyTextOwn]}
+                numberOfLines={2}
+              >
+                {replyTo.text}
+              </Text>
+            </View>
           ) : null}
 
           <ChatMessageText
             text={msg.text}
             isOwn={isOwn}
             style={styles.messageText}
+            mentions={mentions}
           />
 
           <Text
@@ -81,7 +135,29 @@ export const MessageBubble = React.memo(function MessageBubble({
             })}
           </Text>
         </View>
-      </View>
+      </TouchableOpacity>
+
+      {reactionChips.length > 0 ? (
+        <View
+          style={[
+            styles.reactionsRow,
+            isOwn ? styles.reactionsOwn : styles.reactionsOther,
+          ]}
+        >
+          {reactionChips.map(([emoji, count]) => (
+            <TouchableOpacity
+              key={emoji}
+              style={styles.reactionChip}
+              onPress={() => onReactionPress?.(emoji)}
+            >
+              <Text style={styles.reactionEmoji}>
+                {emoji}
+                {count > 1 ? ` ${count}` : ""}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      ) : null}
     </View>
   );
 });
@@ -104,6 +180,10 @@ const styles = StyleSheet.create({
   },
   ownMessage: { alignSelf: "flex-end", backgroundColor: "#8c52ff" },
   otherMessage: { alignSelf: "flex-start", backgroundColor: "#f4eaff" },
+  highlighted: {
+    borderWidth: 2,
+    borderColor: "#ffe56a",
+  },
   messageText: {
     paddingRight: 6,
     flexShrink: 1,
@@ -129,6 +209,61 @@ const styles = StyleSheet.create({
   },
   ownSenderName: {
     color: "rgba(255,255,255,0.9)",
+  },
+  replyBox: {
+    borderLeftWidth: 3,
+    paddingLeft: 8,
+    paddingVertical: 4,
+    marginBottom: 6,
+    borderRadius: 8,
+  },
+  replyBoxOwn: {
+    borderLeftColor: "rgba(255,255,255,0.8)",
+    backgroundColor: "rgba(255,255,255,0.12)",
+  },
+  replyBoxOther: {
+    borderLeftColor: "#8c52ff",
+    backgroundColor: "rgba(140,82,255,0.12)",
+  },
+  replyAuthor: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#5a4b7a",
+  },
+  replyAuthorOwn: {
+    color: "#fff",
+  },
+  replyText: {
+    fontSize: 12,
+    color: "#4b3d6b",
+  },
+  replyTextOwn: {
+    color: "rgba(255,255,255,0.9)",
+  },
+  reactionsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    marginTop: -4,
+    marginBottom: 6,
+    gap: 4,
+  },
+  reactionsOwn: {
+    justifyContent: "flex-end",
+    paddingRight: 20,
+  },
+  reactionsOther: {
+    paddingLeft: 56,
+  },
+  reactionChip: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: "#e4d7ff",
+  },
+  reactionEmoji: {
+    fontSize: 12,
   },
   msgAvatarContainer: {
     width: 40,

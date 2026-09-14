@@ -84,6 +84,12 @@ service cloud.firestore {
         || request.auth.uid in chat.participants;
     }
 
+    function reactionsMap(data) {
+      return 'reactions' in data && data.reactions is map
+        ? data.reactions
+        : {};
+    }
+
     function canWriteUserDocument() {
       return isSignedIn()
         && (
@@ -213,8 +219,35 @@ service cloud.firestore {
           && request.auth.uid == request.resource.data.senderId
           && canAccessChat(chatId);
 
-        allow delete, update: if false;
+        allow update: if isSignedIn()
+          && canAccessChat(chatId)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions'])
+          && request.resource.data.reactions is map
+          && request.resource.data.reactions.diff(reactionsMap(resource.data)).affectedKeys().hasOnly([request.auth.uid]);
+
+        allow delete: if false;
       }
+    }
+
+    match /reports/{reportId} {
+      allow create: if isSignedIn()
+        && request.resource.data.reporterId == request.auth.uid;
+      allow read: if isAdmin();
+      allow update, delete: if isAdmin();
+    }
+
+    match /blocks/{blockId} {
+      allow read: if isSignedIn()
+        && resource.data.blockerId == request.auth.uid;
+      allow list: if isSignedIn()
+        && resource.data.blockerId == request.auth.uid;
+      allow create: if isSignedIn()
+        && request.resource.data.blockerId == request.auth.uid
+        && request.resource.data.blockedId is string
+        && request.resource.data.blockedId != request.auth.uid;
+      allow delete: if isSignedIn()
+        && resource.data.blockerId == request.auth.uid;
+      allow update: if false;
     }
   }
 }

@@ -12,6 +12,7 @@ import {
   Image,
   Modal,
   Alert,
+  AppState,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -19,13 +20,21 @@ import { useAuth } from "../../hooks/useAuth";
 import { useUserChats } from "../../hooks/useUserChats";
 import { useChatMessages } from "../../hooks/useChatMessages";
 import { Layout } from "../../components/Layout/Layout";
-import chatService from "../../services/chatService";
+import chatService, { Message } from "../../services/chatService";
 import { userService } from "../../services/userServices";
 import consultantServices from "../../services/consultantServices";
 import { setActiveChatId } from "../../utils/chatActivity";
 import { useNavigation } from "../../routes/NavigationContext";
 import { MessageBubble } from "../../components/Chat/MessageBubble";
 import { EmojiPickerPanel } from "../../components/Chat/EmojiPickerPanel";
+import { MessageActionSheet } from "../../components/Chat/MessageActionSheet";
+import {
+  filterMentionCandidates,
+  getActiveMentionQuery,
+  insertMention,
+  mentionsStillInText,
+  ChatMention,
+} from "../../utils/chatMentions";
 import {
   profileDisplayName,
   profileInitial,
@@ -37,6 +46,9 @@ import {
   isCoupleAccount,
   parseCoupleMember,
 } from "../../utils/coupleAccount";
+import moderationService, {
+  ReportReason,
+} from "../../services/moderationService";
 
 export const ChatScreen: React.FC = () => {
   const { user, activeCoupleMember } = useAuth();
@@ -60,6 +72,15 @@ export const ChatScreen: React.FC = () => {
   const [startChatLoading, setStartChatLoading] = useState(false);
   const [startingChat, setStartingChat] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [blockedUserIds, setBlockedUserIds] = useState<string[]>([]);
+  const [moderationBusy, setModerationBusy] = useState(false);
+  const [actionMessage, setActionMessage] = useState<Message | null>(null);
+  const [replyTo, setReplyTo] = useState<Message | null>(null);
+  const [pendingMentions, setPendingMentions] = useState<ChatMention[]>([]);
+  const [inputSelection, setInputSelection] = useState({ start: 0, end: 0 });
+  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(
+    null,
+  );
 
   const isAdminUser =
     String(user?.role || "").toLowerCase() === "admin" || user?.isAdmin === true;
@@ -88,6 +109,25 @@ export const ChatScreen: React.FC = () => {
       prev[user.id] ? prev : { ...prev, [user.id]: "Você" },
     );
   }, [user]);
+
+  useEffect(() => {
+    if (!user?.id) {
+      setBlockedUserIds([]);
+      return;
+    }
+    let cancelled = false;
+    moderationService
+      .getBlockedUserIds(user.id)
+      .then((ids) => {
+        if (!cancelled) setBlockedUserIds(ids);
+      })
+      .catch(() => {
+        if (!cancelled) setBlockedUserIds([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
 
   // Ensure global chat exists and direct chats with consultant/admin for clients
   useEffect(() => {
@@ -154,8 +194,26 @@ export const ChatScreen: React.FC = () => {
 
   useEffect(() => {
     setActiveChatId(selectedChatId);
-    return () => setActiveChatId(null);
-  }, [selectedChatId]);
+    if (user?.id) {
+      userService
+        .updateChatPresence(user.id, {
+          presenceState: AppState.currentState === "active" ? "foreground" : "background",
+          activeChatId: selectedChatId,
+        })
+        .catch(() => undefined);
+    }
+    return () => {
+      setActiveChatId(null);
+      if (user?.id) {
+        userService
+          .updateChatPresence(user.id, {
+            presenceState: "foreground",
+            activeChatId: "",
+          })
+          .catch(() => undefined);
+      }
+    };
+  }, [selectedChatId, user?.id]);
 
   // Deduplicate and sort chats - Include global chat manually
   const processedChats = useMemo(() => {
@@ -330,10 +388,57 @@ export const ChatScreen: React.FC = () => {
 
   const orderedMessages = useMemo(() => {
     // With `inverted`, keep newest first in data so newest stays at the bottom in the UI.
-    return [...chatMessages].sort(
-      (a, b) => getMessageTimeMs(b.createdAt) - getMessageTimeMs(a.createdAt),
-    );
-  }, [chatMessages]);
+    const blocked = new Set(blockedUserIds);
+    return [...chatMessages]
+      .filter((msg) => !blocked.has(msg.senderId) || msg.senderId === user?.id)
+      .sort(
+        (a, b) => getMessageTimeMs(b.createdAt) - getMessageTimeMs(a.createdAt),
+      );
+  }, [chatMessages, blockedUserIds, user?.id]);
+
+  const mentionCandidates = useMemo(() => {
+    const ids = new Set<string>();
+    (selectedChat?.participants || []).forEach((id: string) => {
+      if (id && id !== user?.id) ids.add(id);
+    });
+    orderedMessages.forEach((msg) => {
+      if (msg.senderId && msg.senderId !== user?.id) ids.add(msg.senderId);
+    });
+    return Array.from(ids).map((id) => ({
+      userId: id,
+      displayName: profileDisplayName(userMap[id], getParticipantDisplayName(id)),
+    }));
+  }, [orderedMessages, selectedChat?.participants, user?.id, userMap]);
+
+  const activeMention = useMemo(
+    () => getActiveMentionQuery(inputText, inputSelection.start),
+    [inputText, inputSelection.start],
+  );
+  const mentionSuggestions = activeMention
+    ? filterMentionCandidates(mentionCandidates, activeMention.query)
+    : [];
+
+  useEffect(() => {
+    const messageId = String(params?.messageId || "").trim();
+    if (!messageId || !selectedChatId) return;
+    const index = orderedMessages.findIndex((msg) => msg.id === messageId);
+    if (index < 0) return;
+    setHighlightedMessageId(messageId);
+    const timer = setTimeout(() => {
+      flatListRef.current?.scrollToIndex({
+        index,
+        animated: true,
+        viewPosition: 0.4,
+      });
+    }, 250);
+    const clearHighlight = setTimeout(() => {
+      setHighlightedMessageId(null);
+    }, 3500);
+    return () => {
+      clearTimeout(timer);
+      clearTimeout(clearHighlight);
+    };
+  }, [params?.messageId, selectedChatId, orderedMessages]);
 
   const toJsDate = (value: any): Date | null => {
     if (!value) return null;
@@ -512,13 +617,218 @@ export const ChatScreen: React.FC = () => {
 
   const handleSendMessage = async () => {
     if (!inputText.trim() || !selectedChatId || !user?.id) return;
+    if (
+      otherParticipantId &&
+      blockedUserIds.includes(otherParticipantId)
+    ) {
+      Alert.alert(
+        "Usuário bloqueado",
+        "Desbloqueie o usuário para enviar mensagens neste chat.",
+      );
+      return;
+    }
     try {
-      await sendMessage(inputText.trim());
+      const mentions = mentionsStillInText(inputText, pendingMentions).filter(
+        (mention) =>
+          mention.userId !== user.id &&
+          mentionCandidates.some((item) => item.userId === mention.userId),
+      );
+      await sendMessage(inputText.trim(), {
+        mentions,
+        replyTo: replyTo
+          ? {
+              messageId: replyTo.id,
+              senderId: replyTo.senderId,
+              text: String(replyTo.text || "").slice(0, 180),
+            }
+          : null,
+      });
       setInputText("");
+      setPendingMentions([]);
+      setReplyTo(null);
       setShowEmojiPicker(false);
     } catch (error) {
       console.error("Error sending message:", error);
     }
+  };
+
+  const handleSelectMention = (mention: ChatMention) => {
+    if (!activeMention) return;
+    const next = insertMention(
+      inputText,
+      inputSelection.start,
+      activeMention.start,
+      mention.displayName,
+    );
+    setInputText(next.text);
+    setInputSelection({ start: next.cursor, end: next.cursor });
+    setPendingMentions((current) => {
+      const without = current.filter((item) => item.userId !== mention.userId);
+      return [...without, mention];
+    });
+  };
+
+  const handleToggleReaction = async (msg: Message, emoji: string) => {
+    if (!user?.id || !selectedChatId || !msg.id) return;
+    const current = msg.reactions?.[user.id];
+    try {
+      await chatService.setMessageReaction(
+        selectedChatId,
+        msg.id,
+        user.id,
+        current === emoji ? null : emoji,
+      );
+    } catch (error) {
+      console.error("Erro ao reagir à mensagem:", error);
+      Alert.alert("Erro", "Não foi possível salvar a reação agora.");
+    }
+  };
+
+  const pickReportReason = (
+    onPicked: (reason: ReportReason) => void,
+  ) => {
+    Alert.alert("Motivo da denúncia", "Selecione o motivo:", [
+      { text: "Spam", onPress: () => onPicked("spam") },
+      { text: "Assédio", onPress: () => onPicked("harassment") },
+      {
+        text: "Conteúdo inadequado",
+        onPress: () => onPicked("inappropriate"),
+      },
+      { text: "Outro", onPress: () => onPicked("other") },
+      { text: "Cancelar", style: "cancel" },
+    ]);
+  };
+
+  const handleReportMessage = (msg: {
+    id?: string;
+    text: string;
+    senderId: string;
+  }) => {
+    if (!user?.id || !selectedChatId || !msg.senderId) return;
+    if (msg.senderId === user.id) return;
+    pickReportReason(async (reason) => {
+      try {
+        setModerationBusy(true);
+        await moderationService.reportContent({
+          reporterId: user.id,
+          reportedUserId: msg.senderId,
+          chatId: selectedChatId,
+          messageId: msg.id,
+          messageText: msg.text,
+          reason,
+        });
+        Alert.alert(
+          "Denúncia enviada",
+          "Recebemos sua denúncia. Nossa equipe analisará em até 24 horas.",
+        );
+      } catch (error) {
+        console.error("Erro ao denunciar mensagem:", error);
+        Alert.alert("Erro", "Não foi possível enviar a denúncia agora.");
+      } finally {
+        setModerationBusy(false);
+      }
+    });
+  };
+
+  const handleReportUser = (targetUserId: string) => {
+    if (!user?.id || !selectedChatId || !targetUserId) return;
+    pickReportReason(async (reason) => {
+      try {
+        setModerationBusy(true);
+        await moderationService.reportContent({
+          reporterId: user.id,
+          reportedUserId: targetUserId,
+          chatId: selectedChatId,
+          reason,
+        });
+        Alert.alert(
+          "Denúncia enviada",
+          "Recebemos sua denúncia. Nossa equipe analisará em até 24 horas.",
+        );
+      } catch (error) {
+        console.error("Erro ao denunciar usuário:", error);
+        Alert.alert("Erro", "Não foi possível enviar a denúncia agora.");
+      } finally {
+        setModerationBusy(false);
+      }
+    });
+  };
+
+  const handleBlockUser = (targetUserId: string) => {
+    if (!user?.id || !targetUserId || targetUserId === user.id) return;
+    Alert.alert(
+      "Bloquear usuário",
+      "Você deixará de ver as mensagens desta pessoa. Pode desbloquear depois pelo mesmo menu.",
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Bloquear",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setModerationBusy(true);
+              await moderationService.blockUser(user.id, targetUserId);
+              setBlockedUserIds((prev) =>
+                prev.includes(targetUserId) ? prev : [...prev, targetUserId],
+              );
+              Alert.alert("Bloqueado", "Usuário bloqueado com sucesso.");
+            } catch (error) {
+              console.error("Erro ao bloquear:", error);
+              Alert.alert("Erro", "Não foi possível bloquear agora.");
+            } finally {
+              setModerationBusy(false);
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const handleUnblockUser = (targetUserId: string) => {
+    if (!user?.id || !targetUserId) return;
+    Alert.alert("Desbloquear usuário", "Deseja desbloquear esta pessoa?", [
+      { text: "Cancelar", style: "cancel" },
+      {
+        text: "Desbloquear",
+        onPress: async () => {
+          try {
+            setModerationBusy(true);
+            await moderationService.unblockUser(user.id, targetUserId);
+            setBlockedUserIds((prev) =>
+              prev.filter((id) => id !== targetUserId),
+            );
+            Alert.alert("Desbloqueado", "Usuário desbloqueado.");
+          } catch (error) {
+            console.error("Erro ao desbloquear:", error);
+            Alert.alert("Erro", "Não foi possível desbloquear agora.");
+          } finally {
+            setModerationBusy(false);
+          }
+        },
+      },
+    ]);
+  };
+
+  const openChatSafetyMenu = () => {
+    if (!otherParticipantId || moderationBusy) return;
+    const isBlocked = blockedUserIds.includes(otherParticipantId);
+    Alert.alert("Segurança", "Escolha uma opção:", [
+      {
+        text: "Denunciar usuário",
+        onPress: () => handleReportUser(otherParticipantId),
+      },
+      isBlocked
+        ? {
+            text: "Desbloquear usuário",
+            onPress: () => handleUnblockUser(otherParticipantId),
+          }
+        : {
+            text: "Bloquear usuário",
+            style: "destructive" as const,
+            onPress: () => handleBlockUser(otherParticipantId),
+          },
+      { text: "Cancelar", style: "cancel" },
+    ]);
   };
 
   const handleAppendEmoji = (emoji: string) => {
@@ -873,7 +1183,18 @@ export const ChatScreen: React.FC = () => {
             </Text>
           )}
 
-          <View style={styles.headerRight} />
+          {otherParticipantId ? (
+            <TouchableOpacity
+              onPress={openChatSafetyMenu}
+              style={styles.headerRight}
+              accessibilityLabel="Opções de segurança"
+              disabled={moderationBusy}
+            >
+              <Ionicons name="ellipsis-vertical" size={22} color="#8c52ff" />
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.headerRight} />
+          )}
         </View>
 
         {/* Messages List */}
@@ -915,11 +1236,26 @@ export const ChatScreen: React.FC = () => {
                 showSenderName={isGroup || showCoupleSpeaker}
                 senderLabel={senderLabel}
                 senderPhotoBase64={sender?.photoBase64}
+                highlighted={highlightedMessageId === msg.id}
+                replySenderLabel={
+                  msg.replyTo
+                    ? resolveCoupleChatSenderLabel(
+                        msg.replyTo.senderId,
+                        user?.id,
+                        userMap[msg.replyTo.senderId],
+                        undefined,
+                        previewSenderMap[msg.replyTo.senderId],
+                      )
+                    : undefined
+                }
+                onLongPress={() => setActionMessage(msg)}
+                onReactionPress={(emoji) => handleToggleReaction(msg, emoji)}
               />
             );
           }}
           inverted
           scrollEnabled={true}
+          onScrollToIndexFailed={() => undefined}
         />
 
         {/* Input */}
@@ -931,6 +1267,36 @@ export const ChatScreen: React.FC = () => {
         >
           {showEmojiPicker ? (
             <EmojiPickerPanel onSelect={handleAppendEmoji} />
+          ) : null}
+
+          {mentionSuggestions.length > 0 ? (
+            <View style={styles.mentionList}>
+              {mentionSuggestions.map((item) => (
+                <TouchableOpacity
+                  key={item.userId}
+                  style={styles.mentionItem}
+                  onPress={() => handleSelectMention(item)}
+                >
+                  <Text style={styles.mentionName}>@{item.displayName}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : null}
+
+          {replyTo ? (
+            <View style={styles.replyPreview}>
+              <View style={styles.replyPreviewBody}>
+                <Text style={styles.replyPreviewLabel}>
+                  Respondendo {getParticipantDisplayName(replyTo.senderId)}
+                </Text>
+                <Text style={styles.replyPreviewText} numberOfLines={1}>
+                  {replyTo.text}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setReplyTo(null)}>
+                <Ionicons name="close" size={18} color="#888" />
+              </TouchableOpacity>
+            </View>
           ) : null}
 
           <View style={styles.inputContainer}>
@@ -952,6 +1318,9 @@ export const ChatScreen: React.FC = () => {
               placeholderTextColor="#999"
               value={inputText}
               onChangeText={setInputText}
+              onSelectionChange={(event) =>
+                setInputSelection(event.nativeEvent.selection)
+              }
               multiline
               maxLength={500}
             />
@@ -972,6 +1341,39 @@ export const ChatScreen: React.FC = () => {
           </View>
         </View>
       </KeyboardAvoidingView>
+      <MessageActionSheet
+        visible={Boolean(actionMessage)}
+        isOwn={Boolean(
+          actionMessage &&
+            user?.id &&
+            actionMessage.senderId === user.id,
+        )}
+        currentReaction={
+          actionMessage && user?.id
+            ? actionMessage.reactions?.[user.id]
+            : null
+        }
+        onClose={() => setActionMessage(null)}
+        onReact={(emoji) => {
+          if (!actionMessage) return;
+          handleToggleReaction(actionMessage, emoji);
+          setActionMessage(null);
+        }}
+        onReply={() => {
+          if (!actionMessage) return;
+          setReplyTo(actionMessage);
+          setActionMessage(null);
+        }}
+        onReport={
+          actionMessage && user?.id && actionMessage.senderId !== user.id
+            ? () => {
+                const target = actionMessage;
+                setActionMessage(null);
+                handleReportMessage(target);
+              }
+            : undefined
+        }
+      />
     </Layout>
   );
 };
@@ -1043,7 +1445,12 @@ const styles = StyleSheet.create({
     marginLeft: 12,
     color: "#000",
   },
-  headerRight: { width: 44 },
+  headerRight: {
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   msgAvatarContainer: {
     width: 40,
     height: 40,
@@ -1066,6 +1473,46 @@ const styles = StyleSheet.create({
   inputWrapper: {
     borderTopWidth: 1,
     borderTopColor: "#f0f0f0",
+  },
+  mentionList: {
+    backgroundColor: "#161616",
+    borderTopWidth: 1,
+    borderTopColor: "#2a2a2a",
+    maxHeight: 180,
+  },
+  mentionItem: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#2a2a2a",
+  },
+  mentionName: {
+    color: "#fff",
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  replyPreview: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    backgroundColor: "#1a1a1a",
+    borderLeftWidth: 3,
+    borderLeftColor: "#8c52ff",
+  },
+  replyPreviewBody: {
+    flex: 1,
+    marginRight: 8,
+  },
+  replyPreviewLabel: {
+    color: "#8c52ff",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  replyPreviewText: {
+    color: "#ccc",
+    fontSize: 13,
+    marginTop: 2,
   },
   inputContainer: {
     flexDirection: "row",

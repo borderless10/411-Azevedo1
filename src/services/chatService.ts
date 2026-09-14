@@ -1,7 +1,6 @@
 import {
-  addDoc,
-  arrayUnion,
   collection,
+  deleteField,
   doc,
   getDoc,
   getDocs,
@@ -18,12 +17,13 @@ import {
   DocumentData,
   Query,
   QuerySnapshot,
-  DocumentReference,
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { timestampToDate } from "../lib/firestore";
 import { CoupleMember } from "../types/auth";
 import { parseCoupleMember } from "../utils/coupleAccount";
+import { ChatMention } from "../utils/chatMentions";
+import { notifyChatMessageRecipients } from "./chatPushService";
 
 export type ChatType = "direct" | "group" | "global";
 
@@ -41,13 +41,62 @@ export interface Chat {
   createdAt?: any;
 }
 
+export interface ChatReplyTo {
+  messageId: string;
+  senderId: string;
+  text: string;
+}
+
 export interface Message {
   id: string;
   text: string;
   senderId: string;
   senderCoupleMember?: CoupleMember | null;
   createdAt: Date;
+  mentions?: ChatMention[];
+  replyTo?: ChatReplyTo | null;
+  reactions?: Record<string, string>;
 }
+
+export type SendMessageOptions = {
+  senderCoupleMember?: CoupleMember | null;
+  mentions?: ChatMention[];
+  replyTo?: ChatReplyTo | null;
+};
+
+const mapReplyTo = (raw: any): ChatReplyTo | null => {
+  if (!raw || typeof raw !== "object") return null;
+  const messageId = String(raw.messageId || "").trim();
+  const senderId = String(raw.senderId || "").trim();
+  const text = String(raw.text || "").trim();
+  if (!messageId || !senderId || !text) return null;
+  return { messageId, senderId, text: text.slice(0, 180) };
+};
+
+const mapMentions = (raw: any): ChatMention[] => {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  return raw
+    .map((item) => ({
+      userId: String(item?.userId || "").trim(),
+      displayName: String(item?.displayName || "").trim(),
+    }))
+    .filter((item) => {
+      if (!item.userId || seen.has(item.userId)) return false;
+      seen.add(item.userId);
+      return true;
+    });
+};
+
+const mapReactions = (raw: any): Record<string, string> => {
+  if (!raw || typeof raw !== "object") return {};
+  return Object.fromEntries(
+    Object.entries(raw).filter(
+      ([userId, emoji]) =>
+        Boolean(userId) && typeof emoji === "string" && emoji.trim().length > 0,
+    ),
+  ) as Record<string, string>;
+};
 
 const mapMessage = (id: string, data: any): Message => ({
   id,
@@ -55,6 +104,9 @@ const mapMessage = (id: string, data: any): Message => ({
   senderId: data.senderId,
   senderCoupleMember: parseCoupleMember(data.senderCoupleMember),
   createdAt: data.createdAt ? timestampToDate(data.createdAt) : new Date(),
+  mentions: mapMentions(data.mentions),
+  replyTo: mapReplyTo(data.replyTo),
+  reactions: mapReactions(data.reactions),
 });
 
 const CHATS_COL = "chats";
@@ -113,6 +165,13 @@ export async function createChatIfNotExists(
   return { id: created.id, ...(created.data() as any) } as Chat;
 }
 
+export async function getChatById(chatId: string): Promise<Chat | null> {
+  if (!chatId) return null;
+  const snap = await getDoc(doc(db, CHATS_COL, chatId));
+  if (!snap.exists()) return null;
+  return { id: snap.id, ...(snap.data() as any) } as Chat;
+}
+
 /**
  * Send a message to a chat: create message doc and update chat.lastMessage atomically (batch).
  */
@@ -120,12 +179,26 @@ export async function sendMessage(
   chatId: string,
   senderId: string,
   text: string,
-  senderCoupleMember?: CoupleMember | null,
-): Promise<void> {
+  senderCoupleMemberOrOptions?: CoupleMember | null | SendMessageOptions,
+): Promise<{ id: string }> {
+  const options: SendMessageOptions =
+    senderCoupleMemberOrOptions &&
+    typeof senderCoupleMemberOrOptions === "object" &&
+    !Array.isArray(senderCoupleMemberOrOptions) &&
+    ("mentions" in senderCoupleMemberOrOptions ||
+      "replyTo" in senderCoupleMemberOrOptions ||
+      "senderCoupleMember" in senderCoupleMemberOrOptions)
+      ? senderCoupleMemberOrOptions
+      : { senderCoupleMember: senderCoupleMemberOrOptions as CoupleMember | null | undefined };
+
   const chatRef = doc(db, CHATS_COL, chatId);
   const messagesCol = collection(chatRef, MESSAGES_SUBCOL);
-  const msgRef = doc(messagesCol); // auto-id doc reference
-  const coupleMember = parseCoupleMember(senderCoupleMember);
+  const msgRef = doc(messagesCol);
+  const coupleMember = parseCoupleMember(options.senderCoupleMember);
+  const mentions = (options.mentions || []).filter(
+    (mention) => mention.userId && mention.userId !== senderId,
+  );
+  const replyTo = options.replyTo || null;
 
   const batch = writeBatch(db);
 
@@ -133,7 +206,17 @@ export async function sendMessage(
     text,
     senderId,
     createdAt: serverTimestamp(),
+    mentions,
     ...(coupleMember ? { senderCoupleMember: coupleMember } : {}),
+    ...(replyTo
+      ? {
+          replyTo: {
+            messageId: replyTo.messageId,
+            senderId: replyTo.senderId,
+            text: String(replyTo.text || "").slice(0, 180),
+          },
+        }
+      : {}),
   });
 
   batch.update(chatRef, {
@@ -147,6 +230,32 @@ export async function sendMessage(
   });
 
   await batch.commit();
+
+  void notifyChatMessageRecipients({
+    chatId,
+    messageId: msgRef.id,
+    senderId,
+    text,
+    mentionUserIds: mentions.map((mention) => mention.userId),
+  }).catch((error) => {
+    console.warn("Falha ao enviar push do chat:", error);
+  });
+
+  return { id: msgRef.id };
+}
+
+export async function setMessageReaction(
+  chatId: string,
+  messageId: string,
+  userId: string,
+  emoji: string | null,
+): Promise<void> {
+  if (!chatId || !messageId || !userId) return;
+  const msgRef = doc(db, CHATS_COL, chatId, MESSAGES_SUBCOL, messageId);
+  const trimmed = String(emoji || "").trim();
+  await updateDoc(msgRef, {
+    [`reactions.${userId}`]: trimmed ? trimmed : deleteField(),
+  });
 }
 
 /**
@@ -320,11 +429,14 @@ export async function getChatsForUserNoOrder(userId: string, role: string): Prom
 export default {
   getDirectChatId,
   createChatIfNotExists,
+  getChatById,
   sendMessage,
   sendDirectMessage,
+  setMessageReaction,
   markChatAsRead,
   listenToMessages,
   loadMoreMessages,
   listenToUserChats,
   getChatsForUser,
+  getChatsForUserNoOrder,
 };

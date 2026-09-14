@@ -32,6 +32,13 @@ export interface User {
   consultationPreferredDate?: string;
   consultationSchedulingRequestPending?: boolean;
   consultationSchedulingRequestedAt?: Date;
+  expoPushToken?: string;
+  activeChatId?: string | null;
+  presenceState?: "foreground" | "background";
+  presenceUpdatedAt?: Date;
+  expenseReminderEnabled?: boolean;
+  expenseReminderHour?: number;
+  expenseReminderMinute?: number;
   createdAt: Date;
   updatedAt: Date;
 }

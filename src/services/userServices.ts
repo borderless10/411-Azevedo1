@@ -73,6 +73,25 @@ export const mapUserDocument = (id: string, data: any): User => ({
   consultationSchedulingRequestedAt: data?.consultationSchedulingRequestedAt
     ? toDateValue(data.consultationSchedulingRequestedAt)
     : undefined,
+  expoPushToken: data?.expoPushToken || "",
+  activeChatId: data?.activeChatId || null,
+  presenceState:
+    data?.presenceState === "background" ? "background" : data?.presenceState === "foreground" ? "foreground" : undefined,
+  presenceUpdatedAt: data?.presenceUpdatedAt
+    ? toDateValue(data.presenceUpdatedAt)
+    : undefined,
+  expenseReminderEnabled:
+    data?.expenseReminderEnabled === undefined
+      ? true
+      : data?.expenseReminderEnabled === true,
+  expenseReminderHour:
+    typeof data?.expenseReminderHour === "number"
+      ? data.expenseReminderHour
+      : 21,
+  expenseReminderMinute:
+    typeof data?.expenseReminderMinute === "number"
+      ? data.expenseReminderMinute
+      : 0,
   createdAt: toDateValue(data?.createdAt),
   updatedAt: toDateValue(data?.updatedAt),
 });
@@ -277,6 +296,9 @@ export const userService = {
       currency?: string;
       showInRanking?: boolean;
       rankingPreference?: RankingPreference;
+      expenseReminderEnabled?: boolean;
+      expenseReminderHour?: number;
+      expenseReminderMinute?: number;
     },
   ): Promise<void> {
     try {
@@ -290,6 +312,15 @@ export const userService = {
       if (prefs.rankingPreference !== undefined) {
         updatePayload.rankingPreference = prefs.rankingPreference;
         updatePayload.showInRanking = prefs.rankingPreference === "participate";
+      }
+      if (prefs.expenseReminderEnabled !== undefined) {
+        updatePayload.expenseReminderEnabled = prefs.expenseReminderEnabled;
+      }
+      if (prefs.expenseReminderHour !== undefined) {
+        updatePayload.expenseReminderHour = prefs.expenseReminderHour;
+      }
+      if (prefs.expenseReminderMinute !== undefined) {
+        updatePayload.expenseReminderMinute = prefs.expenseReminderMinute;
       }
 
       await updateDoc(userRef, updatePayload);
@@ -485,5 +516,56 @@ export const userService = {
       console.error("❌ Erro ao atualizar usuário:", error);
       throw error;
     }
+  },
+
+  async updatePushToken(userId: string, token: string | null): Promise<void> {
+    if (!userId) return;
+    const userRef = doc(db, "users", userId);
+    await updateDoc(userRef, {
+      expoPushToken: token || "",
+      updatedAt: Timestamp.now(),
+    });
+  },
+
+  async updateChatPresence(
+    userId: string,
+    payload: {
+      presenceState: "foreground" | "background";
+      activeChatId?: string | null;
+    },
+  ): Promise<void> {
+    if (!userId) return;
+    const userRef = doc(db, "users", userId);
+    const updatePayload: Record<string, unknown> = {
+      presenceState: payload.presenceState,
+      presenceUpdatedAt: Timestamp.now(),
+      updatedAt: Timestamp.now(),
+    };
+    if (payload.activeChatId !== undefined) {
+      updatePayload.activeChatId = payload.activeChatId || "";
+    }
+    await updateDoc(userRef, updatePayload);
+  },
+
+  /**
+   * Anonimiza PII e desativa a conta no Firestore antes de apagar Auth.
+   */
+  async anonymizeAndDeactivateAccount(userId: string): Promise<void> {
+    const userRef = doc(db, "users", userId);
+    const now = Timestamp.now();
+    const snap = await getDoc(userRef);
+    if (!snap.exists()) {
+      return;
+    }
+    await updateDoc(userRef, {
+      name: "Conta excluída",
+      nickname: "",
+      email: "",
+      phone: "",
+      photoBase64: "",
+      isActive: false,
+      deletedAt: now,
+      updatedAt: now,
+    });
   },
 };

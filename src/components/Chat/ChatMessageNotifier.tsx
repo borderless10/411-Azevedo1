@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
   Animated,
+  AppState,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -13,7 +14,6 @@ import { useUserChats } from "../../hooks/useUserChats";
 import { useNavigation } from "../../routes/NavigationContext";
 import {
   requestNotificationPermissions,
-  showChatMessageNotification,
 } from "../../services/notificationServices";
 import { userService } from "../../services/userServices";
 import {
@@ -109,14 +109,13 @@ export const ChatMessageNotifier: React.FC = () => {
             }
 
             if (cancelled) return;
+            if (AppState.currentState !== "active") {
+              lastMessageTimesRef.current.set(chatId, currentTime);
+              continue;
+            }
 
             const messageText = chat.lastMessage.text;
             setBanner({ chatId, senderName, messageText });
-            showChatMessageNotification(senderName, messageText, chatId).catch(
-              () => {
-                // ignore push errors
-              },
-            );
           }
         }
 
