@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useRef } from "react";
 import { View, Text, Image, StyleSheet, TouchableOpacity } from "react-native";
 import { profilePhotoUri } from "../../utils/chatDisplayNames";
 import { ChatMessageText } from "./ChatMessageText";
@@ -15,7 +15,10 @@ export interface ChatMessageBubbleProps {
   highlighted?: boolean;
   replySenderLabel?: string;
   onLongPress?: () => void;
-  onReactionPress?: (emoji: string) => void;
+  onReactionPress?: (
+    emoji: string,
+    anchor: { x: number; y: number; width: number; height: number },
+  ) => void;
 }
 
 const groupReactions = (reactions?: Record<string, string>) => {
@@ -44,6 +47,7 @@ export const MessageBubble = React.memo(function MessageBubble({
     () => groupReactions(msg.reactions),
     [msg.reactions],
   );
+  const chipRefs = useRef<Record<string, any>>({});
   const replyTo = msg.replyTo as ChatReplyTo | null | undefined;
   const mentions = (msg.mentions || []) as ChatMention[];
 
@@ -147,8 +151,41 @@ export const MessageBubble = React.memo(function MessageBubble({
           {reactionChips.map(([emoji, count]) => (
             <TouchableOpacity
               key={emoji}
+              ref={(node) => {
+                chipRefs.current[emoji] = node;
+              }}
               style={styles.reactionChip}
-              onPress={() => onReactionPress?.(emoji)}
+              onPress={(event) => {
+                const node = chipRefs.current[emoji];
+                const emit = (anchor: {
+                  x: number;
+                  y: number;
+                  width: number;
+                  height: number;
+                }) => onReactionPress?.(emoji, anchor);
+                if (typeof node?.measureInWindow === "function") {
+                  node.measureInWindow(
+                    (x: number, y: number, width: number, height: number) => {
+                      emit({ x, y, width, height });
+                    },
+                  );
+                  return;
+                }
+                const element = node?.getNode?.() || node?._nativeNode || node;
+                const rect = element?.getBoundingClientRect?.();
+                if (rect && rect.width) {
+                  emit({
+                    x: rect.left,
+                    y: rect.top,
+                    width: rect.width,
+                    height: rect.height,
+                  });
+                  return;
+                }
+                const pageX = event.nativeEvent?.pageX ?? 24;
+                const pageY = event.nativeEvent?.pageY ?? 80;
+                emit({ x: pageX - 18, y: pageY - 14, width: 36, height: 28 });
+              }}
             >
               <Text style={styles.reactionEmoji}>
                 {emoji}

@@ -24,8 +24,14 @@ import { useNavigation } from "../../routes/NavigationContext";
 export const CycleConsultationNotifier: React.FC = () => {
   const { user } = useAuth();
   const { navigate } = useNavigation();
-  const { schedulingUrl, planning, preferredDayLabel, shouldPulse, openScheduling } =
-    useConsultationScheduling();
+  const {
+    schedulingUrl,
+    planning,
+    preferredDayLabel,
+    shouldPulse,
+    cycleEnded,
+    openScheduling,
+  } = useConsultationScheduling();
   const insets = useSafeAreaInsets();
   const [visible, setVisible] = useState(false);
   const slideAnim = useRef(new Animated.Value(-120)).current;
@@ -58,9 +64,11 @@ export const CycleConsultationNotifier: React.FC = () => {
       notifiedKeysRef.current.add(reminderKey);
       await markCycleConsultationReminderSent(reminderKey);
       setVisible(true);
-      showCycleEndedConsultationNotification(preferredDayLabel).catch(() => {
-        // ignore push errors
-      });
+      showCycleEndedConsultationNotification(preferredDayLabel, cycleEnded).catch(
+        () => {
+          // ignore push errors
+        },
+      );
     };
 
     notify().catch(() => {
@@ -70,7 +78,7 @@ export const CycleConsultationNotifier: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [planning, preferredDayLabel, shouldPulse, user?.id]);
+  }, [cycleEnded, planning, preferredDayLabel, shouldPulse, user?.id]);
 
   useEffect(() => {
     if (!visible) return;
@@ -126,14 +134,16 @@ export const CycleConsultationNotifier: React.FC = () => {
         </View>
         <View style={styles.textWrap}>
           <Text style={styles.title} numberOfLines={1}>
-            Seu ciclo acabou!
+            {cycleEnded ? "Seu ciclo acabou!" : "Seu ciclo acaba em breve"}
           </Text>
           <Text style={styles.body} numberOfLines={3}>
             {schedulingUrl
               ? preferredDayLabel
                 ? `Agende sua consultoria. Melhor dia sugerido: ${preferredDayLabel}.`
                 : "Agende uma consultoria com seu consultor."
-              : "Seu ciclo terminou. Solicite a liberação do agendamento na Visão."}
+              : cycleEnded
+                ? "Seu ciclo terminou. Solicite a liberação do agendamento na Visão."
+                : "Seu ciclo acaba em breve. Solicite a liberação do agendamento na Visão."}
           </Text>
         </View>
         <TouchableOpacity

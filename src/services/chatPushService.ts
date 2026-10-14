@@ -46,9 +46,21 @@ const sendExpoPush = async (
     body: JSON.stringify(messages),
   });
 
+  const raw = await response.text();
   if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`Expo push falhou (${response.status}): ${body}`);
+    throw new Error(`Expo push falhou (${response.status}): ${raw}`);
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as {
+      data?: Array<{ status?: string; message?: string; details?: unknown }>;
+    };
+    const failed = (parsed.data || []).filter((item) => item.status === "error");
+    if (failed.length) {
+      console.warn("Expo push recusou envio:", failed);
+    }
+  } catch {
+    // corpo não-JSON ainda é sucesso HTTP
   }
 };
 
@@ -97,6 +109,12 @@ export const notifyChatMessageRecipients = async ({
           isViewingChat(recipient || {}) && recipient?.activeChatId === chatId;
         if (viewingThisChat) return;
 
+        const presenceUpdatedAt = recipient?.presenceUpdatedAt?.getTime?.() || 0;
+        const presenceFresh =
+          Boolean(presenceUpdatedAt) &&
+          Date.now() - presenceUpdatedAt <= PRESENCE_STALE_MS;
+        if (presenceFresh && recipient?.presenceState === "background") return;
+
         const mentioned = mentionSet.has(userId);
         payloads.push({
           to: token,
@@ -107,6 +125,7 @@ export const notifyChatMessageRecipients = async ({
           sound: "default",
           channelId: NOTIFICATION_CHANNEL_CHAT,
           priority: "high",
+          interruptionLevel: "active",
           badge: 1,
           data: {
             type: mentioned ? "chat_mention" : "chat_message",

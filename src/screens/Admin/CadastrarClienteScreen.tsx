@@ -18,6 +18,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { Layout } from "../../components/Layout/Layout";
 import { useNavigation } from "../../routes/NavigationContext";
+import { useAuth } from "../../hooks/useAuth";
 import { initializeApp, deleteApp } from "firebase/app";
 import {
   getAuth,
@@ -27,13 +28,15 @@ import {
 } from "firebase/auth";
 import { doc, setDoc, getDoc, Timestamp } from "firebase/firestore";
 import { auth, db, firebaseConfig } from "../../lib/firebase";
-import { userService } from "../../services/userServices";
+import { userService, isAdminUser } from "../../services/userServices";
 import ConsultantPicker from "../../components/ui/ConsultantPicker";
 import { AccountType } from "../../types/auth";
 import { coupleAccountFieldsFromInput } from "../../utils/coupleAccount";
 
 export const CadastrarClienteScreen = () => {
   const { navigate } = useNavigation();
+  const { user } = useAuth();
+  const canAssignStaffRole = isAdminUser(user);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
 
@@ -44,9 +47,9 @@ export const CadastrarClienteScreen = () => {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [phone, setPhone] = useState("");
   const [loading, setLoading] = useState(false);
-  const [role, setRole] = useState<"user" | "consultor" | "cliente_premium">(
-    "user",
-  );
+  const [role, setRole] = useState<
+    "user" | "consultor" | "supervisor" | "cliente_premium"
+  >("user");
   const [accountType, setAccountType] = useState<AccountType>("individual");
   const [coupleMember1Name, setCoupleMember1Name] = useState("");
   const [coupleMember2Name, setCoupleMember2Name] = useState("");
@@ -228,7 +231,13 @@ export const CadastrarClienteScreen = () => {
           throw new Error("Consultor não foi vinculado ao cliente.");
         }
 
-        const successMessage = `Cliente "${name}" cadastrado com sucesso!\n\nEmail: ${email}\n\nO cliente já pode fazer login no sistema.`;
+        const profileLabel =
+          role === "supervisor"
+            ? "Supervisor"
+            : role === "consultor"
+              ? "Consultor"
+              : "Cliente";
+        const successMessage = `${profileLabel} "${name}" cadastrado com sucesso!\n\nEmail: ${email}\n\nJá pode fazer login no sistema.`;
         Alert.alert("Sucesso", successMessage);
         navigate("Profile", {
           showSuccess: true,
@@ -283,9 +292,19 @@ export const CadastrarClienteScreen = () => {
           >
             <View style={styles.header}>
               <Ionicons name="person-add-outline" size={64} color="#8c52ff" />
-              <Text style={styles.title}>Cadastrar Novo Cliente</Text>
+              <Text style={styles.title}>
+                {role === "supervisor"
+                  ? "Cadastrar Novo Supervisor"
+                  : role === "consultor"
+                    ? "Cadastrar Novo Consultor"
+                    : "Cadastrar Novo Cliente"}
+              </Text>
               <Text style={styles.subtitle}>
-                Preencha os dados do novo cliente
+                {role === "supervisor"
+                  ? "Preencha os dados do novo supervisor"
+                  : role === "consultor"
+                    ? "Preencha os dados do novo consultor"
+                    : "Preencha os dados do novo cliente"}
               </Text>
             </View>
 
@@ -306,22 +325,42 @@ export const CadastrarClienteScreen = () => {
                   Cliente
                 </Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.roleButton,
-                  role === "consultor" && styles.roleActive,
-                ]}
-                onPress={() => setRole("consultor")}
-              >
-                <Text
+              {canAssignStaffRole ? (
+                <TouchableOpacity
                   style={[
-                    styles.roleText,
-                    role === "consultor" && styles.roleTextActive,
+                    styles.roleButton,
+                    role === "consultor" && styles.roleActive,
                   ]}
+                  onPress={() => setRole("consultor")}
                 >
-                  Consultor
-                </Text>
-              </TouchableOpacity>
+                  <Text
+                    style={[
+                      styles.roleText,
+                      role === "consultor" && styles.roleTextActive,
+                    ]}
+                  >
+                    Consultor
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
+              {canAssignStaffRole ? (
+                <TouchableOpacity
+                  style={[
+                    styles.roleButton,
+                    role === "supervisor" && styles.roleActive,
+                  ]}
+                  onPress={() => setRole("supervisor")}
+                >
+                  <Text
+                    style={[
+                      styles.roleText,
+                      role === "supervisor" && styles.roleTextActive,
+                    ]}
+                  >
+                    Supervisor
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
               <TouchableOpacity
                 style={[
                   styles.roleButton,
@@ -558,7 +597,9 @@ export const CadastrarClienteScreen = () => {
                     ? "Cadastrando..."
                     : role === "consultor"
                       ? "Cadastrar Consultor"
-                      : "Cadastrar Cliente"}
+                      : role === "supervisor"
+                        ? "Cadastrar Supervisor"
+                        : "Cadastrar Cliente"}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -689,6 +730,7 @@ const styles = StyleSheet.create({
   },
   roleRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     justifyContent: "center",
     gap: 12,
     marginBottom: 16,

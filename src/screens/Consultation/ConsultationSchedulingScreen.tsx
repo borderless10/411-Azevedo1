@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -16,6 +16,8 @@ import { consultationRequestService } from "../../services/consultationRequestSe
 import { getCoupleDisplayName, isCoupleAccount } from "../../utils/coupleAccount";
 import { profileDisplayName } from "../../utils/chatDisplayNames";
 import CustomModal from "../../components/ui/CustomModal";
+import { ConsultationPreferredDayPicker } from "../../components/Consultation/ConsultationPreferredDayPicker";
+import { parseConsultationPreferredDay } from "../../utils/consultationScheduling";
 
 type FeedbackModal = {
   visible: boolean;
@@ -27,10 +29,27 @@ type FeedbackModal = {
 export const ConsultationSchedulingScreen: React.FC = () => {
   const { user } = useAuth();
   const { colors } = useTheme();
-  const { schedulingUrl, preferredDayLabel, shouldPulse, openScheduling } =
-    useConsultationScheduling();
+  const {
+    schedulingUrl,
+    preferredDate,
+    preferredDayLabel,
+    bookedDay,
+    bookedDayLabel,
+    hasBookedCurrentCycle,
+    shouldPulse,
+    cycleEnded,
+    cycleStartKey,
+    openScheduling,
+    confirmBooking,
+  } = useConsultationScheduling();
   const request = useUserConsultationRequest(user?.id || null);
   const [submitting, setSubmitting] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const suggestedDay = parseConsultationPreferredDay(
+    hasBookedCurrentCycle ? bookedDay : preferredDate,
+  );
+  const [selectedDay, setSelectedDay] = useState<number | null>(suggestedDay);
+  const dayTouchedRef = useRef(false);
   const [feedback, setFeedback] = useState<FeedbackModal>({
     visible: false,
     title: "",
@@ -47,6 +66,11 @@ export const ConsultationSchedulingScreen: React.FC = () => {
     const diffMs = Date.now() - new Date(requestedAt).getTime();
     return diffMs < 1000 * 60 * 30;
   }, [request?.lastRequestedAt, user?.consultationSchedulingRequestedAt]);
+
+  useEffect(() => {
+    if (dayTouchedRef.current) return;
+    setSelectedDay(suggestedDay);
+  }, [suggestedDay]);
 
   const showFeedback = (
     tone: "success" | "error",
@@ -89,6 +113,91 @@ export const ConsultationSchedulingScreen: React.FC = () => {
     }
   };
 
+  const handleConfirmBooking = async () => {
+    if (!selectedDay) {
+      showFeedback("error", "Escolha o dia", "Informe o dia da consultoria.");
+      return;
+    }
+
+    try {
+      setConfirming(true);
+      await confirmBooking(selectedDay);
+      showFeedback(
+        "success",
+        "Consultoria agendada",
+        "A sidebar agora mostra a consultoria agendada e o aviso vermelho fica desligado neste ciclo.",
+      );
+    } catch (error: any) {
+      console.error("Erro ao confirmar consultoria:", error);
+      showFeedback(
+        "error",
+        "Não foi possível confirmar",
+        error?.message || "Tente novamente em instantes.",
+      );
+    } finally {
+      setConfirming(false);
+    }
+  };
+
+  const bookingSection = (
+    <View
+      style={[
+        styles.bookingBox,
+        { borderColor: hasBookedCurrentCycle ? "#8c52ff" : colors.border },
+      ]}
+    >
+      <Text style={[styles.bookingTitle, { color: colors.text }]}>
+        {hasBookedCurrentCycle
+          ? "Consultoria agendada"
+          : "Já agendei a consultoria"}
+      </Text>
+      <Text style={[styles.bookingBody, { color: colors.textSecondary }]}>
+        {hasBookedCurrentCycle
+          ? "Se o horário mudar, escolha outro dia e atualize."
+          : "Depois de marcar no calendário, escolha o dia e confirme."}
+      </Text>
+      {hasBookedCurrentCycle && bookedDayLabel ? (
+        <Text style={styles.bookedLabel}>
+          Dia da consultoria: {bookedDayLabel}
+        </Text>
+      ) : null}
+      <ConsultationPreferredDayPicker
+        day={selectedDay}
+        onChangeDay={(day) => {
+          dayTouchedRef.current = true;
+          setSelectedDay(day);
+        }}
+        modalTitle="Dia da consultoria"
+        modalHint="Escolha o dia em que a consultoria ficou marcada."
+        placeholder="Selecionar o dia"
+      />
+      <TouchableOpacity
+        style={[
+          styles.secondaryButton,
+          (!selectedDay || !cycleStartKey || confirming) && styles.buttonDisabled,
+        ]}
+        onPress={handleConfirmBooking}
+        disabled={confirming || !selectedDay || !cycleStartKey}
+      >
+        {confirming ? (
+          <ActivityIndicator color="#8c52ff" />
+        ) : (
+          <>
+            <Ionicons name="checkmark-circle-outline" size={20} color="#fff" />
+            <Text style={styles.primaryButtonText}>
+              {hasBookedCurrentCycle ? "Atualizar dia" : "Confirmar que agendei"}
+            </Text>
+          </>
+        )}
+      </TouchableOpacity>
+      {!cycleStartKey ? (
+        <Text style={[styles.bookingBody, { color: colors.textSecondary }]}>
+          O ciclo atual ainda não está disponível para confirmar.
+        </Text>
+      ) : null}
+    </View>
+  );
+
   if (schedulingUrl) {
     return (
       <Layout title="Agendar consultoria" showBackButton showSidebar>
@@ -109,7 +218,7 @@ export const ConsultationSchedulingScreen: React.FC = () => {
               Toque no botão abaixo para abrir o calendário e escolher o melhor
               horário.
             </Text>
-            {preferredDayLabel ? (
+            {!hasBookedCurrentCycle && preferredDayLabel ? (
               <View
                 style={[
                   styles.dayBadge,
@@ -124,7 +233,9 @@ export const ConsultationSchedulingScreen: React.FC = () => {
             ) : null}
             {shouldPulse ? (
               <Text style={styles.pulseHint}>
-                Seu ciclo de Consumo Moderado terminou — agende sua consultoria.
+                {cycleEnded
+                  ? "Seu ciclo de Consumo Moderado terminou. Agende sua consultoria."
+                  : "Seu ciclo de Consumo Moderado acaba em breve. Agende sua consultoria."}
               </Text>
             ) : null}
             <TouchableOpacity
@@ -138,8 +249,16 @@ export const ConsultationSchedulingScreen: React.FC = () => {
               <Ionicons name="open-outline" size={20} color="#fff" />
               <Text style={styles.primaryButtonText}>Abrir agendamento</Text>
             </TouchableOpacity>
+            {bookingSection}
           </View>
         </View>
+        <CustomModal
+          visible={feedback.visible}
+          title={feedback.title}
+          message={feedback.message}
+          primaryLabel="Entendi"
+          onClose={() => setFeedback((current) => ({ ...current, visible: false }))}
+        />
       </Layout>
     );
   }
@@ -204,6 +323,7 @@ export const ConsultationSchedulingScreen: React.FC = () => {
               </>
             )}
           </TouchableOpacity>
+          {bookingSection}
         </View>
       </View>
 
@@ -303,6 +423,38 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.7,
+  },
+  bookingBox: {
+    marginTop: 8,
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 14,
+    gap: 12,
+  },
+  bookingTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    textAlign: "center",
+  },
+  bookingBody: {
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: "center",
+  },
+  bookedLabel: {
+    color: "#c4b5fd",
+    fontSize: 14,
+    fontWeight: "700",
+    textAlign: "center",
+  },
+  secondaryButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: "#8c52ff",
   },
 });
 

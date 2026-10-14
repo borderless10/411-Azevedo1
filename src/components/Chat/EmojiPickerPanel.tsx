@@ -5,19 +5,29 @@ import {
   Text,
   TouchableOpacity,
   View,
+  StyleProp,
+  ViewStyle,
 } from "react-native";
 import { CHAT_EMOJIS } from "../../utils/chatMessageText";
 
 type EmojiPickerPanelProps = {
   onSelect: (emoji: string) => void;
+  height?: number;
+  style?: StyleProp<ViewStyle>;
 };
 
-export const EmojiPickerPanel = ({ onSelect }: EmojiPickerPanelProps) => (
-  <View style={styles.container}>
+export const EmojiPickerPanel = ({
+  onSelect,
+  height,
+  style,
+}: EmojiPickerPanelProps) => (
+  <View style={[styles.container, height ? { height, maxHeight: height } : null, style]}>
     <ScrollView
+      style={height ? { height } : styles.scroll}
       contentContainerStyle={styles.grid}
       keyboardShouldPersistTaps="always"
-      showsVerticalScrollIndicator={false}
+      nestedScrollEnabled
+      showsVerticalScrollIndicator
     >
       {CHAT_EMOJIS.map((emoji) => (
         <TouchableOpacity
@@ -38,6 +48,9 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: "#2a2a2a",
     backgroundColor: "#121212",
+    maxHeight: 200,
+  },
+  scroll: {
     maxHeight: 200,
   },
   grid: {

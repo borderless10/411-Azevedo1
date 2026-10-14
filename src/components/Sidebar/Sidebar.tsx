@@ -19,6 +19,7 @@ import { useNavigation, ScreenName } from "../../routes/NavigationContext";
 import { useTheme } from "../../contexts/ThemeContext";
 import { planningServices } from "../../services/planningServices";
 import { useUserChats } from "../../hooks/useUserChats";
+import chatService, { Chat } from "../../services/chatService";
 import { isChatUnreadForUser } from "../../utils/chatUtils";
 import { useConsultationScheduling } from "../../hooks/useConsultationScheduling";
 import { isAppClientUser } from "../../services/userServices";
@@ -45,9 +46,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const { navigate, currentScreen, params } = useNavigation() as any;
   const { colors } = useTheme();
   const { chats } = useUserChats(user?.id || null, user?.role || null);
+  const [globalChat, setGlobalChat] = useState<Chat | null>(null);
   const slideAnim = useRef(new Animated.Value(-300)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const isConsultor = user?.role === "consultor";
+  const isConsultor =
+    user?.role === "consultor" || user?.role === "supervisor";
   const isAdminUser = user?.isAdmin === true || user?.role === "admin";
   const isCommonUser = isAppClientUser(user);
   const shouldHideRankingItem =
@@ -60,6 +63,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const consultationPulseAnim = useRef(new Animated.Value(1)).current;
   const {
     preferredDayLabel,
+    bookedDayLabel,
+    hasBookedCurrentCycle,
     shouldPulse: shouldPulseConsultation,
   } = useConsultationScheduling();
 
@@ -71,9 +76,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
       .replace(/\s+/g, " ")
       .toLocaleLowerCase("pt-BR");
 
-  const hasUnreadChats = (chats || []).some((chat: any) =>
-    isChatUnreadForUser(chat, user?.id),
+  const hasUnreadChats = [...(chats || []), ...(globalChat ? [globalChat] : [])].some(
+    (chat) => isChatUnreadForUser(chat, user?.id),
   );
+
+  useEffect(() => {
+    if (!user?.id) {
+      setGlobalChat(null);
+      return;
+    }
+    return chatService.listenToChat("global", setGlobalChat);
+  }, [user?.id]);
 
   useEffect(() => {
     if (visible) {
@@ -337,7 +350,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const handleNavigate = (screen: ScreenName) => {
     // If user is a consultor or admin and trying to go to Home, redirect to respective home
     if (screen === "Home") {
-      if (user?.role === "consultor") {
+      if (user?.role === "consultor" || user?.role === "supervisor") {
         navigate("ConsultorHome");
         onClose();
         return;
@@ -367,7 +380,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
   };
 
   const homeMenuItem = menuItems.find((item) => item.id === "Home");
-  const menuItemsWithoutHome = menuItems.filter((item) => item.id !== "Home");
+  const chatMenuItem = isCommonUser
+    ? menuItems.find((item) => item.id === "Chat")
+    : undefined;
+  const menuItemsWithoutHome = menuItems.filter(
+    (item) => item.id !== "Home" && !(isCommonUser && item.id === "Chat"),
+  );
   const showTrackedExpensesAsSecond =
     isCommonUser && trackedExpenseTitles.length > 0 && !!homeMenuItem;
 
@@ -409,11 +427,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 styles.menuItemText,
                 { color: colors.textSecondary },
                 shouldPulseConsultation && styles.consultationMenuTextPulse,
+                hasBookedCurrentCycle && styles.consultationMenuTextBooked,
               ]}
             >
-              Agende sua consultoria
+              {hasBookedCurrentCycle
+                ? "Consultoria agendada"
+                : "Agende sua consultoria"}
             </Text>
-            {preferredDayLabel ? (
+            {hasBookedCurrentCycle && bookedDayLabel ? (
+              <Text
+                style={[styles.consultationDayHint, styles.consultationDayHintBooked]}
+                numberOfLines={2}
+              >
+                Dia da consultoria: {bookedDayLabel}
+              </Text>
+            ) : preferredDayLabel ? (
               <Text
                 style={[
                   styles.consultationDayHint,
@@ -436,7 +464,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <Ionicons
           name="open-outline"
           size={20}
-          color={shouldPulseConsultation ? "#ff4d6d" : colors.textSecondary}
+          color={
+            shouldPulseConsultation
+              ? "#ff4d6d"
+              : hasBookedCurrentCycle
+                ? "#8c52ff"
+                : colors.textSecondary
+          }
         />
       </TouchableOpacity>
     );
@@ -635,14 +669,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <>
               {homeMenuItem ? renderMenuItem(homeMenuItem) : null}
               {renderConsultationItem()}
+              {chatMenuItem ? renderMenuItem(chatMenuItem) : null}
               {renderTrackedExpensesSection()}
               {menuItemsWithoutHome.map((item) => renderMenuItem(item))}
             </>
           ) : (
-            menuItems.map((item) => (
+            menuItems
+              .filter((item) => !(isCommonUser && item.id === "Chat"))
+              .map((item) => (
               <React.Fragment key={item.id}>
                 {renderMenuItem(item)}
-                {item.id === "Home" ? renderConsultationItem() : null}
+                {item.id === "Home" ? (
+                  <>
+                    {renderConsultationItem()}
+                    {chatMenuItem ? renderMenuItem(chatMenuItem) : null}
+                  </>
+                ) : null}
               </React.Fragment>
             ))
           )}
@@ -851,6 +893,10 @@ const styles = StyleSheet.create({
     color: "#ff4d6d",
     fontWeight: "700",
   },
+  consultationMenuTextBooked: {
+    color: "#8c52ff",
+    fontWeight: "700",
+  },
   consultationTextWrap: {
     flex: 1,
     gap: 2,
@@ -859,6 +905,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 16,
     fontWeight: "500",
+  },
+  consultationDayHintBooked: {
+    color: "#c4b5fd",
   },
   consultationPulseBackground: {
     ...StyleSheet.absoluteFillObject,

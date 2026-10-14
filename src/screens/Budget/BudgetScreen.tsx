@@ -61,7 +61,10 @@ export const BudgetScreen = () => {
   const clientId = String(params?.clientId || "");
   const isSpectator =
     !!clientId &&
-    (user?.role === "consultor" || user?.role === "admin" || !!user?.isAdmin);
+    (user?.role === "consultor" ||
+      user?.role === "supervisor" ||
+      user?.role === "admin" ||
+      !!user?.isAdmin);
   const ownerId = isSpectator ? clientId : user?.id || "";
   const [ownerProfile, setOwnerProfile] = useState<User | null>(null);
   const [spectatorMember, setSpectatorMember] = useState<1 | 2>(1);

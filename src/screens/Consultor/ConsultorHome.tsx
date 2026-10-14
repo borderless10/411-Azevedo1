@@ -9,6 +9,7 @@ import {
 import { Layout } from "../../components/Layout/Layout";
 import { useAuth } from "../../hooks/useAuth";
 import consultantServices from "../../services/consultantServices";
+import { userService, isSupervisorUser } from "../../services/userServices";
 import { User } from "../../types/auth";
 import { useNavigation } from "../../routes/NavigationContext";
 import { useTheme } from "../../contexts/ThemeContext";
@@ -20,7 +21,11 @@ export const ConsultorHome: React.FC = () => {
   const { navigate } = useNavigation();
   const { colors } = useTheme();
   const [clients, setClients] = useState<User[]>([]);
+  const [consultantNames, setConsultantNames] = useState<Record<string, string>>(
+    {},
+  );
   const [loading, setLoading] = useState(false);
+  const supervisorView = isSupervisorUser(user);
 
   useEffect(() => {
     async function load() {
@@ -39,8 +44,20 @@ export const ConsultorHome: React.FC = () => {
 
         // load only clients assigned to this consultant
         console.log("Carregando clientes para consultorId:", consultantId);
-        const list =
-          await consultantServices.getClientsByConsultant(consultantId);
+        const list = supervisorView
+          ? await consultantServices.getAllClients()
+          : await consultantServices.getClientsByConsultant(consultantId);
+        if (supervisorView) {
+          const consultors = await userService.getUsersByRole("consultor");
+          const names: Record<string, string> = {};
+          consultors.forEach((consultor) => {
+            names[consultor.id] =
+              (consultor.nickname || "").trim() || consultor.name || "Consultor";
+          });
+          setConsultantNames(names);
+        } else {
+          setConsultantNames({});
+        }
         console.log(
           "[CONSULTOR HOME] ✅ Clientes carregados:",
           list.length,
@@ -60,7 +77,7 @@ export const ConsultorHome: React.FC = () => {
       }
     }
     load();
-  }, [user]);
+  }, [user, supervisorView]);
 
   function openPlanning(clientId: string) {
     // Navigate to the existing ClientPlanning screen and pass clientId as param
@@ -68,15 +85,21 @@ export const ConsultorHome: React.FC = () => {
   }
 
   return (
-    <Layout title="Consultor - Painel" showSidebar>
+    <Layout
+      title={supervisorView ? "Supervisor - Painel" : "Consultor - Painel"}
+      showSidebar
+    >
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <ConsultationRequestsBanner />
         <Text style={[styles.heading, { color: colors.text }]}>
-          Meus Clientes
+          {supervisorView ? "Clientes" : "Meus Clientes"}
         </Text>
         <FlatList
           data={clients}
           keyExtractor={(c) => c.id}
+          style={styles.list}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator
           renderItem={({ item }) => (
             <View
               style={[
@@ -98,6 +121,16 @@ export const ConsultorHome: React.FC = () => {
                     style={[styles.subtitle, { color: colors.textSecondary }]}
                   >
                     {item.email}
+                  </Text>
+                ) : null}
+                {supervisorView ? (
+                  <Text
+                    style={[styles.subtitle, { color: colors.textSecondary }]}
+                  >
+                    Consultor:{" "}
+                    {item.consultantId
+                      ? consultantNames[item.consultantId] || "não identificado"
+                      : "sem consultor"}
                   </Text>
                 ) : null}
                 {isCoupleAccount(item) ? (
@@ -130,8 +163,10 @@ export const ConsultorHome: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { padding: 16 },
+  container: { flex: 1, padding: 16 },
   heading: { fontSize: 18, fontWeight: "600", marginBottom: 12 },
+  list: { flex: 1 },
+  listContent: { flexGrow: 1, paddingBottom: 48 },
   card: {
     flexDirection: "row",
     alignItems: "center",

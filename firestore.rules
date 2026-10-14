@@ -25,6 +25,16 @@ service cloud.firestore {
         && userDoc(request.auth.uid).role == 'consultor';
     }
 
+    function isSupervisor() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && userDoc(request.auth.uid).role == 'supervisor';
+    }
+
+    function staffRoleUnchanged() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'isAdmin']);
+    }
+
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
@@ -103,27 +113,28 @@ service cloud.firestore {
       // Admin cadastra cliente/consultor com app Auth secundário:
       // o write usa o uid do admin, não o uid do documento criado.
       allow create: if isSignedIn() && (request.auth.uid == userId || isAdmin());
-      allow update: if isOwner(userId) || isAdmin() || isConsultantOf(userId);
+      allow update: if isAdmin()
+        || ((isOwner(userId) || isConsultantOf(userId)) && staffRoleUnchanged());
       allow delete: if isAdmin();
 
       match /planning/{planningId} {
-        allow get, write: if canAccessUserData(userId);
-        allow list: if canAccessUserData(userId);
+        allow get, list: if canAccessUserData(userId) || isSupervisor();
+        allow write: if canAccessUserData(userId);
       }
     }
 
     match /incomes/{docId} {
-      allow get: if canGetUserDocument();
-      allow list: if canReadUserDocument();
-      allow create: if ownsUserDocument();
-      allow update, delete: if canWriteUserDocument();
+      allow get: if canGetUserDocument() || isSupervisor();
+      allow list: if canReadUserDocument() || isSupervisor();
+      allow create: if ownsUserDocument() || isSupervisor();
+      allow update, delete: if canWriteUserDocument() || isSupervisor();
     }
 
     match /expenses/{docId} {
-      allow get: if canGetUserDocument();
-      allow list: if canReadUserDocument();
-      allow create: if ownsUserDocument();
-      allow update, delete: if canWriteUserDocument();
+      allow get: if canGetUserDocument() || isSupervisor();
+      allow list: if canReadUserDocument() || isSupervisor();
+      allow create: if ownsUserDocument() || isSupervisor();
+      allow update, delete: if canWriteUserDocument() || isSupervisor();
     }
 
     match /budgets/{docId} {

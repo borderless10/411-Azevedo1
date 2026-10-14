@@ -12,6 +12,7 @@ import {
 import { db, auth } from "../lib/firebase";
 import { RankingPreference, User } from "../types/auth";
 import { resolveAccountType } from "../utils/coupleAccount";
+import { isValidConsultationPreferredDay } from "../utils/consultationScheduling";
 import { consultationRequestService } from "./consultationRequestService";
 
 const resolveRankingPreference = (data: any): RankingPreference => {
@@ -68,6 +69,8 @@ export const mapUserDocument = (id: string, data: any): User => ({
   coupleMember2Name: data?.coupleMember2Name || "",
   consultationSchedulingUrl: data?.consultationSchedulingUrl || "",
   consultationPreferredDate: data?.consultationPreferredDate || "",
+  consultationBookedDay: data?.consultationBookedDay || "",
+  consultationBookedCycleStartedAt: data?.consultationBookedCycleStartedAt || "",
   consultationSchedulingRequestPending:
     data?.consultationSchedulingRequestPending === true,
   consultationSchedulingRequestedAt: data?.consultationSchedulingRequestedAt
@@ -96,21 +99,28 @@ export const mapUserDocument = (id: string, data: any): User => ({
   updatedAt: toDateValue(data?.updatedAt),
 });
 
+export const isAdminUser = (user?: User | null): boolean =>
+  !!user && (user.isAdmin === true || user.role === "admin");
+
+export const isSupervisorUser = (user?: User | null): boolean =>
+  user?.role === "supervisor";
+
+export const isConsultorUser = (user?: User | null): boolean =>
+  user?.role === "consultor";
+
+export const isStaffUser = (user?: User | null): boolean =>
+  isAdminUser(user) || isConsultorUser(user) || isSupervisorUser(user);
+
 export const userParticipatesInRanking = (user: User | null): boolean => {
   if (!user || user.isActive === false) return false;
-  if (user.isAdmin || user.role === "admin" || user.role === "consultor") {
-    return false;
-  }
+  if (isStaffUser(user)) return false;
   return user.rankingPreference === "participate";
 };
 
-/** Cliente comum no app (individual ou casal — não admin/consultor). */
+/** Cliente comum no app (individual ou casal). Admin, consultor e supervisor ficam de fora. */
 export const isAppClientUser = (user?: User | null): boolean => {
   if (!user) return false;
-  if (user.isAdmin || user.role === "admin" || user.role === "consultor") {
-    return false;
-  }
-  return true;
+  return !isStaffUser(user);
 };
 
 export const userService = {
@@ -516,6 +526,28 @@ export const userService = {
       console.error("❌ Erro ao atualizar usuário:", error);
       throw error;
     }
+  },
+
+  async confirmConsultationBooking(
+    userId: string,
+    day: number,
+    cycleStartedAtKey: string,
+  ): Promise<void> {
+    if (!userId) {
+      throw new Error("Não foi possível identificar sua conta.");
+    }
+    if (!isValidConsultationPreferredDay(day)) {
+      throw new Error("Informe o dia da consultoria.");
+    }
+    if (!cycleStartedAtKey) {
+      throw new Error("Não foi possível identificar o ciclo atual.");
+    }
+
+    await updateDoc(doc(db, "users", userId), {
+      consultationBookedDay: String(day),
+      consultationBookedCycleStartedAt: cycleStartedAtKey,
+      updatedAt: Timestamp.now(),
+    });
   },
 
   async updatePushToken(userId: string, token: string | null): Promise<void> {

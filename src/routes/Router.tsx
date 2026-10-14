@@ -73,7 +73,7 @@ export const Router = () => {
             },
           );
         // Redirect based on role: consultor -> ConsultorHome, admin -> AdminUsers, others -> Home
-        if (user && user.role === "consultor") {
+        if (user && (user.role === "consultor" || user.role === "supervisor")) {
           navigate("ConsultorHome");
         } else if (user && (user.isAdmin === true || user.role === "admin")) {
           navigate("AdminUsers");
@@ -110,7 +110,7 @@ export const Router = () => {
     switch (currentScreen) {
       case "Home":
         // If current user is a consultor or admin, show their dedicated home
-        if (user && user.role === "consultor") {
+        if (user && (user.role === "consultor" || user.role === "supervisor")) {
           return <ConsultorHome />;
         }
         if (user && (user.isAdmin === true || user.role === "admin")) {

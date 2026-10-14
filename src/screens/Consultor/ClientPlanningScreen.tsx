@@ -53,6 +53,7 @@ import { isCoupleAccount } from "../../utils/coupleAccount";
 
 export const ClientPlanningScreen = () => {
   const { user } = useAuth();
+  const planningReadOnly = user?.role === "supervisor";
   const { navigate, params } = useNavigation();
   const { colors } = useTheme();
   const { height: windowHeight } = useWindowDimensions();
@@ -386,16 +387,19 @@ export const ClientPlanningScreen = () => {
   }, [selectedClient, activeTab, reloadClientCards]);
 
   const openCreateCardModal = () => {
+    if (planningReadOnly) return;
     setEditingClientCard(null);
     setIsCardModalVisible(true);
   };
 
   const openEditCardModal = (card: CreditCard) => {
+    if (planningReadOnly) return;
     setEditingClientCard(card);
     setIsCardModalVisible(true);
   };
 
   const handleClientCardSaved = async (_card: CreditCard) => {
+    if (planningReadOnly) return;
     const wasEditing = Boolean(editingClientCard);
     setIsCardModalVisible(false);
     setEditingClientCard(null);
@@ -409,6 +413,7 @@ export const ClientPlanningScreen = () => {
   };
 
   const handleSaveCardInvoice = async (cardId: string) => {
+    if (planningReadOnly) return;
     if (!user?.id || !selectedClient) {
       setCardInvoiceFeedback((previous) => ({
         ...previous,
@@ -704,6 +709,7 @@ export const ClientPlanningScreen = () => {
   );
 
   const handleSave = async () => {
+    if (planningReadOnly) return;
     if (!user || !selectedClient) {
       Alert.alert("Erro", "Cliente não disponível para salvar o planejamento");
       return;
@@ -745,6 +751,7 @@ export const ClientPlanningScreen = () => {
   };
 
   const handleAddBill = async () => {
+    if (planningReadOnly) return;
     if (!user || !selectedClient || !newBillName || !newBillAmount) return;
 
     try {
@@ -773,6 +780,7 @@ export const ClientPlanningScreen = () => {
   };
 
   const handleDeleteBill = async (id: string) => {
+    if (planningReadOnly) return;
     if (!user || !selectedClient) return;
 
     try {
@@ -796,6 +804,7 @@ export const ClientPlanningScreen = () => {
   };
 
   const handleCreateBillModal = async () => {
+    if (planningReadOnly) return;
     if (!user || !selectedClient || !billTitle) return;
     try {
       setSavingBill(true);
@@ -896,6 +905,7 @@ export const ClientPlanningScreen = () => {
   };
 
   const handleCreateIncomeModal = async () => {
+    if (planningReadOnly) return;
     const amount = incomeAmountNumber || 0;
     if (!user || !selectedClient || !incomeSource || amount <= 0) return;
 
@@ -962,6 +972,7 @@ export const ClientPlanningScreen = () => {
   };
 
   const handleCreateExpenseModal = async () => {
+    if (planningReadOnly) return;
     if (!user || !selectedClient || !expenseSource) return;
     try {
       setSavingExpense(true);
@@ -1092,6 +1103,7 @@ export const ClientPlanningScreen = () => {
   };
 
   const handleDeleteExpectedIncome = async (id: string) => {
+    if (planningReadOnly) return;
     if (!user || !selectedClient) return;
     try {
       await planningServices.deleteExpectedIncome(
@@ -1107,6 +1119,7 @@ export const ClientPlanningScreen = () => {
   };
 
   const handleDeleteExpectedExpense = async (id: string) => {
+    if (planningReadOnly) return;
     if (!user || !selectedClient) return;
     try {
       await planningServices.deleteExpectedExpense(
@@ -1143,6 +1156,7 @@ export const ClientPlanningScreen = () => {
   };
 
   const handleConfirmDelete = async () => {
+    if (planningReadOnly) return;
     if (!deleteTarget) return;
 
     const target = deleteTarget;
@@ -1168,6 +1182,7 @@ export const ClientPlanningScreen = () => {
   };
 
   const handleSaveAvailableInAccount = async () => {
+    if (planningReadOnly) return;
     if (!user || !selectedClient) return;
     try {
       setSavingAvailableInAccount(true);
@@ -1188,6 +1203,7 @@ export const ClientPlanningScreen = () => {
   };
 
   const handleSaveConsumoModerado = async () => {
+    if (planningReadOnly) return;
     if (!user || !selectedClient) return;
     try {
       setSavingConsumo(true);
@@ -1212,6 +1228,7 @@ export const ClientPlanningScreen = () => {
   };
 
   const openCycleDurationModal = (action: "restart" | "edit") => {
+    if (planningReadOnly) return;
     setCycleDurationAction(action);
     setCycleDurationInput(
       action === "edit" && consumoModeradoCycleDurationDays > 0
@@ -1222,6 +1239,7 @@ export const ClientPlanningScreen = () => {
   };
 
   const handleSaveCycleDuration = async () => {
+    if (planningReadOnly) return;
     if (!user || !selectedClient) return;
     try {
       const durationDays = parseInt(cycleDurationInput, 10);
@@ -1335,6 +1353,11 @@ export const ClientPlanningScreen = () => {
           keyboardShouldPersistTaps="handled"
         >
         <View style={styles.cycleCard}>
+          {planningReadOnly ? (
+            <Text style={styles.readOnlyBanner}>
+              Somente visualização. O supervisor não altera o planejamento.
+            </Text>
+          ) : null}
           {isCoupleAccount(selectedClient) ? (
             <View style={styles.coupleBadge}>
               <Text style={styles.coupleBadgeText}>❤️ Planejamento do casal</Text>
@@ -1372,6 +1395,7 @@ export const ClientPlanningScreen = () => {
               </Text>
             </>
           )}
+          {!planningReadOnly ? (
           <View style={styles.cycleActionsRow}>
             <TouchableOpacity
               style={styles.cycleActionButton}
@@ -1396,6 +1420,7 @@ export const ClientPlanningScreen = () => {
               )}
             </TouchableOpacity>
           </View>
+          ) : null}
         </View>
 
         <View style={styles.tabsContainer}>
@@ -1480,13 +1505,13 @@ export const ClientPlanningScreen = () => {
             <View style={{ marginBottom: 8 }}>
               <View style={{ flexDirection: "row", gap: 8 }}>
                 <TouchableOpacity
-                  style={styles.saveButton}
+                  style={[styles.saveButton, planningReadOnly && styles.hiddenActions]}
                   onPress={() => setIsConsumoModalVisible(true)}
                 >
                   <Text style={styles.saveButtonText}>Consumo moderado</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={styles.saveButton}
+                  style={[styles.saveButton, planningReadOnly && styles.hiddenActions]}
                   onPress={() => {
                     setExpenseSource("");
                     setExpenseAmount("");
@@ -1547,7 +1572,7 @@ export const ClientPlanningScreen = () => {
                             </Text>
                           </View>
                         </View>
-                        <View style={styles.billActions}>
+                        <View style={[styles.billActions, planningReadOnly && styles.hiddenActions]}>
                           <TouchableOpacity
                             style={[
                               styles.actionButton,
@@ -1627,7 +1652,7 @@ export const ClientPlanningScreen = () => {
                           </Text>
                         </View>
                       </View>
-                      <View style={styles.billActions}>
+                      <View style={[styles.billActions, planningReadOnly && styles.hiddenActions]}>
                         <TouchableOpacity
                           style={[
                             styles.actionButton,
@@ -1701,7 +1726,7 @@ export const ClientPlanningScreen = () => {
                     </View>
                   </View>
 
-                  <View style={styles.billActions}>
+                  <View style={[styles.billActions, planningReadOnly && styles.hiddenActions]}>
                     <TouchableOpacity
                       style={[
                         styles.actionButton,
@@ -1777,7 +1802,7 @@ export const ClientPlanningScreen = () => {
                         </Text>
                       </View>
                     </View>
-                    <View style={styles.billActions}>
+                    <View style={[styles.billActions, planningReadOnly && styles.hiddenActions]}>
                       <TouchableOpacity
                         style={[
                           styles.actionButton,
@@ -1872,7 +1897,7 @@ export const ClientPlanningScreen = () => {
 
             <View style={{ marginBottom: 12 }}>
               <TouchableOpacity
-                style={styles.saveButton}
+                style={[styles.saveButton, planningReadOnly && styles.hiddenActions]}
                 onPress={openCreateCardModal}
                 disabled={!selectedClient?.id}
               >
@@ -1914,6 +1939,7 @@ export const ClientPlanningScreen = () => {
                       style={[
                         styles.actionButton,
                         { backgroundColor: "#8c52ff" },
+                        planningReadOnly && styles.hiddenActions,
                       ]}
                       onPress={() => openEditCardModal(card)}
                     >
@@ -1976,6 +2002,7 @@ export const ClientPlanningScreen = () => {
                       { marginTop: 12, alignSelf: "flex-start" },
                       cardInvoiceFeedback[card.id]?.type === "success" &&
                         styles.saveButtonSuccess,
+                      planningReadOnly && styles.hiddenActions,
                     ]}
                     onPress={() => handleSaveCardInvoice(card.id)}
                     disabled={savingCardInvoiceId === card.id}
@@ -2055,11 +2082,13 @@ export const ClientPlanningScreen = () => {
               placeholder="R$ 0,00"
               placeholderTextColor="#777"
               keyboardType="numeric"
+              editable={!planningReadOnly}
             />
             <TouchableOpacity
               style={[
                 styles.saveButton,
                 savingAvailableInAccount && styles.primarySaveButtonDisabled,
+                planningReadOnly && styles.hiddenActions,
               ]}
               onPress={handleSaveAvailableInAccount}
               disabled={savingAvailableInAccount}
@@ -2073,7 +2102,7 @@ export const ClientPlanningScreen = () => {
 
             <View style={{ marginBottom: 8, marginTop: 12 }}>
               <TouchableOpacity
-                style={styles.saveButton}
+                style={[styles.saveButton, planningReadOnly && styles.hiddenActions]}
                 onPress={() => {
                   setIncomeSource("");
                   setIncomeAmountNumber(null);
@@ -2135,7 +2164,7 @@ export const ClientPlanningScreen = () => {
                     </View>
                   </View>
 
-                  <View style={styles.billActions}>
+                  <View style={[styles.billActions, planningReadOnly && styles.hiddenActions]}>
                     <TouchableOpacity
                       style={[
                         styles.actionButton,
@@ -2218,6 +2247,7 @@ export const ClientPlanningScreen = () => {
             style={[
               styles.primarySaveButton,
               saving && styles.primarySaveButtonDisabled,
+              planningReadOnly && styles.hiddenActions,
             ]}
             onPress={handleSave}
             disabled={saving}
@@ -3026,6 +3056,14 @@ export const ClientPlanningScreen = () => {
 };
 
 const styles = StyleSheet.create({
+  hiddenActions: {
+    display: "none",
+  },
+  readOnlyBanner: {
+    color: "#c9b5ff",
+    fontSize: 13,
+    marginBottom: 8,
+  },
   page: {
     flex: 1,
   },

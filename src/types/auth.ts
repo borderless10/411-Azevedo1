@@ -15,7 +15,7 @@ export interface User {
   username?: string;
   bio?: string;
   phone?: string;
-  role?: "admin" | "consultor" | "user" | "cliente_premium";
+  role?: "admin" | "consultor" | "supervisor" | "user" | "cliente_premium";
   consultantId?: string; // id do consultor responsável (se houver)
   isAdmin?: boolean;
   isActive?: boolean;
@@ -30,6 +30,10 @@ export interface User {
   consultationSchedulingUrl?: string;
   /** Melhor dia do mês para consultoria (1–31, armazenado como string) */
   consultationPreferredDate?: string;
+  /** Dia (1–31) que o cliente confirmou ter agendado neste ciclo */
+  consultationBookedDay?: string;
+  /** Início do ciclo ao qual a confirmação de agendamento pertence */
+  consultationBookedCycleStartedAt?: string;
   consultationSchedulingRequestPending?: boolean;
   consultationSchedulingRequestedAt?: Date;
   expoPushToken?: string;

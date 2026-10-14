@@ -29,7 +29,9 @@ export const AdminUsersScreen: React.FC = () => {
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [toggling, setToggling] = useState<string | null>(null);
-  const [tab, setTab] = useState<"clients" | "consultors">("clients");
+  const [tab, setTab] = useState<"clients" | "consultors" | "supervisors">(
+    "clients",
+  );
   const [query, setQuery] = useState<string>("");
   const [statusFilter, setStatusFilter] = useState<
     "all" | "active" | "inactive"
@@ -144,6 +146,7 @@ export const AdminUsersScreen: React.FC = () => {
           u.role === "cliente" ||
           u.role === "cliente_premium"
         );
+      if (tab === "supervisors") return u.role === "supervisor";
       return u.role === "consultor";
     })
     .filter((u) => {
@@ -269,6 +272,22 @@ export const AdminUsersScreen: React.FC = () => {
                 ]}
               >
                 Consultores
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.tabButton,
+                tab === "supervisors" && styles.tabActive,
+              ]}
+              onPress={() => setTab("supervisors")}
+            >
+              <Text
+                style={[
+                  styles.tabText,
+                  tab === "supervisors" && styles.tabTextActive,
+                ]}
+              >
+                Supervisores
               </Text>
             </TouchableOpacity>
           </View>

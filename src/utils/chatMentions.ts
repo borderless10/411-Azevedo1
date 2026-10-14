@@ -126,9 +126,20 @@ export const parseMentionSegments = (
 const escapeRegExp = (value: string): string =>
   value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
+export const PURPLE_HEART = "💜";
+
+const HEART_REACTION =
+  /❤|♥|💖|💗|💓|💞|💕|💘|💝|💟|💜|🧡|💛|💚|💙|🖤|🤍|🤎|💔|❣️/;
+
+export const normalizeReactionEmoji = (emoji: string): string => {
+  const value = String(emoji || "").trim();
+  if (!value) return "";
+  return HEART_REACTION.test(value) ? PURPLE_HEART : value;
+};
+
 export const CHAT_REACTION_EMOJIS = [
   "👍",
-  "❤️",
+  PURPLE_HEART,
   "😂",
   "😮",
   "😢",

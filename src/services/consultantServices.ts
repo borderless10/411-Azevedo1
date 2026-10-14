@@ -57,4 +57,25 @@ export async function getClientsByConsultant(
   });
 }
 
-export default { getClientsByConsultant };
+export async function getAllClients(term?: string): Promise<User[]> {
+  const usersRef = collection(db, "users");
+  const [commonSnap, premiumSnap, legacySnap] = await Promise.all([
+    getDocs(query(usersRef, where("role", "==", "user"))),
+    getDocs(query(usersRef, where("role", "==", "cliente_premium"))),
+    getDocs(query(usersRef, where("role", "==", "cliente"))),
+  ]);
+  const byId = new Map<string, User>();
+  [...commonSnap.docs, ...premiumSnap.docs, ...legacySnap.docs].forEach((item) => {
+    byId.set(item.id, mapUserDocument(item.id, item.data()));
+  });
+  const results = Array.from(byId.values());
+  if (!term) return results;
+  const normalized = term.trim().toLowerCase();
+  return results.filter((person) => {
+    const name = (person.nickname || person.name || "").toString().toLowerCase();
+    const email = (person.email || "").toString().toLowerCase();
+    return name.includes(normalized) || email.includes(normalized);
+  });
+}
+
+export default { getClientsByConsultant, getAllClients };

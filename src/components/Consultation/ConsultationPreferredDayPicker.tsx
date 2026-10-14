@@ -18,12 +18,18 @@ type Props = {
   day: number | null;
   onChangeDay: (day: number) => void;
   style?: ViewStyle;
+  modalTitle?: string;
+  modalHint?: string;
+  placeholder?: string;
 };
 
 export const ConsultationPreferredDayPicker: React.FC<Props> = ({
   day,
   onChangeDay,
   style,
+  modalTitle = "Melhor dia do mês",
+  modalHint = "Escolha o dia fixo sugerido para agendar a consultoria.",
+  placeholder = "Selecionar dia do mês",
 }) => {
   const { colors } = useTheme();
   const [open, setOpen] = useState(false);
@@ -43,7 +49,7 @@ export const ConsultationPreferredDayPicker: React.FC<Props> = ({
       >
         <Ionicons name="calendar-outline" size={20} color={colors.primary} />
         <Text style={[styles.triggerText, { color: colors.text }]}>
-          {selectedDay ? `Dia ${selectedDay}` : "Selecionar dia do mês"}
+          {selectedDay ? `Dia ${selectedDay}` : placeholder}
         </Text>
         <Text style={[styles.triggerHint, { color: colors.textSecondary }]}>
           do mês
@@ -60,10 +66,10 @@ export const ConsultationPreferredDayPicker: React.FC<Props> = ({
             ]}
           >
             <Text style={[styles.modalTitle, { color: colors.text }]}>
-              Melhor dia do mês
+              {modalTitle}
             </Text>
             <Text style={[styles.modalHint, { color: colors.textSecondary }]}>
-              Escolha o dia fixo sugerido para agendar a consultoria.
+              {modalHint}
             </Text>
             <FlatList
               data={DAYS}

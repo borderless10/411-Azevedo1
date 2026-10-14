@@ -60,7 +60,10 @@ export const CategoryBudgetScreen = () => {
   const clientId = String(params?.clientId || "");
   const isSpectator =
     !!clientId &&
-    (user?.role === "consultor" || user?.role === "admin" || !!user?.isAdmin);
+    (user?.role === "consultor" ||
+      user?.role === "supervisor" ||
+      user?.role === "admin" ||
+      !!user?.isAdmin);
   const ownerId = isSpectator ? clientId : user?.id || "";
   const [loading, setLoading] = useState(true);
   const [days, setDays] = useState<DaySummary[]>([]);

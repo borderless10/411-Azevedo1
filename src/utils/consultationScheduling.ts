@@ -58,3 +58,13 @@ export const defaultConsultationPreferredDay = (): number => {
 export const defaultConsultationPreferredDate = defaultConsultationPreferredDay;
 
 export const parseConsultationPreferredDate = parseConsultationPreferredDay;
+
+export const isConsultationBookedForCycle = (
+  bookedDay: string | null | undefined,
+  bookedCycleStartedAt: string | null | undefined,
+  cycleStartKey: string | null,
+): boolean => {
+  if (!cycleStartKey) return false;
+  if (String(bookedCycleStartedAt || "") !== cycleStartKey) return false;
+  return parseConsultationPreferredDay(bookedDay) !== null;
+};

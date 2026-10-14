@@ -664,13 +664,14 @@ export const showChatMessageNotification = async (
  */
 export const showCycleEndedConsultationNotification = async (
   preferredDayLabel?: string | null,
+  cycleEnded = true,
 ): Promise<void> => {
   const body = preferredDayLabel
     ? `Agende uma consultoria. Melhor dia sugerido: ${preferredDayLabel}.`
     : "Agende uma consultoria com seu consultor.";
 
   await sendImmediateNotification(
-    "Seu ciclo acabou!",
+    cycleEnded ? "Seu ciclo acabou!" : "Seu ciclo acaba em breve",
     body,
     { type: "cycle_ended_consultation" },
     { channelId: NOTIFICATION_CHANNEL_REMINDERS },

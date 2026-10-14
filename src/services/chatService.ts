@@ -22,7 +22,7 @@ import { db } from "../lib/firebase";
 import { timestampToDate } from "../lib/firestore";
 import { CoupleMember } from "../types/auth";
 import { parseCoupleMember } from "../utils/coupleAccount";
-import { ChatMention } from "../utils/chatMentions";
+import { ChatMention, normalizeReactionEmoji } from "../utils/chatMentions";
 import { notifyChatMessageRecipients } from "./chatPushService";
 
 export type ChatType = "direct" | "group" | "global";
@@ -35,6 +35,7 @@ export interface Chat {
     text: string;
     senderId: string;
     senderCoupleMember?: CoupleMember;
+    kind?: "message" | "reaction";
   };
   lastMessageAt?: any; // Firestore Timestamp
   lastReadBy?: Record<string, any>;
@@ -91,10 +92,17 @@ const mapMentions = (raw: any): ChatMention[] => {
 const mapReactions = (raw: any): Record<string, string> => {
   if (!raw || typeof raw !== "object") return {};
   return Object.fromEntries(
-    Object.entries(raw).filter(
-      ([userId, emoji]) =>
-        Boolean(userId) && typeof emoji === "string" && emoji.trim().length > 0,
-    ),
+    Object.entries(raw)
+      .filter(
+        ([userId, emoji]) =>
+          Boolean(userId) &&
+          typeof emoji === "string" &&
+          emoji.trim().length > 0,
+      )
+      .map(([userId, emoji]) => [
+        userId,
+        normalizeReactionEmoji(String(emoji)),
+      ]),
   ) as Record<string, string>;
 };
 
@@ -111,6 +119,11 @@ const mapMessage = (id: string, data: any): Message => ({
 
 const CHATS_COL = "chats";
 const MESSAGES_SUBCOL = "messages";
+
+/** Janela em tempo real. Acima disso o listener fica pesado no aparelho. */
+export const CHAT_LIVE_MESSAGE_LIMIT = 300;
+/** Página extra ao rolar o histórico. O Firestore aceita até o fim da conversa. */
+export const CHAT_OLDER_PAGE_SIZE = 100;
 
 /**
  * Deterministic id for direct chats between two users.
@@ -252,10 +265,26 @@ export async function setMessageReaction(
 ): Promise<void> {
   if (!chatId || !messageId || !userId) return;
   const msgRef = doc(db, CHATS_COL, chatId, MESSAGES_SUBCOL, messageId);
-  const trimmed = String(emoji || "").trim();
+  const trimmed = normalizeReactionEmoji(String(emoji || ""));
   await updateDoc(msgRef, {
     [`reactions.${userId}`]: trimmed ? trimmed : deleteField(),
   });
+
+  if (!trimmed) return;
+
+  try {
+    const chatRef = doc(db, CHATS_COL, chatId);
+    await updateDoc(chatRef, {
+      lastMessage: {
+        text: `Reagiu ${trimmed}`,
+        senderId: userId,
+        kind: "reaction",
+      },
+      lastMessageAt: serverTimestamp(),
+    });
+  } catch (error) {
+    console.warn("Reação salva, mas o indicador da conversa não atualizou:", error);
+  }
 }
 
 /**
@@ -296,8 +325,11 @@ export async function markChatAsRead(
  */
 export function listenToMessages(
   chatId: string,
-  onUpdate: (messages: Message[], meta: { hasMore: boolean }) => void,
-  limitCount = 20,
+  onUpdate: (
+    messages: Message[],
+    meta: { hasMore: boolean; oldestCursor: any | null },
+  ) => void,
+  limitCount = CHAT_LIVE_MESSAGE_LIMIT,
 ): () => void {
   const chatRef = doc(db, CHATS_COL, chatId);
   const messagesCol = collection(chatRef, MESSAGES_SUBCOL);
@@ -311,7 +343,11 @@ export function listenToMessages(
 
     // Firestore returns newest first (desc) — reverse for UI chronological order
     const ordered = msgs.reverse();
-    onUpdate(ordered, { hasMore: snap.size >= limitCount });
+    const oldestCursor = snap.docs.length ? snap.docs[snap.docs.length - 1] : null;
+    onUpdate(ordered, {
+      hasMore: snap.size >= limitCount,
+      oldestCursor,
+    });
   });
 
   return unsubscribe;
@@ -322,22 +358,50 @@ export function listenToMessages(
  */
 export async function loadMoreMessages(
   chatId: string,
-  lastVisibleCreatedAt: any, // Firestore Timestamp
-  pageSize = 20,
-): Promise<Message[]> {
+  oldestCursor: any,
+  pageSize = CHAT_OLDER_PAGE_SIZE,
+): Promise<{ messages: Message[]; oldestCursor: any | null; hasMore: boolean }> {
+  if (!oldestCursor) {
+    return { messages: [], oldestCursor: null, hasMore: false };
+  }
+
   const chatRef = doc(db, CHATS_COL, chatId);
   const messagesCol = collection(chatRef, MESSAGES_SUBCOL);
   const q = query(
     messagesCol,
     orderBy("createdAt", "desc"),
-    startAfter(lastVisibleCreatedAt),
+    startAfter(oldestCursor),
     limit(pageSize),
   );
 
   const snap = await getDocs(q);
   const msgs: Message[] = snap.docs.map((d) => mapMessage(d.id, d.data()));
 
-  return msgs.reverse(); // chronological order
+  return {
+    messages: msgs.reverse(),
+    oldestCursor: snap.docs.length ? snap.docs[snap.docs.length - 1] : oldestCursor,
+    hasMore: snap.size >= pageSize,
+  };
+}
+
+export function listenToChat(
+  chatId: string,
+  onUpdate: (chat: Chat | null) => void,
+): () => void {
+  if (!chatId) return () => undefined;
+  return onSnapshot(
+    doc(db, CHATS_COL, chatId),
+    (snap) => {
+      if (!snap.exists()) {
+        onUpdate(null);
+        return;
+      }
+      onUpdate({ id: snap.id, ...(snap.data() as any) } as Chat);
+    },
+    (error) => {
+      console.warn("Não foi possível ouvir o chat", chatId, error);
+    },
+  );
 }
 
 /**
@@ -436,6 +500,7 @@ export default {
   markChatAsRead,
   listenToMessages,
   loadMoreMessages,
+  listenToChat,
   listenToUserChats,
   getChatsForUser,
   getChatsForUserNoOrder,

@@ -48,7 +48,11 @@ export const RankingScreen = () => {
   const [cutoffDateKey, setCutoffDateKey] = useState<string | null>(null);
 
   const isAdminUser = user?.isAdmin === true || user?.role === "admin";
-  const isCommonUser = !user?.isAdmin && user?.role !== "consultor";
+  const isCommonUser =
+    !user?.isAdmin &&
+    user?.role !== "consultor" &&
+    user?.role !== "supervisor" &&
+    user?.role !== "admin";
   const activeLeague: RankingLeague = leagueTab;
 
   const getEffectiveRankingPreference = (): RankingPreference => {

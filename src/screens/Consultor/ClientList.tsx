@@ -12,6 +12,7 @@ import { Layout } from "../../components/Layout/Layout";
 import { useNavigation } from "../../routes/NavigationContext";
 import { useAuth } from "../../hooks/useAuth";
 import consultantServices from "../../services/consultantServices";
+import { isSupervisorUser } from "../../services/userServices";
 import { useTheme } from "../../contexts/ThemeContext";
 import { isCoupleAccount } from "../../utils/coupleAccount";
 
@@ -28,7 +29,9 @@ export const ClientList: React.FC = () => {
       setLoading(true);
       try {
         if (!user) return;
-        const list = await consultantServices.getClientsByConsultant(user.id);
+        const list = isSupervisorUser(user)
+          ? await consultantServices.getAllClients(term)
+          : await consultantServices.getClientsByConsultant(user.id, term);
         setClients(list);
       } catch (e) {
         console.warn("Erro ao carregar clientes", e);
@@ -70,6 +73,9 @@ export const ClientList: React.FC = () => {
               );
             })}
             keyExtractor={(i) => i.id}
+            style={styles.list}
+            contentContainerStyle={styles.listContent}
+            showsVerticalScrollIndicator
             renderItem={({ item }) => (
               <TouchableOpacity
                 style={[styles.row, { borderColor: colors.border }]}
@@ -105,6 +111,8 @@ export const ClientList: React.FC = () => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 16 },
+  list: { flex: 1 },
+  listContent: { flexGrow: 1, paddingBottom: 48 },
   row: {
     padding: 12,
     borderWidth: 1,

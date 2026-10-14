@@ -13,6 +13,8 @@ import {
   Modal,
   Alert,
   AppState,
+  ScrollView,
+  useWindowDimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -20,7 +22,10 @@ import { useAuth } from "../../hooks/useAuth";
 import { useUserChats } from "../../hooks/useUserChats";
 import { useChatMessages } from "../../hooks/useChatMessages";
 import { Layout } from "../../components/Layout/Layout";
-import chatService, { Message } from "../../services/chatService";
+import chatService, {
+  CHAT_LIVE_MESSAGE_LIMIT,
+  Message,
+} from "../../services/chatService";
 import { userService } from "../../services/userServices";
 import consultantServices from "../../services/consultantServices";
 import { setActiveChatId } from "../../utils/chatActivity";
@@ -33,6 +38,7 @@ import {
   getActiveMentionQuery,
   insertMention,
   mentionsStillInText,
+  normalizeReactionEmoji,
   ChatMention,
 } from "../../utils/chatMentions";
 import {
@@ -85,11 +91,24 @@ export const ChatScreen: React.FC = () => {
   const isAdminUser =
     String(user?.role || "").toLowerCase() === "admin" || user?.isAdmin === true;
 
-  const { messages, sendMessage } = useChatMessages(
-    selectedChatId || "",
-    user?.id || "",
-    20,
-    isCoupleAccount(user) ? activeCoupleMember : null,
+  const { messages, sendMessage, loadMore, hasMore, isLoadingMore } =
+    useChatMessages(
+      selectedChatId || "",
+      user?.id || "",
+      CHAT_LIVE_MESSAGE_LIMIT,
+      isCoupleAccount(user) ? activeCoupleMember : null,
+    );
+  const [reactionFocus, setReactionFocus] = useState<{
+    messageId: string;
+    emoji: string | null;
+    anchor: { x: number; y: number; width: number; height: number };
+  } | null>(null);
+  const [reactionCardHeight, setReactionCardHeight] = useState(180);
+  const [reactionPickerOpen, setReactionPickerOpen] = useState(false);
+  const windowSize = useWindowDimensions();
+  const reactionPickerHeight = Math.max(
+    160,
+    Math.min(280, windowSize.height - 220),
   );
 
   const [userMap, setUserMap] = useState<Record<string, any>>({});
@@ -97,6 +116,7 @@ export const ChatScreen: React.FC = () => {
   const userMapRef = useRef<Record<string, any>>({});
   const profilesLoadingRef = useRef<Set<string>>(new Set());
   const flatListRef = useRef<FlatList<any> | null>(null);
+  const allowOlderLoadRef = useRef(false);
 
   useEffect(() => {
     userMapRef.current = userMap;
@@ -188,9 +208,20 @@ export const ChatScreen: React.FC = () => {
   }, [user?.id, user?.role, (user as any)?.consultantId]);
 
   useEffect(() => {
+    if (!user?.id) return;
+    return chatService.listenToChat("global", (chat) => {
+      if (chat) setGlobalChat(chat);
+    });
+  }, [user?.id]);
+
+  useEffect(() => {
     if (!params?.chatId) return;
     setSelectedChatId(String(params.chatId));
   }, [params?.chatId]);
+
+  useEffect(() => {
+    allowOlderLoadRef.current = false;
+  }, [selectedChatId]);
 
   useEffect(() => {
     setActiveChatId(selectedChatId);
@@ -298,6 +329,7 @@ export const ChatScreen: React.FC = () => {
 
     (messages || []).forEach((msg: any) => {
       if (msg?.senderId) ids.push(msg.senderId);
+      Object.keys(msg?.reactions || {}).forEach((id: string) => ids.push(id));
     });
 
     loadProfiles(ids);
@@ -461,33 +493,117 @@ export const ChatScreen: React.FC = () => {
     return lastMessageAt.getTime() > lastReadAt.getTime();
   };
 
-  // Auto-scroll to latest message when messages change
+  const newestMessageId = orderedMessages[0]?.id || "";
+  const previousNewestIdRef = useRef<string>("");
+
   useEffect(() => {
+    if (!newestMessageId || newestMessageId === previousNewestIdRef.current) {
+      previousNewestIdRef.current = newestMessageId;
+      return;
+    }
+    previousNewestIdRef.current = newestMessageId;
     try {
-      if (flatListRef.current) {
-        // @ts-ignore
-        flatListRef.current.scrollToOffset({ offset: 0, animated: true });
-      }
-    } catch (err) {
+      flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+    } catch {
       // ignore
     }
-  }, [chatMessages.length]);
+  }, [newestMessageId]);
 
-  // Mark selected chat as read when user enters it
+  const conversationActivityKey = useMemo(
+    () =>
+      messages
+        .map((msg) => {
+          const reactions = Object.entries(msg.reactions || {})
+            .map(([id, emoji]) => `${id}:${emoji}`)
+            .sort()
+            .join(",");
+          return `${msg.id}:${reactions}`;
+        })
+        .join("|"),
+    [messages],
+  );
+
   useEffect(() => {
-    if (!selectedChatId || !user?.id) return;
+    if (!selectedChatId || !user?.id || messages.length === 0) return;
     chatService.markChatAsRead(selectedChatId, user.id).catch(() => {
       // ignore read marker errors
     });
-  }, [selectedChatId, user?.id]);
+  }, [selectedChatId, user?.id, conversationActivityKey, messages.length]);
 
-  // Keep selected chat marked as read while conversation is open and messages update
-  useEffect(() => {
-    if (!selectedChatId || !user?.id || chatMessages.length === 0) return;
-    chatService.markChatAsRead(selectedChatId, user.id).catch(() => {
-      // ignore read marker errors
+  const reactionSheet = useMemo(() => {
+    if (!reactionFocus) return null;
+    const message = messages.find((item) => item.id === reactionFocus.messageId);
+    if (!message) return null;
+
+    const entries = Object.entries(message.reactions || {}).filter(
+      ([, emoji]) => Boolean(emoji),
+    );
+    if (!entries.length) return null;
+
+    const counts = new Map<string, number>();
+    entries.forEach(([, emoji]) => {
+      counts.set(emoji, (counts.get(emoji) || 0) + 1);
     });
-  }, [selectedChatId, user?.id, chatMessages.length]);
+
+    const selected =
+      reactionFocus.emoji && counts.has(reactionFocus.emoji)
+        ? reactionFocus.emoji
+        : null;
+
+    const people = entries
+      .filter(([, emoji]) => !selected || emoji === selected)
+      .map(([userId, emoji]) => {
+        const isOwn = userId === user?.id;
+        const profile = isOwn ? user : userMap[userId];
+        return {
+          userId,
+          emoji,
+          isOwn,
+          name: isOwn ? "Você" : getParticipantDisplayName(userId),
+          photoUri: profilePhotoUri(profile?.photoBase64),
+          initial: profileInitial(profile, "U"),
+        };
+      })
+      .sort((a, b) => Number(b.isOwn) - Number(a.isOwn));
+
+    return {
+      message,
+      chips: Array.from(counts.entries()),
+      selected,
+      people,
+    };
+  }, [
+    getParticipantDisplayName,
+    messages,
+    reactionFocus,
+    user,
+    userMap,
+  ]);
+
+  const reactionCardFrame = useMemo(() => {
+    const anchor = reactionFocus?.anchor;
+    if (!anchor) return null;
+    const margin = 12;
+    const width = Math.min(340, windowSize.width - margin * 2);
+    let top = anchor.y - reactionCardHeight - 6;
+    if (top < margin) {
+      top = anchor.y + anchor.height + 6;
+    }
+    if (top + reactionCardHeight > windowSize.height - margin) {
+      top = Math.max(margin, windowSize.height - reactionCardHeight - margin);
+    }
+    let left = anchor.x;
+    if (left + width > windowSize.width - margin) {
+      left = anchor.x + anchor.width - width;
+    }
+    left = Math.max(margin, Math.min(left, windowSize.width - width - margin));
+    return { top, left, width };
+  }, [
+    reactionCardHeight,
+    reactionFocus?.anchor,
+    windowSize.height,
+    windowSize.width,
+  ]);
 
   // For private/direct chats show header avatar/name (fetch if missing)
   const isPrivateChat =
@@ -505,9 +621,13 @@ export const ChatScreen: React.FC = () => {
 
   // Access control
   const userRole = String(user?.role || "").toLowerCase();
-  const canAccess = ["admin", "consultor", "user", "cliente_premium"].includes(
-    userRole,
-  );
+  const canAccess = [
+    "admin",
+    "consultor",
+    "supervisor",
+    "user",
+    "cliente_premium",
+  ].includes(userRole);
 
   const isGroupChat = (chat: any): boolean => {
     return (
@@ -520,7 +640,7 @@ export const ChatScreen: React.FC = () => {
 
   const getChatTitle = (chat: any): string => {
     const isClient = ["user", "cliente_premium"].includes(userRole);
-    const isPrivileged = ["admin", "consultor"].includes(userRole);
+    const isPrivileged = ["admin", "consultor", "supervisor"].includes(userRole);
 
     if (isGroupChat(chat)) {
       if (chat?.id === "global" || chat?.type === "global") return "Bate-Papo";
@@ -670,13 +790,14 @@ export const ChatScreen: React.FC = () => {
 
   const handleToggleReaction = async (msg: Message, emoji: string) => {
     if (!user?.id || !selectedChatId || !msg.id) return;
-    const current = msg.reactions?.[user.id];
+    const next = normalizeReactionEmoji(emoji);
+    const current = normalizeReactionEmoji(msg.reactions?.[user.id] || "");
     try {
       await chatService.setMessageReaction(
         selectedChatId,
         msg.id,
         user.id,
-        current === emoji ? null : emoji,
+        current === next ? null : next,
       );
     } catch (error) {
       console.error("Erro ao reagir à mensagem:", error);
@@ -1249,12 +1370,33 @@ export const ChatScreen: React.FC = () => {
                     : undefined
                 }
                 onLongPress={() => setActionMessage(msg)}
-                onReactionPress={(emoji) => handleToggleReaction(msg, emoji)}
+                onReactionPress={(emoji, anchor) => {
+                  if (!msg.id) return;
+                  setReactionCardHeight(180);
+                  setReactionPickerOpen(false);
+                  setReactionFocus({ messageId: msg.id, emoji, anchor });
+                }}
               />
             );
           }}
           inverted
           scrollEnabled={true}
+          onEndReached={() => {
+            if (!allowOlderLoadRef.current || !hasMore || isLoadingMore) return;
+            loadMore();
+          }}
+          onEndReachedThreshold={0.3}
+          onMomentumScrollBegin={() => {
+            allowOlderLoadRef.current = true;
+          }}
+          ListFooterComponent={
+            isLoadingMore ? (
+              <ActivityIndicator
+                color="#8c52ff"
+                style={{ marginVertical: 12 }}
+              />
+            ) : null
+          }
           onScrollToIndexFailed={() => undefined}
         />
 
@@ -1374,11 +1516,259 @@ export const ChatScreen: React.FC = () => {
             : undefined
         }
       />
+      <Modal
+        visible={Boolean(reactionSheet)}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setReactionFocus(null)}
+      >
+        <View style={styles.reactionBackdrop}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => setReactionFocus(null)}
+          />
+          {reactionSheet && reactionCardFrame ? (
+            <View
+              style={[
+                styles.reactionCard,
+                {
+                  top: reactionCardFrame.top,
+                  left: reactionCardFrame.left,
+                  width: reactionCardFrame.width,
+                },
+              ]}
+              onLayout={(event) => {
+                const nextHeight = Math.round(event.nativeEvent.layout.height);
+                if (nextHeight > 0 && nextHeight !== reactionCardHeight) {
+                  setReactionCardHeight(nextHeight);
+                }
+              }}
+            >
+              <Text style={styles.reactionTitle}>
+                {reactionSheet.people.length}{" "}
+                {reactionSheet.people.length === 1 ? "reação" : "reações"}
+              </Text>
+              <View style={styles.reactionChipRow}>
+                <TouchableOpacity
+                  style={[
+                    styles.reactionAllChip,
+                    reactionPickerOpen && styles.reactionAllChipOn,
+                  ]}
+                  onPress={() => setReactionPickerOpen((open) => !open)}
+                  accessibilityLabel="Mais reações"
+                >
+                  <Ionicons name="happy-outline" size={18} color="#d7d7d7" />
+                </TouchableOpacity>
+                {reactionSheet.chips.map(([emoji, count]) => {
+                  const active = reactionSheet.selected === emoji;
+                  return (
+                    <TouchableOpacity
+                      key={emoji}
+                      style={[
+                        styles.reactionFilterChip,
+                        active && styles.reactionFilterChipOn,
+                      ]}
+                      onPress={() =>
+                        setReactionFocus((current) =>
+                          current ? { ...current, emoji } : current,
+                        )
+                      }
+                    >
+                      <Text
+                        style={[
+                          styles.reactionFilterText,
+                          active && styles.reactionFilterTextOn,
+                        ]}
+                      >
+                        {emoji} {count}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              {reactionPickerOpen ? (
+                <EmojiPickerPanel
+                  height={reactionPickerHeight}
+                  style={styles.reactionPicker}
+                  onSelect={(emoji) => {
+                    const next = normalizeReactionEmoji(emoji);
+                    handleToggleReaction(reactionSheet.message, next);
+                    setReactionPickerOpen(false);
+                    setReactionFocus((current) =>
+                      current ? { ...current, emoji: next } : current,
+                    );
+                  }}
+                />
+              ) : null}
+              <ScrollView
+                style={[
+                  styles.reactionList,
+                  reactionPickerOpen && styles.reactionListCompact,
+                ]}
+                bounces={false}
+              >
+                {reactionSheet.people.map((person) => (
+                  <TouchableOpacity
+                    key={`${person.userId}-${person.emoji}`}
+                    style={styles.reactionPerson}
+                    activeOpacity={person.isOwn ? 0.7 : 1}
+                    onPress={() => {
+                      if (!person.isOwn) return;
+                      handleToggleReaction(reactionSheet.message, person.emoji);
+                    }}
+                  >
+                    {person.photoUri ? (
+                      <Image
+                        source={{ uri: person.photoUri }}
+                        style={styles.reactionAvatar}
+                      />
+                    ) : (
+                      <View style={styles.reactionAvatarFallback}>
+                        <Text style={styles.reactionAvatarInitial}>
+                          {person.initial}
+                        </Text>
+                      </View>
+                    )}
+                    <View style={styles.reactionPersonText}>
+                      <Text style={styles.reactionPersonName}>{person.name}</Text>
+                      {person.isOwn ? (
+                        <Text style={styles.reactionRemoveHint}>
+                          Clique para remover
+                        </Text>
+                      ) : null}
+                    </View>
+                    <Text style={styles.reactionPersonEmoji}>{person.emoji}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          ) : null}
+        </View>
+      </Modal>
     </Layout>
   );
 };
 
 const styles = StyleSheet.create({
+  reactionBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "transparent",
+  },
+  reactionCard: {
+    position: "absolute",
+    backgroundColor: "#1c1f21",
+    borderRadius: 16,
+    paddingTop: 14,
+    paddingBottom: 8,
+    paddingHorizontal: 14,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.45,
+    shadowRadius: 18,
+    elevation: 16,
+  },
+  reactionTitle: {
+    color: "#f2f2f2",
+    fontSize: 16,
+    fontWeight: "600",
+    marginBottom: 12,
+    marginLeft: 4,
+  },
+  reactionChipRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 8,
+    marginLeft: 2,
+  },
+  reactionAllChip: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#2a2d2f",
+  },
+  reactionAllChipOn: {
+    backgroundColor: "#3a3d40",
+  },
+  reactionPicker: {
+    marginBottom: 6,
+    borderRadius: 12,
+    overflow: "hidden",
+    borderTopWidth: 0,
+  },
+  reactionFilterChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: 16,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: "#2a2d2f",
+  },
+  reactionFilterChipOn: {
+    backgroundColor: "#1b7f45",
+  },
+  reactionFilterText: {
+    color: "#e6e6e6",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  reactionFilterTextOn: {
+    color: "#ffffff",
+  },
+  reactionList: {
+    maxHeight: 280,
+  },
+  reactionListCompact: {
+    maxHeight: 96,
+  },
+  reactionPerson: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 10,
+    paddingHorizontal: 4,
+  },
+  reactionAvatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    marginRight: 12,
+  },
+  reactionAvatarFallback: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    marginRight: 12,
+    backgroundColor: "#3a3d40",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  reactionAvatarInitial: {
+    color: "#ffffff",
+    fontWeight: "700",
+    fontSize: 16,
+  },
+  reactionPersonText: {
+    flex: 1,
+    minWidth: 0,
+  },
+  reactionPersonName: {
+    color: "#ffffff",
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  reactionRemoveHint: {
+    color: "#9a9a9a",
+    fontSize: 13,
+    marginTop: 2,
+  },
+  reactionPersonEmoji: {
+    fontSize: 26,
+    marginLeft: 12,
+  },
   container: { flex: 1 },
   centerContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
   errorText: { fontSize: 16, color: "red", marginTop: 12 },

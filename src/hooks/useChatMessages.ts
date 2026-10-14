@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import chatService, { ChatReplyTo, Message } from "../services/chatService";
-import { Timestamp } from "firebase/firestore";
+import chatService, {
+  CHAT_LIVE_MESSAGE_LIMIT,
+  CHAT_OLDER_PAGE_SIZE,
+  ChatReplyTo,
+  Message,
+} from "../services/chatService";
 import { ChatMention } from "../utils/chatMentions";
 
 interface UseChatMessagesResult {
@@ -14,47 +18,74 @@ interface UseChatMessagesResult {
   ) => Promise<void>;
   loadMore: () => Promise<void>;
   isLoading: boolean;
+  isLoadingMore: boolean;
   hasMore: boolean;
 }
+
+const mergeMessages = (older: Message[], live: Message[]): Message[] => {
+  const byId = new Map<string, Message>();
+  older.forEach((message) => {
+    if (message.id) byId.set(message.id, message);
+  });
+  live.forEach((message) => {
+    if (message.id) byId.set(message.id, message);
+  });
+  return Array.from(byId.values()).sort(
+    (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
+  );
+};
 
 export function useChatMessages(
   chatId: string,
   currentUserId: string,
-  pageSize = 20,
+  pageSize = CHAT_LIVE_MESSAGE_LIMIT,
   senderCoupleMember?: 1 | 2 | null,
 ): UseChatMessagesResult {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [liveMessages, setLiveMessages] = useState<Message[]>([]);
+  const [olderMessages, setOlderMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
-  const lastVisibleRef = useRef<any | null>(null);
-  const unsubscribeRef = useRef<() => void | null>(null);
+  const oldestCursorRef = useRef<any | null>(null);
+  const loadingMoreRef = useRef(false);
+  const hasOlderRef = useRef(false);
 
   useEffect(() => {
     if (!chatId) return;
     setIsLoading(true);
+    setOlderMessages([]);
+    oldestCursorRef.current = null;
+    hasOlderRef.current = false;
+    setHasMore(false);
 
-    // Subscribe to newest messages (real-time) - chatService provides newest `pageSize` messages
     const unsub = chatService.listenToMessages(
       chatId,
       (msgs, meta) => {
-        setMessages(msgs);
-        setHasMore(meta.hasMore);
+        setLiveMessages((previousLive) => {
+          if (hasOlderRef.current && previousLive.length) {
+            const liveIds = new Set(msgs.map((message) => message.id));
+            const dropped = previousLive.filter(
+              (message) => message.id && !liveIds.has(message.id),
+            );
+            if (dropped.length) {
+              setOlderMessages((previousOlder) =>
+                mergeMessages(dropped, previousOlder),
+              );
+            }
+          }
+          return msgs;
+        });
         setIsLoading(false);
-
-        // keep track of the oldest message's createdAt (for pagination)
-        if (msgs.length > 0) {
-          // messages are chronological (old->new)
-          const oldest = msgs[0];
-          lastVisibleRef.current = oldest.createdAt;
+        if (!hasOlderRef.current) {
+          oldestCursorRef.current = meta.oldestCursor;
+          setHasMore(meta.hasMore);
         }
       },
       pageSize,
     );
 
-    unsubscribeRef.current = unsub;
-
     return () => {
-      if (unsubscribeRef.current) unsubscribeRef.current();
+      unsub();
     };
   }, [chatId, pageSize]);
 
@@ -78,29 +109,41 @@ export function useChatMessages(
   );
 
   const loadMore = useCallback(async () => {
-    if (!chatId || !lastVisibleRef.current) return;
-    setIsLoading(true);
+    if (!chatId || !oldestCursorRef.current || loadingMoreRef.current || !hasMore) {
+      return;
+    }
+    loadingMoreRef.current = true;
+    setIsLoadingMore(true);
     try {
-      // lastVisibleRef stores a Date — we need Firestore Timestamp for startAfter
-      const lastTs = lastVisibleRef.current as unknown as Timestamp;
-      const older = await chatService.loadMoreMessages(
+      const page = await chatService.loadMoreMessages(
         chatId,
-        lastTs,
-        pageSize,
+        oldestCursorRef.current,
+        CHAT_OLDER_PAGE_SIZE,
       );
-      if (older.length === 0) {
+      if (page.messages.length === 0) {
         setHasMore(false);
       } else {
-        setMessages((prev) => [...older, ...prev]);
-        // update lastVisible to the new oldest
-        lastVisibleRef.current = older[0].createdAt;
+        oldestCursorRef.current = page.oldestCursor;
+        hasOlderRef.current = true;
+        setHasMore(page.hasMore);
+        setOlderMessages((previous) =>
+          mergeMessages(page.messages, previous),
+        );
       }
     } finally {
-      setIsLoading(false);
+      loadingMoreRef.current = false;
+      setIsLoadingMore(false);
     }
-  }, [chatId, pageSize]);
+  }, [chatId, hasMore]);
 
-  return { messages, sendMessage, loadMore, isLoading, hasMore };
+  return {
+    messages: mergeMessages(olderMessages, liveMessages),
+    sendMessage,
+    loadMore,
+    isLoading,
+    isLoadingMore,
+    hasMore,
+  };
 }
 
 export default useChatMessages;

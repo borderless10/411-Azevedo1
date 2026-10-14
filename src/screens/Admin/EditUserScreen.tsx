@@ -12,7 +12,7 @@ import { Layout } from "../../components/Layout/Layout";
 import { useNavigation } from "../../routes/NavigationContext";
 import { useAuth } from "../../hooks/useAuth";
 import { useTheme } from "../../contexts/ThemeContext";
-import { userService } from "../../services/userServices";
+import { userService, isAdminUser } from "../../services/userServices";
 import ConsultantPicker from "../../components/ui/ConsultantPicker";
 import { ConsultationPreferredDayPicker } from "../../components/Consultation/ConsultationPreferredDayPicker";
 import CustomModal from "../../components/ui/CustomModal";
@@ -40,7 +40,7 @@ export const EditUserScreen: React.FC = ({}: any) => {
   const [nickname, setNickname] = useState("");
   const [phone, setPhone] = useState("");
   const [role, setRole] = useState<
-    "user" | "consultor" | "admin" | "cliente_premium"
+    "user" | "consultor" | "supervisor" | "admin" | "cliente_premium"
   >("user");
   const [consultants, setConsultants] = useState<any[]>([]);
   const [consultantId, setConsultantId] = useState<string | null>(null);
@@ -130,8 +130,9 @@ export const EditUserScreen: React.FC = ({}: any) => {
         name: name.trim(),
         nickname: nickname.trim(),
         phone: phone.trim(),
-        role,
-        isAdmin: role === "admin",
+        ...(isAdminUser(user)
+          ? { role, isAdmin: role === "admin" }
+          : {}),
         consultantId: consultantId === null ? null : consultantId,
         consultationSchedulingUrl:
           role === "user" || role === "cliente_premium"
@@ -228,39 +229,44 @@ export const EditUserScreen: React.FC = ({}: any) => {
               placeholderTextColor={colors.placeholder}
             />
 
-            <Text style={[styles.label, { color: colors.text }]}>Papel</Text>
-            <View style={styles.roleRow}>
-              {(
-                [
-                  ["user", "Cliente"],
-                  ["consultor", "Consultor"],
-                  ["cliente_premium", "Cliente Premium"],
-                  ["admin", "Admin"],
-                ] as const
-              ).map(([value, labelText]) => (
-                <TouchableOpacity
-                  key={value}
-                  style={[
-                    styles.roleButton,
-                    {
-                      backgroundColor:
-                        role === value ? colors.primary : colors.inputBackground,
-                      borderColor: colors.border,
-                    },
-                  ]}
-                  onPress={() => setRole(value)}
-                >
-                  <Text
-                    style={[
-                      styles.roleText,
-                      { color: role === value ? "#fff" : colors.textSecondary },
-                    ]}
-                  >
-                    {labelText}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+            {isAdminUser(user) ? (
+              <>
+                <Text style={[styles.label, { color: colors.text }]}>Papel</Text>
+                <View style={styles.roleRow}>
+                  {(
+                    [
+                      ["user", "Cliente"],
+                      ["consultor", "Consultor"],
+                      ["supervisor", "Supervisor"],
+                      ["cliente_premium", "Cliente Premium"],
+                      ["admin", "Admin"],
+                    ] as const
+                  ).map(([value, labelText]) => (
+                    <TouchableOpacity
+                      key={value}
+                      style={[
+                        styles.roleButton,
+                        {
+                          backgroundColor:
+                            role === value ? colors.primary : colors.inputBackground,
+                          borderColor: colors.border,
+                        },
+                      ]}
+                      onPress={() => setRole(value)}
+                    >
+                      <Text
+                        style={[
+                          styles.roleText,
+                          { color: role === value ? "#fff" : colors.textSecondary },
+                        ]}
+                      >
+                        {labelText}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </>
+            ) : null}
 
             {isClientRole && (
               <>

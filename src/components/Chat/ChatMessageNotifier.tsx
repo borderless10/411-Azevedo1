@@ -14,11 +14,11 @@ import { useUserChats } from "../../hooks/useUserChats";
 import { useNavigation } from "../../routes/NavigationContext";
 import {
   requestNotificationPermissions,
+  showChatMessageNotification,
 } from "../../services/notificationServices";
 import { userService } from "../../services/userServices";
-import {
-  getChatLastMessageTime,
-} from "../../utils/chatUtils";
+import chatService, { Chat } from "../../services/chatService";
+import { getChatLastMessageTime } from "../../utils/chatUtils";
 import { getActiveChatId } from "../../utils/chatActivity";
 
 type BannerState = {
@@ -34,6 +34,7 @@ export const ChatMessageNotifier: React.FC = () => {
   const { user } = useAuth();
   const { navigate } = useNavigation();
   const { chats } = useUserChats(user?.id || null, user?.role || null);
+  const [globalChat, setGlobalChat] = useState<Chat | null>(null);
   const insets = useSafeAreaInsets();
   const [banner, setBanner] = useState<BannerState | null>(null);
   const slideAnim = useRef(new Animated.Value(-120)).current;
@@ -48,6 +49,14 @@ export const ChatMessageNotifier: React.FC = () => {
     requestNotificationPermissions().catch(() => {
       // Permissão opcional; banner in-app continua funcionando.
     });
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) {
+      setGlobalChat(null);
+      return;
+    }
+    return chatService.listenToChat("global", setGlobalChat);
   }, [user?.id]);
 
   useEffect(() => {
@@ -76,13 +85,26 @@ export const ChatMessageNotifier: React.FC = () => {
   }, [banner, slideAnim]);
 
   useEffect(() => {
-    if (!user?.id || !chats?.length) return;
+    if (!user?.id) return;
+
+    const watched = [
+      ...(chats || []),
+      ...(globalChat ? [globalChat] : []),
+    ];
+    if (!watched.length) return;
 
     let cancelled = false;
 
     const handleNewMessages = async () => {
-      for (const chat of chats) {
-        if (chat.type !== "direct" || !chat.lastMessage?.text) continue;
+      for (const chat of watched) {
+        if (!chat.lastMessage?.text) continue;
+        if (chat.lastMessage.kind === "reaction") {
+          lastMessageTimesRef.current.set(
+            chat.id,
+            getChatLastMessageTime(chat),
+          );
+          continue;
+        }
 
         const chatId = chat.id;
         const currentTime = getChatLastMessageTime(chat);
@@ -109,13 +131,15 @@ export const ChatMessageNotifier: React.FC = () => {
             }
 
             if (cancelled) return;
-            if (AppState.currentState !== "active") {
-              lastMessageTimesRef.current.set(chatId, currentTime);
-              continue;
-            }
 
             const messageText = chat.lastMessage.text;
-            setBanner({ chatId, senderName, messageText });
+            if (AppState.currentState !== "active") {
+              showChatMessageNotification(senderName, messageText, chatId).catch(
+                () => undefined,
+              );
+            } else {
+              setBanner({ chatId, senderName, messageText });
+            }
           }
         }
 
@@ -130,7 +154,7 @@ export const ChatMessageNotifier: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [chats, user?.id]);
+  }, [chats, globalChat, user?.id]);
 
   const openChat = () => {
     if (!banner) return;
