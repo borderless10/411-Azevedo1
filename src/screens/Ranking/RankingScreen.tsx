@@ -18,7 +18,7 @@ import { useAuth } from "../../hooks/useAuth";
 import { useNavigation } from "../../routes/NavigationContext";
 import { RankingPreference } from "../../types/auth";
 import { profilePhotoUri } from "../../utils/chatDisplayNames";
-import { getCoupleDisplayName, isCoupleAccount } from "../../utils/coupleAccount";
+import { isCoupleAccount } from "../../utils/coupleAccount";
 
 type Row = {
   position: number;
@@ -123,43 +123,43 @@ export const RankingScreen = () => {
           rankingServices.getRanking(50, activeLeague),
           rankingServices.getRankingConfig(),
         ]);
-        if (mounted) setCutoffDateKey(config.cutoffDateKey);
-        const out: Row[] = [];
+        if (!mounted) return;
+        setCutoffDateKey(config.cutoffDateKey);
+        const out: Row[] = ranking.map((r: RankingEntry, i) => ({
+          position: i + 1,
+          userId: r.userId,
+          displayName: r.displayName || r.userId,
+          zeroDays: r.rankingPoints,
+          nickname: r.nickname ?? null,
+          isCouple: r.isCouple,
+        }));
+        setRows(out);
+        setLoading(false);
 
-        for (let i = 0; i < ranking.length; i++) {
-          const r: RankingEntry = ranking[i];
-          let display = r.userId;
-          let photo: string | null = null;
-          let nickname: string | null = null;
-          let role: string | null = null;
-          let couple = false;
-          try {
-            const u = await userService.getUserById(r.userId);
-            if (u) {
-              couple = isCoupleAccount(u);
-              display = couple
-                ? getCoupleDisplayName(u)
-                : u.nickname || u.username || u.name || u.email || display;
-              photo = (u as any).photoBase64 ?? null;
-              nickname = (u as any).nickname ?? null;
-              role = (u as any).role ?? null;
+        const withPhotos = await Promise.all(
+          out.slice(0, 20).map(async (row) => {
+            try {
+              const profile = await userService.getUserById(row.userId);
+              return {
+                userId: row.userId,
+                photoBase64: profile?.photoBase64 ?? null,
+              };
+            } catch {
+              return { userId: row.userId, photoBase64: null };
             }
-          } catch (e) {
-            // ignore
-          }
-          out.push({
-            position: i + 1,
-            userId: r.userId,
-            displayName: display,
-            zeroDays: r.rankingPoints,
-            photoBase64: photo,
-            nickname,
-            role,
-            isCouple: couple,
-          });
-        }
-
-        if (mounted) setRows(out);
+          }),
+        );
+        if (!mounted) return;
+        const photos = new Map(
+          withPhotos.map((item) => [item.userId, item.photoBase64]),
+        );
+        setRows((current) =>
+          current.map((row) =>
+            photos.has(row.userId)
+              ? { ...row, photoBase64: photos.get(row.userId) }
+              : row,
+          ),
+        );
       } catch (error) {
         console.error("❌ [RANKING SCREEN] Erro ao carregar ranking:", error);
       } finally {

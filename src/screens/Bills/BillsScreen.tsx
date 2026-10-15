@@ -38,6 +38,10 @@ import {
 } from "../../services/billServices";
 import { planningServices } from "../../services/planningServices";
 import { isPayablePlanningBill } from "../../types/planning";
+import {
+  clientSeesOverdueHighlight,
+  openObligationDueDate,
+} from "../../utils/planningBillRules";
 import expenseServices from "../../services/expenseServices";
 import {
   scheduleBillNotification,
@@ -46,11 +50,7 @@ import {
   syncBillNotifications,
 } from "../../services/notificationServices";
 import { Bill } from "../../types/bill";
-import {
-  billStatusFromDueDate,
-  classifyDueDate,
-  resolveDueDateFromDay,
-} from "../../utils/dueDateFromDay";
+import { classifyDueDate } from "../../utils/dueDateFromDay";
 import ConfirmDeleteModal from "../../components/ui/ConfirmDeleteModal";
 import { creditCardServices } from "../../services/creditCardServices";
 import { CreditCard } from "../../types/creditCard";
@@ -99,6 +99,7 @@ export const BillsScreen = () => {
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
   const [dueDate, setDueDate] = useState("");
+  const [billRecurring, setBillRecurring] = useState(false);
   const [formPaymentMethod, setFormPaymentMethod] = useState<
     "cash" | "debit_card" | "credit_card" | "pix"
   >("cash");
@@ -217,22 +218,26 @@ export const BillsScreen = () => {
       return "paid";
     }
 
-    if (bill?.dueDay !== undefined && bill?.dueDay !== null) {
-      return billStatusFromDueDate(resolveDueDateFromDay(Number(bill.dueDay)));
-    }
-
     const rawDueDate = bill?.dueDate;
-    if (rawDueDate) {
-      const dueDate =
-        typeof rawDueDate?.toDate === "function"
-          ? rawDueDate.toDate()
-          : rawDueDate instanceof Date
-            ? rawDueDate
-            : new Date(rawDueDate);
-
-      if (!isNaN(dueDate.getTime())) {
-        return billStatusFromDueDate(dueDate);
-      }
+    const storedDue =
+      rawDueDate && typeof rawDueDate?.toDate === "function"
+        ? rawDueDate.toDate()
+        : rawDueDate instanceof Date
+          ? rawDueDate
+          : null;
+    if (
+      clientSeesOverdueHighlight(
+        {
+          dueDay: bill?.dueDay,
+          dueDate: storedDue,
+          status: paidInCurrentCycle ? "paid" : "pending",
+          paidDate: paidInCurrentCycle ? paidAtValid : null,
+          inactive: bill?.inactive,
+        },
+        new Date(),
+      )
+    ) {
+      return "overdue";
     }
 
     return "pending";
@@ -303,18 +308,16 @@ export const BillsScreen = () => {
         const mapping_result = { mapped: 0, expectedExpenses: 0 };
         const mapped = (planning?.bills || [])
           .filter(isPayablePlanningBill)
+          .filter((b) => isConsultorManagingClient || b.inactive !== true)
           .map((b) => {
           mapping_result.mapped++;
-          const dueDay =
-            b.dueDay !== undefined && b.dueDay !== null
-              ? Number(b.dueDay)
-              : b.dueDate
-                ? new Date(b.dueDate).getDate()
-                : undefined;
-          let dueDate: Date = b.dueDate || b.createdAt || new Date();
-          if (dueDay) {
-            dueDate = resolveDueDateFromDay(dueDay);
-          }
+          const obligationDate = openObligationDueDate({
+            dueDay: b.dueDay,
+            dueDate: b.dueDate || null,
+            status: b.status,
+            paidDate: b.paidDate || null,
+            inactive: b.inactive,
+          });
           const status = getPlanningBillStatus(b, cycleStartedAt);
           return {
             id: b.id!,
@@ -323,13 +326,16 @@ export const BillsScreen = () => {
             description: b.notes,
             amount: b.amount,
             paymentMethod: b.paymentMethod as any,
-            dueDate,
-            dueDay,
+            dueDate: obligationDate || undefined,
+            dueDay: b.dueDay,
             status,
             paidDate: status === "paid" ? b.paidDate : undefined,
             notificationId: undefined,
             createdAt: b.createdAt || new Date(),
             updatedAt: b.updatedAt || new Date(),
+            inactive: b.inactive === true,
+            markedOverdue: b.markedOverdue === true,
+            recurring: b.recurring === true,
           } as Bill;
         });
 
@@ -468,7 +474,7 @@ export const BillsScreen = () => {
     if (parts.length === 1) {
       const day = parseInt(parts[0], 10);
       if (!Number.isFinite(day) || day < 1 || day > 31) return null;
-      return resolveDueDateFromDay(day);
+      return openObligationDueDate({ dueDay: day });
     }
     if (parts.length === 3) {
       const due = new Date(
@@ -482,20 +488,25 @@ export const BillsScreen = () => {
   };
 
   const handleCreateBill = async () => {
-    if (!user || !title || !amount || !dueDate) {
-      Alert.alert("Erro", "Preencha todos os campos obrigatórios");
+    if (!user || !title || !amount) {
+      Alert.alert("Erro", "Preencha nome e valor");
       return;
     }
 
     try {
       setSaving(true);
 
-      const dueDateObj = parseDueDateInput(dueDate);
-      if (!dueDateObj) {
+      const dueText = dueDate.trim();
+      const dueDateObj = dueText ? parseDueDateInput(dueText) : null;
+      if (dueText && !dueDateObj) {
         Alert.alert(
           "Erro",
           "Data inválida. Informe só o dia (ex.: 13) ou DD/MM/YYYY",
         );
+        return;
+      }
+      if (!isPlanningSource && !dueDateObj) {
+        Alert.alert("Erro", "Informe o vencimento");
         return;
       }
 
@@ -505,22 +516,26 @@ export const BillsScreen = () => {
 
       const newBill = isPlanningSource
         ? await (async () => {
+            const dueFields = dueDateObj
+              ? { dueDay: dueDateObj.getDate(), dueDate: dueDateObj }
+              : {};
             const created = isConsultorManagingClient
               ? await planningServices.addBill(user.id, billsOwnerId, {
                   name: title,
                   amount: amountValue,
                   notes: description || undefined,
-                  dueDay: dueDateObj.getDate(),
                   paymentMethod: formPaymentMethod,
+                  recurring: billRecurring,
+                  ...dueFields,
                 } as any)
               : await planningServices.addBillByClient(billsOwnerId, {
                   name: title,
                   amount: amountValue,
                   notes: description || undefined,
-                  dueDay: dueDateObj.getDate(),
-                  dueDate: dueDateObj,
                   paymentMethod: formPaymentMethod,
-                });
+                  recurring: billRecurring,
+                  ...dueFields,
+                } as any);
             return {
               id: created.id!,
               userId: billsOwnerId,
@@ -528,7 +543,7 @@ export const BillsScreen = () => {
               description: created.notes,
               amount: created.amount,
               paymentMethod: formPaymentMethod,
-              dueDate: dueDateObj,
+              dueDate: dueDateObj || undefined,
               status: "pending" as const,
               createdAt: created.createdAt || new Date(),
               updatedAt: created.updatedAt || new Date(),
@@ -539,11 +554,10 @@ export const BillsScreen = () => {
             description: description || undefined,
             amount: amountValue,
             paymentMethod: formPaymentMethod,
-            dueDate: dueDateObj,
+            dueDate: dueDateObj as Date,
           });
 
-      // Agendar notificação (somente contas da coleção bills)
-      if (!isPlanningSource) {
+      if (!isPlanningSource && dueDateObj) {
         const notificationId = await scheduleBillNotification(
           newBill.id,
           title,
@@ -844,15 +858,17 @@ export const BillsScreen = () => {
   const getStatusLabel = (status: string, dueDate?: Date) => {
     if (status === "paid") return "Paga";
     if (status === "overdue") return "Vencida";
-    if (dueDate && classifyDueDate(dueDate) === "due_today") return "Vence hoje";
+    if (!dueDate) return "Sem vencimento";
+    if (classifyDueDate(dueDate) === "due_today") return "Vence hoje";
     return "A vencer";
   };
 
+  const activeBills = bills.filter((bill) => !(bill as any).inactive);
   const filteredBills = getFilteredBills();
-  const totalPending = bills
+  const totalPending = activeBills
     .filter((b) => b.status === "pending")
     .reduce((sum, b) => sum + b.amount, 0);
-  const totalOverdue = bills
+  const totalOverdue = activeBills
     .filter((b) => b.status === "overdue")
     .reduce((sum, b) => sum + b.amount, 0);
 
@@ -1067,6 +1083,16 @@ export const BillsScreen = () => {
                       {getStatusLabel(bill.status, bill.dueDate)}
                     </Text>
                   </View>
+                  {isConsultorManagingClient && (bill as any).markedOverdue ? (
+                    <Text style={{ color: "#b45309", fontWeight: "700" }}>
+                      Já vencida
+                    </Text>
+                  ) : null}
+                  {isConsultorManagingClient && (bill as any).inactive ? (
+                    <Text style={{ color: colors.textSecondary, fontWeight: "700" }}>
+                      Inativa
+                    </Text>
+                  ) : null}
                 </View>
 
                 <View style={styles.billDetails}>
@@ -1089,12 +1115,9 @@ export const BillsScreen = () => {
                     <Text
                       style={[styles.billDate, { color: colors.textSecondary }]}
                     >
-                      Vence{" "}
                       {bill.dueDate
-                        ? formatDate(bill.dueDate)
-                        : bill.dueDay
-                          ? `dia ${bill.dueDay}`
-                          : "—"}
+                        ? `Vence ${formatDate(bill.dueDate)}`
+                        : "Sem vencimento"}
                     </Text>
                   </View>
                   <View style={styles.billDetailItem}>
@@ -1111,7 +1134,49 @@ export const BillsScreen = () => {
                   </View>
                 </View>
 
-                {bill.status === "pending" || bill.status === "overdue" ? (
+                {isConsultorManagingClient && isPlanningSource && !(bill as any)._isExpectedExpense ? (
+                  <View style={styles.billActions}>
+                    <TouchableOpacity
+                      style={[styles.actionButton, { backgroundColor: "#b45309" }]}
+                      onPress={() =>
+                        planningServices
+                          .updateBill(user!.id, billsOwnerId, bill.id, {
+                            markedOverdue: !(bill as any).markedOverdue,
+                          } as any)
+                          .then(() => loadBills())
+                          .catch(() =>
+                            Alert.alert("Erro", "Não foi possível atualizar a marcação"),
+                          )
+                      }
+                    >
+                      <Text style={styles.actionButtonText}>
+                        {(bill as any).markedOverdue
+                          ? "Retirar já vencida"
+                          : "Já vencida"}
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.actionButton, { backgroundColor: colors.primary }]}
+                      onPress={() =>
+                        planningServices
+                          .updateBill(user!.id, billsOwnerId, bill.id, {
+                            inactive: !(bill as any).inactive,
+                          } as any)
+                          .then(() => loadBills())
+                          .catch(() =>
+                            Alert.alert("Erro", "Não foi possível atualizar a conta"),
+                          )
+                      }
+                    >
+                      <Text style={styles.actionButtonText}>
+                        {(bill as any).inactive ? "Reativar" : "Desativar"}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : null}
+
+                {(bill.status === "pending" || bill.status === "overdue") &&
+                !(bill as any).inactive ? (
                   <View style={styles.billActions}>
                     <TouchableOpacity
                       style={[
@@ -1134,7 +1199,7 @@ export const BillsScreen = () => {
                       <Text style={styles.actionButtonText}>Excluir</Text>
                     </TouchableOpacity>
                   </View>
-                ) : (
+                ) : bill.status === "paid" && !(bill as any).inactive ? (
                   <View style={styles.billActions}>
                     <TouchableOpacity
                       style={[
@@ -1147,7 +1212,7 @@ export const BillsScreen = () => {
                       <Text style={styles.actionButtonText}>Não pago</Text>
                     </TouchableOpacity>
                   </View>
-                )}
+                ) : null}
               </View>
             ))
           )}
@@ -1311,8 +1376,16 @@ export const BillsScreen = () => {
 
                   <View style={styles.inputGroup}>
                     <Text style={[styles.inputLabel, { color: colors.text }]}>
-                      Data de Vencimento *
+                      Data de Vencimento
                     </Text>
+                    <TouchableOpacity
+                      style={{ marginBottom: 8 }}
+                      onPress={() => setBillRecurring((current) => !current)}
+                    >
+                      <Text style={{ color: colors.text }}>
+                        {billRecurring ? "Recorrente: sim" : "Recorrente: não"}
+                      </Text>
+                    </TouchableOpacity>
                     <TextInput
                       style={[
                         styles.input,

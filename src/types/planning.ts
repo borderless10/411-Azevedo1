@@ -159,6 +159,8 @@ export interface Bill {
   notes?: string;
   status?: BillStatus;
   paidDate?: Date;
+  markedOverdue?: boolean;
+  inactive?: boolean;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -178,6 +180,8 @@ export interface BillFirestore {
   notes?: string;
   status?: BillStatus;
   paidDate?: Timestamp;
+  markedOverdue?: boolean;
+  inactive?: boolean;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
@@ -216,5 +220,10 @@ export interface ExpectedItemFirestore {
 export const isPayablePlanningBill = (entry?: {
   dailyTracking?: boolean;
 }): boolean => !Boolean(entry?.dailyTracking);
+
+export const isActivePlanningBill = (entry?: {
+  dailyTracking?: boolean;
+  inactive?: boolean;
+}): boolean => isPayablePlanningBill(entry) && entry?.inactive !== true;
 
 export default Planning;

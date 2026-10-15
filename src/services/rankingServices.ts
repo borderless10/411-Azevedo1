@@ -1,17 +1,32 @@
 /**
  * Serviço para calcular ranking baseado em pontos da planilha de consumo moderado
  */
-import { query, getDocs, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
+import {
+  query,
+  getDocs,
+  getDoc,
+  setDoc,
+  deleteDoc,
+  writeBatch,
+  serverTimestamp,
+  where,
+  orderBy,
+  limit,
+} from "firebase/firestore";
+import { db } from "../lib/firebase";
 import {
   getBudgetsCollection,
   convertBudgetFromFirestore,
   getDocData,
   getAppConfigDoc,
+  getRankingSnapshotsCollection,
+  getRankingSnapshotDoc,
 } from "../lib/firestore";
 import { userService, userParticipatesInRanking } from "./userServices";
 import rankingPlanilhaService from "./rankingPlanilhaService";
-import { isCoupleAccount } from "../utils/coupleAccount";
+import { getCoupleDisplayName, isCoupleAccount } from "../utils/coupleAccount";
 import { formatDateToString } from "../utils/dateUtils";
+import { User } from "../types/auth";
 
 const RANKING_CONFIG_ID = "ranking";
 
@@ -26,8 +41,40 @@ export type RankingConfig = {
 export type RankingEntry = {
   userId: string;
   rankingPoints: number;
+  displayName: string;
+  nickname?: string | null;
+  isCouple: boolean;
   /** @deprecated use rankingPoints */
   zeroDays?: number;
+};
+
+const displayNameFor = (user: User): string =>
+  isCoupleAccount(user)
+    ? getCoupleDisplayName(user)
+    : user.nickname || user.username || user.name || user.email || user.id;
+
+const snapshotFromUser = (
+  user: User,
+  rankingPoints: number,
+): RankingEntry => ({
+  userId: user.id,
+  rankingPoints,
+  displayName: displayNameFor(user),
+  nickname: user.nickname ?? null,
+  isCouple: isCoupleAccount(user),
+  zeroDays: rankingPoints,
+});
+
+const entryFromSnapshot = (id: string, data: Record<string, unknown>): RankingEntry => {
+  const rankingPoints = Number(data.rankingPoints) || 0;
+  return {
+    userId: id,
+    rankingPoints,
+    displayName: String(data.displayName || id),
+    nickname: typeof data.nickname === "string" ? data.nickname : null,
+    isCouple: data.isCouple === true,
+    zeroDays: rankingPoints,
+  };
 };
 
 export type RankingLeague = "individual" | "couple";
@@ -63,69 +110,167 @@ export const rankingServices = {
       resetAt: serverTimestamp(),
       resetBy: adminUserId,
     });
+    await this.zeroSnapshots();
+  },
+
+  async refreshUserSnapshot(userId: string): Promise<void> {
+    if (!userId) return;
+    try {
+      const [user, config, { budgetServices }] = await Promise.all([
+        userService.getUserById(userId),
+        this.getRankingConfig(),
+        import("./budgetServices"),
+      ]);
+      const ref = getRankingSnapshotDoc(userId);
+      if (!user || !userParticipatesInRanking(user)) {
+        const existing = await getDoc(ref);
+        if (existing.exists()) await deleteDoc(ref);
+        return;
+      }
+      const budgets = await budgetServices.getAllBudgets(userId);
+      const rankingPoints = rankingPlanilhaService.getTotalPointsFromBudgets(
+        budgets,
+        config.cutoffDateKey,
+      );
+      const entry = snapshotFromUser(user, rankingPoints);
+      await setDoc(ref, {
+        userId: entry.userId,
+        rankingPoints: entry.rankingPoints,
+        league: entry.isCouple ? "couple" : "individual",
+        displayName: entry.displayName,
+        nickname: entry.nickname || "",
+        isCouple: entry.isCouple,
+        updatedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      console.error("❌ [RANKING SERVICE] Erro ao gravar resumo:", error);
+    }
   },
 
   /**
-   * Ranking: clientes com preferência "participar", ordenados por pontos
-   * do ciclo atual (até o admin resetar). Casais e contas individuais em ligas separadas.
+   * Ranking: lê os resumos. Se ainda não existirem, calcula uma vez e grava.
    */
   async getRanking(
     topN: number = 20,
     league: RankingLeague = "individual",
   ): Promise<RankingEntry[]> {
     try {
-      const [allUsers, snapshot, config] = await Promise.all([
-        userService.getAllUsers(),
-        getDocs(query(getBudgetsCollection())),
-        this.getRankingConfig(),
-      ]);
-
-      const budgetsByUser: Record<
-        string,
-        ReturnType<typeof convertBudgetFromFirestore>[]
-      > = {};
-
-      snapshot.docs.forEach((docSnap) => {
-        const data: any = getDocData(docSnap);
-        const budget = convertBudgetFromFirestore(data);
-        const uid = budget.userId;
-        if (!budgetsByUser[uid]) {
-          budgetsByUser[uid] = [];
-        }
-        budgetsByUser[uid].push(budget);
-      });
-
-      const pointsByUser = new Map<string, number>();
-      Object.entries(budgetsByUser).forEach(([userId, budgets]) => {
-        pointsByUser.set(
-          userId,
-          rankingPlanilhaService.getTotalPointsFromBudgets(
-            budgets,
-            config.cutoffDateKey,
-          ),
-        );
-      });
-
-      const arr: RankingEntry[] = allUsers
-        .filter(userParticipatesInRanking)
-        .filter((user) =>
-          league === "couple" ? isCoupleAccount(user) : !isCoupleAccount(user),
+      const listed = await this.listSnapshots(topN, league);
+      if (listed) return listed;
+      const built = await this.buildRankingFromCollections();
+      if (built.length === 0) return [];
+      await this.writeSnapshots(built);
+      return built
+        .filter((entry) =>
+          league === "couple" ? entry.isCouple : !entry.isCouple,
         )
-        .map((user) => {
-          const rankingPoints = pointsByUser.get(user.id) ?? 0;
-          return {
-            userId: user.id,
-            rankingPoints,
-            zeroDays: rankingPoints,
-          };
-        });
-
-      arr.sort((a, b) => b.rankingPoints - a.rankingPoints);
-
-      return arr.slice(0, topN);
+        .slice(0, topN);
     } catch (error) {
       console.error("❌ [RANKING SERVICE] Erro ao calcular ranking:", error);
       return [];
+    }
+  },
+
+  async listSnapshots(
+    topN: number,
+    league: RankingLeague,
+  ): Promise<RankingEntry[] | null> {
+    try {
+      const collectionRef = getRankingSnapshotsCollection();
+      const probe = await getDocs(query(collectionRef, limit(1)));
+      if (probe.empty) return null;
+      const snapshot = await getDocs(
+        query(
+          collectionRef,
+          where("league", "==", league),
+          orderBy("rankingPoints", "desc"),
+          limit(topN),
+        ),
+      );
+      return snapshot.docs.map((docSnap) =>
+        entryFromSnapshot(docSnap.id, docSnap.data() as Record<string, unknown>),
+      );
+    } catch (error) {
+      const code = String((error as { code?: string })?.code || "");
+      if (
+        code.includes("failed-precondition") ||
+        code.includes("permission-denied")
+      ) {
+        return null;
+      }
+      throw error;
+    }
+  },
+
+  async buildRankingFromCollections(): Promise<RankingEntry[]> {
+    const [allUsers, snapshot, config] = await Promise.all([
+      userService.getAllUsers(),
+      getDocs(query(getBudgetsCollection())),
+      this.getRankingConfig(),
+    ]);
+
+    const budgetsByUser: Record<
+      string,
+      ReturnType<typeof convertBudgetFromFirestore>[]
+    > = {};
+
+    snapshot.docs.forEach((docSnap) => {
+      const budget = convertBudgetFromFirestore(getDocData(docSnap));
+      const uid = budget.userId;
+      if (!budgetsByUser[uid]) budgetsByUser[uid] = [];
+      budgetsByUser[uid].push(budget);
+    });
+
+    return allUsers
+      .filter(userParticipatesInRanking)
+      .map((user) =>
+        snapshotFromUser(
+          user,
+          rankingPlanilhaService.getTotalPointsFromBudgets(
+            budgetsByUser[user.id] || [],
+            config.cutoffDateKey,
+          ),
+        ),
+      )
+      .sort((a, b) => b.rankingPoints - a.rankingPoints);
+  },
+
+  async writeSnapshots(entries: RankingEntry[]): Promise<void> {
+    const chunkSize = 400;
+    for (let index = 0; index < entries.length; index += chunkSize) {
+      const batch = writeBatch(db);
+      entries.slice(index, index + chunkSize).forEach((entry) => {
+        batch.set(getRankingSnapshotDoc(entry.userId), {
+          userId: entry.userId,
+          rankingPoints: entry.rankingPoints,
+          league: entry.isCouple ? "couple" : "individual",
+          displayName: entry.displayName,
+          nickname: entry.nickname || "",
+          isCouple: entry.isCouple,
+          updatedAt: serverTimestamp(),
+        });
+      });
+      try {
+        await batch.commit();
+      } catch (error) {
+        console.error("❌ [RANKING SERVICE] Erro ao gravar resumos:", error);
+      }
+    }
+  },
+
+  async zeroSnapshots(): Promise<void> {
+    const snapshot = await getDocs(getRankingSnapshotsCollection());
+    const chunkSize = 400;
+    for (let index = 0; index < snapshot.docs.length; index += chunkSize) {
+      const batch = writeBatch(db);
+      snapshot.docs.slice(index, index + chunkSize).forEach((docSnap) => {
+        batch.set(
+          docSnap.ref,
+          { rankingPoints: 0, updatedAt: serverTimestamp() },
+          { merge: true },
+        );
+      });
+      await batch.commit();
     }
   },
 

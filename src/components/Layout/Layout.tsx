@@ -11,6 +11,7 @@ import {
   Animated,
   Text,
 } from "react-native";
+import { useDesktopWeb } from "../../utils/desktopWeb";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { Header } from "../Header/Header";
@@ -32,6 +33,7 @@ interface LayoutProps {
   rightAction?: React.ReactNode;
   style?: ViewStyle;
   contentStyle?: ViewStyle;
+  desktopWidth?: number | "full";
 }
 
 export const Layout: React.FC<LayoutProps> = ({
@@ -43,7 +45,9 @@ export const Layout: React.FC<LayoutProps> = ({
   rightAction,
   style,
   contentStyle,
+  desktopWidth = 1100,
 }) => {
+  const desktop = useDesktopWeb();
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const { colors } = useTheme();
@@ -60,6 +64,68 @@ export const Layout: React.FC<LayoutProps> = ({
       useNativeDriver: true,
     }).start();
   }, []);
+
+  if (desktop) {
+    const limit = desktopWidth === "full" ? null : desktopWidth;
+    return (
+      <SafeAreaView
+        edges={["top", "left", "right", "bottom"]}
+        style={[styles.container, { backgroundColor: colors.background }, style]}
+      >
+        <View style={styles.desktopRow}>
+          <Sidebar visible docked onClose={() => undefined} />
+          <View style={styles.desktopMain}>
+            {showHeader && (
+              <View
+                style={[
+                  styles.headerBlock,
+                  { backgroundColor: colors.background, borderBottomColor: colors.border },
+                ]}
+              >
+                <View style={styles.headerWrapper}>
+                  <Header
+                    title={title}
+                    showBackButton={showBackButton}
+                    showProfile={true}
+                    rightAction={rightAction}
+                    style={styles.header}
+                  />
+                </View>
+                {showCoupleBar ? (
+                  <TouchableOpacity
+                    style={styles.coupleBar}
+                    onPress={() => {
+                      void clearActiveCoupleMember();
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="heart" size={13} color="#ff6b8a" />
+                    <Text style={styles.coupleBarName} numberOfLines={1}>
+                      {getCoupleMemberLabel(user, activeCoupleMember as 1 | 2)}
+                    </Text>
+                    <View style={styles.coupleBarDivider} />
+                    <Text style={styles.coupleBarAction}>Trocar integrante</Text>
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+            )}
+            <View
+              style={[
+                styles.content,
+                { backgroundColor: colors.background },
+                contentStyle,
+                limit ? styles.desktopContentCenter : null,
+              ]}
+            >
+              <View style={limit ? { flex: 1, width: "100%", maxWidth: limit } : styles.desktopFill}>
+                {children}
+              </View>
+            </View>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView
@@ -141,6 +207,21 @@ export const Layout: React.FC<LayoutProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  desktopRow: {
+    flex: 1,
+    flexDirection: "row",
+    minHeight: 0,
+  },
+  desktopMain: {
+    flex: 1,
+    minWidth: 0,
+  },
+  desktopFill: {
+    flex: 1,
+  },
+  desktopContentCenter: {
+    alignItems: "center",
   },
   headerBlock: {
     borderBottomWidth: 1,

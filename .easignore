@@ -1,0 +1,12 @@
+*.aab
+docs/
+scripts/__pycache__/
+*.mp4
+*.webm
+*.docx
+cloudflare/
+android/app/build
+android/build
+android/.gradle
+.gradle-local
+dist/

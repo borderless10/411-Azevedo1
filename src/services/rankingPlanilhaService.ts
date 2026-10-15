@@ -163,6 +163,8 @@ export const rankingPlanilhaService = {
     if (!firstRegistered && !secondRegistered) {
       await markMissedDay(userId, firstDay, today, coupleMember);
       await markMissedDay(userId, secondDay, today, coupleMember);
+      const { rankingServices } = await import("./rankingServices");
+      await rankingServices.refreshUserSnapshot(userId);
     }
   },
 
@@ -231,6 +233,8 @@ export const rankingPlanilhaService = {
 
     entries.push(entry);
     await persistEntries(userId, monthYear, budget, entries, coupleMember);
+    const { rankingServices } = await import("./rankingServices");
+    await rankingServices.refreshUserSnapshot(userId);
 
     return { points, applied: true, type };
   },

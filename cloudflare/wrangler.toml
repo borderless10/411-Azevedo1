@@ -1,0 +1,15 @@
+name = "visao-login-proxy"
+main = "visao-login-proxy.js"
+compatibility_date = "2024-09-23"
+account_id = "27798bdf172b9d81d9c165ce98e2efb1"
+
+# Rotas no domínio (também podem ser criadas no dashboard → Domains)
+# [[routes]]
+# pattern = "planejecomvisao.com.br/login*"
+# zone_name = "planejecomvisao.com.br"
+# [[routes]]
+# pattern = "planejecomvisao.com.br/_expo/*"
+# zone_name = "planejecomvisao.com.br"
+# [[routes]]
+# pattern = "planejecomvisao.com.br/assets/*"
+# zone_name = "planejecomvisao.com.br"

@@ -23,7 +23,11 @@ import { activityServices } from "./activityServices";
 import { resolveExpenseCategoryName } from "../types/category";
 import { CreditCardInvoiceSummary } from "../types/creditCard";
 import { cancelBillNotification } from "./notificationServices";
-import { resolveDueDateFromDay } from "../utils/dueDateFromDay";
+import {
+  openObligationDueDate,
+  restartPlanningBill,
+  startOfLocalDay,
+} from "../utils/planningBillRules";
 
 const getUserPlanningDoc = (userId: string) =>
   doc(db, "users", userId, "planning", "current");
@@ -214,6 +218,8 @@ export const planningServices = {
         notes: b.notes,
         status: b.status,
         paidDate: b.paidDate ? b.paidDate.toDate() : undefined,
+        markedOverdue: b.markedOverdue === true,
+        inactive: b.inactive === true,
         createdAt: b.createdAt ? b.createdAt.toDate() : undefined,
         updatedAt: b.updatedAt ? b.updatedAt.toDate() : undefined,
       }));
@@ -463,34 +469,28 @@ export const planningServices = {
           return b;
         }
 
-        let dueDate: Date | null = null;
+        if ((b as any).inactive === true) return b;
 
-        if ((b as any).dueDate) {
-          const rawDueDate: any = (b as any).dueDate;
-          dueDate =
-            typeof rawDueDate?.toDate === "function"
-              ? rawDueDate.toDate()
-              : rawDueDate instanceof Date
-                ? rawDueDate
-                : new Date(rawDueDate);
-        } else if (b.dueDay !== undefined && b.dueDay !== null) {
-          dueDate = resolveDueDateFromDay(Number(b.dueDay));
-        } else if ((b as any).createdAt) {
-          // Fallback legado: contas antigas sem dueDate/dueDay
-          const rawCreatedAt: any = (b as any).createdAt;
-          dueDate =
-            typeof rawCreatedAt?.toDate === "function"
-              ? rawCreatedAt.toDate()
-              : rawCreatedAt instanceof Date
-                ? rawCreatedAt
-                : new Date(rawCreatedAt);
-        }
+        const rawDueDate: any = (b as any).dueDate;
+        const storedDue =
+          rawDueDate && typeof rawDueDate?.toDate === "function"
+            ? rawDueDate.toDate()
+            : rawDueDate instanceof Date
+              ? rawDueDate
+              : null;
+        const dueDate = openObligationDueDate(
+          {
+            dueDay: b.dueDay,
+            dueDate: storedDue,
+            status: (b as any).status,
+          },
+          today,
+        );
 
-        if (!dueDate || isNaN(dueDate.getTime())) {
+        if (!dueDate) {
           return b;
         }
 
-        dueDate.setHours(0, 0, 0, 0);
         if (dueDate < today) {
           changed += 1;
           return {
@@ -844,33 +844,52 @@ export const planningServices = {
     const nowTs = Timestamp.now();
     const data = snap.data() as any;
     const resetBills = (data.bills || []).map((bill: any) => {
-      let dueDay =
-        bill?.dueDay !== undefined && bill?.dueDay !== null
-          ? Number(bill.dueDay)
-          : undefined;
+      if (bill?.inactive === true) return bill;
 
-      if (!dueDay && bill?.dueDate) {
-        const rawDueDate =
-          typeof bill.dueDate?.toDate === "function"
-            ? bill.dueDate.toDate()
-            : new Date(bill.dueDate);
-        if (!isNaN(rawDueDate.getTime())) {
-          dueDay = rawDueDate.getDate();
-        }
-      }
+      const rawDue =
+        typeof bill?.dueDate?.toDate === "function"
+          ? bill.dueDate.toDate()
+          : bill?.dueDate instanceof Date
+            ? bill.dueDate
+            : null;
+      const rawPaid =
+        typeof bill?.paidDate?.toDate === "function"
+          ? bill.paidDate.toDate()
+          : bill?.paidDate instanceof Date
+            ? bill.paidDate
+            : null;
+      const restarted = restartPlanningBill(
+        {
+          dueDay: bill?.dueDay,
+          dueDate: rawDue,
+          recurring: bill?.recurring,
+          status: bill?.status,
+          paidDate: rawPaid,
+          markedOverdue: bill?.markedOverdue === true,
+          inactive: false,
+        },
+        cycleStart,
+        now,
+      );
 
-      const {
-        paidDate: _paidDate,
-        dueDate: _dueDate,
-        ...billRest
-      } = bill;
-
-      return removeUndefinedFields({
-        ...billRest,
-        dueDay,
-        status: "pending",
+      const next: Record<string, unknown> = {
+        ...bill,
+        recurring: restarted.recurring,
+        status: restarted.status,
         updatedAt: nowTs,
-      });
+      };
+      delete next.paidDate;
+      if (restarted.dueDay) next.dueDay = restarted.dueDay;
+      else delete next.dueDay;
+      if (restarted.dueDate) {
+        next.dueDate = Timestamp.fromDate(startOfLocalDay(restarted.dueDate));
+      } else {
+        delete next.dueDate;
+      }
+      if (restarted.markedOverdue) next.markedOverdue = true;
+      else delete next.markedOverdue;
+      delete next.inactive;
+      return removeUndefinedFields(next);
     });
 
     const payload: Record<string, unknown> = {
@@ -1099,7 +1118,7 @@ export const planningServices = {
         name: bill.name,
         amount: bill.amount,
         paymentMethod: bill.paymentMethod || "cash",
-        recurring: false,
+        recurring: Boolean((bill as any).recurring),
         dailyTracking: false,
         notes: bill.notes || "",
         status: "pending",
@@ -1169,6 +1188,16 @@ export const planningServices = {
         ...changes,
         updatedAt: now,
       } as BillFirestore;
+      if ("dueDay" in changes && changes.dueDay == null) {
+        delete (updatedBill as any).dueDay;
+        delete (updatedBill as any).dueDate;
+      }
+      if ("markedOverdue" in changes && !changes.markedOverdue) {
+        delete (updatedBill as any).markedOverdue;
+      }
+      if ("inactive" in changes && !changes.inactive) {
+        delete (updatedBill as any).inactive;
+      }
       bills[idx] = removeUndefinedFields(updatedBill as any);
 
       await updateDoc(docRef, {
@@ -1602,12 +1631,14 @@ export const planningServices = {
       const idx = bills.findIndex((b) => b.id === billId);
       if (idx === -1) throw new Error("Bill não encontrada no planning");
 
-      bills[idx] = {
+      const paidBill = {
         ...bills[idx],
         status: "paid",
         paidDate: now,
         updatedAt: now,
       } as BillFirestore;
+      delete (paidBill as any).markedOverdue;
+      bills[idx] = paidBill;
 
       await updateDoc(docRef, { bills, updatedAt: now });
       await cancelBillNotification(billId);

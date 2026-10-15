@@ -1,0 +1,18 @@
+[
+  {
+    "file": "01-page-full.png",
+    "label": "Imagem 1 — Menu: consultoria em alerta e Chats logo abaixo, com ponto roxo"
+  },
+  {
+    "file": "02-detalhe-consultoria.png",
+    "label": "Imagem 2 — Detalhe — Agende sua consultoria em alerta vermelho"
+  },
+  {
+    "file": "03-detalhe-confirmar-agendamento.png",
+    "label": "Imagem 3 — Detalhe — Dia e confirmação de que a consultoria foi agendada"
+  },
+  {
+    "file": "04-detalhe-papel-supervisor.png",
+    "label": "Imagem 4 — Detalhe — Papel Supervisor no cadastro, ao lado de Cliente e Consultor"
+  }
+]

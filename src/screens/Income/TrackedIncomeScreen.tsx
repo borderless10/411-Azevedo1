@@ -307,8 +307,15 @@ export const TrackedIncomeScreen = () => {
       });
       merged.sort((a, b) => a.dateKey.localeCompare(b.dateKey));
       setDailyIncomes(merged);
-      setZeroConfirmedDateKeys((previous) =>
-        previous.filter((dateKey) => (dayMap.get(dateKey) ?? 0) <= 0),
+      const recordedKeys = new Set(
+        filteredIncomes.map((income) =>
+          formatDateToString(new Date(income.date)),
+        ),
+      );
+      setZeroConfirmedDateKeys(
+        Array.from(dayMap.entries())
+          .filter(([dateKey, amount]) => recordedKeys.has(dateKey) && amount <= 0)
+          .map(([dateKey]) => dateKey),
       );
     } catch (error) {
       console.error("❌ Erro ao carregar renda acompanhada:", error);
@@ -338,13 +345,26 @@ export const TrackedIncomeScreen = () => {
     });
   };
 
-  const handleChooseMarkZero = () => {
-    if (!choiceModalDate) return;
+  const handleChooseMarkZero = async () => {
+    if (!choiceModalDate || !ownerId || !trackedTitle) return;
+    const date = choiceModalDate;
     setChoiceModalVisible(false);
-    const dateKey = formatDateToString(choiceModalDate);
-    setZeroConfirmedDateKeys((previous) =>
-      Array.from(new Set([...previous, dateKey])),
-    );
+    try {
+      setSaving(true);
+      await incomeServices.createIncome(ownerId, {
+        value: 0,
+        description: trackedTitle,
+        date,
+        category: "Acompanhamento Diário",
+        dailyTracking: true,
+      });
+      await loadIncomeData();
+    } catch (error) {
+      console.error("Erro ao registrar renda zero:", error);
+      Alert.alert("Erro", "Não foi possível registrar o zero");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const getIncomesForDate = (date: Date) => {
@@ -560,7 +580,7 @@ export const TrackedIncomeScreen = () => {
                           month: "2-digit",
                         })}
                       </Text>
-                      {!isEditing && daySummary.total > 0 ? (
+                      {!isEditing && (daySummary.total > 0 || isZeroConfirmed) ? (
                         <Text style={styles.dayExpense}>
                           {formatCurrency(daySummary.total)}
                         </Text>
@@ -592,7 +612,9 @@ export const TrackedIncomeScreen = () => {
                             >
                               <View style={{ flex: 1 }}>
                                 <Text style={styles.editItemTitle}>
-                                  {item.description || trackedTitle}
+                                  {item.origin?.trim()
+                                    ? item.origin.trim()
+                                    : item.description || trackedTitle}
                                 </Text>
                                 {item.category ? (
                                   <Text style={styles.editItemMeta}>

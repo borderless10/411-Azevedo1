@@ -30,6 +30,7 @@ import {
 import { useNavigation } from "../../routes/NavigationContext";
 import {
   budgetServices,
+  computeConsumoModeradoFromLoaded,
   getMonthYearFromDate,
   listMonthYearsInRange,
   ConsumoModeradoPerformance,
@@ -340,7 +341,9 @@ export const BudgetScreen = () => {
             0,
           )
         : 0;
-      const billsArr = planning?.bills || [];
+      const billsArr = (planning?.bills || []).filter(
+        (bill) => bill.inactive !== true,
+      );
       const totalBills = billsArr.reduce((sum, bill) => {
         if (isCardPayment(bill?.paymentMethod)) return sum;
         return sum + (Number(bill.amount) || 0);
@@ -399,9 +402,6 @@ export const BudgetScreen = () => {
         plannedByCategory: planning?.plannedByCategory || {},
       });
       setPlanningLoaded(!!planning);
-      const performance =
-        await budgetServices.getConsumoModeradoPerformance(ownerId);
-      setSharedPerformance(performance);
 
       if (__DEV__) {
         console.log("[BUDGET] planejamento carregado para consumo moderado", {
@@ -452,6 +452,9 @@ export const BudgetScreen = () => {
       setDailyExpenseDates(cycleDates);
 
       const monthYears = listMonthYearsInRange(start, end);
+      const monthsToLoad = Array.from(
+        new Set([...monthYears, getMonthYearFromDate(new Date())]),
+      );
       const budgetsByMonth = new Map<
         string,
         Awaited<ReturnType<typeof budgetServices.getBudget>>
@@ -460,22 +463,28 @@ export const BudgetScreen = () => {
         string,
         Array<Awaited<ReturnType<typeof budgetServices.getBudget>>>
       >();
+      const loadCoupleBudgets =
+        isCoupleAccount(isSpectator ? ownerProfile : user) || !!coupleMember;
       await Promise.all(
-        monthYears.map(async (monthYear) => {
-          const monthBudget = await budgetServices.getBudget(
-            ownerId,
-            monthYear,
-            coupleMember,
-          );
-          budgetsByMonth.set(monthYear, monthBudget);
-
-          if (coupleMember) {
-            const [budgetOne, budgetTwo] = await Promise.all([
-              budgetServices.getBudget(ownerId, monthYear, 1),
-              budgetServices.getBudget(ownerId, monthYear, 2),
-            ]);
-            coupleBudgetsByMonth.set(monthYear, [budgetOne, budgetTwo]);
+        monthsToLoad.flatMap((monthYear) => {
+          const reads = [
+            budgetServices
+              .getBudget(ownerId, monthYear, coupleMember)
+              .then((monthBudget) => {
+                budgetsByMonth.set(monthYear, monthBudget);
+              }),
+          ];
+          if (loadCoupleBudgets) {
+            reads.push(
+              Promise.all([
+                budgetServices.getBudget(ownerId, monthYear, 1),
+                budgetServices.getBudget(ownerId, monthYear, 2),
+              ]).then((pair) => {
+                coupleBudgetsByMonth.set(monthYear, pair);
+              }),
+            );
           }
+          return reads;
         }),
       );
 
@@ -571,12 +580,38 @@ export const BudgetScreen = () => {
           zeroKeys.filter((key) => (amountByDateKey.get(key) ?? 0) <= 0),
         );
         setExpensesByDate(grouped);
+
+        const currentMonth = getMonthYearFromDate(new Date());
+        const currentCouple = coupleBudgetsByMonth.get(currentMonth) || [];
+        const zeroConfirmedDays = Array.from(
+          new Set([
+            ...(budgetsByMonth.get(currentMonth)?.zeroConfirmedDays || []),
+            ...currentCouple.flatMap((budget) => budget?.zeroConfirmedDays || []),
+          ]),
+        );
+        const storedBudget =
+          currentCouple.find((budget) => (budget?.dailyExpenses || []).length > 0) ||
+          budgetsByMonth.get(currentMonth);
+        setSharedPerformance(
+          computeConsumoModeradoFromLoaded({
+            budgetValue: Number(planning?.consumoModerado ?? 0),
+            plannedCycleDurationDays: Number(
+              planning?.consumoModeradoCycleDurationDays || 0,
+            ),
+            start,
+            end,
+            expenses,
+            zeroConfirmedDays,
+            storedDailyExpenses: storedBudget?.dailyExpenses,
+          }),
+        );
       } catch (err) {
         console.error("❌ [BUDGET] Erro ao agregar gastos do mês:", err);
         setDailyExpenses([]);
         setExpensesByDate({});
         setCoupleTotalSpent(0);
         setCoupleSpentByDate({});
+        setSharedPerformance(null);
       }
 
       console.log("✅ Orçamento carregado do Firebase");

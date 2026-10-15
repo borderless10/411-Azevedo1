@@ -115,6 +115,104 @@ const isBillPaymentExpense = (expense: { category?: string }): boolean => {
   );
 };
 
+export const computeConsumoModeradoFromLoaded = ({
+  budgetValue,
+  plannedCycleDurationDays,
+  start,
+  end,
+  expenses,
+  zeroConfirmedDays,
+  storedDailyExpenses,
+}: {
+  budgetValue: number;
+  plannedCycleDurationDays: number;
+  start: Date;
+  end: Date;
+  expenses: {
+    date: Date;
+    value: number;
+    category?: string;
+    isTrackedDaily?: boolean;
+  }[];
+  zeroConfirmedDays: number[];
+  storedDailyExpenses?: DailyExpense[];
+}): ConsumoModeradoPerformance => {
+  const cycleDates: Date[] = [];
+  let dateCursor = getStartOfDay(start);
+  const lastDate = getStartOfDay(end);
+  while (dateCursor <= lastDate) {
+    cycleDates.push(new Date(dateCursor));
+    dateCursor = addDays(dateCursor, 1);
+  }
+
+  const daysInCycle = Math.max(1, cycleDates.length);
+  const daysForIdealTarget =
+    plannedCycleDurationDays > 0 ? plannedCycleDurationDays : daysInCycle;
+  const idealDailyAverage =
+    budgetValue > 0 && daysForIdealTarget > 0
+      ? budgetValue / daysForIdealTarget
+      : 0;
+
+  const expensesForModerado = expenses.filter((expense) => {
+    if (isTrackedDailyExpense(expense)) return false;
+    if (isBillPaymentExpense(expense)) return false;
+    return true;
+  });
+
+  const map = new Map<number, number>();
+  let cursor = getStartOfDay(start);
+  while (cursor <= lastDate) {
+    map.set(cursor.getDate(), 0);
+    cursor = addDays(cursor, 1);
+  }
+
+  expensesForModerado.forEach((expense) => {
+    const dayNum = new Date(expense.date).getDate();
+    const prev = map.get(dayNum) ?? 0;
+    const value =
+      typeof expense.value === "number"
+        ? expense.value
+        : parseFloat(String(expense.value)) || 0;
+    map.set(dayNum, prev + value);
+  });
+
+  const computed: DailyExpense[] = Array.from(map.entries())
+    .map(([day, amount]) => ({ day, amount }))
+    .sort((a, b) => a.day - b.day);
+
+  const dailyExpenses =
+    (storedDailyExpenses || []).length > 0
+      ? (() => {
+          const byDay = new Map<number, number>();
+          computed.forEach((item) => byDay.set(item.day, item.amount));
+          (storedDailyExpenses || []).forEach((item) => {
+            const existing = byDay.get(item.day) ?? 0;
+            byDay.set(item.day, existing > 0 ? existing : item.amount);
+          });
+          return Array.from(byDay.entries())
+            .map(([day, amount]) => ({ day, amount }))
+            .sort((a, b) => a.day - b.day);
+        })()
+      : computed;
+
+  const totalSpent = dailyExpenses.reduce((sum, item) => sum + item.amount, 0);
+  const countedDays = cycleDates.filter((date) => {
+    const day = date.getDate();
+    const hasExpense = dailyExpenses.some(
+      (item) => item.day === day && item.amount > 0,
+    );
+    return hasExpense || zeroConfirmedDays.includes(day);
+  }).length;
+  const actualDailyAverage = countedDays > 0 ? totalSpent / countedDays : 0;
+
+  return buildConsumoModeradoPerformance(
+    budgetValue,
+    idealDailyAverage,
+    actualDailyAverage,
+    totalSpent,
+  );
+};
+
 const buildConsumoModeradoPerformance = (
   budgetValue: number,
   idealDailyAverage: number,
@@ -804,33 +902,17 @@ export const budgetServices = {
         end = cycleEndDate || getEndOfDay(today);
       }
 
-      const cycleDates: Date[] = [];
-      let dateCursor = getStartOfDay(start);
-      const lastDate = getStartOfDay(end);
-      while (dateCursor <= lastDate) {
-        cycleDates.push(new Date(dateCursor));
-        dateCursor = addDays(dateCursor, 1);
-      }
-
-      const daysInCycle = Math.max(
-        1,
-        Math.floor(
-          (lastDate.getTime() - getStartOfDay(start).getTime()) /
-            (1000 * 60 * 60 * 24),
-        ) + 1,
-      );
-      const daysForIdealTarget =
-        plannedCycleDurationDays > 0 ? plannedCycleDurationDays : daysInCycle;
-      const idealDailyAverage =
-        budgetValue > 0 && daysForIdealTarget > 0
-          ? budgetValue / daysForIdealTarget
-          : 0;
-
-      const [plainBudget, member1Budget, member2Budget] = await Promise.all([
-        this.getCurrentBudget(userId),
-        this.getCurrentBudget(userId, 1),
-        this.getCurrentBudget(userId, 2),
-      ]);
+      const [plainBudget, member1Budget, member2Budget, expenses] =
+        await Promise.all([
+          this.getCurrentBudget(userId),
+          this.getCurrentBudget(userId, 1),
+          this.getCurrentBudget(userId, 2),
+          expenseServices.getExpenses(userId, {
+            startDate: start,
+            endDate: end,
+            createdAtFrom: cycleStartedAtRaw || undefined,
+          }),
+        ]);
       const zeroConfirmedDays = Array.from(
         new Set([
           ...(plainBudget?.zeroConfirmedDays || []),
@@ -840,77 +922,15 @@ export const budgetServices = {
       );
       const budget = member1Budget || member2Budget || plainBudget;
 
-      const expenses = await expenseServices.getExpenses(userId, {
-        startDate: start,
-        endDate: end,
-        createdAtFrom: cycleStartedAtRaw || undefined,
-      });
-
-      const expensesForModerado = expenses.filter((expense) => {
-        if (isTrackedDailyExpense(expense)) return false;
-        if (isBillPaymentExpense(expense)) return false;
-        return true;
-      });
-
-      const map = new Map<number, number>();
-      let cursor = getStartOfDay(start);
-      while (cursor <= getStartOfDay(end)) {
-        map.set(cursor.getDate(), 0);
-        cursor = addDays(cursor, 1);
-      }
-
-      expensesForModerado.forEach((expense) => {
-        const dayNum = new Date(expense.date).getDate();
-        const prev = map.get(dayNum) ?? 0;
-        const value =
-          typeof expense.value === "number"
-            ? expense.value
-            : parseFloat(String(expense.value)) || 0;
-        map.set(dayNum, prev + value);
-      });
-
-      const computed: DailyExpense[] = Array.from(map.entries())
-        .map(([day, amount]) => ({ day, amount }))
-        .sort((a, b) => a.day - b.day);
-
-      const dailyExpenses =
-        (budget?.dailyExpenses || []).length > 0
-          ? (() => {
-              const byDay = new Map<number, number>();
-              computed.forEach((item) => byDay.set(item.day, item.amount));
-              (budget?.dailyExpenses || []).forEach((item) => {
-                const existing = byDay.get(item.day) ?? 0;
-                byDay.set(item.day, existing > 0 ? existing : item.amount);
-              });
-              return Array.from(byDay.entries())
-                .map(([day, amount]) => ({ day, amount }))
-                .sort((a, b) => a.day - b.day);
-            })()
-          : computed;
-
-      const totalSpent = dailyExpenses.reduce(
-        (sum, item) => sum + item.amount,
-        0,
-      );
-
-      const countedDays = cycleDates.filter((date) => {
-        const day = date.getDate();
-        const hasExpense = dailyExpenses.some(
-          (item) => item.day === day && item.amount > 0,
-        );
-        const isZeroConfirmed = zeroConfirmedDays.includes(day);
-        return hasExpense || isZeroConfirmed;
-      }).length;
-
-      const actualDailyAverage =
-        countedDays > 0 ? totalSpent / countedDays : 0;
-
-      return buildConsumoModeradoPerformance(
+      return computeConsumoModeradoFromLoaded({
         budgetValue,
-        idealDailyAverage,
-        actualDailyAverage,
-        totalSpent,
-      );
+        plannedCycleDurationDays,
+        start,
+        end,
+        expenses,
+        zeroConfirmedDays,
+        storedDailyExpenses: budget?.dailyExpenses,
+      });
     } catch (error) {
       console.error(
         "❌ [BUDGET SERVICE] Erro ao calcular performance do consumo moderado:",

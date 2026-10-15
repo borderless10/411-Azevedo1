@@ -1,6 +1,6 @@
 {
   "name": "411-azevedo",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "main": "index.ts",
   "scripts": {
     "start": "expo start",
@@ -15,6 +15,7 @@
     "build:apk": "cd android && ./gradlew assembleRelease",
     "build:apk:clean": "cd android && ./gradlew clean assembleRelease",
     "lint": "tsc --noEmit",
+    "test": "node --experimental-strip-types --test src/utils/planningBillRules.test.ts",
     "seed:users": "node scripts/seed-demo-users.mjs",
     "eas:build:dev": "eas build --profile development --platform android",
     "eas:build:preview": "eas build --profile preview --platform android",

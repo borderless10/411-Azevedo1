@@ -90,9 +90,9 @@ export const computePlanningTotals = (planning?: PlanningTotalsInput | null) => 
 
   const totalResources = availableInAccount + totalExpectedIncomes;
 
-  const billBreakdown = (planning?.bills || []).map((item) =>
-    getPlannedSplitAmounts(item),
-  );
+  const billBreakdown = (planning?.bills || [])
+    .filter((item) => (item as { inactive?: boolean }).inactive !== true)
+    .map((item) => getPlannedSplitAmounts(item));
   const expectedExpenseBreakdown = (planning?.expectedExpenses || []).map(
     (item) => getPlannedSplitAmounts(item),
   );

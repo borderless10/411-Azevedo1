@@ -32,6 +32,10 @@ import {
 import { formatDateToString } from "../utils/dateUtils";
 import { formatCurrency } from "../utils/currencyUtils";
 import { isExpenseCreatedFrom } from "../utils/expenseScopeUtils";
+import {
+  incomeValueError,
+  normalizeIncomeOrigin,
+} from "../utils/incomeEntry";
 import { activityServices } from "./activityServices";
 
 /**
@@ -40,9 +44,8 @@ import { activityServices } from "./activityServices";
 const validateCreateIncomeData = (data: CreateIncomeData): string[] => {
   const errors: string[] = [];
 
-  if (!data.value || data.value <= 0) {
-    errors.push("Valor deve ser maior que zero");
-  }
+  const valueError = incomeValueError(data.value, data.dailyTracking);
+  if (valueError) errors.push(valueError);
 
   if (!data.description || data.description.trim().length === 0) {
     errors.push("Descrição é obrigatória");
@@ -69,8 +72,15 @@ const validateCreateIncomeData = (data: CreateIncomeData): string[] => {
 const validateUpdateIncomeData = (data: UpdateIncomeData): string[] => {
   const errors: string[] = [];
 
-  if (data.value !== undefined && data.value <= 0) {
-    errors.push("Valor deve ser maior que zero");
+  if (data.value !== undefined) {
+    const valueError = incomeValueError(data.value, data.dailyTracking);
+    if (valueError) errors.push(valueError);
+  }
+  if (
+    data.origin !== undefined &&
+    String(data.origin).trim().length > 80
+  ) {
+    errors.push("Origem da renda deve ter no máximo 80 caracteres");
   }
 
   if (data.description !== undefined && data.description.trim().length < 3) {
@@ -104,6 +114,7 @@ export const incomeServices = {
 
     try {
       const now = new Date();
+      const origin = normalizeIncomeOrigin(data.origin);
       const incomeData = {
         userId,
         value: data.value,
@@ -111,6 +122,7 @@ export const incomeServices = {
         date: Timestamp.fromDate(data.date),
         category: data.category || "Outros",
         dailyTracking: Boolean(data.dailyTracking),
+        ...(origin ? { origin } : {}),
         createdAt: Timestamp.fromDate(now),
         updatedAt: Timestamp.fromDate(now),
       };
@@ -126,6 +138,7 @@ export const incomeServices = {
         date: data.date,
         category: data.category,
         dailyTracking: Boolean(data.dailyTracking),
+        ...(origin ? { origin } : {}),
         createdAt: now,
         updatedAt: now,
       };

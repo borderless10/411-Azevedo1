@@ -28,6 +28,7 @@ interface SidebarProps {
   visible: boolean;
   onClose: () => void;
   style?: ViewStyle;
+  docked?: boolean;
 }
 
 interface MenuItem {
@@ -41,6 +42,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   visible,
   onClose,
   style,
+  docked = false,
 }) => {
   const { user, signOut, isAuthenticated } = useAuth();
   const { navigate, currentScreen, params } = useNavigation() as any;
@@ -89,6 +91,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   }, [user?.id]);
 
   useEffect(() => {
+    if (docked) return;
     if (visible) {
       Animated.parallel([
         Animated.timing(slideAnim, {
@@ -116,7 +119,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         }),
       ]).start();
     }
-  }, [visible]);
+  }, [visible, docked]);
 
   useEffect(() => {
     if (!shouldPulseConsultation) {
@@ -615,47 +618,29 @@ export const Sidebar: React.FC<SidebarProps> = ({
     );
   };
 
-  if (!visible) {
+  if (!visible && !docked) {
     return null;
   }
 
-  return (
-    <Animated.View
-      style={[
-        styles.overlay,
-        {
-          opacity: fadeAnim,
-        },
-      ]}
-    >
-      <TouchableOpacity
-        style={StyleSheet.absoluteFillObject}
-        activeOpacity={1}
-        onPress={onClose}
-      />
-      <Animated.View
-        style={[
-          styles.container,
-          {
-            backgroundColor: colors.card,
-            transform: [{ translateX: slideAnim }],
-          },
-          style,
-        ]}
-        onStartShouldSetResponder={() => true}
-      >
-        {/* Botão de Fechar no canto superior esquerdo */}
+  const panel = (
+    <>
+        {!docked ? (
         <TouchableOpacity onPress={onClose} style={styles.closeButton}>
           <Ionicons name="close" size={28} color={colors.text} />
         </TouchableOpacity>
+        ) : null}
 
         {/* Logo */}
         <View
-          style={[styles.logoContainer, { borderBottomColor: colors.border }]}
+          style={[
+            styles.logoContainer,
+            docked && styles.logoDocked,
+            { borderBottomColor: colors.border },
+          ]}
         >
           <Image
             source={require("../../../assets/logo411.png")}
-            style={styles.logo}
+            style={[styles.logo, docked && styles.logoImageDocked]}
             resizeMode="contain"
           />
         </View>
@@ -771,12 +756,67 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <Text style={styles.logoutText}>Sair</Text>
           </TouchableOpacity>
         </View>
+    </>
+  );
+
+  if (docked) {
+    return (
+      <View style={styles.dockedRoot}>
+        <View
+          style={[
+            styles.dockedContainer,
+            { backgroundColor: colors.card, borderRightColor: colors.border },
+            style,
+          ]}
+        >
+          {panel}
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
+      <TouchableOpacity
+        style={StyleSheet.absoluteFillObject}
+        activeOpacity={1}
+        onPress={onClose}
+      />
+      <Animated.View
+        style={[
+          styles.container,
+          {
+            backgroundColor: colors.card,
+            transform: [{ translateX: slideAnim }],
+          },
+          style,
+        ]}
+        onStartShouldSetResponder={() => true}
+      >
+        {panel}
       </Animated.View>
     </Animated.View>
   );
 };
 
 const styles = StyleSheet.create({
+  dockedRoot: {
+    width: 280,
+    alignSelf: "stretch",
+  },
+  dockedContainer: {
+    flex: 1,
+    width: 280,
+    borderRightWidth: 1,
+  },
+  logoDocked: {
+    paddingTop: 16,
+    paddingBottom: 12,
+  },
+  logoImageDocked: {
+    width: 180,
+    height: 72,
+  },
   overlay: {
     position: "absolute",
     top: 0,

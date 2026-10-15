@@ -1,0 +1,18 @@
+[
+  {
+    "file": "01-page-full.png",
+    "label": "Imagem 1 — Configurações do app (Expo)"
+  },
+  {
+    "file": "02-detalhe-termos-privacidade.png",
+    "label": "Imagem 2 — Detalhe — Termos e Privacidade"
+  },
+  {
+    "file": "03-detalhe-opcoes-legais.png",
+    "label": "Imagem 3 — Detalhe — Seção Sistema (documentos legais)"
+  },
+  {
+    "file": "04-detalhe-sobre-versao.png",
+    "label": "Imagem 4 — Detalhe — Sobre / versão do app"
+  }
+]

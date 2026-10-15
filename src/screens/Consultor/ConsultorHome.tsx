@@ -3,6 +3,7 @@ import {
   View,
   Text,
   FlatList,
+  TextInput,
   TouchableOpacity,
   StyleSheet,
 } from "react-native";
@@ -14,6 +15,7 @@ import { User } from "../../types/auth";
 import { useNavigation } from "../../routes/NavigationContext";
 import { useTheme } from "../../contexts/ThemeContext";
 import { isCoupleAccount } from "../../utils/coupleAccount";
+import { matchesClientSearch } from "../../utils/clientSearch";
 import { ConsultationRequestsBanner } from "../../components/Consultation/ConsultationRequestsBanner";
 
 export const ConsultorHome: React.FC = () => {
@@ -25,6 +27,7 @@ export const ConsultorHome: React.FC = () => {
     {},
   );
   const [loading, setLoading] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
   const supervisorView = isSupervisorUser(user);
 
   useEffect(() => {
@@ -94,8 +97,32 @@ export const ConsultorHome: React.FC = () => {
         <Text style={[styles.heading, { color: colors.text }]}>
           {supervisorView ? "Clientes" : "Meus Clientes"}
         </Text>
+        <TextInput
+          value={searchTerm}
+          onChangeText={setSearchTerm}
+          placeholder="Buscar cliente"
+          placeholderTextColor={colors.placeholder}
+          autoCapitalize="none"
+          autoCorrect={false}
+          style={[
+            styles.search,
+            {
+              color: colors.text,
+              borderColor: colors.border,
+              backgroundColor: colors.card,
+            },
+          ]}
+        />
         <FlatList
-          data={clients}
+          data={clients.filter((client) =>
+            matchesClientSearch(
+              client,
+              searchTerm,
+              supervisorView
+                ? consultantNames[client.consultantId || ""]
+                : undefined,
+            ),
+          )}
           keyExtractor={(c) => c.id}
           style={styles.list}
           contentContainerStyle={styles.listContent}
@@ -165,6 +192,14 @@ export const ConsultorHome: React.FC = () => {
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 16 },
   heading: { fontSize: 18, fontWeight: "600", marginBottom: 12 },
+  search: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 12,
+    fontSize: 16,
+  },
   list: { flex: 1 },
   listContent: { flexGrow: 1, paddingBottom: 48 },
   card: {

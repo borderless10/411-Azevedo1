@@ -24,6 +24,7 @@ import { useNavigation } from "../../routes/NavigationContext";
 import { useTheme } from "../../contexts/ThemeContext";
 import { recommendationServices } from "../../services/recommendationServices";
 import { Recommendation } from "../../types/recommendation";
+import ConfirmDeleteModal from "../../components/ui/ConfirmDeleteModal";
 
 const formatDay = (date: Date): string => {
   return date.toLocaleDateString("pt-BR", {
@@ -90,6 +91,9 @@ export const RecomendacaoScreen = () => {
   const [topicInputs, setTopicInputs] = useState<string[]>([""]);
   const [editingRecommendation, setEditingRecommendation] =
     useState<Recommendation | null>(null);
+  const [recommendationToDelete, setRecommendationToDelete] =
+    useState<Recommendation | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
@@ -138,26 +142,38 @@ export const RecomendacaoScreen = () => {
   };
 
   const handleDeleteRecommendation = (recommendation: Recommendation) => {
-    if (!isConsultantCreatingForClient) return;
+    if (!isConsultantCreatingForClient || deleting) return;
+    setRecommendationToDelete(recommendation);
+  };
 
-    Alert.alert("Excluir recomendação", "Deseja remover esta recomendação?", [
-      { text: "Cancelar", style: "cancel" },
-      {
-        text: "Excluir",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await recommendationServices.deleteRecommendation(
-              recommendation.id,
-            );
-            await loadRecommendations();
-          } catch (error) {
-            console.error("❌ [RECOMENDACOES] Erro ao excluir:", error);
-            Alert.alert("Erro", "Não foi possível excluir a recomendação.");
-          }
-        },
-      },
-    ]);
+  const confirmDeleteRecommendation = async () => {
+    if (!recommendationToDelete || deleting) return;
+
+    try {
+      setDeleting(true);
+      console.log(
+        "[RECOMENDACOES] excluindo",
+        recommendationToDelete.id,
+      );
+      await recommendationServices.deleteRecommendation(
+        recommendationToDelete.id,
+      );
+      setRecommendationToDelete(null);
+      await loadRecommendations();
+    } catch (error) {
+      console.error("❌ [RECOMENDACOES] Erro ao excluir:", error);
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Não foi possível excluir a recomendação.";
+      if (Platform.OS === "web" && typeof window !== "undefined") {
+        window.alert(message);
+      } else {
+        Alert.alert("Erro", message);
+      }
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const handleDateInputChange = (value: string) => {
@@ -542,6 +558,16 @@ export const RecomendacaoScreen = () => {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      <ConfirmDeleteModal
+        visible={recommendationToDelete != null}
+        title="Excluir recomendação"
+        message="Deseja remover esta recomendação financeira? Esta ação não pode ser desfeita."
+        onCancel={() => {
+          if (!deleting) setRecommendationToDelete(null);
+        }}
+        onConfirm={confirmDeleteRecommendation}
+      />
     </Layout>
   );
 };

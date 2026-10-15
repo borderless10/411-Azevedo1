@@ -31,7 +31,7 @@ import ExpenseCreatedModal from "../../components/ui/ExpenseCreatedModal";
 import { creditCardServices } from "../../services/creditCardServices";
 import { markBillAsPaid, createBill } from "../../services/billServices";
 import { isBillUnpaid } from "../../types/bill";
-import { isPayablePlanningBill } from "../../types/planning";
+import { isActivePlanningBill } from "../../types/planning";
 import { CreditCard } from "../../types/creditCard";
 import { Bill } from "../../types/planning";
 import { budgetServices } from "../../services/budgetServices";
@@ -183,9 +183,9 @@ export const AddExpenseScreen = () => {
             await expenseServices.getPaidSourceBillIds(ownerId);
           const planningBills = (planning.bills || [])
             .filter(isBillUnpaid)
-            .filter(isPayablePlanningBill);
+            .filter(isActivePlanningBill);
           const expectedAsBills = (planning.expectedExpenses || [])
-            .filter(isPayablePlanningBill)
+            .filter(isActivePlanningBill)
             .filter((exp) => !exp.id || !paidSourceBillIds.has(exp.id))
             .map(
               (exp, index) =>

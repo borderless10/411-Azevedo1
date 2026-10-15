@@ -21,6 +21,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "../../routes/NavigationContext";
 import { Layout } from "../../components/Layout/Layout";
+import { useDesktopWeb } from "../../utils/desktopWeb";
 import { useAuth } from "../../hooks/useAuth";
 import incomeServices from "../../services/incomeServices";
 import expenseServices from "../../services/expenseServices";
@@ -71,6 +72,7 @@ import {
 } from "../../utils/expenseScopeUtils";
 
 export const HomeScreen = () => {
+  const desktop = useDesktopWeb();
   const { navigate, currentScreen } = useNavigation();
   const { user, activeCoupleMember } = useAuth();
 
@@ -605,6 +607,7 @@ export const HomeScreen = () => {
     });
     // bills
     (planning.bills || []).forEach((b: any) => {
+      if (b?.inactive === true) return;
       const n = getNonCardPortion(b);
       if (n <= 0) return;
       const key = b.name || "Contas";
@@ -1014,6 +1017,7 @@ export const HomeScreen = () => {
       <Animated.View
         style={[
           styles.actionCardWrapper,
+          desktop && styles.actionCardDesktop,
           {
             opacity: opacityAnim,
             transform: [{ scale: scaleAnim }],
@@ -1278,7 +1282,7 @@ export const HomeScreen = () => {
   // Mostrar loading apenas na primeira carga
   if (!hasLoaded && loading) {
     return (
-      <Layout showHeader={true} showSidebar={true}>
+      <Layout showHeader={true} showSidebar={true} desktopWidth="full">
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#8c52ff" />
           <Text style={styles.loadingText}>Carregando dados...</Text>
@@ -1288,7 +1292,7 @@ export const HomeScreen = () => {
   }
 
   return (
-    <Layout showHeader={true} showSidebar={true}>
+    <Layout showHeader={true} showSidebar={true} desktopWidth="full">
       <ScrollView
         style={styles.container}
         keyboardShouldPersistTaps="handled"
@@ -1320,8 +1324,8 @@ export const HomeScreen = () => {
             {user?.role !== "consultor" && !user?.isAdmin ? (
               // Normal user: show planning-based expected cards
               <>
-                <View style={styles.summaryRow}>
-                  <View style={styles.expectedSummaryColumn}>
+                <View style={[styles.summaryRow, desktop && styles.summaryRowDesktop]}>
+                  <View style={[styles.expectedSummaryColumn, desktop && styles.expectedSummaryColumnDesktop]}>
                     <TouchableOpacity
                       activeOpacity={0.9}
                       onPress={() => toggleExpand("income")}
@@ -1384,7 +1388,7 @@ export const HomeScreen = () => {
                     </TouchableOpacity>
                   </View>
 
-                  <View style={styles.expectedSummaryColumn}>
+                  <View style={[styles.expectedSummaryColumn, desktop && styles.expectedSummaryColumnDesktop]}>
                     <TouchableOpacity
                       activeOpacity={0.9}
                       onPress={() => toggleExpand("expense")}
@@ -1565,7 +1569,7 @@ export const HomeScreen = () => {
                 <View style={styles.balanceCardsSection}>
                   <Text style={styles.sectionTitle}>Saldo</Text>
                   <View style={styles.balanceCardsRow}>
-                    <View style={styles.expectedSummaryColumn}>
+                    <View style={[styles.expectedSummaryColumn, desktop && styles.expectedSummaryColumnDesktop]}>
                       <View style={styles.expectedCardPressable}>
                         <View
                           style={[styles.expectedCardSquare, styles.cardGreen]}
@@ -1590,7 +1594,7 @@ export const HomeScreen = () => {
                       </View>
                     </View>
 
-                    <View style={styles.expectedSummaryColumn}>
+                    <View style={[styles.expectedSummaryColumn, desktop && styles.expectedSummaryColumnDesktop]}>
                       <View style={styles.expectedCardPressable}>
                         <View
                           style={[styles.expectedCardSquare, styles.cardRed]}
@@ -1619,7 +1623,7 @@ export const HomeScreen = () => {
                       </View>
                     </View>
 
-                    <View style={styles.expectedSummaryColumn}>
+                    <View style={[styles.expectedSummaryColumn, desktop && styles.expectedSummaryColumnDesktop]}>
                       <View style={styles.expectedCardPressable}>
                         <View
                           style={[
@@ -1705,7 +1709,7 @@ export const HomeScreen = () => {
                 </Animated.View>
 
                 {/* Total Gasto e Total Recebido - Quadrados */}
-                <View style={styles.summaryRow}>
+                <View style={[styles.summaryRow, desktop && styles.summaryRowDesktop]}>
                   <Animated.View
                     style={[
                       styles.summaryCardSquare,
@@ -1786,7 +1790,7 @@ export const HomeScreen = () => {
           <View style={styles.actionsContainer}>
             <Text style={styles.sectionTitle}>Ações Rápidas</Text>
 
-            <View style={styles.actionsGrid}>
+            <View style={[styles.actionsGrid, desktop && styles.actionsGridDesktop]}>
               <ActionCard
                 icon="add-circle"
                 label="Adicionar Renda"
@@ -1832,6 +1836,7 @@ export const HomeScreen = () => {
             <Animated.View
               style={[
                 styles.chartsContainer,
+                desktop && styles.chartsContainerDesktop,
                 {
                   opacity: fadeAnim,
                   transform: [{ translateY: slideAnim }],
@@ -1842,7 +1847,7 @@ export const HomeScreen = () => {
 
               {/* Gráfico de Gastos por Categoria */}
               {categoryChartData.length > 0 && (
-                <View style={styles.chartCard}>
+                <View style={[styles.chartCard, desktop && styles.chartCardDesktop]}>
                   <View style={styles.chartHeader}>
                     <Ionicons
                       name="pie-chart-outline"
@@ -1861,7 +1866,7 @@ export const HomeScreen = () => {
 
               {/* Gráfico de Evolução Temporal */}
               {lineChartData.length > 0 && (
-                <View style={styles.chartCard}>
+                <View style={[styles.chartCard, desktop && styles.chartCardDesktop]}>
                   <View style={styles.chartHeader}>
                     <Ionicons
                       name="trending-up-outline"
@@ -2169,6 +2174,36 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     marginBottom: 12,
     // espaçamento entre colunas (RN não tem `gap` em todas as versões)
+  },
+  summaryRowDesktop: {
+    flexWrap: "wrap",
+  },
+  expectedSummaryColumnDesktop: {
+    flexGrow: 1,
+    flexBasis: 280,
+    minWidth: 240,
+    maxWidth: 420,
+  },
+  actionCardDesktop: {
+    flexGrow: 0,
+    flexShrink: 0,
+    flexBasis: 220,
+    width: 220,
+    minWidth: 200,
+    maxWidth: 260,
+  },
+  actionsGridDesktop: {
+    gap: 12,
+  },
+  chartsContainerDesktop: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "stretch",
+  },
+  chartCardDesktop: {
+    flexGrow: 1,
+    flexBasis: 420,
+    minWidth: 320,
   },
   expectedSummaryColumn: {
     flex: 1,

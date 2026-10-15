@@ -41,6 +41,8 @@ export const EditIncomeScreen = () => {
   const [description, setDescription] = useState("");
   const [date, setDate] = useState(new Date());
   const [category, setCategory] = useState<string>("Outros");
+  const [origin, setOrigin] = useState("");
+  const [trackedIncome, setTrackedIncome] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState({
@@ -78,6 +80,8 @@ export const EditIncomeScreen = () => {
         setDescription(income.description);
         setDate(income.date);
         setCategory(income.category || "Outros");
+        setOrigin(income.origin || "");
+        setTrackedIncome(Boolean(income.dailyTracking));
       } catch (error: any) {
         console.error("❌ Erro ao carregar renda:", error);
         Alert.alert("Erro", "Erro ao carregar renda. Tente novamente.");
@@ -92,6 +96,7 @@ export const EditIncomeScreen = () => {
 
   // Validações
   const validateValue = (val: number): string => {
+    if (trackedIncome && val === 0) return "";
     if (val <= 0) {
       return "Valor deve ser maior que zero";
     }
@@ -178,6 +183,8 @@ export const EditIncomeScreen = () => {
         description: description.trim(),
         date,
         category,
+        dailyTracking: trackedIncome,
+        origin: origin.trim(),
       };
 
       const savedValue = value;
@@ -266,6 +273,23 @@ export const EditIncomeScreen = () => {
                 icon="cash-outline"
                 editable={!saving}
               />
+
+              {trackedIncome ? (
+                <View style={styles.inputContainer}>
+                  <Text style={styles.label}>Origem da renda</Text>
+                  <View style={styles.inputWrapper}>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Ex.: venda de bolo"
+                      placeholderTextColor="#999"
+                      value={origin}
+                      onChangeText={setOrigin}
+                      editable={!saving}
+                      maxLength={80}
+                    />
+                  </View>
+                </View>
+              ) : null}
 
               {/* Descrição */}
               <View style={styles.inputContainer}>

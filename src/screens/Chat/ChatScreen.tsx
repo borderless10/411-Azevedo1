@@ -22,6 +22,7 @@ import { useAuth } from "../../hooks/useAuth";
 import { useUserChats } from "../../hooks/useUserChats";
 import { useChatMessages } from "../../hooks/useChatMessages";
 import { Layout } from "../../components/Layout/Layout";
+import { useDesktopWeb } from "../../utils/desktopWeb";
 import chatService, {
   CHAT_LIVE_MESSAGE_LIMIT,
   Message,
@@ -60,6 +61,7 @@ export const ChatScreen: React.FC = () => {
   const { user, activeCoupleMember } = useAuth();
   const { params } = useNavigation();
   const insets = useSafeAreaInsets();
+  const desktop = useDesktopWeb();
   const { chats, isLoading } = useUserChats(
     user?.id || null,
     user?.role || null,
@@ -1071,11 +1073,8 @@ export const ChatScreen: React.FC = () => {
     );
   }
 
-  // LIST VIEW - Show when no chat selected
-  if (selectedChatId === null) {
-    return (
-      <Layout>
-        <View style={styles.container}>
+  const chatListPane = (
+        <View style={desktop ? styles.desktopList : styles.container}>
           {isAdminUser ? (
             <TouchableOpacity
               style={styles.startChatButton}
@@ -1098,6 +1097,7 @@ export const ChatScreen: React.FC = () => {
             </View>
           ) : (
             <FlatList
+              style={{ flex: 1 }}
               data={visibleChats}
               keyExtractor={(item) => item.id}
               renderItem={({ item: chat }) => (
@@ -1247,27 +1247,47 @@ export const ChatScreen: React.FC = () => {
             </View>
           </Modal>
         </View>
+  );
+
+  if (selectedChatId === null && !desktop) {
+    return <Layout>{chatListPane}</Layout>;
+  }
+
+  if (selectedChatId === null && desktop) {
+    return (
+      <Layout desktopWidth="full">
+        <View style={styles.desktopSplit}>
+          {chatListPane}
+          <View style={styles.desktopEmpty}>
+            <Ionicons name="chatbubbles-outline" size={42} color="#666" />
+            <Text style={styles.emptyText}>Selecione uma conversa</Text>
+          </View>
+        </View>
       </Layout>
     );
   }
 
   return (
-    <Layout>
+    <Layout desktopWidth={desktop ? "full" : undefined}>
+      <View style={desktop ? styles.desktopSplit : undefined}>
+      {desktop ? chatListPane : null}
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "padding"}
         keyboardVerticalOffset={
           Platform.OS === "ios" ? insets.top + 56 : insets.bottom + 12
         }
-        style={styles.container}
+        style={desktop ? styles.desktopThread : styles.container}
       >
         {/* Header */}
         <View style={styles.conversationHeader}>
+          {desktop ? null : (
           <TouchableOpacity
             onPress={() => setSelectedChatId(null)}
             style={styles.backButton}
           >
             <Ionicons name="chevron-back" size={28} color="#8c52ff" />
           </TouchableOpacity>
+          )}
 
           {isPrivateChat && otherParticipantId ? (
             <View
@@ -1483,6 +1503,7 @@ export const ChatScreen: React.FC = () => {
           </View>
         </View>
       </KeyboardAvoidingView>
+      </View>
       <MessageActionSheet
         visible={Boolean(actionMessage)}
         isOwn={Boolean(
@@ -1651,6 +1672,29 @@ export const ChatScreen: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
+  desktopSplit: {
+    flex: 1,
+    flexDirection: "row",
+    minHeight: 0,
+  },
+  desktopList: {
+    width: 320,
+    flexGrow: 0,
+    flexShrink: 0,
+    alignSelf: "stretch",
+    borderRightWidth: 1,
+    borderRightColor: "#2a2a2a",
+  },
+  desktopThread: {
+    flex: 1,
+    minWidth: 0,
+  },
+  desktopEmpty: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
   reactionBackdrop: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "transparent",

@@ -56,6 +56,7 @@ export const AddIncomeScreen = () => {
   );
   const [selectedPlannedIncomeId, setSelectedPlannedIncomeId] = useState("");
   const [customIncomeTitle, setCustomIncomeTitle] = useState("");
+  const [origin, setOrigin] = useState("");
   const [date, setDate] = useState(new Date());
   const [category, setCategory] = useState<string>("Outros");
   const [loading, setLoading] = useState(false);
@@ -191,6 +192,7 @@ export const AddIncomeScreen = () => {
 
   // Validações
   const validateValue = (val: number): string => {
+    if (incomeType === "tracked" && val === 0) return "";
     if (val <= 0) {
       return "Valor deve ser maior que zero";
     }
@@ -319,6 +321,7 @@ export const AddIncomeScreen = () => {
         date,
         category: isTracked ? "Acompanhamento Diário" : category,
         dailyTracking: isTracked,
+        ...(isTracked && origin.trim() ? { origin: origin.trim() } : {}),
       };
 
       const newIncome = await incomeServices.createIncome(ownerId, incomeData);
@@ -682,6 +685,23 @@ export const AddIncomeScreen = () => {
                 icon="cash"
                 editable={!loading}
               />
+
+              {incomeType === "tracked" ? (
+                <View style={styles.inputContainer}>
+                  <Text style={styles.label}>Origem da renda</Text>
+                  <View style={styles.inputWrapper}>
+                    <TextInput
+                      style={styles.input}
+                      value={origin}
+                      onChangeText={setOrigin}
+                      placeholder="Ex.: venda de bolo"
+                      placeholderTextColor="#999"
+                      maxLength={80}
+                      editable={!loading}
+                    />
+                  </View>
+                </View>
+              ) : null}
 
               {/* Data */}
               <DatePicker

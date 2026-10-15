@@ -1,0 +1,18 @@
+[
+  {
+    "file": "01-page-full.png",
+    "label": "Imagem 1 — Configurações com lembrete de gastos"
+  },
+  {
+    "file": "02-detalhe-lembrete-gastos.png",
+    "label": "Imagem 2 — Detalhe — Lembrete e horário"
+  },
+  {
+    "file": "03-detalhe-vencimento-contas.png",
+    "label": "Imagem 3 — Detalhe — Vencimento das contas"
+  },
+  {
+    "file": "04-detalhe-lista-chat.png",
+    "label": "Imagem 4 — Detalhe — Conversa do chat"
+  }
+]

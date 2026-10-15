@@ -42,6 +42,7 @@ export const COLLECTIONS = {
   CREDIT_CARDS: "creditCards",
   RECOMMENDATIONS: "recommendations",
   APP_CONFIG: "appConfig",
+  RANKING_SNAPSHOTS: "rankingSnapshots",
 } as const;
 
 /**
@@ -93,6 +94,14 @@ export const getRecommendationsCollection = (): CollectionReference => {
 
 export const getAppConfigDoc = (id: string): DocumentReference => {
   return doc(db, COLLECTIONS.APP_CONFIG, id);
+};
+
+export const getRankingSnapshotsCollection = (): CollectionReference => {
+  return collection(db, COLLECTIONS.RANKING_SNAPSHOTS);
+};
+
+export const getRankingSnapshotDoc = (userId: string): DocumentReference => {
+  return doc(db, COLLECTIONS.RANKING_SNAPSHOTS, userId);
 };
 
 /**

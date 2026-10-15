@@ -5,6 +5,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
+  ScrollView,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Layout } from "../../components/Layout/Layout";
@@ -16,7 +17,7 @@ import { consultationRequestService } from "../../services/consultationRequestSe
 import { getCoupleDisplayName, isCoupleAccount } from "../../utils/coupleAccount";
 import { profileDisplayName } from "../../utils/chatDisplayNames";
 import CustomModal from "../../components/ui/CustomModal";
-import { ConsultationPreferredDayPicker } from "../../components/Consultation/ConsultationPreferredDayPicker";
+import { ConsultationBookingCalendar } from "../../components/Consultation/ConsultationBookingCalendar";
 import { parseConsultationPreferredDay } from "../../utils/consultationScheduling";
 
 type FeedbackModal = {
@@ -154,22 +155,19 @@ export const ConsultationSchedulingScreen: React.FC = () => {
       <Text style={[styles.bookingBody, { color: colors.textSecondary }]}>
         {hasBookedCurrentCycle
           ? "Se o horário mudar, escolha outro dia e atualize."
-          : "Depois de marcar no calendário, escolha o dia e confirme."}
+          : "Escolha no calendário o dia em que a consultoria ficou marcada."}
       </Text>
       {hasBookedCurrentCycle && bookedDayLabel ? (
         <Text style={styles.bookedLabel}>
           Dia da consultoria: {bookedDayLabel}
         </Text>
       ) : null}
-      <ConsultationPreferredDayPicker
+      <ConsultationBookingCalendar
         day={selectedDay}
         onChangeDay={(day) => {
           dayTouchedRef.current = true;
           setSelectedDay(day);
         }}
-        modalTitle="Dia da consultoria"
-        modalHint="Escolha o dia em que a consultoria ficou marcada."
-        placeholder="Selecionar o dia"
       />
       <TouchableOpacity
         style={[
@@ -201,7 +199,10 @@ export const ConsultationSchedulingScreen: React.FC = () => {
   if (schedulingUrl) {
     return (
       <Layout title="Agendar consultoria" showBackButton showSidebar>
-        <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <ScrollView
+          style={[styles.container, { backgroundColor: colors.background }]}
+          contentContainerStyle={styles.scrollContent}
+        >
           <View
             style={[
               styles.card,
@@ -251,7 +252,7 @@ export const ConsultationSchedulingScreen: React.FC = () => {
             </TouchableOpacity>
             {bookingSection}
           </View>
-        </View>
+        </ScrollView>
         <CustomModal
           visible={feedback.visible}
           title={feedback.title}
@@ -265,7 +266,10 @@ export const ConsultationSchedulingScreen: React.FC = () => {
 
   return (
     <Layout title="Agendar consultoria" showBackButton showSidebar>
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <ScrollView
+        style={[styles.container, { backgroundColor: colors.background }]}
+        contentContainerStyle={styles.scrollContent}
+      >
         <View
           style={[
             styles.card,
@@ -325,7 +329,7 @@ export const ConsultationSchedulingScreen: React.FC = () => {
           </TouchableOpacity>
           {bookingSection}
         </View>
-      </View>
+      </ScrollView>
 
       <CustomModal
         visible={feedback.visible}
@@ -341,7 +345,10 @@ export const ConsultationSchedulingScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  scrollContent: {
     padding: 16,
+    paddingBottom: 32,
   },
   card: {
     borderWidth: 1,

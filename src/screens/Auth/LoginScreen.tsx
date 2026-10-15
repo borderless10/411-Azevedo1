@@ -20,6 +20,7 @@ import { useAuth } from "../../hooks/useAuth";
 import { useNavigation } from "../../routes/NavigationContext";
 import { getErrorMessage } from "../../components/ui/ErrorMessage";
 import CustomModal from "../../components/ui/CustomModal";
+import { useDesktopWeb } from "../../utils/desktopWeb";
 
 const REMEMBER_EMAIL_KEY = "@411:remember-email";
 const SAVED_EMAIL_KEY = "@411:saved-email";
@@ -27,6 +28,7 @@ const BIOMETRIC_EMAIL_KEY = "411_biometric_email";
 const BIOMETRIC_PASSWORD_KEY = "411_biometric_password";
 
 export const LoginScreen = () => {
+  const desktop = useDesktopWeb();
   const { navigate } = useNavigation();
   const { signIn } = useAuth();
   const [email, setEmail] = useState("");
@@ -307,9 +309,9 @@ export const LoginScreen = () => {
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={styles.keyboard}
+        style={[styles.keyboard, desktop && styles.keyboardDesktop]}
       >
-        <View style={styles.content}>
+        <View style={[styles.content, desktop && styles.contentDesktop]}>
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.logoContainer}>
@@ -516,6 +518,19 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     padding: 24,
+  },
+  keyboardDesktop: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  contentDesktop: {
+    flex: 0,
+    width: "100%",
+    maxWidth: 440,
+    backgroundColor: "#141414",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#333",
   },
   header: {
     alignItems: "center",

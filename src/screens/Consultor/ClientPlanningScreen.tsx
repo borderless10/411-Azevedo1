@@ -50,6 +50,7 @@ import DatePicker from "../../components/DatePicker";
 import { CreditCardFormModal } from "../../components/Cards/CreditCardFormModal";
 import { profileDisplayName } from "../../utils/chatDisplayNames";
 import { isCoupleAccount } from "../../utils/coupleAccount";
+import { dueDateLabel } from "../../utils/planningBillRules";
 import { ActingForClientBanner } from "../../components/Staff/ActingForClientBanner";
 
 export const ClientPlanningScreen = () => {
@@ -155,9 +156,7 @@ export const ClientPlanningScreen = () => {
   const [expenseAmountCash, setExpenseAmountCash] = useState(0);
   const [expenseDate, setExpenseDate] = useState("");
   const [expenseIsRecurring, setExpenseIsRecurring] = useState(true);
-  const [expenseRecurringDay, setExpenseRecurringDay] = useState(
-    String(new Date().getDate()),
-  );
+  const [expenseRecurringDay, setExpenseRecurringDay] = useState("");
   const [expenseDailyTracking, setExpenseDailyTracking] = useState(false);
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
   const [editingBillId, setEditingBillId] = useState<string | null>(null);
@@ -634,9 +633,9 @@ export const ClientPlanningScreen = () => {
         0,
       );
 
-    const billBreakdown = (bills || []).map((bill) =>
-      resolveSplitAmounts(bill as any),
-    );
+    const billBreakdown = (bills || [])
+      .filter((bill) => !(bill as any).inactive)
+      .map((bill) => resolveSplitAmounts(bill as any));
     const expectedExpenseBreakdown = (expectedExpenses || []).map((item) =>
       resolveSplitAmounts(item as any),
     );
@@ -780,6 +779,22 @@ export const ClientPlanningScreen = () => {
     }
   };
 
+  const applyBillPatch = async (bill: Bill, changes: Partial<Bill>) => {
+    if (planningReadOnly) return;
+    if (!user || !selectedClient || !bill.id) return;
+    const updated = await planningServices.updateBill(
+      user.id,
+      selectedClient.id,
+      bill.id,
+      changes,
+    );
+    setBills((current) =>
+      current.map((item) =>
+        item.id === bill.id ? { ...item, ...updated, ...changes } : item,
+      ),
+    );
+  };
+
   const handleDeleteBill = async (id: string) => {
     if (planningReadOnly) return;
     if (!user || !selectedClient) return;
@@ -811,11 +826,13 @@ export const ClientPlanningScreen = () => {
       setSavingBill(true);
 
       // tentar extrair dia do vencimento DD/MM/YYYY
-      let dueDay: number | undefined = undefined;
+      let dueDay: number | null | undefined = undefined;
       if (billDueDate) {
         const parts = billDueDate.replace(/[^0-9]/g, "").padEnd(8, "0");
         const day = parseInt(parts.substring(0, 2));
         if (!Number.isNaN(day) && day >= 1 && day <= 31) dueDay = day;
+      } else if (editingBillId) {
+        dueDay = null;
       }
 
       const amountCard = Number(billAmountCard) || 0;
@@ -988,9 +1005,8 @@ export const ClientPlanningScreen = () => {
             : "cash";
 
       if (expenseIsRecurring) {
-        // criar/atualizar como Bill (recorrente)
         let dayNum: number | undefined;
-        if (!expenseDailyTracking) {
+        if (!expenseDailyTracking && expenseRecurringDay.trim()) {
           dayNum = parseInt(expenseRecurringDay, 10);
           if (isNaN(dayNum) || dayNum < 1 || dayNum > 31) {
             Alert.alert("Erro", "Dia deve estar entre 1 e 31");
@@ -1010,7 +1026,7 @@ export const ClientPlanningScreen = () => {
               amountCard,
               amountCash,
               paymentMethod,
-              dueDay: dayNum,
+              dueDay: dayNum ?? null,
               recurring: true,
               dailyTracking: expenseDailyTracking,
               notes: "",
@@ -1091,7 +1107,7 @@ export const ClientPlanningScreen = () => {
       setExpenseAmountCash(0);
       setExpenseDate("");
       setExpenseIsRecurring(true);
-      setExpenseRecurringDay(String(new Date().getDate()));
+      setExpenseRecurringDay("");
       setExpenseDailyTracking(false);
       setEditingExpenseId(null);
       setEditingBillId(null);
@@ -1517,7 +1533,7 @@ export const ClientPlanningScreen = () => {
                     setExpenseAmount("");
                     setExpenseDate("");
                     setExpenseIsRecurring(true);
-                    setExpenseRecurringDay(String(new Date().getDate()));
+                    setExpenseRecurringDay("");
                     setExpenseDailyTracking(false);
                     setEditingExpenseId(null);
                     setEditingBillId(null);
@@ -1718,6 +1734,19 @@ export const ClientPlanningScreen = () => {
                       <Text style={{ color: "#ccc", marginTop: 6 }}>
                         Método: {formatPaymentMethodLabel(bill.paymentMethod)}
                       </Text>
+                      <Text style={{ color: "#ccc", marginTop: 4 }}>
+                        {dueDateLabel(bill as any)}
+                      </Text>
+                      {(bill as any).inactive ? (
+                        <Text style={{ color: "#f59e0b", marginTop: 4 }}>
+                          Inativa
+                        </Text>
+                      ) : null}
+                      {(bill as any).markedOverdue ? (
+                        <Text style={{ color: "#f59e0b", marginTop: 4 }}>
+                          Já vencida
+                        </Text>
+                      ) : null}
                     </View>
                     <View>
                       <Text style={styles.billAmount}>
@@ -1741,9 +1770,7 @@ export const ClientPlanningScreen = () => {
                         setExpenseIsRecurring(true);
                         setExpenseDailyTracking(false);
                         setExpenseRecurringDay(
-                          bill.dueDay
-                            ? String(bill.dueDay)
-                            : String(new Date().getDate()),
+                          bill.dueDay ? String(bill.dueDay) : "",
                         );
                         setExpenseDate("");
                         setEditingExpenseId(null);
@@ -1767,6 +1794,37 @@ export const ClientPlanningScreen = () => {
                       }
                     >
                       <Ionicons name="trash" size={16} color="#fff" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.actionButton, { backgroundColor: "#b45309" }]}
+                      onPress={() =>
+                        applyBillPatch(bill, {
+                          markedOverdue: !(bill as any).markedOverdue,
+                        }).catch(() =>
+                          Alert.alert(
+                            "Erro",
+                            "Não foi possível atualizar a marcação",
+                          ),
+                        )
+                      }
+                    >
+                      <Ionicons name="alert-circle" size={16} color="#fff" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.actionButton, { backgroundColor: "#444" }]}
+                      onPress={() =>
+                        applyBillPatch(bill, {
+                          inactive: !(bill as any).inactive,
+                        }).catch(() =>
+                          Alert.alert("Erro", "Não foi possível atualizar a conta"),
+                        )
+                      }
+                    >
+                      <Ionicons
+                        name={(bill as any).inactive ? "play" : "pause"}
+                        size={16}
+                        color="#fff"
+                      />
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -2691,7 +2749,7 @@ export const ClientPlanningScreen = () => {
 
                     {expenseIsRecurring ? (
                       <View style={styles.inputGroup}>
-                        <Text style={styles.inputLabel}>Dia do mês (1-31) *</Text>
+                        <Text style={styles.inputLabel}>Dia do mês (1-31)</Text>
                         <TextInput
                           style={[
                             styles.input,

@@ -59,6 +59,8 @@ export const SettingsScreen = () => {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const changingPasswordRef = useRef(false);
+  const [passwordFeedback, setPasswordFeedback] = useState<string>("");
   const [isRankingModalVisible, setIsRankingModalVisible] = useState(false);
   const [selectedRankingPref, setSelectedRankingPref] =
     useState<RankingPreference | null>(null);
@@ -258,41 +260,52 @@ export const SettingsScreen = () => {
   };
 
   const handleChangePassword = async () => {
+    if (changingPasswordRef.current) return;
+
+    const fail = (message: string) => {
+      setPasswordFeedback(message);
+      Alert.alert("Erro", message);
+    };
+
     if (!currentPassword || !newPassword || !confirmPassword) {
-      Alert.alert("Erro", "Preencha todos os campos");
+      fail("Preencha todos os campos");
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      Alert.alert("Erro", "A nova senha e a confirmação não coincidem");
+      fail("A nova senha e a confirmação não coincidem");
       return;
     }
 
     if (newPassword.length < 6) {
-      Alert.alert("Erro", "A nova senha deve ter pelo menos 6 caracteres");
+      fail("A nova senha deve ter pelo menos 6 caracteres");
       return;
     }
 
     if (newPassword === currentPassword) {
-      Alert.alert("Erro", "A nova senha deve ser diferente da atual");
+      fail("A nova senha deve ser diferente da atual");
       return;
     }
 
+    changingPasswordRef.current = true;
     setIsChangingPassword(true);
+    setPasswordFeedback("");
     try {
       await authServices.changePassword(currentPassword, newPassword);
+      setPasswordFeedback("Senha alterada com sucesso");
       Alert.alert("Sucesso", "Senha alterada com sucesso!");
       setIsPasswordModalVisible(false);
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
+      setPasswordFeedback("");
     } catch (error: any) {
-      console.log("Erro ao alterar senha:", error);
-      Alert.alert(
-        "Erro",
-        error.message || "Erro ao alterar senha. Tente novamente.",
-      );
+      const message =
+        error?.message || "Erro ao alterar senha. Tente novamente.";
+      setPasswordFeedback(message);
+      Alert.alert("Erro", message);
     } finally {
+      changingPasswordRef.current = false;
       setIsChangingPassword(false);
     }
   };
@@ -1008,6 +1021,9 @@ export const SettingsScreen = () => {
                         placeholderTextColor={colors.placeholder}
                         secureTextEntry={!showCurrentPassword}
                         autoCapitalize="none"
+                        autoCorrect={false}
+                        autoComplete="password"
+                        textContentType="password"
                       />
                       <TouchableOpacity
                         onPress={() =>
@@ -1046,6 +1062,9 @@ export const SettingsScreen = () => {
                         placeholderTextColor={colors.placeholder}
                         secureTextEntry={!showNewPassword}
                         autoCapitalize="none"
+                        autoCorrect={false}
+                        autoComplete="password-new"
+                        textContentType="newPassword"
                       />
                       <TouchableOpacity
                         onPress={() => setShowNewPassword(!showNewPassword)}
@@ -1087,6 +1106,9 @@ export const SettingsScreen = () => {
                         value={confirmPassword}
                         onChangeText={setConfirmPassword}
                         placeholder="Confirme sua nova senha"
+                        autoCorrect={false}
+                        autoComplete="password-new"
+                        textContentType="newPassword"
                         placeholderTextColor={colors.placeholder}
                         secureTextEntry={!showConfirmPassword}
                         autoCapitalize="none"
@@ -1106,7 +1128,11 @@ export const SettingsScreen = () => {
                     </View>
                   </View>
 
-                  {/* Botões */}
+                  {passwordFeedback ? (
+                    <Text style={{ color: colors.text, marginBottom: 12 }}>
+                      {passwordFeedback}
+                    </Text>
+                  ) : null}
                   <View style={styles.modalButtons}>
                     <TouchableOpacity
                       style={[

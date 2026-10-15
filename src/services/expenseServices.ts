@@ -242,10 +242,36 @@ export const expenseServices = {
     console.log("💸 [EXPENSE SERVICE] Filtros:", filters);
 
     try {
-      // Buscar todos os gastos do usuário (evita problemas de índice)
-      let q = query(getExpensesCollection(), where("userId", "==", userId));
+      const startBound = filters?.startDate ? new Date(filters.startDate) : null;
+      const endBound = filters?.endDate ? new Date(filters.endDate) : null;
+      if (startBound) startBound.setHours(0, 0, 0, 0);
+      if (endBound) endBound.setHours(23, 59, 59, 999);
 
-      const snapshot = await getDocs(q);
+      const userQuery = query(
+        getExpensesCollection(),
+        where("userId", "==", userId),
+      );
+      let queriedByDate = false;
+      let snapshot;
+      if (startBound || endBound) {
+        try {
+          const constraints = [where("userId", "==", userId)];
+          if (startBound) {
+            constraints.push(where("date", ">=", Timestamp.fromDate(startBound)));
+          }
+          if (endBound) {
+            constraints.push(where("date", "<=", Timestamp.fromDate(endBound)));
+          }
+          snapshot = await getDocs(query(getExpensesCollection(), ...constraints));
+          queriedByDate = true;
+        } catch (error) {
+          const code = String((error as { code?: string })?.code || "");
+          if (!code.includes("failed-precondition")) throw error;
+          snapshot = await getDocs(userQuery);
+        }
+      } else {
+        snapshot = await getDocs(userQuery);
+      }
       console.log(
         "💸 [EXPENSE SERVICE] Encontrados",
         snapshot.size,
@@ -257,8 +283,7 @@ export const expenseServices = {
         convertExpenseFromFirestore(getDocData(doc)),
       );
 
-      // Aplicar filtros no cliente (mais confiável)
-      if (filters?.startDate) {
+      if (!queriedByDate && filters?.startDate) {
         const startDate = new Date(filters.startDate);
         startDate.setHours(0, 0, 0, 0);
         expenses = expenses.filter((expense) => {
@@ -273,7 +298,7 @@ export const expenseServices = {
         );
       }
 
-      if (filters?.endDate) {
+      if (!queriedByDate && filters?.endDate) {
         const endDate = new Date(filters.endDate);
         endDate.setHours(23, 59, 59, 999);
         expenses = expenses.filter((expense) => {

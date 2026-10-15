@@ -7,10 +7,12 @@ import {
   updatePassword,
   reauthenticateWithCredential,
   EmailAuthProvider,
+  deleteUser,
   User as FirebaseUser,
 } from 'firebase/auth';
 import { auth } from '../lib/firebase';
 import { User, LoginCredentials, RegisterCredentials } from '../types/auth';
+import { userService } from './userServices';
 
 /**
  * Converter usuário do Firebase para o tipo da aplicação
@@ -146,11 +148,11 @@ export const authServices = {
       console.log('🟡 [AUTH SERVICE] Senha alterada com sucesso');
     } catch (error: any) {
       if (__DEV__) {
-        console.log('❌ [AUTH SERVICE] Erro ao alterar senha:', error);
+        console.log('❌ [AUTH SERVICE] Erro ao alterar senha:', error?.code || "desconhecido");
       }
       
       // Melhorar mensagens de erro
-      if (error.code === 'auth/wrong-password') {
+      if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
         throw new Error('Senha atual incorreta');
       } else if (error.code === 'auth/weak-password') {
         throw new Error('A nova senha deve ter pelo menos 6 caracteres');
@@ -159,6 +161,37 @@ export const authServices = {
       }
       
       throw error;
+    }
+  },
+
+  /**
+   * Excluir conta: reautentica, anonimiza dados no Firestore e remove Auth.
+   */
+  async deleteAccount(password: string): Promise<void> {
+    const user = auth.currentUser;
+    if (!user || !user.email) {
+      throw new Error('Usuário não autenticado');
+    }
+    if (!password) {
+      throw new Error('Informe sua senha para confirmar a exclusão');
+    }
+
+    try {
+      const credential = EmailAuthProvider.credential(user.email, password);
+      await reauthenticateWithCredential(user, credential);
+      await userService.anonymizeAndDeactivateAccount(user.uid);
+      await deleteUser(user);
+    } catch (error: any) {
+      if (__DEV__) {
+        console.log('❌ [AUTH SERVICE] Erro ao excluir conta:', error);
+      }
+      if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+        throw new Error('Senha incorreta');
+      }
+      if (error.code === 'auth/requires-recent-login') {
+        throw new Error('Por segurança, faça login novamente e tente excluir a conta');
+      }
+      throw error?.message ? error : new Error('Não foi possível excluir a conta');
     }
   },
 };

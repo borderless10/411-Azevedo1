@@ -1,6 +1,7 @@
 import { Expense } from "../types/expense";
 import {
   Bill,
+  isActivePlanningBill,
   isPayablePlanningBill,
   Planning,
 } from "../types/planning";
@@ -210,7 +211,7 @@ export const computePlannedSpendingSummary = (
   if (!planning) return null;
 
   const billsTotal = (planning.bills || [])
-    .filter(isPayablePlanningBill)
+    .filter(isActivePlanningBill)
     .reduce((sum, bill) => sum + getItemAmount(bill), 0);
 
   const expectedExpensesTotal = (planning.expectedExpenses || [])
@@ -261,7 +262,7 @@ export const findPlanningBillForExpense = (
   expense: Expense,
   planning: Planning | null,
 ): Bill | undefined => {
-  const payableBills = (planning?.bills || []).filter(isPayablePlanningBill);
+  const payableBills = (planning?.bills || []).filter(isActivePlanningBill);
   if (payableBills.length === 0) return undefined;
 
   if (expense.sourceBillId) {
