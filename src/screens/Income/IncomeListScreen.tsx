@@ -25,6 +25,7 @@ import {
 } from "../../services/planningServices";
 import { ExpectedItem } from "../../types/planning";
 import { normalizeExpenseTitleKey } from "../../utils/expenseScopeUtils";
+import { ActingForClientBanner } from "../../components/Staff/ActingForClientBanner";
 
 type TrackedIncomeItem = {
   title: string;
@@ -179,11 +180,7 @@ export const IncomeListScreen = () => {
             <Text style={styles.subtitle}>
               Selecione uma renda para registrar e acompanhar dia a dia
             </Text>
-            {isSpectator ? (
-              <Text style={styles.spectatorHint}>
-                Visualização do cliente (somente leitura)
-              </Text>
-            ) : null}
+            <ActingForClientBanner clientId={clientId} />
             {planningCycleLabel ? (
               <Text style={styles.cycleLabel}>{planningCycleLabel}</Text>
             ) : null}

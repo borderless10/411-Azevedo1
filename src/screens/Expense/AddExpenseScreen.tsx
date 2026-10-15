@@ -36,6 +36,11 @@ import { CreditCard } from "../../types/creditCard";
 import { Bill } from "../../types/planning";
 import { budgetServices } from "../../services/budgetServices";
 import { getRankingRegistrationFeedback } from "../../services/rankingPlanilhaService";
+import { ActingForClientBanner } from "../../components/Staff/ActingForClientBanner";
+import {
+  recordOwnerId,
+  staffClientId,
+} from "../../utils/staffClientContext";
 
 const parsePrefillDate = (value?: string): Date | null => {
   if (!value) return null;
@@ -62,6 +67,20 @@ const parsePrefillDate = (value?: string): Date | null => {
 export const AddExpenseScreen = () => {
   const { user, activeCoupleMember } = useAuth();
   const { navigate, params } = useNavigation() as any;
+  const actingClientId = staffClientId(
+    user,
+    params?.clientId || params?.returnParams?.clientId,
+  );
+  const ownerId = recordOwnerId(user, actingClientId);
+  const requestedCoupleMember = Number(params?.coupleMember);
+  const coupleMemberForWrite: 1 | 2 | undefined =
+    requestedCoupleMember === 1 || requestedCoupleMember === 2
+      ? (requestedCoupleMember as 1 | 2)
+      : actingClientId
+        ? undefined
+        : activeCoupleMember === 1 || activeCoupleMember === 2
+          ? activeCoupleMember
+          : undefined;
   const skipPrefillAfterAddAnother = useRef(false);
   const initialPrefillDate = parsePrefillDate(params?.prefillDate);
   const isConsumptionOnlyMode =
@@ -138,16 +157,14 @@ export const AddExpenseScreen = () => {
   // Carregar cards e dados de planejamento
   useEffect(() => {
     const loadData = async () => {
-      if (!user?.id) return;
+      if (!ownerId) return;
       try {
         setLoadingData(true);
 
-        // Carregar cartões
-        const loaded = await creditCardServices.getCreditCards(user.id);
+        const loaded = await creditCardServices.getCreditCards(ownerId);
         setCards(loaded.filter((card) => card.isActive !== false));
 
-        // Carregar planejamento
-        const planning = await planningServices.getPlanning(user.id);
+        const planning = await planningServices.getPlanning(ownerId);
 
         // Extrair gastos acompanhados
         if (planning) {
@@ -163,7 +180,7 @@ export const AddExpenseScreen = () => {
 
           // Extrair contas a serem pagas
           const paidSourceBillIds =
-            await expenseServices.getPaidSourceBillIds(user.id);
+            await expenseServices.getPaidSourceBillIds(ownerId);
           const planningBills = (planning.bills || [])
             .filter(isBillUnpaid)
             .filter(isPayablePlanningBill);
@@ -201,7 +218,7 @@ export const AddExpenseScreen = () => {
     };
 
     loadData();
-  }, [user?.id]);
+  }, [ownerId]);
 
   const normalizeBillPaymentMethod = (
     raw?: string,
@@ -356,7 +373,9 @@ export const AddExpenseScreen = () => {
   };
 
   const isPlanningUser =
-    user?.role === "user" || user?.role === "cliente_premium";
+    user?.role === "user" ||
+    user?.role === "cliente_premium" ||
+    !!actingClientId;
 
   const selectPlannedBill = (bill: Bill) => {
     setBillSourceMode("planned");
@@ -430,10 +449,9 @@ export const AddExpenseScreen = () => {
 
     try {
       setLoading(true);
-      const coupleExpenseFields =
-        activeCoupleMember === 1 || activeCoupleMember === 2
-          ? { coupleMember: activeCoupleMember as 1 | 2 }
-          : {};
+      const coupleExpenseFields = coupleMemberForWrite
+        ? { coupleMember: coupleMemberForWrite }
+        : {};
 
       if (expenseType === "consumption") {
         // Criar expense como Consumo Moderado
@@ -453,9 +471,9 @@ export const AddExpenseScreen = () => {
           ...coupleExpenseFields,
         };
 
-        await expenseServices.createExpense(user.id, expenseData);
+        await expenseServices.createExpense(ownerId, expenseData);
         const ranking = await budgetServices.reconcileConsumoModeradoDay(
-          user.id,
+          ownerId,
           consumoDate,
           coupleExpenseFields.coupleMember,
         );
@@ -481,7 +499,7 @@ export const AddExpenseScreen = () => {
             : {}),
         };
 
-        await expenseServices.createExpense(user.id, expenseData);
+        await expenseServices.createExpense(ownerId, expenseData);
         setSavedValueForModal(trackedValue);
         setLastSavedExpenseType("tracked");
         setLastSavedTrackedTitle(trackedTitle);
@@ -492,7 +510,7 @@ export const AddExpenseScreen = () => {
           let billDescription = title;
 
           if (isPlanningUser) {
-            const created = await planningServices.addBillByClient(user.id, {
+            const created = await planningServices.addBillByClient(ownerId, {
               name: title,
               amount: billAmount,
               dueDate: billDueDate,
@@ -501,9 +519,9 @@ export const AddExpenseScreen = () => {
             });
             newBillId = created.id!;
             billDescription = created.name;
-            await planningServices.markBillAsPaidByClient(user.id, newBillId);
+            await planningServices.markBillAsPaidByClient(ownerId, newBillId);
           } else {
-            const created = await createBill(user.id, {
+            const created = await createBill(ownerId, {
               title,
               amount: billAmount,
               dueDate: billDueDate,
@@ -513,7 +531,7 @@ export const AddExpenseScreen = () => {
             await markBillAsPaid(newBillId);
           }
 
-          await expenseServices.createExpense(user.id, {
+          await expenseServices.createExpense(ownerId, {
             value: billAmount,
             description: billDescription,
             date: billDueDate,
@@ -531,7 +549,7 @@ export const AddExpenseScreen = () => {
             throw new Error("Conta selecionada não encontrada");
           }
 
-          await expenseServices.createExpense(user.id, {
+          await expenseServices.createExpense(ownerId, {
             value: billAmount,
             description: selectedBill.name,
             date: billDueDate,
@@ -546,7 +564,7 @@ export const AddExpenseScreen = () => {
 
           if (!(selectedBill as any)._isExpectedExpense) {
             try {
-              await planningServices.markBillAsPaidByClient(user.id, billId);
+              await planningServices.markBillAsPaidByClient(ownerId, billId);
             } catch {
               await markBillAsPaid(billId);
             }
@@ -631,6 +649,7 @@ export const AddExpenseScreen = () => {
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.content}>
+            <ActingForClientBanner clientId={actingClientId} />
             {!isConsumptionOnlyMode && (
               <View style={styles.typeSelector}>
                 <TouchableOpacity

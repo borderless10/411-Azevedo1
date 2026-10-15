@@ -50,10 +50,11 @@ import DatePicker from "../../components/DatePicker";
 import { CreditCardFormModal } from "../../components/Cards/CreditCardFormModal";
 import { profileDisplayName } from "../../utils/chatDisplayNames";
 import { isCoupleAccount } from "../../utils/coupleAccount";
+import { ActingForClientBanner } from "../../components/Staff/ActingForClientBanner";
 
 export const ClientPlanningScreen = () => {
   const { user } = useAuth();
-  const planningReadOnly = user?.role === "supervisor";
+  const planningReadOnly = false;
   const { navigate, params } = useNavigation();
   const { colors } = useTheme();
   const { height: windowHeight } = useWindowDimensions();
@@ -1314,6 +1315,7 @@ export const ClientPlanningScreen = () => {
         }
         showBackButton={true}
         showSidebar={false}
+        desktopWidth={760}
       >
         <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
@@ -1332,6 +1334,7 @@ export const ClientPlanningScreen = () => {
         }
         showBackButton={true}
         showSidebar={false}
+        desktopWidth={760}
       >
         <View style={styles.centerContainer}>
           <Text style={styles.emptyText}>Nenhum cliente disponível</Text>
@@ -1345,6 +1348,7 @@ export const ClientPlanningScreen = () => {
       title={profileDisplayName(selectedClient, "Planejamento do Cliente")}
       showBackButton={true}
       showSidebar={false}
+        desktopWidth={760}
     >
       <View style={styles.page}>
         <ScrollView
@@ -1353,11 +1357,7 @@ export const ClientPlanningScreen = () => {
           keyboardShouldPersistTaps="handled"
         >
         <View style={styles.cycleCard}>
-          {planningReadOnly ? (
-            <Text style={styles.readOnlyBanner}>
-              Somente visualização. O supervisor não altera o planejamento.
-            </Text>
-          ) : null}
+          <ActingForClientBanner clientId={params?.clientId} />
           {isCoupleAccount(selectedClient) ? (
             <View style={styles.coupleBadge}>
               <Text style={styles.coupleBadgeText}>❤️ Planejamento do casal</Text>

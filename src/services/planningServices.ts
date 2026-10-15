@@ -156,12 +156,13 @@ export const planningServices = {
     const consultant = await userService.getUserById(consultantId);
     if (
       !consultant ||
-      (consultant.role !== "consultor" && consultant.role !== "admin")
+      (consultant.role !== "consultor" &&
+        consultant.role !== "admin" &&
+        consultant.role !== "supervisor")
     ) {
       throw new Error("Usuário não autorizado a modificar planejamento");
     }
-    // admins can manage any client
-    if (consultant.role === "admin") return;
+    if (consultant.role === "admin" || consultant.role === "supervisor") return;
 
     const target = await userService.getUserById(userId);
     if (!target) throw new Error("Cliente não encontrado");
@@ -534,15 +535,20 @@ export const planningServices = {
 
       const now = Timestamp.now();
       const docRef = getUserPlanningDoc(userId);
-      // Ensure we don't send `undefined` values to Firestore.
-      // Use the passed consultantId (param) instead of relying on data.consultantId.
+      const existingSnap = await getDoc(docRef);
+      const existingConsultantId = existingSnap.exists()
+        ? String((existingSnap.data() as any)?.consultantId || "")
+        : "";
+      const actor = await userService.getUserById(consultantId);
+      const consultantIdToStore =
+        actor?.role === "supervisor"
+          ? existingConsultantId || String(data.consultantId || "")
+          : consultantId;
       const payload: any = {
-        consultantId: consultantId,
         updatedAt: now,
       };
+      if (consultantIdToStore) payload.consultantId = consultantIdToStore;
 
-      // If document does not exist yet, set createdAt when merging
-      const existingSnap = await getDoc(docRef);
       if (!existingSnap.exists()) payload.createdAt = now;
 
       if (data.availableInAccount !== undefined && data.availableInAccount !== null) {

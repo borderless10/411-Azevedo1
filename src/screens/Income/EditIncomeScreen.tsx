@@ -25,11 +25,17 @@ import { CategoryPicker } from "../../components/CategoryPicker";
 import incomeServices from "../../services/incomeServices";
 import { formatCurrency } from "../../utils/currencyUtils";
 import { Income } from "../../types/income";
+import { ActingForClientBanner } from "../../components/Staff/ActingForClientBanner";
+import { staffClientId } from "../../utils/staffClientContext";
 
 export const EditIncomeScreen = () => {
   const { user } = useAuth();
   const { navigate, params } = useNavigation();
   const incomeId = params?.id;
+  const actingClientId = staffClientId(
+    user,
+    params?.clientId || params?.returnParams?.clientId,
+  );
 
   const [value, setValue] = useState(0);
   const [description, setDescription] = useState("");
@@ -59,7 +65,10 @@ export const EditIncomeScreen = () => {
           return;
         }
 
-        if (income.userId !== user.id) {
+        const canEdit =
+          income.userId === user.id ||
+          (!!actingClientId && income.userId === actingClientId);
+        if (!canEdit) {
           Alert.alert("Erro", "Você não tem permissão para editar esta renda");
           navigate("Home");
           return;
@@ -229,6 +238,7 @@ export const EditIncomeScreen = () => {
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.content}>
+            <ActingForClientBanner clientId={actingClientId} />
             {/* Header visual */}
             <View style={styles.header}>
               <View style={styles.iconContainer}>

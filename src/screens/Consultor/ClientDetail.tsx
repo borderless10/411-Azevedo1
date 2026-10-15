@@ -487,6 +487,9 @@ export const ClientDetail: React.FC = () => {
         ) : null}
 
         <View style={styles.actionColumn}>
+          <Text style={[styles.heading, { color: colors.text }]}>
+            Lançar na conta de {profileDisplayName(clientDoc, "cliente")}
+          </Text>
           <TouchableOpacity
             style={[
               styles.actionButtonFull,

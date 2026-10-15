@@ -119,7 +119,7 @@ service cloud.firestore {
 
       match /planning/{planningId} {
         allow get, list: if canAccessUserData(userId) || isSupervisor();
-        allow write: if canAccessUserData(userId);
+        allow write: if canAccessUserData(userId) || isSupervisor();
       }
     }
 
@@ -138,10 +138,10 @@ service cloud.firestore {
     }
 
     match /budgets/{docId} {
-      allow get: if canGetUserDocument();
-      allow list: if canReadUserDocument();
-      allow create: if ownsUserDocument();
-      allow update, delete: if canWriteUserDocument();
+      allow get: if canGetUserDocument() || isSupervisor();
+      allow list: if canReadUserDocument() || isSupervisor();
+      allow create: if ownsUserDocument() || isSupervisor();
+      allow update, delete: if canWriteUserDocument() || isSupervisor();
     }
 
     match /goals/{docId} {
@@ -159,10 +159,10 @@ service cloud.firestore {
     }
 
     match /bills/{docId} {
-      allow get: if canGetUserDocument();
-      allow list: if canReadUserDocument();
-      allow create: if ownsUserDocument();
-      allow update, delete: if canWriteUserDocument();
+      allow get: if canGetUserDocument() || isSupervisor();
+      allow list: if canReadUserDocument() || isSupervisor();
+      allow create: if ownsUserDocument() || isSupervisor();
+      allow update, delete: if canWriteUserDocument() || isSupervisor();
     }
 
     match /wishlists/{docId} {

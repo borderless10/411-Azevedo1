@@ -49,6 +49,7 @@ import {
 } from "../../services/notificationServices";
 import { getRankingRegistrationFeedback } from "../../services/rankingPlanilhaService";
 import ConfettiCelebration from "../../components/ui/ConfettiCelebration";
+import { ActingForClientBanner } from "../../components/Staff/ActingForClientBanner";
 import {
   isConsumoModeradoHistoryExpense,
 } from "../../utils/expenseScopeUtils";
@@ -621,7 +622,10 @@ export const BudgetScreen = () => {
     navigate("EditExpense", {
       id: expenseId,
       expenseId,
+      clientId: clientId || undefined,
+      coupleMember,
       returnTo: "Budget",
+      returnParams: { clientId: clientId || undefined },
     });
   };
 
@@ -630,6 +634,8 @@ export const BudgetScreen = () => {
       prefillDate: formatDateToString(date),
       prefillExpenseType: "consumption",
       consumptionOnly: true,
+      clientId: clientId || undefined,
+      coupleMember,
       returnTo: "Budget",
       returnParams: { clientId: clientId || undefined },
     });
@@ -650,7 +656,7 @@ export const BudgetScreen = () => {
   };
 
   const handleOpenNoRecordActions = (date: Date) => {
-    if (!user || isSpectator) return;
+    if (!user || !ownerId) return;
     const label = formatDayMonthLabel(date);
 
     setChoiceModalDayLabel(label);
@@ -664,7 +670,7 @@ export const BudgetScreen = () => {
   };
 
   const handleChooseRegister = () => {
-    if (isSpectator || !choiceModalDate) return;
+    if (!choiceModalDate) return;
     const date = choiceModalDate;
     setChoiceModalVisible(false);
     setChoiceModalDate(null);
@@ -676,12 +682,12 @@ export const BudgetScreen = () => {
   };
 
   const handleChooseMarkZero = async () => {
-    if (!user || isSpectator || !choiceModalDate) return;
+    if (!ownerId || !choiceModalDate) return;
     setChoiceModalVisible(false);
     try {
       setSaving(true);
       const { ranking } = await budgetServices.confirmZeroExpenseDay(
-        user.id,
+        ownerId,
         choiceModalDate,
         coupleMember,
       );
@@ -700,7 +706,7 @@ export const BudgetScreen = () => {
   };
 
   const handleCorrectDayToZero = (date: Date) => {
-    if (!user || isSpectator) return;
+    if (!ownerId) return;
     setCorrectZeroModalDayLabel(formatDayMonthLabel(date));
     setCorrectZeroModalDate(date);
     setCorrectZeroModalVisible(true);
@@ -712,7 +718,7 @@ export const BudgetScreen = () => {
   };
 
   const executeCorrectDayToZero = async () => {
-    if (!user || isSpectator || !correctZeroModalDate) return;
+    if (!ownerId || !correctZeroModalDate) return;
 
     const date = correctZeroModalDate;
     setCorrectZeroModalVisible(false);
@@ -720,7 +726,7 @@ export const BudgetScreen = () => {
     try {
       setSaving(true);
       const { ranking } = await budgetServices.correctConsumoModeradoDayToZero(
-        user.id,
+        ownerId,
         date,
         coupleMember,
       );
@@ -798,11 +804,7 @@ export const BudgetScreen = () => {
             <Text style={styles.subtitle}>
               Controle quanto você pode gastar por dia
             </Text>
-            {isSpectator ? (
-              <Text style={styles.spectatorHint}>
-                Visualização do cliente (somente leitura)
-              </Text>
-            ) : null}
+            <ActingForClientBanner clientId={clientId} />
             {isCoupleAccount(coupleOwner) && isSpectator ? (
               <View style={styles.memberToggleRow}>
                 <TouchableOpacity
@@ -1036,8 +1038,7 @@ export const BudgetScreen = () => {
                         )}
                       </View>
 
-                      {!isSpectator &&
-                        (isEditing ? (
+                      {isEditing ? (
                         <View style={styles.editItemsWrap}>
                           {(expensesByDate[dateKey] || []).map((item) => (
                             <TouchableOpacity
@@ -1110,7 +1111,7 @@ export const BudgetScreen = () => {
                         >
                           <Ionicons name="pencil" size={18} color="#8c52ff" />
                         </TouchableOpacity>
-                      ))}
+                      )}
                     </View>
                   );
                 })}

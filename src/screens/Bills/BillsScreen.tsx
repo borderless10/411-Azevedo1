@@ -54,6 +54,7 @@ import {
 import ConfirmDeleteModal from "../../components/ui/ConfirmDeleteModal";
 import { creditCardServices } from "../../services/creditCardServices";
 import { CreditCard } from "../../types/creditCard";
+import { ActingForClientBanner } from "../../components/Staff/ActingForClientBanner";
 
 export const BillsScreen = () => {
   const { user } = useAuth();
@@ -62,7 +63,10 @@ export const BillsScreen = () => {
   const clientId = String(params?.clientId || "");
   const isConsultorManagingClient =
     !!clientId &&
-    (user?.role === "consultor" || user?.role === "admin" || user?.isAdmin);
+    (user?.role === "consultor" ||
+      user?.role === "supervisor" ||
+      user?.role === "admin" ||
+      user?.isAdmin);
   const billsOwnerId = isConsultorManagingClient ? clientId : user?.id || "";
   const usePlanningBills =
     user?.role === "user" ||
@@ -459,6 +463,24 @@ export const BillsScreen = () => {
     }
   };
 
+  const parseDueDateInput = (raw: string): Date | null => {
+    const parts = raw.trim().split("/").filter(Boolean);
+    if (parts.length === 1) {
+      const day = parseInt(parts[0], 10);
+      if (!Number.isFinite(day) || day < 1 || day > 31) return null;
+      return resolveDueDateFromDay(day);
+    }
+    if (parts.length === 3) {
+      const due = new Date(
+        parseInt(parts[2], 10),
+        parseInt(parts[1], 10) - 1,
+        parseInt(parts[0], 10),
+      );
+      return isNaN(due.getTime()) ? null : due;
+    }
+    return null;
+  };
+
   const handleCreateBill = async () => {
     if (!user || !title || !amount || !dueDate) {
       Alert.alert("Erro", "Preencha todos os campos obrigatórios");
@@ -468,16 +490,12 @@ export const BillsScreen = () => {
     try {
       setSaving(true);
 
-      // Converter data DD/MM/YYYY para Date
-      const [day, month, year] = dueDate.split("/");
-      const dueDateObj = new Date(
-        parseInt(year),
-        parseInt(month) - 1,
-        parseInt(day),
-      );
-
-      if (isNaN(dueDateObj.getTime())) {
-        Alert.alert("Erro", "Data inválida. Use o formato DD/MM/YYYY");
+      const dueDateObj = parseDueDateInput(dueDate);
+      if (!dueDateObj) {
+        Alert.alert(
+          "Erro",
+          "Data inválida. Informe só o dia (ex.: 13) ou DD/MM/YYYY",
+        );
         return;
       }
 
@@ -884,6 +902,7 @@ export const BillsScreen = () => {
             },
           ]}
         >
+          <ActingForClientBanner clientId={clientId} />
           {/* Resumo */}
           <View style={styles.summaryContainer}>
             <View
@@ -1305,7 +1324,7 @@ export const BillsScreen = () => {
                       ]}
                       value={dueDate}
                       onChangeText={handleDateChange}
-                      placeholder="DD/MM/YYYY"
+                      placeholder="Dia ou DD/MM/YYYY"
                       placeholderTextColor={colors.placeholder}
                       keyboardType="numeric"
                       maxLength={10}

@@ -42,6 +42,7 @@ import { useNavigation } from "../../routes/NavigationContext";
 import ZeroPlanilhaConfirmModal from "../../components/ui/ZeroPlanilhaConfirmModal";
 import ConfettiCelebration from "../../components/ui/ConfettiCelebration";
 import { Expense } from "../../types/expense";
+import { ActingForClientBanner } from "../../components/Staff/ActingForClientBanner";
 
 type DaySummary = {
   date: Date;
@@ -257,12 +258,12 @@ export const CategoryBudgetScreen = () => {
   }, [currentScreen, ownerId, trackedTitle]);
 
   const handleAddTrackedExpense = () => {
-    if (isSpectator) return;
     navigate("AddExpense", {
       prefillExpenseType: "tracked",
       prefillTrackedTitle: trackedTitle,
+      clientId: clientId || undefined,
       returnTo: "CategoryBudget",
-      returnParams: { trackedTitle },
+      returnParams: { trackedTitle, clientId: clientId || undefined },
     });
   };
 
@@ -373,12 +374,12 @@ export const CategoryBudgetScreen = () => {
       id: expenseId,
       expenseId,
       returnTo: "CategoryBudget",
-      returnParams: { trackedTitle },
+      clientId: clientId || undefined,
+      returnParams: { trackedTitle, clientId: clientId || undefined },
     });
   };
 
   const handleOpenNoRecordActions = (date: Date) => {
-    if (isSpectator) return;
     const label = date.toLocaleDateString("pt-BR", {
       day: "2-digit",
       month: "2-digit",
@@ -390,7 +391,7 @@ export const CategoryBudgetScreen = () => {
   };
 
   const handleConfirmZero = async () => {
-    if (isSpectator || !user?.id || !zeroConfirmDate) {
+    if (!ownerId || !zeroConfirmDate) {
       setZeroConfirmVisible(false);
       return;
     }
@@ -398,7 +399,7 @@ export const CategoryBudgetScreen = () => {
     try {
       setConfirmingZero(true);
       await budgetServices.confirmZeroExpenseDayForTracked(
-        user.id,
+        ownerId,
         zeroConfirmDate,
         trackedTitle,
       );
@@ -420,14 +421,14 @@ export const CategoryBudgetScreen = () => {
   };
 
   const handleConfirmExpense = async (amount: number) => {
-    if (isSpectator || !user?.id || !zeroConfirmDate || !trackedTitle) {
+    if (!ownerId || !zeroConfirmDate || !trackedTitle) {
       setZeroConfirmVisible(false);
       return;
     }
 
     try {
       setConfirmingZero(true);
-      await expenseServices.createExpense(user.id, {
+      await expenseServices.createExpense(ownerId, {
         value: amount,
         description: trackedTitle,
         date: zeroConfirmDate,
@@ -485,11 +486,7 @@ export const CategoryBudgetScreen = () => {
             <Text style={styles.subtitle}>
               Acompanhe os gastos diarios desse titulo personalizado
             </Text>
-            {isSpectator ? (
-              <Text style={styles.spectatorHint}>
-                Visualização do cliente (somente leitura)
-              </Text>
-            ) : null}
+            <ActingForClientBanner clientId={clientId} />
             {cycleLabel ? (
               <Text style={styles.cycleLabel}>{cycleLabel}</Text>
             ) : null}
@@ -653,8 +650,7 @@ export const CategoryBudgetScreen = () => {
                       ) : null}
                     </View>
 
-                    {!isSpectator &&
-                      (isEditing ? (
+                    {isEditing ? (
                       <View style={styles.editItemsWrap}>
                         {dayItems.map((item) => (
                           <TouchableOpacity
@@ -712,7 +708,7 @@ export const CategoryBudgetScreen = () => {
                       >
                         <Ionicons name="pencil" size={18} color="#8c52ff" />
                       </TouchableOpacity>
-                    ))}
+                    )}
                   </View>
                 );
               })}
@@ -733,15 +729,13 @@ export const CategoryBudgetScreen = () => {
                   Gastos registrados em {trackedTitle} neste ciclo
                 </Text>
               </View>
-              {!isSpectator ? (
-                <TouchableOpacity
+              <TouchableOpacity
                   style={styles.addExpenseButton}
                   onPress={handleAddTrackedExpense}
                 >
                   <Ionicons name="add-circle" size={18} color="#fff" />
                   <Text style={styles.addExpenseButtonText}>Adicionar</Text>
                 </TouchableOpacity>
-              ) : null}
             </View>
 
             {expenseHistory.length === 0 ? (

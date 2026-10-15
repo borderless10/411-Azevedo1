@@ -27,6 +27,7 @@ import {
 import { getStartOfDay, getEndOfDay, addDays, formatDateToString, formatDateForDisplay } from "../../utils/dateUtils";
 import { Income } from "../../types/income";
 import { normalizeExpenseTitleKey } from "../../utils/expenseScopeUtils";
+import { ActingForClientBanner } from "../../components/Staff/ActingForClientBanner";
 
 type DaySummary = {
   date: Date;
@@ -318,7 +319,6 @@ export const TrackedIncomeScreen = () => {
   };
 
   const handleOpenNoRecordActions = (date: Date) => {
-    if (isSpectator) return;
     const label = formatDayMonthLabel(date);
     setChoiceModalDayLabel(label);
     setChoiceModalDate(date);
@@ -326,19 +326,20 @@ export const TrackedIncomeScreen = () => {
   };
 
   const handleChooseRegister = () => {
-    if (isSpectator || !choiceModalDate) return;
+    if (!choiceModalDate) return;
     setChoiceModalVisible(false);
     navigate("AddIncome", {
       prefillDate: choiceModalDate.toISOString(),
       trackedMode: true,
       prefillDescription: trackedTitle,
+      clientId: clientId || undefined,
       returnTo: "TrackedIncome",
       returnParams: { trackedTitle, clientId: clientId || undefined },
     });
   };
 
   const handleChooseMarkZero = () => {
-    if (isSpectator || !choiceModalDate) return;
+    if (!choiceModalDate) return;
     setChoiceModalVisible(false);
     const dateKey = formatDateToString(choiceModalDate);
     setZeroConfirmedDateKeys((previous) =>
@@ -354,19 +355,19 @@ export const TrackedIncomeScreen = () => {
   };
 
   const openIncomeEditor = (incomeId: string) => {
-    if (isSpectator) return;
     navigate("EditIncome", {
       id: incomeId,
+      clientId: clientId || undefined,
       returnTo: "TrackedIncome",
       returnParams: { trackedTitle, clientId: clientId || undefined },
     });
   };
 
   const handleAddTrackedIncome = () => {
-    if (isSpectator) return;
     navigate("AddIncome", {
       trackedMode: true,
       prefillDescription: trackedTitle,
+      clientId: clientId || undefined,
       returnTo: "TrackedIncome",
       returnParams: { trackedTitle, clientId: clientId || undefined },
     });
@@ -409,11 +410,7 @@ export const TrackedIncomeScreen = () => {
             <Text style={styles.subtitle}>
               Acompanhe as rendas diarias desse titulo personalizado
             </Text>
-            {isSpectator ? (
-              <Text style={styles.spectatorHint}>
-                Visualização do cliente (somente leitura)
-              </Text>
-            ) : null}
+            <ActingForClientBanner clientId={clientId} />
             {planningCycleLabel ? (
               <Text style={styles.cycleLabel}>{planningCycleLabel}</Text>
             ) : null}
@@ -585,8 +582,7 @@ export const TrackedIncomeScreen = () => {
                       ) : null}
                     </View>
 
-                    {!isSpectator &&
-                      (isEditing ? (
+                    {isEditing ? (
                         <View style={styles.editItemsWrap}>
                           {dayItems.map((item) => (
                             <TouchableOpacity
@@ -661,7 +657,7 @@ export const TrackedIncomeScreen = () => {
                         >
                           <Ionicons name="pencil" size={18} color="#8c52ff" />
                         </TouchableOpacity>
-                      ))}
+                      )}
                   </View>
                 );
               })}
@@ -682,15 +678,13 @@ export const TrackedIncomeScreen = () => {
                   Rendas registradas em {trackedTitle} neste ciclo
                 </Text>
               </View>
-              {!isSpectator ? (
-                <TouchableOpacity
+              <TouchableOpacity
                   style={styles.addIncomeButton}
                   onPress={handleAddTrackedIncome}
                 >
                   <Ionicons name="add-circle" size={18} color="#fff" />
                   <Text style={styles.addIncomeButtonText}>Adicionar</Text>
                 </TouchableOpacity>
-              ) : null}
             </View>
 
             {incomeHistory.length === 0 ? (

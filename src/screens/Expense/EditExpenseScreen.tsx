@@ -30,6 +30,8 @@ import { creditCardServices } from "../../services/creditCardServices";
 import { CreditCard } from "../../types/creditCard";
 import { budgetServices } from "../../services/budgetServices";
 import { getRankingRegistrationFeedback } from "../../services/rankingPlanilhaService";
+import { ActingForClientBanner } from "../../components/Staff/ActingForClientBanner";
+import { staffClientId } from "../../utils/staffClientContext";
 
 export const EditExpenseScreen = () => {
   const { user } = useAuth();
@@ -37,6 +39,10 @@ export const EditExpenseScreen = () => {
   const expenseId = params?.id || params?.expenseId;
   const returnTo = params?.returnTo || "Home";
   const returnParams = params?.returnParams;
+  const actingClientId = staffClientId(
+    user,
+    params?.clientId || returnParams?.clientId,
+  );
 
   const [value, setValue] = useState(0);
   const [description, setDescription] = useState("");
@@ -78,7 +84,10 @@ export const EditExpenseScreen = () => {
           return;
         }
 
-        if (expense.userId !== user.id) {
+        const canEdit =
+          expense.userId === user.id ||
+          (!!actingClientId && expense.userId === actingClientId);
+        if (!canEdit) {
           Alert.alert("Erro", "Você não tem permissão para editar este gasto");
           navigate(returnTo, returnParams);
           return;
@@ -109,9 +118,10 @@ export const EditExpenseScreen = () => {
 
   useEffect(() => {
     const loadCards = async () => {
-      if (!user?.id) return;
+      const cardOwnerId = actingClientId || user?.id;
+      if (!cardOwnerId) return;
       try {
-        const loaded = await creditCardServices.getCreditCards(user.id);
+        const loaded = await creditCardServices.getCreditCards(cardOwnerId);
         setCards(loaded.filter((card) => card.isActive !== false));
       } catch (error) {
         console.warn("Erro ao carregar cartões", error);
@@ -119,7 +129,7 @@ export const EditExpenseScreen = () => {
     };
 
     loadCards();
-  }, [user?.id]);
+  }, [user?.id, actingClientId]);
 
   // Validações
   const validateValue = (val: number): string => {
@@ -250,7 +260,7 @@ export const EditExpenseScreen = () => {
       await expenseServices.updateExpense(expenseId, expenseData);
       console.log("✅ Gasto atualizado");
       const ranking = await budgetServices.reconcileConsumoModeradoDay(
-        user.id,
+        actingClientId || user.id,
         date,
         loadedCoupleMember,
       );
@@ -315,6 +325,7 @@ export const EditExpenseScreen = () => {
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.content}>
+            <ActingForClientBanner clientId={actingClientId} />
             {/* Header visual */}
             <View style={styles.header}>
               <View style={styles.iconContainer}>

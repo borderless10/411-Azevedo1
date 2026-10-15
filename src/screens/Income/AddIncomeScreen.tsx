@@ -28,12 +28,18 @@ import { ExpectedItem } from "../../types/planning";
 import { formatCurrency } from "../../utils/currencyUtils";
 import IncomeCreatedModal from "../../components/ui/IncomeCreatedModal";
 import CustomModal from "../../components/ui/CustomModal";
+import { ActingForClientBanner } from "../../components/Staff/ActingForClientBanner";
+import { recordOwnerId } from "../../utils/staffClientContext";
 
 const MONTHLY_INCOME_ID = "__monthly_income__";
 
 export const AddIncomeScreen = () => {
   const { user } = useAuth();
   const { navigate, params } = useNavigation() as any;
+  const actingClientId = String(
+    params?.clientId || params?.returnParams?.clientId || "",
+  );
+  const ownerId = recordOwnerId(user, actingClientId);
 
   const [value, setValue] = useState(0);
   const [incomeType, setIncomeType] = useState<"tracked" | "general">(
@@ -111,9 +117,9 @@ export const AddIncomeScreen = () => {
 
   useEffect(() => {
     const loadPlanningIncomes = async () => {
-      if (!user?.id) return;
+      if (!ownerId) return;
       try {
-        const planning = await planningServices.getPlanning(user.id);
+        const planning = await planningServices.getPlanning(ownerId);
 
         const trackedOptions = (planning?.expectedIncomes || [])
           .filter((item) => item.dailyTracking)
@@ -146,7 +152,7 @@ export const AddIncomeScreen = () => {
     };
 
     loadPlanningIncomes();
-  }, [user?.id]);
+  }, [ownerId]);
 
   const selectPlannedIncome = (item: ExpectedItem) => {
     if (item.dailyTracking) {
@@ -315,7 +321,7 @@ export const AddIncomeScreen = () => {
         dailyTracking: isTracked,
       };
 
-      const newIncome = await incomeServices.createIncome(user.id, incomeData);
+      const newIncome = await incomeServices.createIncome(ownerId, incomeData);
       console.log("✅ Renda criada:", newIncome);
 
       // Armazenar valor antes de limpar para usar na mensagem
@@ -367,6 +373,7 @@ export const AddIncomeScreen = () => {
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.content}>
+            <ActingForClientBanner clientId={actingClientId} />
             {/* Header visual */}
             <View style={styles.header}>
               <View style={styles.iconContainer}>
