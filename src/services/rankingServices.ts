@@ -44,6 +44,7 @@ export type RankingEntry = {
   displayName: string;
   nickname?: string | null;
   isCouple: boolean;
+  photoUrl?: string | null;
   /** @deprecated use rankingPoints */
   zeroDays?: number;
 };
@@ -62,6 +63,7 @@ const snapshotFromUser = (
   displayName: displayNameFor(user),
   nickname: user.nickname ?? null,
   isCouple: isCoupleAccount(user),
+  photoUrl: user.photoUrl || null,
   zeroDays: rankingPoints,
 });
 
@@ -73,11 +75,18 @@ const entryFromSnapshot = (id: string, data: Record<string, unknown>): RankingEn
     displayName: String(data.displayName || id),
     nickname: typeof data.nickname === "string" ? data.nickname : null,
     isCouple: data.isCouple === true,
+    photoUrl: typeof data.photoUrl === "string" ? data.photoUrl : null,
     zeroDays: rankingPoints,
   };
 };
 
 export type RankingLeague = "individual" | "couple";
+
+let expectedParticipantsCache: {
+  at: number;
+  individual: number;
+  couple: number;
+} | null = null;
 
 export const rankingServices = {
   async getRankingConfig(): Promise<RankingConfig> {
@@ -140,6 +149,7 @@ export const rankingServices = {
         displayName: entry.displayName,
         nickname: entry.nickname || "",
         isCouple: entry.isCouple,
+        photoUrl: entry.photoUrl || "",
         updatedAt: serverTimestamp(),
       });
     } catch (error) {
@@ -156,7 +166,12 @@ export const rankingServices = {
   ): Promise<RankingEntry[]> {
     try {
       const listed = await this.listSnapshots(topN, league);
-      if (listed) return listed;
+      if (listed !== null) {
+        const expected = await this.countExpectedParticipants(league);
+        if (listed.length >= expected) return listed;
+        // Resumo incompleto: algum participante ainda não tem snapshot.
+        // Reconstrói uma vez e grava todos, senão ele nunca aparece na lista.
+      }
       const built = await this.buildRankingFromCollections();
       if (built.length === 0) return [];
       await this.writeSnapshots(built);
@@ -171,6 +186,26 @@ export const rankingServices = {
     }
   },
 
+  async countExpectedParticipants(league: RankingLeague): Promise<number> {
+    // Cache curto: sem ele, cada abertura/troca de liga relê todos os usuários.
+    const now = Date.now();
+    if (
+      !expectedParticipantsCache ||
+      now - expectedParticipantsCache.at > 60_000
+    ) {
+      const allUsers = await userService.getAllUsersLite();
+      const participants = allUsers.filter(userParticipatesInRanking);
+      expectedParticipantsCache = {
+        at: now,
+        individual: participants.filter((u) => !isCoupleAccount(u)).length,
+        couple: participants.filter((u) => isCoupleAccount(u)).length,
+      };
+    }
+    return league === "couple"
+      ? expectedParticipantsCache.couple
+      : expectedParticipantsCache.individual;
+  },
+
   async listSnapshots(
     topN: number,
     league: RankingLeague,
@@ -178,7 +213,7 @@ export const rankingServices = {
     try {
       const collectionRef = getRankingSnapshotsCollection();
       const probe = await getDocs(query(collectionRef, limit(1)));
-      if (probe.empty) return null;
+      if (probe.empty) return [];
       const snapshot = await getDocs(
         query(
           collectionRef,
@@ -196,7 +231,7 @@ export const rankingServices = {
         code.includes("failed-precondition") ||
         code.includes("permission-denied")
       ) {
-        return null;
+        return [];
       }
       throw error;
     }
@@ -204,7 +239,7 @@ export const rankingServices = {
 
   async buildRankingFromCollections(): Promise<RankingEntry[]> {
     const [allUsers, snapshot, config] = await Promise.all([
-      userService.getAllUsers(),
+      userService.getAllUsersLite(),
       getDocs(query(getBudgetsCollection())),
       this.getRankingConfig(),
     ]);
@@ -247,6 +282,7 @@ export const rankingServices = {
           displayName: entry.displayName,
           nickname: entry.nickname || "",
           isCouple: entry.isCouple,
+          photoUrl: entry.photoUrl || "",
           updatedAt: serverTimestamp(),
         });
       });
@@ -279,7 +315,7 @@ export const rankingServices = {
     league: RankingLeague = "individual",
   ): Promise<{ position: number; rankingPoints: number } | null> {
     try {
-      const ranking = await this.getRanking(1000, league);
+      const ranking = await this.getRanking(100, league);
       const idx = ranking.findIndex((r) => r.userId === userId);
       if (idx === -1) return null;
       return {

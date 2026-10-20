@@ -19,7 +19,7 @@ import { useNavigation } from "../../routes/NavigationContext";
 import { useTheme } from "../../contexts/ThemeContext";
 import {
   profileInitial,
-  profilePhotoUri,
+  resolveProfilePhotoUri,
 } from "../../utils/chatDisplayNames";
 
 interface HeaderProps {
@@ -162,10 +162,10 @@ export const Header: React.FC<HeaderProps> = ({
                 style={styles.profileButton}
               >
                 <View style={styles.profileWrapper}>
-                  {profilePhotoUri(user?.photoBase64) ? (
+                  {resolveProfilePhotoUri(user) ? (
                     <Image
                       source={{
-                        uri: profilePhotoUri(user?.photoBase64) as string,
+                        uri: resolveProfilePhotoUri(user) as string,
                       }}
                       style={styles.avatar}
                     />

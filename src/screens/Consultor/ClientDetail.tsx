@@ -544,7 +544,7 @@ export const ClientDetail: React.FC = () => {
               ]}
               onPress={() => navigate("IncomeList", { clientId })}
             >
-              <Text style={styles.actionButtonText}>Rendas do Cliente</Text>
+              <Text style={styles.actionButtonText}>Rendas Acompanhadas</Text>
             </TouchableOpacity>
           )}
 
@@ -568,7 +568,8 @@ export const ClientDetail: React.FC = () => {
               ]}
               onPress={() =>
                 navigate(
-                  user && user.role === "consultor"
+                  user &&
+                  (user.role === "consultor" || user.role === "supervisor")
                     ? "ClientInvestments"
                     : "ClientInvestmentsView",
                   { clientId },

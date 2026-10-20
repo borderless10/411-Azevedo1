@@ -1,4 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  createContext,
+  createElement,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  ReactNode,
+} from "react";
 import { doc, onSnapshot } from "firebase/firestore";
 import { useAuth } from "./useAuth";
 import { db } from "../lib/firebase";
@@ -55,7 +64,7 @@ const applySchedulingProfile = (
   setBookedCycleStartedAt(bookedCycle || null);
 };
 
-export const useConsultationScheduling = () => {
+function useConsultationSchedulingState() {
   const { user } = useAuth();
   const enabled = isAppClientUser(user) && !!user?.id;
 
@@ -197,19 +206,62 @@ export const useConsultationScheduling = () => {
     [cycleStartKey, user?.id],
   );
 
-  return {
-    enabled,
-    schedulingUrl,
-    preferredDate,
-    preferredDayLabel,
-    bookedDay,
-    bookedDayLabel,
-    hasBookedCurrentCycle,
-    planning,
-    cycleEnded,
-    cycleStartKey,
-    shouldPulse: inRenewalWindow && !hasBookedCurrentCycle,
-    openScheduling,
-    confirmBooking,
-  };
-};
+  return useMemo(
+    () => ({
+      enabled,
+      schedulingUrl,
+      preferredDate,
+      preferredDayLabel,
+      bookedDay,
+      bookedDayLabel,
+      hasBookedCurrentCycle,
+      planning,
+      cycleEnded,
+      cycleStartKey,
+      shouldPulse: inRenewalWindow && !hasBookedCurrentCycle,
+      openScheduling,
+      confirmBooking,
+    }),
+    [
+      bookedDay,
+      bookedDayLabel,
+      confirmBooking,
+      cycleEnded,
+      cycleStartKey,
+      enabled,
+      hasBookedCurrentCycle,
+      inRenewalWindow,
+      openScheduling,
+      planning,
+      preferredDate,
+      preferredDayLabel,
+      schedulingUrl,
+    ],
+  );
+}
+
+type ConsultationSchedulingValue = ReturnType<typeof useConsultationSchedulingState>;
+
+const ConsultationSchedulingContext =
+  createContext<ConsultationSchedulingValue | null>(null);
+
+export function ConsultationSchedulingProvider({
+  children,
+}: {
+  children: ReactNode;
+}) {
+  const value = useConsultationSchedulingState();
+  return createElement(
+    ConsultationSchedulingContext.Provider,
+    { value },
+    children,
+  );
+}
+
+export function useConsultationScheduling(): ConsultationSchedulingValue {
+  const value = useContext(ConsultationSchedulingContext);
+  if (!value) {
+    throw new Error("useConsultationScheduling precisa do provider");
+  }
+  return value;
+}

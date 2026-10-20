@@ -27,6 +27,7 @@ import {
 } from "../../utils/currencyUtils";
 import { useAuth } from "../../contexts/AuthContext";
 import { goalServices } from "../../services/goalServices";
+import { canOperateAsConsultant } from "../../utils/staffAccess";
 import {
   Goal,
   GoalStatus,
@@ -94,7 +95,9 @@ export const MetasScreen = () => {
   const loadGoals = async () => {
     if (!user) return;
     const ownerId =
-      params?.clientId && user.role === "consultor" ? params.clientId : user.id;
+      params?.clientId && canOperateAsConsultant(user)
+        ? params.clientId
+        : user.id;
 
     try {
       setLoading(true);
@@ -113,7 +116,9 @@ export const MetasScreen = () => {
     if (!user) return;
 
     const ownerId =
-      params?.clientId && user.role === "consultor" ? params.clientId : user.id;
+      params?.clientId && canOperateAsConsultant(user)
+        ? params.clientId
+        : user.id;
 
     const targetAmount = parseFloat(
       newGoalTarget.replace(/[^0-9.,]/g, "").replace(",", "."),
@@ -301,7 +306,7 @@ export const MetasScreen = () => {
         100
       : 0;
 
-  const showBack = params?.clientId && user?.role === "consultor";
+  const showBack = params?.clientId && canOperateAsConsultant(user);
 
   if (loading) {
     return (
@@ -381,7 +386,7 @@ export const MetasScreen = () => {
           )}
 
           {/* Botão Criar Meta (somente consultor quando visualizando cliente) */}
-          {user?.role === "consultor" && params?.clientId && (
+          {canOperateAsConsultant(user) && params?.clientId && (
             <TouchableOpacity
               style={styles.createButton}
               onPress={() => {
@@ -591,7 +596,7 @@ export const MetasScreen = () => {
                     )}
 
                     <View style={styles.goalActions}>
-                      {user?.role === "consultor" && (
+                      {canOperateAsConsultant(user) && (
                         <>
                           {!isCompleted && !isOutOfPlans && hasTarget && (
                             <TouchableOpacity

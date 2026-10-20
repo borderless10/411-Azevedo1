@@ -3,6 +3,8 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider } from "./src/contexts/AuthContext";
 import { ThemeProvider } from "./src/contexts/ThemeContext";
 import { ShowValuesProvider } from "./src/contexts/ShowValuesContext";
+import { ChatsProvider } from "./src/contexts/ChatsContext";
+import { ConsultationSchedulingProvider } from "./src/hooks/useConsultationScheduling";
 import { NavigationProvider } from "./src/routes/NavigationContext";
 import { Router } from "./src/routes/Router";
 import { AppContent } from "./src/components/AppContent";
@@ -16,11 +18,15 @@ export default function App() {
     <ThemeProvider>
       <SafeAreaProvider>
         <AuthProvider>
-          <ShowValuesProvider>
-            <NavigationProvider>
-              <AppContent />
-            </NavigationProvider>
-          </ShowValuesProvider>
+          <ChatsProvider>
+            <ConsultationSchedulingProvider>
+              <ShowValuesProvider>
+                <NavigationProvider>
+                  <AppContent />
+                </NavigationProvider>
+              </ShowValuesProvider>
+            </ConsultationSchedulingProvider>
+          </ChatsProvider>
         </AuthProvider>
       </SafeAreaProvider>
     </ThemeProvider>

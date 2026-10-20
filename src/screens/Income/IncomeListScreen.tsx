@@ -198,8 +198,8 @@ export const IncomeListScreen = () => {
               </Text>
               <Text style={styles.emptyText}>
                 Apenas rendas marcadas com acompanhamento diário no planejamento
-                aparecem aqui. Rendas avulsas ou sem acompanhamento não entram
-                nesta lista.
+                aparecem aqui. Rendas gerais ou salário ficam em Registros de
+                Rendas.
               </Text>
             </View>
           ) : (
@@ -228,6 +228,22 @@ export const IncomeListScreen = () => {
               ))}
             </View>
           )}
+
+          {isSpectator ? (
+            <TouchableOpacity
+              style={styles.generalIncomesLink}
+              onPress={() =>
+                navigate("ClientIncomeRecords", { clientId })
+              }
+              activeOpacity={0.85}
+            >
+              <Ionicons name="list-outline" size={20} color="#8c52ff" />
+              <Text style={styles.generalIncomesLinkText}>
+                Ver todas as rendas (incluindo salário)
+              </Text>
+              <Ionicons name="chevron-forward" size={18} color="#8c52ff" />
+            </TouchableOpacity>
+          ) : null}
         </Animated.View>
       </ScrollView>
     </Layout>
@@ -337,6 +353,23 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginTop: 12,
     textAlign: "center",
+  },
+  generalIncomesLink: {
+    marginTop: 20,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "#141414",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#8c52ff",
+    padding: 14,
+  },
+  generalIncomesLinkText: {
+    flex: 1,
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "600",
   },
   emptyText: {
     color: "#999",

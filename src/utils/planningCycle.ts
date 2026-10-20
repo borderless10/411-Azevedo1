@@ -1,7 +1,8 @@
 import { Planning } from "../types/planning";
 import { addDays, getEndOfDay, getStartOfDay } from "./dateUtils";
+import { CONSULTATION_RENEWAL_LEAD_DAYS } from "./cycleNotificationSchedule";
 
-export const CONSULTATION_RENEWAL_LEAD_DAYS = 7;
+export { CONSULTATION_RENEWAL_LEAD_DAYS };
 
 export const getPlanningCycleStartKey = (
   planning: Planning | null | undefined,

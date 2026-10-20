@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Tela de Recomendação
  */
 
@@ -25,6 +25,7 @@ import { useTheme } from "../../contexts/ThemeContext";
 import { recommendationServices } from "../../services/recommendationServices";
 import { Recommendation } from "../../types/recommendation";
 import ConfirmDeleteModal from "../../components/ui/ConfirmDeleteModal";
+import { canCreateRecommendationForClient } from "../../utils/staffAccess";
 
 const formatDay = (date: Date): string => {
   return date.toLocaleDateString("pt-BR", {
@@ -97,10 +98,11 @@ export const RecomendacaoScreen = () => {
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
-  const targetUserId =
-    params?.clientId && user?.role === "consultor" ? params.clientId : user?.id;
   const isConsultantCreatingForClient =
-    user?.role === "consultor" && Boolean(params?.clientId);
+    canCreateRecommendationForClient(user) && Boolean(params?.clientId);
+  const targetUserId = isConsultantCreatingForClient
+    ? params.clientId
+    : user?.id;
 
   const loadRecommendations = async () => {
     if (!targetUserId) {

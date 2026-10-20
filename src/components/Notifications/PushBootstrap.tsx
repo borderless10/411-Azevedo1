@@ -37,18 +37,21 @@ export const PushBootstrap: React.FC = () => {
 
     let cancelled = false;
 
+    const saveExpoPushToken = async () => {
+      const tokenResponse = await Notifications.getExpoPushTokenAsync({
+        projectId: EXPO_PROJECT_ID,
+      });
+      const token = String(tokenResponse?.data || "").trim();
+      if (!token || cancelled) return;
+      await userService.updatePushToken(user.id, token);
+    };
+
     const register = async () => {
       const granted = await requestNotificationPermissions();
       if (!granted || cancelled || !Device.isDevice) return;
 
       try {
-        const tokenResponse = await Notifications.getExpoPushTokenAsync({
-          projectId: EXPO_PROJECT_ID,
-        });
-        const token = String(tokenResponse?.data || "").trim();
-        if (token && token !== user.expoPushToken) {
-          await userService.updatePushToken(user.id, token);
-        }
+        await saveExpoPushToken();
       } catch (error) {
         console.warn("Não foi possível obter o token de push:", error);
       }
@@ -64,13 +67,18 @@ export const PushBootstrap: React.FC = () => {
     };
 
     register().catch(() => undefined);
+    const tokenSubscription = Notifications.addPushTokenListener(() => {
+      saveExpoPushToken().catch((error) => {
+        console.warn("Não foi possível renovar o token de push:", error);
+      });
+    });
 
     return () => {
       cancelled = true;
+      tokenSubscription.remove();
     };
   }, [
     user?.id,
-    user?.expoPushToken,
     user?.expenseReminderEnabled,
     user?.expenseReminderHour,
     user?.expenseReminderMinute,

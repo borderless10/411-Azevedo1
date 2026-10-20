@@ -128,14 +128,21 @@ const escapeRegExp = (value: string): string =>
 
 export const PURPLE_HEART = "💜";
 
-const HEART_REACTION =
-  /❤|♥|💖|💗|💓|💞|💕|💘|💝|💟|💜|🧡|💛|💚|💙|🖤|🤍|🤎|💔|❣️/;
+const HEART_EMOJI_SOURCE =
+  "(?:❤|♥|💖|💗|💓|💞|💕|💘|💝|💟|💜|🧡|💛|💚|💙|🖤|🤍|🤎|💔|❣️)\\uFE0F?";
+
+const HEART_EMOJI_TEST = new RegExp(HEART_EMOJI_SOURCE);
+const HEART_EMOJI_ALL = new RegExp(HEART_EMOJI_SOURCE, "gu");
 
 export const normalizeReactionEmoji = (emoji: string): string => {
   const value = String(emoji || "").trim();
   if (!value) return "";
-  return HEART_REACTION.test(value) ? PURPLE_HEART : value;
+  return HEART_EMOJI_TEST.test(value) ? PURPLE_HEART : value;
 };
+
+/** Qualquer coração no texto vira roxo (💙 → 💜). */
+export const normalizeHeartEmojisInText = (text: string): string =>
+  String(text || "").replace(HEART_EMOJI_ALL, PURPLE_HEART);
 
 export const CHAT_REACTION_EMOJIS = [
   "👍",

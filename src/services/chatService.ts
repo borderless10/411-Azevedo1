@@ -22,7 +22,11 @@ import { db } from "../lib/firebase";
 import { timestampToDate } from "../lib/firestore";
 import { CoupleMember } from "../types/auth";
 import { parseCoupleMember } from "../utils/coupleAccount";
-import { ChatMention, normalizeReactionEmoji } from "../utils/chatMentions";
+import {
+  ChatMention,
+  normalizeHeartEmojisInText,
+  normalizeReactionEmoji,
+} from "../utils/chatMentions";
 import { notifyChatMessageRecipients } from "./chatPushService";
 
 export type ChatType = "direct" | "group" | "global";
@@ -71,7 +75,11 @@ const mapReplyTo = (raw: any): ChatReplyTo | null => {
   const senderId = String(raw.senderId || "").trim();
   const text = String(raw.text || "").trim();
   if (!messageId || !senderId || !text) return null;
-  return { messageId, senderId, text: text.slice(0, 180) };
+  return {
+    messageId,
+    senderId,
+    text: normalizeHeartEmojisInText(text).slice(0, 180),
+  };
 };
 
 const mapMentions = (raw: any): ChatMention[] => {
@@ -108,7 +116,7 @@ const mapReactions = (raw: any): Record<string, string> => {
 
 const mapMessage = (id: string, data: any): Message => ({
   id,
-  text: data.text,
+  text: normalizeHeartEmojisInText(String(data.text || "")),
   senderId: data.senderId,
   senderCoupleMember: parseCoupleMember(data.senderCoupleMember),
   createdAt: data.createdAt ? timestampToDate(data.createdAt) : new Date(),
@@ -121,7 +129,7 @@ const CHATS_COL = "chats";
 const MESSAGES_SUBCOL = "messages";
 
 /** Janela em tempo real. Acima disso o listener fica pesado no aparelho. */
-export const CHAT_LIVE_MESSAGE_LIMIT = 300;
+export const CHAT_LIVE_MESSAGE_LIMIT = 50;
 /** Página extra ao rolar o histórico. O Firestore aceita até o fim da conversa. */
 export const CHAT_OLDER_PAGE_SIZE = 100;
 
@@ -213,10 +221,11 @@ export async function sendMessage(
   );
   const replyTo = options.replyTo || null;
 
+  const normalizedText = normalizeHeartEmojisInText(text);
   const batch = writeBatch(db);
 
   batch.set(msgRef, {
-    text,
+    text: normalizedText,
     senderId,
     createdAt: serverTimestamp(),
     mentions,
@@ -226,7 +235,9 @@ export async function sendMessage(
           replyTo: {
             messageId: replyTo.messageId,
             senderId: replyTo.senderId,
-            text: String(replyTo.text || "").slice(0, 180),
+            text: normalizeHeartEmojisInText(
+              String(replyTo.text || "").slice(0, 180),
+            ),
           },
         }
       : {}),
@@ -234,9 +245,12 @@ export async function sendMessage(
 
   batch.update(chatRef, {
     lastMessage: {
-      text,
+      text: normalizedText,
       senderId,
       ...(coupleMember ? { senderCoupleMember: coupleMember } : {}),
+      ...(mentions.length
+        ? { mentionUserIds: mentions.map((mention) => mention.userId) }
+        : { mentionUserIds: [] }),
     },
     lastMessageAt: serverTimestamp(),
     [`lastReadBy.${senderId}`]: serverTimestamp(),
@@ -244,6 +258,7 @@ export async function sendMessage(
 
   await batch.commit();
 
+  // Push não pode travar o envio da mensagem (senão o botão parece morto).
   void notifyChatMessageRecipients({
     chatId,
     messageId: msgRef.id,
@@ -416,19 +431,9 @@ export function listenToUserChats(
   let q: Query;
   const chatsCol = collection(db, CHATS_COL);
 
-  if (role === "admin") {
-    q = query(
-      chatsCol,
-      where("participants", "array-contains", userId),
-      orderBy("lastMessageAt", "desc"),
-    );
-  } else {
-    q = query(
-      chatsCol,
-      where("participants", "array-contains", userId),
-      orderBy("lastMessageAt", "desc"),
-    );
-  }
+  // Sem orderBy: evita índice composto e a lista não fica presa no spinner.
+  void role;
+  q = query(chatsCol, where("participants", "array-contains", userId));
 
   const unsubscribe = onSnapshot(
     q,
@@ -439,13 +444,8 @@ export function listenToUserChats(
       onUpdate(chats);
     },
     (err) => {
-      // Helpful log when Firestore requires a composite index
       console.error("Firestore listener error (listenToUserChats):", err);
-      if (err && err.code === "failed-precondition") {
-        console.warn(
-          "Firestore requires a composite index for this query. Open the console link in the error message to create it.",
-        );
-      }
+      onUpdate([]);
     },
   );
 

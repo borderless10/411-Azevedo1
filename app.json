@@ -2,12 +2,11 @@
   "expo": {
     "name": "Visão",
     "slug": "411-Azevedo",
-    "version": "1.0.2",
+    "version": "1.0.7",
     "orientation": "portrait",
     "scheme": "plan411azevedo",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -16,7 +15,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.borderlesspc2.visao411",
-      "buildNumber": "5",
+      "buildNumber": "16",
       "infoPlist": {
         "CFBundleDisplayName": "Visão",
         "ITSAppUsesNonExemptEncryption": false,
@@ -29,7 +28,6 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#000000"
       },
-      "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "permissions": [
         "android.permission.POST_NOTIFICATIONS",
@@ -63,10 +61,13 @@
           "cameraPermission": false,
           "microphonePermission": false
         }
-      ]
+      ],
+      "expo-secure-store",
+      "expo-status-bar",
+      "expo-font"
     ],
     "owner": "visao",
-    "runtimeVersion": "1.0.0",
+    "runtimeVersion": "1.0.7-sdk57-b16",
     "extra": {
       "eas": {
         "projectId": "be2008b3-c7c7-453f-af2c-2cf82fcfcd56"

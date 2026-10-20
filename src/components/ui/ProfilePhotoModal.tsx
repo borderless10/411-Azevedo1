@@ -56,12 +56,12 @@ const ProfilePhotoModal: React.FC<Props> = ({
         }
 
         try {
-          // Resize to max width 800 and compress to reduce size
+          // Avatar não precisa de mais que 512px. Menor = menos memória e upload.
           const manipResult: any = await ImageManipulator.manipulateAsync(
             uri,
-            [{ resize: { width: 800 } }],
+            [{ resize: { width: 512 } }],
             {
-              compress: 0.7,
+              compress: 0.6,
               format: ImageManipulator.SaveFormat.JPEG,
               base64: true,
             },

@@ -18,6 +18,7 @@ import { Layout } from "../../components/Layout/Layout";
 import { useAuth } from "../../hooks/useAuth";
 import { useNavigation } from "../../routes/NavigationContext";
 import { wishlistServices } from "../../services/wishlistServices";
+import { canOperateAsConsultant } from "../../utils/staffAccess";
 import {
   DECIMAL_INPUT_KEYBOARD,
   formatCurrency,
@@ -60,7 +61,7 @@ export const WishlistScreen = () => {
     try {
       setLoading(true);
       const ownerId =
-        params?.clientId && user.role === "consultor"
+        params?.clientId && canOperateAsConsultant(user)
           ? params.clientId
           : user.id;
       const fetched = await wishlistServices.getWishlist(ownerId);
@@ -74,7 +75,9 @@ export const WishlistScreen = () => {
   };
 
   const ownerId =
-    params?.clientId && user?.role === "consultor" ? params.clientId : user?.id;
+    params?.clientId && canOperateAsConsultant(user)
+      ? params.clientId
+      : user?.id;
 
   const openCreate = () => {
     // disable create when viewing client's wishlist
@@ -171,7 +174,7 @@ export const WishlistScreen = () => {
     );
   }
 
-  const showBack = params?.clientId && user?.role === "consultor";
+  const showBack = params?.clientId && canOperateAsConsultant(user);
 
   return (
     <Layout

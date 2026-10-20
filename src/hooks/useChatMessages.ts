@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import chatService, {
   CHAT_LIVE_MESSAGE_LIMIT,
   CHAT_OLDER_PAGE_SIZE,
@@ -6,6 +6,11 @@ import chatService, {
   Message,
 } from "../services/chatService";
 import { ChatMention } from "../utils/chatMentions";
+import {
+  mergeChatMessages,
+  reconcilePendingMessages,
+} from "../utils/chatMessagePipeline";
+import { perfMark, perfMeasure } from "../utils/perfMarks";
 
 interface UseChatMessagesResult {
   messages: Message[];
@@ -22,19 +27,6 @@ interface UseChatMessagesResult {
   hasMore: boolean;
 }
 
-const mergeMessages = (older: Message[], live: Message[]): Message[] => {
-  const byId = new Map<string, Message>();
-  older.forEach((message) => {
-    if (message.id) byId.set(message.id, message);
-  });
-  live.forEach((message) => {
-    if (message.id) byId.set(message.id, message);
-  });
-  return Array.from(byId.values()).sort(
-    (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
-  );
-};
-
 export function useChatMessages(
   chatId: string,
   currentUserId: string,
@@ -43,17 +35,26 @@ export function useChatMessages(
 ): UseChatMessagesResult {
   const [liveMessages, setLiveMessages] = useState<Message[]>([]);
   const [olderMessages, setOlderMessages] = useState<Message[]>([]);
+  const [pendingMessages, setPendingMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const oldestCursorRef = useRef<any | null>(null);
   const loadingMoreRef = useRef(false);
   const hasOlderRef = useRef(false);
+  const previousLiveRef = useRef<Message[]>([]);
 
   useEffect(() => {
-    if (!chatId) return;
+    if (!chatId) {
+      setLiveMessages([]);
+      setIsLoading(false);
+      return;
+    }
     setIsLoading(true);
+    perfMark("chat.messages.start");
     setOlderMessages([]);
+    setPendingMessages([]);
+    previousLiveRef.current = [];
     oldestCursorRef.current = null;
     hasOlderRef.current = false;
     setHasMore(false);
@@ -61,21 +62,23 @@ export function useChatMessages(
     const unsub = chatService.listenToMessages(
       chatId,
       (msgs, meta) => {
-        setLiveMessages((previousLive) => {
-          if (hasOlderRef.current && previousLive.length) {
-            const liveIds = new Set(msgs.map((message) => message.id));
-            const dropped = previousLive.filter(
-              (message) => message.id && !liveIds.has(message.id),
+        const previousLive = previousLiveRef.current;
+        if (hasOlderRef.current && previousLive.length) {
+          const liveIds = new Set(msgs.map((message) => message.id));
+          const dropped = previousLive.filter(
+            (message) => message.id && !liveIds.has(message.id),
+          );
+          if (dropped.length) {
+            setOlderMessages((previousOlder) =>
+              mergeChatMessages(dropped, previousOlder),
             );
-            if (dropped.length) {
-              setOlderMessages((previousOlder) =>
-                mergeMessages(dropped, previousOlder),
-              );
-            }
           }
-          return msgs;
-        });
+        }
+        previousLiveRef.current = msgs;
+        setLiveMessages(msgs);
+        setPendingMessages((current) => reconcilePendingMessages(current, msgs));
         setIsLoading(false);
+        perfMeasure("chat.messages.snapshot", "chat.messages.start");
         if (!hasOlderRef.current) {
           oldestCursorRef.current = meta.oldestCursor;
           setHasMore(meta.hasMore);
@@ -97,13 +100,31 @@ export function useChatMessages(
         replyTo?: ChatReplyTo | null;
       },
     ) => {
-      if (!chatId || !currentUserId)
+      if (!chatId || !currentUserId) {
         throw new Error("Missing chatId or userId");
-      await chatService.sendMessage(chatId, currentUserId, text, {
+      }
+      const pending: Message = {
+        id: `pending-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        text,
+        senderId: currentUserId,
         senderCoupleMember,
+        createdAt: new Date(),
         mentions: extras?.mentions,
         replyTo: extras?.replyTo,
-      });
+      };
+      setPendingMessages((current) => [...current, pending]);
+      try {
+        await chatService.sendMessage(chatId, currentUserId, text, {
+          senderCoupleMember,
+          mentions: extras?.mentions,
+          replyTo: extras?.replyTo,
+        });
+      } catch (error) {
+        setPendingMessages((current) =>
+          current.filter((message) => message.id !== pending.id),
+        );
+        throw error;
+      }
     },
     [chatId, currentUserId, senderCoupleMember],
   );
@@ -127,7 +148,7 @@ export function useChatMessages(
         hasOlderRef.current = true;
         setHasMore(page.hasMore);
         setOlderMessages((previous) =>
-          mergeMessages(page.messages, previous),
+          mergeChatMessages(page.messages, previous),
         );
       }
     } finally {
@@ -136,8 +157,17 @@ export function useChatMessages(
     }
   }, [chatId, hasMore]);
 
+  const messages = useMemo(
+    () =>
+      mergeChatMessages(
+        mergeChatMessages(olderMessages, liveMessages),
+        pendingMessages,
+      ),
+    [liveMessages, olderMessages, pendingMessages],
+  );
+
   return {
-    messages: mergeMessages(olderMessages, liveMessages),
+    messages,
     sendMessage,
     loadMore,
     isLoading,

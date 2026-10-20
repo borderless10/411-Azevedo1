@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -51,7 +51,7 @@ export const ConsultorHome: React.FC = () => {
           ? await consultantServices.getAllClients()
           : await consultantServices.getClientsByConsultant(consultantId);
         if (supervisorView) {
-          const consultors = await userService.getUsersByRole("consultor");
+          const consultors = await userService.getConsultantUsers();
           const names: Record<string, string> = {};
           consultors.forEach((consultor) => {
             names[consultor.id] =
@@ -97,6 +97,12 @@ export const ConsultorHome: React.FC = () => {
         <Text style={[styles.heading, { color: colors.text }]}>
           {supervisorView ? "Clientes" : "Meus Clientes"}
         </Text>
+        <TouchableOpacity
+          onPress={() => navigate("CadastrarCliente")}
+          style={[styles.registerButton, { backgroundColor: colors.primary }]}
+        >
+          <Text style={styles.registerButtonText}>Cadastrar cliente</Text>
+        </TouchableOpacity>
         <TextInput
           value={searchTerm}
           onChangeText={setSearchTerm}
@@ -192,6 +198,14 @@ export const ConsultorHome: React.FC = () => {
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 16 },
   heading: { fontSize: 18, fontWeight: "600", marginBottom: 12 },
+  registerButton: {
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: 12,
+    alignItems: "center",
+  },
+  registerButtonText: { color: "#fff", fontWeight: "700" },
   search: {
     borderWidth: 1,
     borderRadius: 8,

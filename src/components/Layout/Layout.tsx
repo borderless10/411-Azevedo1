@@ -2,13 +2,12 @@
  * Componente Layout - Combina Header + Sidebar + Conteúdo
  */
 
-import React, { useState, ReactNode, useRef, useEffect } from "react";
+import React, { useState, ReactNode } from "react";
 import {
   View,
   StyleSheet,
   ViewStyle,
   TouchableOpacity,
-  Animated,
   Text,
 } from "react-native";
 import { useDesktopWeb } from "../../utils/desktopWeb";
@@ -23,6 +22,9 @@ import {
   getCoupleMemberLabel,
   isCoupleAccount,
 } from "../../utils/coupleAccount";
+import { perfMark } from "../../utils/perfMarks";
+
+type SafeAreaEdge = "top" | "right" | "bottom" | "left";
 
 interface LayoutProps {
   children: ReactNode;
@@ -34,6 +36,8 @@ interface LayoutProps {
   style?: ViewStyle;
   contentStyle?: ViewStyle;
   desktopWidth?: number | "full";
+  /** Chat com teclado: omitir `bottom` e deixar a barra cuidar do inset. */
+  safeAreaEdges?: SafeAreaEdge[];
 }
 
 export const Layout: React.FC<LayoutProps> = ({
@@ -46,10 +50,10 @@ export const Layout: React.FC<LayoutProps> = ({
   style,
   contentStyle,
   desktopWidth = 1100,
+  safeAreaEdges = ["top", "left", "right", "bottom"],
 }) => {
   const desktop = useDesktopWeb();
   const [sidebarVisible, setSidebarVisible] = useState(false);
-  const fadeAnim = useRef(new Animated.Value(0)).current;
   const { colors } = useTheme();
   const unreadChatCount = useUnreadChatCount();
   const { user, activeCoupleMember, clearActiveCoupleMember } = useAuth();
@@ -57,19 +61,11 @@ export const Layout: React.FC<LayoutProps> = ({
     isCoupleAccount(user) &&
     (activeCoupleMember === 1 || activeCoupleMember === 2);
 
-  useEffect(() => {
-    Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 300,
-      useNativeDriver: true,
-    }).start();
-  }, []);
-
   if (desktop) {
     const limit = desktopWidth === "full" ? null : desktopWidth;
     return (
       <SafeAreaView
-        edges={["top", "left", "right", "bottom"]}
+        edges={safeAreaEdges}
         style={[styles.container, { backgroundColor: colors.background }, style]}
       >
         <View style={styles.desktopRow}>
@@ -129,10 +125,10 @@ export const Layout: React.FC<LayoutProps> = ({
 
   return (
     <SafeAreaView
-      edges={["top", "left", "right", "bottom"]}
+      edges={safeAreaEdges}
       style={[styles.container, { backgroundColor: colors.background }, style]}
     >
-      <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
+      <View style={{ flex: 1 }}>
         {showHeader && (
           <View
             style={[
@@ -143,12 +139,19 @@ export const Layout: React.FC<LayoutProps> = ({
             <View style={styles.headerWrapper}>
               {showSidebar && (
                 <TouchableOpacity
-                  onPress={() => setSidebarVisible(true)}
+                  onPress={() => {
+                    perfMark("sidebar.open.press");
+                    perfMark("interaction.tap");
+                    setSidebarVisible(true);
+                  }}
                   style={styles.menuButton}
+                  activeOpacity={0.7}
+                  delayPressIn={0}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
                   <Ionicons name="menu" size={24} color={colors.text} />
                   {unreadChatCount > 0 ? (
-                    <View style={styles.menuBadge}>
+                    <View style={styles.menuBadge} pointerEvents="none">
                       <Text style={styles.menuBadgeText}>
                         {unreadChatCount > 9 ? "9+" : unreadChatCount}
                       </Text>
@@ -193,13 +196,13 @@ export const Layout: React.FC<LayoutProps> = ({
           {children}
         </View>
 
-        {showSidebar && (
+        {showSidebar ? (
           <Sidebar
             visible={sidebarVisible}
             onClose={() => setSidebarVisible(false)}
           />
-        )}
-      </Animated.View>
+        ) : null}
+      </View>
     </SafeAreaView>
   );
 };

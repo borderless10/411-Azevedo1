@@ -63,7 +63,10 @@ export const EditUserScreen: React.FC = ({}: any) => {
   useEffect(() => {
     if (
       !user ||
-      (user.role !== "consultor" && user.role !== "admin" && !user.isAdmin)
+      (user.role !== "consultor" &&
+        user.role !== "supervisor" &&
+        user.role !== "admin" &&
+        !user.isAdmin)
     ) {
       navigate("Home");
       return;
@@ -71,7 +74,7 @@ export const EditUserScreen: React.FC = ({}: any) => {
     if (userId) fetchUser();
     async function load() {
       try {
-        const list = await userService.getUsersByRole("consultor");
+        const list = await userService.getConsultantUsers();
         setConsultants(list);
       } catch (e) {
         console.warn("Erro ao carregar consultores", e);

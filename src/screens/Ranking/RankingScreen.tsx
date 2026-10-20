@@ -17,7 +17,7 @@ import { userService } from "../../services/userServices";
 import { useAuth } from "../../hooks/useAuth";
 import { useNavigation } from "../../routes/NavigationContext";
 import { RankingPreference } from "../../types/auth";
-import { profilePhotoUri } from "../../utils/chatDisplayNames";
+import { resolveProfilePhotoUri } from "../../utils/chatDisplayNames";
 import { isCoupleAccount } from "../../utils/coupleAccount";
 
 type Row = {
@@ -26,6 +26,7 @@ type Row = {
   displayName: string;
   zeroDays: number;
   photoBase64?: string | null;
+  photoUrl?: string | null;
   nickname?: string | null;
   role?: string | null;
   isCouple?: boolean;
@@ -46,6 +47,11 @@ export const RankingScreen = () => {
   const [resetting, setResetting] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [cutoffDateKey, setCutoffDateKey] = useState<string | null>(null);
+  const leagueRowsCacheRef = useRef<
+    Partial<Record<RankingLeague, { rows: Row[]; cutoff: string | null }>>
+  >({});
+  const photoCacheRef = useRef<Map<string, string | null>>(new Map());
+  const lastReloadKeyRef = useRef(reloadKey);
 
   const isAdminUser = user?.isAdmin === true || user?.role === "admin";
   const isCommonUser =
@@ -117,10 +123,22 @@ export const RankingScreen = () => {
 
     let mounted = true;
     const load = async () => {
+      if (lastReloadKeyRef.current !== reloadKey) {
+        leagueRowsCacheRef.current = {};
+        lastReloadKeyRef.current = reloadKey;
+      }
+      const cached = leagueRowsCacheRef.current[activeLeague];
+      if (cached) {
+        // Liga já carregada nesta sessão: troca instantânea, sem rede.
+        setCutoffDateKey(cached.cutoff);
+        setRows(cached.rows);
+        setLoading(false);
+        return;
+      }
       setLoading(true);
       try {
         const [ranking, config] = await Promise.all([
-          rankingServices.getRanking(50, activeLeague),
+          rankingServices.getRanking(500, activeLeague),
           rankingServices.getRankingConfig(),
         ]);
         if (!mounted) return;
@@ -132,34 +150,49 @@ export const RankingScreen = () => {
           zeroDays: r.rankingPoints,
           nickname: r.nickname ?? null,
           isCouple: r.isCouple,
+          photoUrl: r.photoUrl ?? photoCacheRef.current.get(r.userId) ?? null,
         }));
         setRows(out);
         setLoading(false);
+        leagueRowsCacheRef.current[activeLeague] = {
+          rows: out,
+          cutoff: config.cutoffDateKey,
+        };
 
+        const missingPhoto = out
+          .slice(0, 20)
+          .filter((row) => !row.photoUrl && !photoCacheRef.current.has(row.userId));
+        if (missingPhoto.length === 0) return;
         const withPhotos = await Promise.all(
-          out.slice(0, 20).map(async (row) => {
+          missingPhoto.map(async (row) => {
             try {
-              const profile = await userService.getUserById(row.userId);
+              const profile = await userService.getUserLiteById(row.userId);
               return {
                 userId: row.userId,
-                photoBase64: profile?.photoBase64 ?? null,
+                photoUrl: profile?.photoUrl ?? null,
               };
             } catch {
-              return { userId: row.userId, photoBase64: null };
+              return { userId: row.userId, photoUrl: null };
             }
           }),
         );
         if (!mounted) return;
+        withPhotos.forEach((item) =>
+          photoCacheRef.current.set(item.userId, item.photoUrl),
+        );
         const photos = new Map(
-          withPhotos.map((item) => [item.userId, item.photoBase64]),
+          withPhotos.map((item) => [item.userId, item.photoUrl]),
         );
-        setRows((current) =>
-          current.map((row) =>
+        setRows((current) => {
+          const next = current.map((row) =>
             photos.has(row.userId)
-              ? { ...row, photoBase64: photos.get(row.userId) }
+              ? { ...row, photoUrl: photos.get(row.userId) }
               : row,
-          ),
-        );
+          );
+          const entry = leagueRowsCacheRef.current[activeLeague];
+          if (entry) entry.rows = next;
+          return next;
+        });
       } catch (error) {
         console.error("❌ [RANKING SCREEN] Erro ao carregar ranking:", error);
       } finally {
@@ -378,9 +411,9 @@ export const RankingScreen = () => {
               </View>
 
               <View style={styles.avatarWrapper}>
-                {profilePhotoUri(r.photoBase64) ? (
+                {resolveProfilePhotoUri(r) ? (
                   <Image
-                    source={{ uri: profilePhotoUri(r.photoBase64) as string }}
+                    source={{ uri: resolveProfilePhotoUri(r) as string }}
                     style={[
                       styles.avatar,
                       r.position <= 3 ? styles.avatarTop : null,

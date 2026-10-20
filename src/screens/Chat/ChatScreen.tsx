@@ -7,19 +7,20 @@ import {
   ActivityIndicator,
   StyleSheet,
   TextInput,
-  KeyboardAvoidingView,
   Platform,
   Image,
   Modal,
   Alert,
   AppState,
+  InteractionManager,
+  Keyboard,
   ScrollView,
   useWindowDimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../hooks/useAuth";
-import { useUserChats } from "../../hooks/useUserChats";
+import { useGlobalChat, useUserChats } from "../../hooks/useUserChats";
 import { useChatMessages } from "../../hooks/useChatMessages";
 import { Layout } from "../../components/Layout/Layout";
 import { useDesktopWeb } from "../../utils/desktopWeb";
@@ -39,13 +40,23 @@ import {
   getActiveMentionQuery,
   insertMention,
   mentionsStillInText,
+  normalizeHeartEmojisInText,
   normalizeReactionEmoji,
   ChatMention,
 } from "../../utils/chatMentions";
 import {
+  listUnseenMentions,
+  mergeSeenMentionIds,
+} from "../../utils/chatMentionSeen";
+import {
+  loadSeenMentionIds,
+  saveSeenMentionIds,
+} from "../../services/chatMentionSeenService";
+import {
   profileDisplayName,
   profileInitial,
   profilePhotoUri,
+  resolveProfilePhotoUri,
   resolveChatDisplayName,
   resolveCoupleChatSenderLabel,
 } from "../../utils/chatDisplayNames";
@@ -56,6 +67,7 @@ import {
 import moderationService, {
   ReportReason,
 } from "../../services/moderationService";
+import { perfMark, perfMeasure } from "../../utils/perfMarks";
 
 export const ChatScreen: React.FC = () => {
   const { user, activeCoupleMember } = useAuth();
@@ -69,7 +81,7 @@ export const ChatScreen: React.FC = () => {
 
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
   const [inputText, setInputText] = useState("");
-  const [globalChat, setGlobalChat] = useState<any>(null);
+  const globalChat = useGlobalChat();
   const [primaryAdminId, setPrimaryAdminId] = useState<string | null>(null);
   const [startChatVisible, setStartChatVisible] = useState(false);
   const [startChatRole, setStartChatRole] = useState<"cliente" | "consultor">(
@@ -80,6 +92,7 @@ export const ChatScreen: React.FC = () => {
   const [startChatLoading, setStartChatLoading] = useState(false);
   const [startingChat, setStartingChat] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const sendingRef = useRef(false);
   const [blockedUserIds, setBlockedUserIds] = useState<string[]>([]);
   const [moderationBusy, setModerationBusy] = useState(false);
   const [actionMessage, setActionMessage] = useState<Message | null>(null);
@@ -93,8 +106,14 @@ export const ChatScreen: React.FC = () => {
   const isAdminUser =
     String(user?.role || "").toLowerCase() === "admin" || user?.isAdmin === true;
 
-  const { messages, sendMessage, loadMore, hasMore, isLoadingMore } =
-    useChatMessages(
+  const {
+    messages,
+    sendMessage,
+    loadMore,
+    hasMore,
+    isLoadingMore,
+    isLoading: messagesLoading,
+  } = useChatMessages(
       selectedChatId || "",
       user?.id || "",
       CHAT_LIVE_MESSAGE_LIMIT,
@@ -108,10 +127,41 @@ export const ChatScreen: React.FC = () => {
   const [reactionCardHeight, setReactionCardHeight] = useState(180);
   const [reactionPickerOpen, setReactionPickerOpen] = useState(false);
   const windowSize = useWindowDimensions();
+  const [keyboardInset, setKeyboardInset] = useState(0);
   const reactionPickerHeight = Math.max(
     160,
     Math.min(280, windowSize.height - 220),
   );
+
+  useEffect(() => {
+    const showEvent =
+      Platform.OS === "ios" ? "keyboardWillChangeFrame" : "keyboardDidShow";
+    const hideEvent =
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+
+    const applyFrame = (height: number) => {
+      perfMark("keyboard.willShow");
+      setKeyboardInset(Math.max(0, Math.round(height)));
+      perfMeasure("keyboard.insetApplied", "keyboard.willShow");
+    };
+
+    const changeSub = Keyboard.addListener(showEvent, (e) => {
+      const frame = e.endCoordinates;
+      const height =
+        Platform.OS === "ios"
+          ? windowSize.height - frame.screenY
+          : frame.height;
+      applyFrame(height);
+    });
+    const hideSub = Keyboard.addListener(hideEvent, () => {
+      setKeyboardInset(0);
+    });
+
+    return () => {
+      changeSub.remove();
+      hideSub.remove();
+    };
+  }, [windowSize.height]);
 
   const [userMap, setUserMap] = useState<Record<string, any>>({});
   const [previewSenderMap, setPreviewSenderMap] = useState<Record<string, string>>({});
@@ -156,13 +206,9 @@ export const ChatScreen: React.FC = () => {
     if (!user?.id || !user?.role) return;
 
     const initChats = async () => {
+      perfMark("chats.init.start");
       try {
-        const global = await chatService.createChatIfNotExists(
-          user.id,
-          "system",
-          "global",
-        );
-        setGlobalChat(global);
+        await chatService.createChatIfNotExists(user.id, "system", "global");
 
         if (
           (user.role === "user" || user.role === "cliente_premium") &&
@@ -186,15 +232,7 @@ export const ChatScreen: React.FC = () => {
         }
 
         if (user.role === "user" || user.role === "cliente_premium") {
-          let admins = await userService.getUsersByRole("admin");
-          if (!admins.length) {
-            const allUsers = await userService.getAllUsers();
-            admins = allUsers.filter(
-              (candidate) =>
-                String(candidate.role || "").toLowerCase() === "admin" ||
-                candidate.isAdmin === true,
-            );
-          }
+          const admins = await userService.getUsersByRole("admin");
           const targetAdmin = admins.find((admin) => admin.id !== user.id) || null;
           if (targetAdmin?.id) {
             setPrimaryAdminId(targetAdmin.id);
@@ -204,17 +242,14 @@ export const ChatScreen: React.FC = () => {
       } catch (error) {
         console.warn("Error initializing chats:", error);
       }
+      perfMeasure("chats.init", "chats.init.start");
     };
 
-    initChats();
-  }, [user?.id, user?.role, (user as any)?.consultantId]);
-
-  useEffect(() => {
-    if (!user?.id) return;
-    return chatService.listenToChat("global", (chat) => {
-      if (chat) setGlobalChat(chat);
+    const task = InteractionManager.runAfterInteractions(() => {
+      void initChats();
     });
-  }, [user?.id]);
+    return () => task.cancel();
+  }, [user?.id, user?.role, (user as any)?.consultantId]);
 
   useEffect(() => {
     if (!params?.chatId) return;
@@ -278,64 +313,119 @@ export const ChatScreen: React.FC = () => {
     });
   }, [isAdminUser, processedChats]);
 
-  const loadProfiles = useCallback(async (ids: string[]) => {
-    const uniqueIds = Array.from(
-      new Set(ids.filter((id) => id && id !== "system")),
-    ).filter(
-      (id) => !userMapRef.current[id] && !profilesLoadingRef.current.has(id),
-    );
-
-    if (!uniqueIds.length) return;
-
-    uniqueIds.forEach((id) => profilesLoadingRef.current.add(id));
-
-    const updates: Record<string, any> = {};
-    const nameUpdates: Record<string, string> = {};
-
-    await Promise.all(
-      uniqueIds.map(async (id) => {
-        try {
-          const userData = await userService.getUserById(id);
-          if (userData) {
-            updates[id] = userData;
-            nameUpdates[id] = profileDisplayName(userData);
-          }
-        } catch {
-          // ignore
-        } finally {
-          profilesLoadingRef.current.delete(id);
+  const loadProfiles = useCallback(
+    async (ids: string[], keepPhotoIds: Set<string> = new Set()) => {
+      const uniqueIds = Array.from(
+        new Set(ids.filter((id) => id && id !== "system")),
+      ).filter((id) => {
+        if (profilesLoadingRef.current.has(id)) return false;
+        const existing = userMapRef.current[id];
+        if (!existing) return true;
+        // Já carregou sem foto; chat direto precisa recarregar o base64.
+        if (
+          keepPhotoIds.has(id) &&
+          !existing.photoBase64 &&
+          !existing.photoUrl
+        ) {
+          return true;
         }
-      }),
-    );
+        return false;
+      });
 
-    if (Object.keys(updates).length > 0) {
-      setUserMap((prev) => ({ ...prev, ...updates }));
-    }
-    if (Object.keys(nameUpdates).length > 0) {
-      setPreviewSenderMap((prev) => ({ ...prev, ...nameUpdates }));
-    }
-  }, []);
+      if (!uniqueIds.length) return;
+
+      uniqueIds.forEach((id) => profilesLoadingRef.current.add(id));
+
+      const updates: Record<string, any> = {};
+      const nameUpdates: Record<string, string> = {};
+
+      perfMark("profiles.load.start");
+      await Promise.all(
+        uniqueIds.map(async (id) => {
+          try {
+            const userData = await userService.getUserById(id);
+            if (userData) {
+              // Sem base64 em massa no bate-papo (app fechava por memória).
+              // Direto / allowlist: mantém foto. photoUrl sempre preservado.
+              updates[id] = {
+                ...userData,
+                photoBase64: keepPhotoIds.has(id) ? userData.photoBase64 : "",
+              };
+              nameUpdates[id] = profileDisplayName(userData);
+            }
+          } catch {
+            // ignore
+          } finally {
+            profilesLoadingRef.current.delete(id);
+          }
+        }),
+      );
+      perfMeasure("profiles.load.done", "profiles.load.start");
+
+      if (Object.keys(updates).length > 0) {
+        setUserMap((prev) => ({ ...prev, ...updates }));
+      }
+      if (Object.keys(nameUpdates).length > 0) {
+        setPreviewSenderMap((prev) => ({ ...prev, ...nameUpdates }));
+      }
+    },
+    [],
+  );
 
   // Resolve participant profiles for chats and messages
   useEffect(() => {
     if (!user?.id) return;
 
     const ids: string[] = [];
+    const keepPhotoIds = new Set<string>([user.id]);
     if ((user as any).consultantId) ids.push((user as any).consultantId);
     if (primaryAdminId) ids.push(primaryAdminId);
 
-    (processedChats || []).forEach((chat: any) => {
-      (chat?.participants || []).forEach((id: string) => ids.push(id));
-      if (chat?.lastMessage?.senderId) ids.push(chat.lastMessage.senderId);
-    });
+    if (selectedChatId) {
+      const active = (processedChats || []).find(
+        (chat: any) => chat.id === selectedChatId,
+      );
+      const isGlobal =
+        selectedChatId === "global" || active?.type === "global";
+      const isDirect =
+        !isGlobal &&
+        Array.isArray(active?.participants) &&
+        active.participants.length === 2;
 
-    (messages || []).forEach((msg: any) => {
-      if (msg?.senderId) ids.push(msg.senderId);
-      Object.keys(msg?.reactions || {}).forEach((id: string) => ids.push(id));
-    });
+      (active?.participants || []).forEach((id: string) => ids.push(id));
+      (messages || []).slice(-30).forEach((msg: any) => {
+        if (msg?.senderId) ids.push(msg.senderId);
+      });
 
-    loadProfiles(ids);
-  }, [processedChats, messages, user?.id, primaryAdminId, loadProfiles]);
+      if (isDirect) {
+        (active?.participants || []).forEach((id: string) => {
+          if (id) keepPhotoIds.add(id);
+        });
+      }
+    } else {
+      (processedChats || []).forEach((chat: any) => {
+        const other = (chat?.participants || []).find(
+          (id: string) => id && id !== user.id,
+        );
+        if (other) {
+          ids.push(other);
+          if (chat?.type !== "global" && (chat?.participants || []).length === 2) {
+            keepPhotoIds.add(other);
+          }
+        }
+        if (chat?.lastMessage?.senderId) ids.push(chat.lastMessage.senderId);
+      });
+    }
+
+    loadProfiles(ids, keepPhotoIds);
+  }, [
+    processedChats,
+    messages,
+    user?.id,
+    primaryAdminId,
+    loadProfiles,
+    selectedChatId,
+  ]);
 
   const getParticipantDisplayName = useCallback(
     (id?: string | null): string => {
@@ -423,11 +513,10 @@ export const ChatScreen: React.FC = () => {
   const orderedMessages = useMemo(() => {
     // With `inverted`, keep newest first in data so newest stays at the bottom in the UI.
     const blocked = new Set(blockedUserIds);
-    return [...chatMessages]
+    return chatMessages
       .filter((msg) => !blocked.has(msg.senderId) || msg.senderId === user?.id)
-      .sort(
-        (a, b) => getMessageTimeMs(b.createdAt) - getMessageTimeMs(a.createdAt),
-      );
+      .slice()
+      .reverse();
   }, [chatMessages, blockedUserIds, user?.id]);
 
   const mentionCandidates = useMemo(() => {
@@ -497,6 +586,102 @@ export const ChatScreen: React.FC = () => {
 
   const newestMessageId = orderedMessages[0]?.id || "";
   const previousNewestIdRef = useRef<string>("");
+  const nearBottomRef = useRef(true);
+  const seenMentionIdsRef = useRef<string[]>([]);
+  const seenReadyRef = useRef(false);
+  const [seenMentionIds, setSeenMentionIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    seenReadyRef.current = false;
+    seenMentionIdsRef.current = [];
+    setSeenMentionIds([]);
+    if (!user?.id || !selectedChatId) return;
+    let cancelled = false;
+    loadSeenMentionIds(user.id, selectedChatId)
+      .then((ids) => {
+        if (cancelled) return;
+        seenMentionIdsRef.current = ids;
+        setSeenMentionIds(ids);
+        seenReadyRef.current = true;
+      })
+      .catch((error) => {
+        console.warn("[menção] não foi possível ler o estado", error);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedChatId, user?.id]);
+
+  const unseenMentions = useMemo(
+    () =>
+      listUnseenMentions(
+        orderedMessages.map((message) => ({
+          id: String(message.id || ""),
+          createdAtMs: getMessageTimeMs(message.createdAt),
+          senderId: String(message.senderId || ""),
+          mentionUserIds: (message.mentions || []).map((mention: ChatMention) =>
+            String(mention.userId || ""),
+          ),
+        })),
+        user?.id || "",
+        new Set(seenMentionIds),
+      ),
+    [orderedMessages, seenMentionIds, user?.id],
+  );
+
+  const mentionContextRef = useRef({
+    userId: "",
+    chatId: "",
+    messages: [] as typeof orderedMessages,
+  });
+  mentionContextRef.current = {
+    userId: user?.id || "",
+    chatId: selectedChatId || "",
+    messages: orderedMessages,
+  };
+
+  const mentionViewability = useRef({ itemVisiblePercentThreshold: 60 }).current;
+
+  const onViewableMentions = useRef(
+    ({ viewableItems }: { viewableItems: Array<{ item?: { id?: string } }> }) => {
+      const { userId, chatId, messages } = mentionContextRef.current;
+      if (!seenReadyRef.current || !userId || !chatId) return;
+      const mentionIds = viewableItems
+        .map((entry) => String(entry.item?.id || ""))
+        .filter((id) =>
+          messages.some(
+            (message) =>
+              message.id === id &&
+              message.senderId !== userId &&
+              (message.mentions || []).some(
+                (mention: ChatMention) => mention.userId === userId,
+              ),
+          ),
+        );
+      if (!mentionIds.length) return;
+      const next = mergeSeenMentionIds(seenMentionIdsRef.current, mentionIds);
+      if (next.length === seenMentionIdsRef.current.length) return;
+      seenMentionIdsRef.current = next;
+      setSeenMentionIds(next);
+      saveSeenMentionIds(userId, chatId, next).catch((error) => {
+        console.warn("[menção] não foi possível gravar a visualização", error);
+      });
+    },
+  ).current;
+
+  const jumpToOldestUnseenMention = () => {
+    const target = unseenMentions[0];
+    if (!target) return;
+    const index = orderedMessages.findIndex((message) => message.id === target.id);
+    if (index < 0) return;
+    setHighlightedMessageId(target.id);
+    flatListRef.current?.scrollToIndex({
+      index,
+      animated: true,
+      viewPosition: 0.4,
+    });
+    setTimeout(() => setHighlightedMessageId(null), 3500);
+  };
 
   useEffect(() => {
     if (!newestMessageId || newestMessageId === previousNewestIdRef.current) {
@@ -504,6 +689,7 @@ export const ChatScreen: React.FC = () => {
       return;
     }
     previousNewestIdRef.current = newestMessageId;
+    if (!nearBottomRef.current) return;
     try {
       flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
     } catch {
@@ -511,26 +697,13 @@ export const ChatScreen: React.FC = () => {
     }
   }, [newestMessageId]);
 
-  const conversationActivityKey = useMemo(
-    () =>
-      messages
-        .map((msg) => {
-          const reactions = Object.entries(msg.reactions || {})
-            .map(([id, emoji]) => `${id}:${emoji}`)
-            .sort()
-            .join(",");
-          return `${msg.id}:${reactions}`;
-        })
-        .join("|"),
-    [messages],
-  );
-
   useEffect(() => {
-    if (!selectedChatId || !user?.id || messages.length === 0) return;
+    if (!selectedChatId || !user?.id || !newestMessageId) return;
+    if (newestMessageId.startsWith("pending-")) return;
     chatService.markChatAsRead(selectedChatId, user.id).catch(() => {
       // ignore read marker errors
     });
-  }, [selectedChatId, user?.id, conversationActivityKey, messages.length]);
+  }, [selectedChatId, user?.id, newestMessageId]);
 
   const reactionSheet = useMemo(() => {
     if (!reactionFocus) return null;
@@ -562,7 +735,7 @@ export const ChatScreen: React.FC = () => {
           emoji,
           isOwn,
           name: isOwn ? "Você" : getParticipantDisplayName(userId),
-          photoUri: profilePhotoUri(profile?.photoBase64),
+          photoUri: resolveProfilePhotoUri(profile),
           initial: profileInitial(profile, "U"),
         };
       })
@@ -738,7 +911,8 @@ export const ChatScreen: React.FC = () => {
   };
 
   const handleSendMessage = async () => {
-    if (!inputText.trim() || !selectedChatId || !user?.id) return;
+    const text = inputText.trim();
+    if (!text || !selectedChatId || !user?.id || sendingRef.current) return;
     if (
       otherParticipantId &&
       blockedUserIds.includes(otherParticipantId)
@@ -749,28 +923,37 @@ export const ChatScreen: React.FC = () => {
       );
       return;
     }
+
+    // Não filtrar por mentionCandidates: no bate-papo global participants=[] e
+    // a lista só cobre remetentes recentes; isso apagava @menções e zerava o push.
+    const mentions = mentionsStillInText(inputText, pendingMentions).filter(
+      (mention) => mention.userId && mention.userId !== user.id,
+    );
+    const replyPayload = replyTo
+      ? {
+          messageId: replyTo.id,
+          senderId: replyTo.senderId,
+          text: String(replyTo.text || "").slice(0, 180),
+        }
+      : null;
+
+    sendingRef.current = true;
+    setInputText("");
+    setPendingMentions([]);
+    setReplyTo(null);
+    setShowEmojiPicker(false);
+
     try {
-      const mentions = mentionsStillInText(inputText, pendingMentions).filter(
-        (mention) =>
-          mention.userId !== user.id &&
-          mentionCandidates.some((item) => item.userId === mention.userId),
-      );
-      await sendMessage(inputText.trim(), {
+      await sendMessage(text, {
         mentions,
-        replyTo: replyTo
-          ? {
-              messageId: replyTo.id,
-              senderId: replyTo.senderId,
-              text: String(replyTo.text || "").slice(0, 180),
-            }
-          : null,
+        replyTo: replyPayload,
       });
-      setInputText("");
-      setPendingMentions([]);
-      setReplyTo(null);
-      setShowEmojiPicker(false);
     } catch (error) {
       console.error("Error sending message:", error);
+      setInputText(text);
+      Alert.alert("Erro", "Não foi possível enviar a mensagem. Tente de novo.");
+    } finally {
+      sendingRef.current = false;
     }
   };
 
@@ -956,7 +1139,7 @@ export const ChatScreen: React.FC = () => {
 
   const handleAppendEmoji = (emoji: string) => {
     setInputText((current) => {
-      const next = `${current}${emoji}`;
+      const next = normalizeHeartEmojisInText(`${current}${emoji}`);
       return next.length > 500 ? next.slice(0, 500) : next;
     });
   };
@@ -969,7 +1152,7 @@ export const ChatScreen: React.FC = () => {
     size: number,
     fallbackIcon?: keyof typeof Ionicons.glyphMap,
   ) => {
-    const uri = profilePhotoUri(person?.photoBase64);
+    const uri = resolveProfilePhotoUri(person);
     if (uri) {
       return (
         <Image
@@ -1023,7 +1206,7 @@ export const ChatScreen: React.FC = () => {
 
     setStartChatLoading(true);
     try {
-      const list = await userService.getAllUsers();
+      const list = await userService.getAllUsersLite();
       setStartChatUsers(list || []);
     } catch (error) {
       console.error("Erro ao carregar usuários para o chat:", error);
@@ -1267,17 +1450,8 @@ export const ChatScreen: React.FC = () => {
     );
   }
 
-  return (
-    <Layout desktopWidth={desktop ? "full" : undefined}>
-      <View style={desktop ? styles.desktopSplit : undefined}>
-      {desktop ? chatListPane : null}
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "padding"}
-        keyboardVerticalOffset={
-          Platform.OS === "ios" ? insets.top + 56 : insets.bottom + 12
-        }
-        style={desktop ? styles.desktopThread : styles.container}
-      >
+  const threadBody = (
+      <>
         {/* Header */}
         <View style={styles.conversationHeader}>
           {desktop ? null : (
@@ -1294,11 +1468,11 @@ export const ChatScreen: React.FC = () => {
               style={{ flexDirection: "row", alignItems: "center", flex: 1 }}
             >
               <View style={styles.msgAvatarContainer}>
-                {profilePhotoUri(userMap[otherParticipantId]?.photoBase64) ? (
+                {resolveProfilePhotoUri(userMap[otherParticipantId]) ? (
                   <Image
                     source={{
-                      uri: profilePhotoUri(
-                        userMap[otherParticipantId]?.photoBase64,
+                      uri: resolveProfilePhotoUri(
+                        userMap[otherParticipantId],
                       ) as string,
                     }}
                     style={styles.msgAvatar}
@@ -1338,93 +1512,127 @@ export const ChatScreen: React.FC = () => {
           )}
         </View>
 
-        {/* Messages List */}
-        <FlatList
-          ref={flatListRef as any}
-          data={orderedMessages}
-          keyExtractor={(item, idx) => item.id || `msg-${idx}`}
-          renderItem={({ item: msg }) => {
-            const sender = userMap[msg.senderId];
-            const senderIsCouple = isCoupleAccount(sender);
-            const senderMember = parseCoupleMember(msg.senderCoupleMember);
-            const ownMember = isCoupleAccount(user)
-              ? parseCoupleMember(activeCoupleMember)
-              : null;
-            const isOwn =
-              msg.senderId === user?.id &&
-              (!senderIsCouple ||
-                senderMember == null ||
-                ownMember == null ||
-                senderMember === ownMember);
-            const isGroup =
-              selectedChat?.type === "global" ||
-              selectedChat?.type === "group" ||
-              (selectedChat?.participants &&
-                selectedChat.participants.length > 2);
-            const showCoupleSpeaker = senderIsCouple;
-            const senderLabel = resolveCoupleChatSenderLabel(
-              msg.senderId,
-              user?.id,
-              sender,
-              msg.senderCoupleMember,
-              previewSenderMap[msg.senderId],
-            );
-            return (
-              <MessageBubble
-                msg={msg}
-                isOwn={isOwn}
-                showAvatar={isGroup || showCoupleSpeaker}
-                showSenderName={isGroup || showCoupleSpeaker}
-                senderLabel={senderLabel}
-                senderPhotoBase64={sender?.photoBase64}
-                highlighted={highlightedMessageId === msg.id}
-                replySenderLabel={
-                  msg.replyTo
-                    ? resolveCoupleChatSenderLabel(
-                        msg.replyTo.senderId,
-                        user?.id,
-                        userMap[msg.replyTo.senderId],
-                        undefined,
-                        previewSenderMap[msg.replyTo.senderId],
-                      )
-                    : undefined
-                }
-                onLongPress={() => setActionMessage(msg)}
-                onReactionPress={(emoji, anchor) => {
-                  if (!msg.id) return;
-                  setReactionCardHeight(180);
-                  setReactionPickerOpen(false);
-                  setReactionFocus({ messageId: msg.id, emoji, anchor });
-                }}
-              />
-            );
-          }}
-          inverted
-          scrollEnabled={true}
-          onEndReached={() => {
-            if (!allowOlderLoadRef.current || !hasMore || isLoadingMore) return;
-            loadMore();
-          }}
-          onEndReachedThreshold={0.3}
-          onMomentumScrollBegin={() => {
-            allowOlderLoadRef.current = true;
-          }}
-          ListFooterComponent={
-            isLoadingMore ? (
-              <ActivityIndicator
-                color="#8c52ff"
-                style={{ marginVertical: 12 }}
-              />
-            ) : null
-          }
-          onScrollToIndexFailed={() => undefined}
-        />
+        {/* Messages List — precisa de flex:1 senão a barra sobe e o meio fica preto */}
+        <View style={styles.messagesPane}>
+          {messagesLoading && orderedMessages.length === 0 ? (
+            <View style={styles.centerContainer}>
+              <ActivityIndicator size="large" color="#8c52ff" />
+            </View>
+          ) : null}
+          <FlatList
+            ref={flatListRef as any}
+            style={styles.messagesList}
+            contentContainerStyle={styles.messagesListContent}
+            data={orderedMessages}
+            keyExtractor={(item, idx) => item.id || `msg-${idx}`}
+            initialNumToRender={12}
+            maxToRenderPerBatch={8}
+            windowSize={7}
+            renderItem={({ item: msg }) => {
+              const sender = userMap[msg.senderId];
+              const senderIsCouple = isCoupleAccount(sender);
+              const senderMember = parseCoupleMember(msg.senderCoupleMember);
+              const ownMember = isCoupleAccount(user)
+                ? parseCoupleMember(activeCoupleMember)
+                : null;
+              const isOwn =
+                msg.senderId === user?.id &&
+                (!senderIsCouple ||
+                  senderMember == null ||
+                  ownMember == null ||
+                  senderMember === ownMember);
+              const isGroup =
+                selectedChat?.type === "global" ||
+                selectedChat?.type === "group" ||
+                (selectedChat?.participants &&
+                  selectedChat.participants.length > 2);
+              const showCoupleSpeaker = senderIsCouple;
+              const senderLabel = resolveCoupleChatSenderLabel(
+                msg.senderId,
+                user?.id,
+                sender,
+                msg.senderCoupleMember,
+                previewSenderMap[msg.senderId],
+              );
+              return (
+                <MessageBubble
+                  msg={msg}
+                  isOwn={isOwn}
+                  showAvatar={isGroup || showCoupleSpeaker}
+                  showSenderName={isGroup || showCoupleSpeaker}
+                  senderLabel={senderLabel}
+                  senderPhotoBase64={
+                    sender?.photoBase64 || sender?.photoUrl || undefined
+                  }
+                  highlighted={highlightedMessageId === msg.id}
+                  replySenderLabel={
+                    msg.replyTo
+                      ? resolveCoupleChatSenderLabel(
+                          msg.replyTo.senderId,
+                          user?.id,
+                          userMap[msg.replyTo.senderId],
+                          undefined,
+                          previewSenderMap[msg.replyTo.senderId],
+                        )
+                      : undefined
+                  }
+                  onLongPress={() => setActionMessage(msg)}
+                  onReactionPress={(emoji, anchor) => {
+                    if (!msg.id) return;
+                    setReactionCardHeight(180);
+                    setReactionPickerOpen(false);
+                    setReactionFocus({ messageId: msg.id, emoji, anchor });
+                  }}
+                />
+              );
+            }}
+            inverted
+            scrollEnabled={true}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="interactive"
+            onScroll={(event) => {
+              nearBottomRef.current = event.nativeEvent.contentOffset.y < 120;
+            }}
+            scrollEventThrottle={64}
+            viewabilityConfig={mentionViewability}
+            onViewableItemsChanged={onViewableMentions}
+            onEndReached={() => {
+              if (!allowOlderLoadRef.current || !hasMore || isLoadingMore) return;
+              loadMore();
+            }}
+            onEndReachedThreshold={0.3}
+            onMomentumScrollBegin={() => {
+              allowOlderLoadRef.current = true;
+            }}
+            ListFooterComponent={
+              isLoadingMore ? (
+                <ActivityIndicator
+                  color="#8c52ff"
+                  style={{ marginVertical: 12 }}
+                />
+              ) : null
+            }
+            onScrollToIndexFailed={() => undefined}
+          />
+          {unseenMentions.length > 0 ? (
+            <TouchableOpacity
+              style={styles.mentionJump}
+              onPress={jumpToOldestUnseenMention}
+              accessibilityLabel="Ir para menção não lida"
+            >
+              <Text style={styles.mentionJumpText}>@</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
 
         {/* Input */}
         <View
           style={[
             styles.inputWrapper,
-            { paddingBottom: Math.max(10, insets.bottom) },
+            {
+              paddingBottom:
+                keyboardInset > 0 ? 8 : Math.max(10, insets.bottom),
+            },
           ]}
         >
           {showEmojiPicker ? (
@@ -1479,12 +1687,15 @@ export const ChatScreen: React.FC = () => {
               placeholder="Digite sua mensagem..."
               placeholderTextColor="#999"
               value={inputText}
-              onChangeText={setInputText}
+              onChangeText={(text) =>
+                setInputText(normalizeHeartEmojisInText(text))
+              }
               onSelectionChange={(event) =>
                 setInputSelection(event.nativeEvent.selection)
               }
               multiline
               maxLength={500}
+              textAlignVertical="center"
             />
             <TouchableOpacity
               style={[
@@ -1502,7 +1713,29 @@ export const ChatScreen: React.FC = () => {
             </TouchableOpacity>
           </View>
         </View>
-      </KeyboardAvoidingView>
+      </>
+  );
+
+  const threadContainerStyle = desktop ? styles.desktopThread : styles.container;
+  const thread = (
+    <View
+      style={[
+        threadContainerStyle,
+        keyboardInset > 0 ? { paddingBottom: keyboardInset } : null,
+      ]}
+    >
+      {threadBody}
+    </View>
+  );
+
+  return (
+    <Layout
+      desktopWidth={desktop ? "full" : undefined}
+      safeAreaEdges={["top", "left", "right"]}
+    >
+      <View style={desktop ? styles.desktopSplit : styles.container}>
+        {desktop ? chatListPane : null}
+        {thread}
       </View>
       <MessageActionSheet
         visible={Boolean(actionMessage)}
@@ -1688,6 +1921,24 @@ const styles = StyleSheet.create({
   desktopThread: {
     flex: 1,
     minWidth: 0,
+    minHeight: 0,
+  },
+  mentionJump: {
+    position: "absolute",
+    right: 16,
+    bottom: 16,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "#8c52ff",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 5,
+  },
+  mentionJumpText: {
+    color: "#fff",
+    fontSize: 22,
+    fontWeight: "700",
   },
   desktopEmpty: {
     flex: 1,
@@ -1813,7 +2064,19 @@ const styles = StyleSheet.create({
     fontSize: 26,
     marginLeft: 12,
   },
-  container: { flex: 1 },
+  container: { flex: 1, minHeight: 0 },
+  messagesPane: {
+    flex: 1,
+    minHeight: 0,
+    position: "relative",
+    backgroundColor: "#000000",
+  },
+  messagesList: {
+    flex: 1,
+  },
+  messagesListContent: {
+    paddingVertical: 8,
+  },
   centerContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
   errorText: { fontSize: 16, color: "red", marginTop: 12 },
   loadingText: { fontSize: 14, color: "#666", marginTop: 12 },
@@ -1866,10 +2129,12 @@ const styles = StyleSheet.create({
   conversationHeader: {
     flexDirection: "row",
     alignItems: "center",
+    flexShrink: 0,
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: "#f0f0f0",
+    borderBottomColor: "#2a2a2a",
+    backgroundColor: "#000000",
   },
   backButton: { paddingHorizontal: 8 },
   conversationTitle: {
@@ -1877,7 +2142,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "600",
     marginLeft: 12,
-    color: "#000",
+    color: "#ffffff",
   },
   headerRight: {
     width: 44,
@@ -1905,8 +2170,10 @@ const styles = StyleSheet.create({
   },
   msgAvatarInitial: { fontSize: 14, fontWeight: "700", color: "#5a4b7a" },
   inputWrapper: {
+    flexShrink: 0,
     borderTopWidth: 1,
-    borderTopColor: "#f0f0f0",
+    borderTopColor: "#2a2a2a",
+    backgroundColor: "#000000",
   },
   mentionList: {
     backgroundColor: "#161616",
@@ -1963,6 +2230,7 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
+    minHeight: 44,
     borderWidth: 1,
     borderColor: "#2f2f2f",
     backgroundColor: "#121212",
@@ -1970,6 +2238,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     paddingHorizontal: 16,
     paddingVertical: 10,
+    lineHeight: 20,
     fontSize: 14,
     maxHeight: 100,
     marginRight: 8,

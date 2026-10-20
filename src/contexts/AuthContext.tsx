@@ -3,9 +3,12 @@ import React, {
   useState,
   useEffect,
   useContext,
+  useMemo,
+  useRef,
   ReactNode,
 } from "react";
 import { authServices } from "../services/authServices";
+import { perfMark, perfMeasure } from "../utils/perfMarks";
 import { userService } from "../services/userServices";
 import { updateOverdueBills } from "../services/billServices";
 import { User, LoginCredentials, RegisterCredentials, CoupleMember } from "../types/auth";
@@ -98,7 +101,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   useEffect(() => {
     // Observar mudanças no estado de autenticação
+    perfMark("auth.start");
     const unsubscribe = authServices.onAuthStateChange(async (firebaseUser) => {
+      let resolvedUser = firebaseUser;
       if (firebaseUser) {
         try {
           const fullUserData = await userService.getUserById(firebaseUser.id);
@@ -119,7 +124,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
               return;
             }
 
-            setUser({ ...firebaseUser, ...fullUserData });
+            resolvedUser = { ...firebaseUser, ...fullUserData };
+            setUser(resolvedUser);
           } else {
             // Fallback: procurar documento pelo email
             try {
@@ -143,7 +149,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                     return;
                   }
 
-                  setUser({ ...firebaseUser, ...byEmail });
+                  resolvedUser = { ...firebaseUser, ...byEmail };
+                  setUser(resolvedUser);
                 } else {
                   // Criar documento padrão
                   await userService.createUserDocument(firebaseUser.id, {
@@ -153,8 +160,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                   const newUserData = await userService.getUserById(
                     firebaseUser.id,
                   );
-                  if (newUserData) setUser({ ...firebaseUser, ...newUserData });
-                  else setUser(firebaseUser);
+                  if (newUserData) {
+                    resolvedUser = { ...firebaseUser, ...newUserData };
+                    setUser(resolvedUser);
+                  } else setUser(firebaseUser);
                 }
               } else {
                 // Sem email, criar documento padrão
@@ -165,8 +174,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                 const newUserData = await userService.getUserById(
                   firebaseUser.id,
                 );
-                if (newUserData) setUser({ ...firebaseUser, ...newUserData });
-                else setUser(firebaseUser);
+                if (newUserData) {
+                  resolvedUser = { ...firebaseUser, ...newUserData };
+                  setUser(resolvedUser);
+                } else setUser(firebaseUser);
               }
             } catch (emailErr) {
               if (__DEV__)
@@ -188,15 +199,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
 
       if (firebaseUser) {
-        const profileForCouple = await userService
-          .getUserById(firebaseUser.id)
-          .catch(() => null);
-        await hydrateCoupleMember(
-          profileForCouple
-            ? { ...firebaseUser, ...profileForCouple }
-            : firebaseUser,
-          { forcePicker: skipRestoreCoupleMemberRef.current },
-        );
+        await hydrateCoupleMember(resolvedUser, {
+          forcePicker: skipRestoreCoupleMemberRef.current,
+        });
         skipRestoreCoupleMemberRef.current = false;
       } else {
         setActiveCoupleMemberState(null);
@@ -215,6 +220,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
 
       setLoading(false);
+      perfMeasure("auth.ready", "auth.start");
     });
 
     // Cleanup da subscrição
@@ -479,28 +485,54 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  const actionsRef = useRef({
+    signIn,
+    signUp,
+    signOut,
+    refreshUser,
+    setActiveCoupleMember,
+    clearActiveCoupleMember,
+  });
+  actionsRef.current = {
+    signIn,
+    signUp,
+    signOut,
+    refreshUser,
+    setActiveCoupleMember,
+    clearActiveCoupleMember,
+  };
+  const stableActions = useMemo(
+    () => ({
+      signIn: (credentials: LoginCredentials) =>
+        actionsRef.current.signIn(credentials),
+      signUp: (credentials: RegisterCredentials) =>
+        actionsRef.current.signUp(credentials),
+      signOut: () => actionsRef.current.signOut(),
+      refreshUser: () => actionsRef.current.refreshUser(),
+      setActiveCoupleMember: (member: CoupleMember) =>
+        actionsRef.current.setActiveCoupleMember(member),
+      clearActiveCoupleMember: () => actionsRef.current.clearActiveCoupleMember(),
+    }),
+    [],
+  );
+  const value = useMemo(
+    () => ({
+      user,
+      loading,
+      ...stableActions,
+      isAuthenticated: !!user,
+      activeCoupleMember,
+      needsCoupleSelection:
+        !!user &&
+        isCoupleAccount(user) &&
+        !activeCoupleMember &&
+        coupleMemberHydrated,
+    }),
+    [activeCoupleMember, coupleMemberHydrated, loading, stableActions, user],
+  );
+
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        loading,
-        signIn,
-        signUp,
-        signOut,
-        refreshUser,
-        isAuthenticated: !!user,
-        activeCoupleMember,
-        setActiveCoupleMember,
-        clearActiveCoupleMember,
-        needsCoupleSelection:
-          !!user &&
-          isCoupleAccount(user) &&
-          !activeCoupleMember &&
-          coupleMemberHydrated,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
+    <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
   );
 };
 

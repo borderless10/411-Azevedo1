@@ -53,6 +53,8 @@ export const mapUserDocument = (id: string, data: any): User => ({
   nickname: data?.nickname || "",
   consultantId: data?.consultantId || undefined,
   photoBase64: data?.photoBase64 || "",
+  photoUrl: data?.photoUrl || "",
+  photoStoragePath: data?.photoStoragePath || "",
   email: data?.email || "",
   username: data?.username || "",
   bio: data?.bio || "",
@@ -134,13 +136,68 @@ export const userService = {
       }
 
       const userData = userDoc.data();
-      console.log("Dados do usuário encontrados:", userData);
+      if (__DEV__) {
+        console.log("Dados do usuário encontrados:", {
+          id: userDoc.id,
+          role: userData?.role,
+          hasPhoto: Boolean(userData?.photoUrl || userData?.photoBase64),
+        });
+      }
       return mapUserDocument(userDoc.id, userData);
     } catch (error) {
       console.error("Erro ao buscar usuário:", error);
       console.error("userId tentado:", userId);
       throw error;
     }
+  },
+
+  /** Perfil leve para push/presença: sem photoBase64 (evita OOM ao enviar mensagem). */
+  async getUserNotifyProfile(userId: string): Promise<{
+    id: string;
+    name: string;
+    nickname: string;
+    expoPushToken: string;
+    presenceState?: "foreground" | "background";
+    activeChatId?: string | null;
+    presenceUpdatedAt?: Date;
+  } | null> {
+    try {
+      const userDoc = await getDoc(doc(db, "users", userId));
+      if (!userDoc.exists()) return null;
+      const data = userDoc.data() || {};
+      return {
+        id: userDoc.id,
+        name: String(data.name || ""),
+        nickname: String(data.nickname || ""),
+        expoPushToken: String(data.expoPushToken || ""),
+        presenceState:
+          data.presenceState === "background"
+            ? "background"
+            : data.presenceState === "foreground"
+              ? "foreground"
+              : undefined,
+        activeChatId: data.activeChatId || null,
+        presenceUpdatedAt: data.presenceUpdatedAt
+          ? toDateValue(data.presenceUpdatedAt)
+          : undefined,
+      };
+    } catch (error) {
+      console.warn("[push] perfil leve indisponível", userId, error);
+      return null;
+    }
+  },
+
+  /** Usuário sem photoBase64 retido em memória (listas). Mantém photoUrl do Storage. */
+  async getUserLiteById(userId: string): Promise<User | null> {
+    const user = await this.getUserById(userId);
+    if (!user) return null;
+    return { ...user, photoBase64: "" };
+  },
+
+  /** Todos os usuários sem photoBase64 retido (evita OOM em listas grandes). */
+  async getAllUsersLite(): Promise<User[]> {
+    const users = await this.getAllUsers();
+    return users.map((item) => ({ ...item, photoBase64: "" }));
   },
 
   /**
@@ -442,6 +499,19 @@ export const userService = {
     }
   },
   /**
+   * Quem pode atuar como consultor responsável: consultor ou supervisor.
+   * Supervisor não deixa de ser consultor, só ganha permissões a mais.
+   */
+  async getConsultantUsers(): Promise<User[]> {
+    const [consultors, supervisors] = await Promise.all([
+      userService.getUsersByRole("consultor"),
+      userService.getUsersByRole("supervisor"),
+    ]);
+    const byId = new Map<string, User>();
+    [...consultors, ...supervisors].forEach((u) => byId.set(u.id, u));
+    return [...byId.values()];
+  },
+  /**
    * Buscar usuário pelo email (retorna o primeiro que encontrar)
    */
   async getUserByEmail(email: string): Promise<User | null> {
@@ -467,6 +537,8 @@ export const userService = {
       nickname?: string;
       phone?: string;
       photoBase64?: string | null;
+      photoUrl?: string | null;
+      photoStoragePath?: string | null;
       role?: string;
       isAdmin?: boolean;
       consultantId?: string | null;
@@ -487,6 +559,9 @@ export const userService = {
         updatePayload.nickname = payload.nickname;
       if (payload.photoBase64 !== undefined)
         updatePayload.photoBase64 = payload.photoBase64;
+      if (payload.photoUrl !== undefined) updatePayload.photoUrl = payload.photoUrl;
+      if (payload.photoStoragePath !== undefined)
+        updatePayload.photoStoragePath = payload.photoStoragePath;
       if (payload.phone !== undefined) updatePayload.phone = payload.phone;
       if (payload.role !== undefined) updatePayload.role = payload.role;
       if (payload.isAdmin !== undefined)

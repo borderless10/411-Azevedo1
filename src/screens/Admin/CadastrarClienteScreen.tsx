@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Tela de Cadastro de Cliente (Admin)
  */
 
@@ -28,7 +28,13 @@ import {
 } from "firebase/auth";
 import { doc, setDoc, getDoc, Timestamp } from "firebase/firestore";
 import { auth, db, firebaseConfig } from "../../lib/firebase";
-import { userService, isAdminUser } from "../../services/userServices";
+import { userService } from "../../services/userServices";
+import {
+  canRegisterClient,
+  isAdminRole,
+  isConsultorRole,
+  lockedConsultantIdForRegistration,
+} from "../../utils/staffAccess";
 import ConsultantPicker from "../../components/ui/ConsultantPicker";
 import { AccountType } from "../../types/auth";
 import { coupleAccountFieldsFromInput } from "../../utils/coupleAccount";
@@ -36,7 +42,8 @@ import { coupleAccountFieldsFromInput } from "../../utils/coupleAccount";
 export const CadastrarClienteScreen = () => {
   const { navigate } = useNavigation();
   const { user } = useAuth();
-  const canAssignStaffRole = isAdminUser(user);
+  const canAssignStaffRole = isAdminRole(user);
+  const lockedConsultantId = lockedConsultantIdForRegistration(user);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
 
@@ -82,9 +89,19 @@ export const CadastrarClienteScreen = () => {
 
   useEffect(() => {
     // carregar consultores para preencher seletor
+    if (!canRegisterClient(user)) {
+      navigate("Home");
+    }
+  }, [navigate, user]);
+
+  useEffect(() => {
+    if (lockedConsultantId) setConsultantId(lockedConsultantId);
+  }, [lockedConsultantId]);
+
+  useEffect(() => {
     async function loadConsultants() {
       try {
-        const list = await userService.getUsersByRole("consultor");
+        const list = await userService.getConsultantUsers();
         console.log("[CADASTRAR] Consultores carregados:", list.length, list);
         setConsultants(list);
       } catch (e) {
@@ -130,19 +147,17 @@ export const CadastrarClienteScreen = () => {
     }
 
     setLoading(true);
+    const responsibleConsultantId = lockedConsultantId || consultantId;
+    if (
+      (role === "user" || role === "cliente_premium") &&
+      !responsibleConsultantId
+    ) {
+      Alert.alert("Erro", "Selecione o consultor responsável.");
+      return;
+    }
+
 
     try {
-      const selectedConsultant = consultants.find((c) => c.id === consultantId);
-      console.log(
-        "[CADASTRAR] role:",
-        role,
-        "consultantId:",
-        consultantId,
-        "consultantName:",
-        selectedConsultant?.name,
-        "consultants count:",
-        consultants.length,
-      );
       // Criar usuário no Firebase Auth usando um app secundário para
       // evitar que o admin atual seja deslogado (createUserWithEmailAndPassword
       // faz sign-in no auth padrão). O usuário criado ficará no Auth do projeto,
@@ -192,12 +207,13 @@ export const CadastrarClienteScreen = () => {
         const phoneNumbers = phone.replace(/\D/g, "");
         const shouldPersistConsultant =
           role === "user" || role === "cliente_premium";
-        const normalizedConsultantId = consultantId || null;
-        const coupleFields = coupleAccountFieldsFromInput({
+        const normalizedConsultantId =
+          lockedConsultantId || consultantId || null;
+        const coupleFields = {
           accountType: shouldPersistConsultant ? accountType : "individual",
           coupleMember1Name,
           coupleMember2Name,
-        });
+        };
 
         const docData = {
           name,
@@ -531,7 +547,17 @@ export const CadastrarClienteScreen = () => {
                 </View>
               </View>
 
-              {(role === "user" || role === "cliente_premium") && (
+              {(role === "user" || role === "cliente_premium") &&
+              lockedConsultantId ? (
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Consultor responsável</Text>
+                  <Text style={styles.subtitle}>
+                    {isConsultorRole(user)
+                      ? "Você será o consultor deste cliente."
+                      : "Consultor responsável definido."}
+                  </Text>
+                </View>
+              ) : role === "user" || role === "cliente_premium" ? (
                 <View style={styles.inputGroup}>
                   <Text style={styles.label}>Consultor responsável</Text>
                   <ConsultantPicker
@@ -540,8 +566,7 @@ export const CadastrarClienteScreen = () => {
                     onChange={(id) => setConsultantId(id)}
                   />
                 </View>
-              )}
-
+              ) : null}
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Senha *</Text>
                 <View style={styles.inputContainer}>

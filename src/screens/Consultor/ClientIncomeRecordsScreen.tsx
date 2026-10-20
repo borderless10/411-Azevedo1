@@ -37,6 +37,9 @@ type DaySummary = {
   total: number;
 };
 
+/** all | tracked | general | título específico de renda acompanhada */
+type IncomeViewFilter = "all" | "tracked" | "general" | string;
+
 const getPlannedAmount = (item: ExpectedItem) => {
   const amountCard = Number(item?.amountCard);
   const amountCash = Number(item?.amountCash);
@@ -50,6 +53,21 @@ const getPlannedAmount = (item: ExpectedItem) => {
   return Number(item?.amount) || 0;
 };
 
+const incomeMatchesViewFilter = (
+  income: Income,
+  viewFilter: IncomeViewFilter,
+): boolean => {
+  const isTracked = Boolean(income.dailyTracking);
+  if (viewFilter === "all") return true;
+  if (viewFilter === "tracked") return isTracked;
+  if (viewFilter === "general") return !isTracked;
+  return (
+    isTracked &&
+    normalizeExpenseTitleKey(income.description) ===
+      normalizeExpenseTitleKey(viewFilter)
+  );
+};
+
 export const ClientIncomeRecordsScreen: React.FC = () => {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
@@ -59,7 +77,7 @@ export const ClientIncomeRecordsScreen: React.FC = () => {
 
   const [loading, setLoading] = useState(true);
   const [clientName, setClientName] = useState("");
-  const [trackedTitle, setTrackedTitle] = useState("");
+  const [viewFilter, setViewFilter] = useState<IncomeViewFilter>("all");
   const [trackedTitles, setTrackedTitles] = useState<string[]>([]);
   const [plannedAmount, setPlannedAmount] = useState(0);
   const [cycleLabel, setCycleLabel] = useState("");
@@ -100,17 +118,29 @@ export const ClientIncomeRecordsScreen: React.FC = () => {
       ).sort((a, b) => a.localeCompare(b, "pt-BR"));
       setTrackedTitles(titles);
 
-      const selectedTitle = titles.includes(trackedTitle) ? trackedTitle : "";
-      if (trackedTitle && !titles.includes(trackedTitle)) {
-        setTrackedTitle("");
+      const isKnownFilter =
+        viewFilter === "all" ||
+        viewFilter === "tracked" ||
+        viewFilter === "general" ||
+        titles.includes(viewFilter);
+      const activeFilter: IncomeViewFilter = isKnownFilter ? viewFilter : "all";
+      if (!isKnownFilter && viewFilter !== "all") {
+        setViewFilter("all");
       }
+
+      const plannedScopeTitle =
+        activeFilter !== "all" &&
+        activeFilter !== "tracked" &&
+        activeFilter !== "general"
+          ? activeFilter
+          : "";
 
       const plannedItems = (planning?.expectedIncomes || []).filter((item) => {
         if (!item.dailyTracking) return false;
-        if (!selectedTitle) return true;
+        if (!plannedScopeTitle) return true;
         return (
           normalizeExpenseTitleKey(item.source) ===
-          normalizeExpenseTitleKey(selectedTitle)
+          normalizeExpenseTitleKey(plannedScopeTitle)
         );
       });
       setPlannedAmount(
@@ -147,14 +177,9 @@ export const ClientIncomeRecordsScreen: React.FC = () => {
         createdAtFrom: cycleStartedAtRaw || undefined,
       });
 
-      const filtered = incomes.filter((income) => {
-        if (!income.dailyTracking) return false;
-        if (!selectedTitle) return true;
-        return (
-          normalizeExpenseTitleKey(income.description) ===
-          normalizeExpenseTitleKey(selectedTitle)
-        );
-      });
+      const filtered = incomes.filter((income) =>
+        incomeMatchesViewFilter(income, activeFilter),
+      );
 
       setIncomeHistory(
         [...filtered].sort(
@@ -193,7 +218,7 @@ export const ClientIncomeRecordsScreen: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [clientId, navigate, trackedTitle, user]);
+  }, [clientId, navigate, viewFilter, user]);
 
   useEffect(() => {
     loadData();
@@ -271,16 +296,29 @@ export const ClientIncomeRecordsScreen: React.FC = () => {
     };
   };
 
+  const showTrackedBudget = viewFilter !== "general";
   const performanceIndicator = getPerformanceIndicator();
   const screenTitle =
-    trackedTitle ||
-    (trackedTitles.length === 1 ? trackedTitles[0] : "Rendas");
+    viewFilter === "general"
+      ? "Rendas gerais"
+      : viewFilter === "tracked"
+        ? "Rendas acompanhadas"
+        : viewFilter === "all"
+          ? "Rendas"
+          : viewFilter;
 
   const formatDayMonthLabel = (date: Date) =>
     date.toLocaleDateString("pt-BR", {
       day: "2-digit",
       month: "2-digit",
     });
+
+  const filterChips: { id: IncomeViewFilter; label: string }[] = [
+    { id: "all", label: "Todas" },
+    { id: "tracked", label: "Acompanhadas" },
+    { id: "general", label: "Gerais / salário" },
+    ...trackedTitles.map((title) => ({ id: title, label: title })),
+  ];
 
   if (loading) {
     return (
@@ -309,7 +347,7 @@ export const ClientIncomeRecordsScreen: React.FC = () => {
             <Ionicons name="wallet-outline" size={64} color="#8c52ff" />
             <Text style={styles.title}>{screenTitle}</Text>
             <Text style={styles.subtitle}>
-              Acompanhe quanto {clientName || "o cliente"} está recebendo por dia
+              Acompanhe quanto {clientName || "o cliente"} está recebendo
             </Text>
             <Text style={styles.spectatorHint}>
               Visualização do cliente (somente leitura)
@@ -319,47 +357,31 @@ export const ClientIncomeRecordsScreen: React.FC = () => {
             ) : null}
           </View>
 
-          {trackedTitles.length > 1 ? (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.chipsRow}
-            >
-              <TouchableOpacity
-                style={[styles.chip, !trackedTitle && styles.chipActive]}
-                onPress={() => setTrackedTitle("")}
-              >
-                <Text
-                  style={[
-                    styles.chipText,
-                    !trackedTitle && styles.chipTextActive,
-                  ]}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.chipsRow}
+          >
+            {filterChips.map((chip) => {
+              const active = viewFilter === chip.id;
+              return (
+                <TouchableOpacity
+                  key={chip.id}
+                  style={[styles.chip, active && styles.chipActive]}
+                  onPress={() => setViewFilter(chip.id)}
                 >
-                  Todas
-                </Text>
-              </TouchableOpacity>
-              {trackedTitles.map((title) => {
-                const active = trackedTitle === title;
-                return (
-                  <TouchableOpacity
-                    key={title}
-                    style={[styles.chip, active && styles.chipActive]}
-                    onPress={() => setTrackedTitle(title)}
+                  <Text
+                    style={[styles.chipText, active && styles.chipTextActive]}
                   >
-                    <Text
-                      style={[
-                        styles.chipText,
-                        active && styles.chipTextActive,
-                      ]}
-                    >
-                      {title}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          ) : null}
+                    {chip.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
 
+          {showTrackedBudget ? (
+          <>
           <View style={styles.card}>
             <Text style={styles.cardTitle}>💰 Quanto falta no ciclo</Text>
             <View style={styles.inputContainerReadOnly}>
@@ -463,6 +485,8 @@ export const ClientIncomeRecordsScreen: React.FC = () => {
               <Text style={styles.performanceMetaValue}>{countedDays}</Text>
             </View>
           </View>
+          </>
+          ) : null}
 
           <View style={styles.daysCard}>
             <Text style={styles.cardTitle}>📅 Rendas Diárias</Text>
@@ -505,7 +529,11 @@ export const ClientIncomeRecordsScreen: React.FC = () => {
             <Text style={styles.cardTitle}>Histórico de lançamentos</Text>
             <Text style={styles.cardSubtitle}>
               Rendas registradas neste ciclo
-              {trackedTitle ? ` em ${trackedTitle}` : ""}
+              {viewFilter !== "all" &&
+              viewFilter !== "tracked" &&
+              viewFilter !== "general"
+                ? ` em ${viewFilter}`
+                : ""}
             </Text>
             {incomeHistory.length === 0 ? (
               <Text style={styles.emptyText}>
@@ -520,6 +548,8 @@ export const ClientIncomeRecordsScreen: React.FC = () => {
                     </Text>
                     <Text style={styles.historyMeta}>
                       {formatDateForDisplay(income.date)}
+                      {" · "}
+                      {income.dailyTracking ? "Acompanhada" : "Geral / salário"}
                     </Text>
                   </View>
                   <Text style={styles.historyAmount}>

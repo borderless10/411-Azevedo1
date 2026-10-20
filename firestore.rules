@@ -112,7 +112,19 @@ service cloud.firestore {
       allow read: if isSignedIn();
       // Admin cadastra cliente/consultor com app Auth secundário:
       // o write usa o uid do admin, não o uid do documento criado.
-      allow create: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow create: if isSignedIn() && (
+        request.auth.uid == userId
+        || isAdmin()
+        || (
+          (isConsultor() || isSupervisor())
+          && request.resource.data.role in ['user', 'cliente_premium']
+          && request.resource.data.isAdmin != true
+          && (
+            isSupervisor()
+            || request.resource.data.consultantId == request.auth.uid
+          )
+        )
+      );
       allow update: if isAdmin()
         || ((isOwner(userId) || isConsultantOf(userId)) && staffRoleUnchanged());
       allow delete: if isAdmin();
@@ -120,6 +132,10 @@ service cloud.firestore {
       match /planning/{planningId} {
         allow get, list: if canAccessUserData(userId) || isSupervisor();
         allow write: if canAccessUserData(userId) || isSupervisor();
+      }
+
+      match /chatMentionSeen/{chatId} {
+        allow read, write: if isOwner(userId);
       }
     }
 
@@ -180,10 +196,10 @@ service cloud.firestore {
     }
 
     match /recommendations/{docId} {
-      allow get: if canGetUserDocument();
-      allow list: if canReadUserDocument();
-      allow create: if ownsUserDocument();
-      allow update, delete: if canWriteUserDocument();
+      allow get: if canGetUserDocument() || isSupervisor();
+      allow list: if canReadUserDocument() || isSupervisor();
+      allow create: if ownsUserDocument() || isSupervisor();
+      allow update, delete: if canWriteUserDocument() || isSupervisor();
     }
 
     match /categories/{docId} {

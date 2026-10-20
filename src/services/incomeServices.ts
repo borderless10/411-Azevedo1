@@ -169,10 +169,33 @@ export const incomeServices = {
     console.log("💰 [INCOME SERVICE] Filtros:", filters);
 
     try {
-      // Buscar todas as rendas do usuário (evita problemas de índice)
-      let q = query(getIncomesCollection(), where("userId", "==", userId));
+      const startBound = filters?.startDate ? new Date(filters.startDate) : null;
+      const endBound = filters?.endDate ? new Date(filters.endDate) : null;
+      if (startBound) startBound.setHours(0, 0, 0, 0);
+      if (endBound) endBound.setHours(23, 59, 59, 999);
 
-      const snapshot = await getDocs(q);
+      const userQuery = query(getIncomesCollection(), where("userId", "==", userId));
+      let queriedByDate = false;
+      let snapshot;
+      if (startBound || endBound) {
+        try {
+          const constraints = [where("userId", "==", userId)];
+          if (startBound) {
+            constraints.push(where("date", ">=", Timestamp.fromDate(startBound)));
+          }
+          if (endBound) {
+            constraints.push(where("date", "<=", Timestamp.fromDate(endBound)));
+          }
+          snapshot = await getDocs(query(getIncomesCollection(), ...constraints));
+          queriedByDate = true;
+        } catch (error) {
+          const code = String((error as { code?: string })?.code || "");
+          if (!code.includes("failed-precondition")) throw error;
+          snapshot = await getDocs(userQuery);
+        }
+      } else {
+        snapshot = await getDocs(userQuery);
+      }
       console.log(
         "💰 [INCOME SERVICE] Encontradas",
         snapshot.size,
@@ -184,8 +207,8 @@ export const incomeServices = {
         convertIncomeFromFirestore(getDocData(doc)),
       );
 
-      // Aplicar filtros no cliente (mais confiável)
-      if (filters?.startDate) {
+      // Filtro no cliente só no fallback sem índice
+      if (!queriedByDate && filters?.startDate) {
         const startDate = new Date(filters.startDate);
         startDate.setHours(0, 0, 0, 0);
         incomes = incomes.filter((income) => {
@@ -200,7 +223,7 @@ export const incomeServices = {
         );
       }
 
-      if (filters?.endDate) {
+      if (!queriedByDate && filters?.endDate) {
         const endDate = new Date(filters.endDate);
         endDate.setHours(23, 59, 59, 999);
         incomes = incomes.filter((income) => {
@@ -522,8 +545,12 @@ export const incomeServices = {
     console.log("💰 [INCOME SERVICE] Buscando últimas", limitCount, "rendas");
 
     try {
-      // Buscar todas as rendas e ordenar no cliente (evita necessidade de índice composto)
-      const q = query(getIncomesCollection(), where("userId", "==", userId));
+      const q = query(
+        getIncomesCollection(),
+        where("userId", "==", userId),
+        orderBy("createdAt", "desc"),
+        limit(limitCount),
+      );
 
       const snapshot = await getDocs(q);
       let incomes = snapshot.docs.map((doc) =>
@@ -544,10 +571,13 @@ export const incomeServices = {
       );
       // Se houver erro de índice, retornar array vazio
       if (error?.code === "failed-precondition") {
-        console.warn(
-          "⚠️ [INCOME SERVICE] Índice não encontrado, retornando array vazio",
+        const snapshot = await getDocs(
+          query(getIncomesCollection(), where("userId", "==", userId)),
         );
-        return [];
+        return snapshot.docs
+          .map((doc) => convertIncomeFromFirestore(getDocData(doc)))
+          .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+          .slice(0, limitCount);
       }
       throw error;
     }

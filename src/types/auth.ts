@@ -23,6 +23,9 @@ export interface User {
   showInRanking?: boolean;
   rankingPreference?: RankingPreference;
   photoBase64?: string;
+  /** URL do Firebase Storage. Prioridade sobre photoBase64 quando existir. */
+  photoUrl?: string;
+  photoStoragePath?: string;
   accountType?: AccountType;
   coupleMember1Name?: string;
   coupleMember2Name?: string;

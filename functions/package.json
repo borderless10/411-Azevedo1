@@ -1,0 +1,17 @@
+{
+  "name": "visao-functions",
+  "private": true,
+  "type": "module",
+  "main": "index.js",
+  "engines": {
+    "node": "22"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "dependencies": {
+    "expo-server-sdk": "^4.0.0",
+    "firebase-admin": "^13.5.0",
+    "firebase-functions": "^7.0.0"
+  }
+}

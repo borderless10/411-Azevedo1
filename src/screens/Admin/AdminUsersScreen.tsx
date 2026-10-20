@@ -18,7 +18,7 @@ import { useNavigation } from "../../routes/NavigationContext";
 import { Ionicons } from "@expo/vector-icons";
 import {
   profileInitial,
-  profilePhotoUri,
+  resolveProfilePhotoUri,
 } from "../../utils/chatDisplayNames";
 import { isCoupleAccount } from "../../utils/coupleAccount";
 import { ConsultationRequestsBanner } from "../../components/Consultation/ConsultationRequestsBanner";
@@ -52,7 +52,7 @@ export const AdminUsersScreen: React.FC = () => {
   const fetchUsers = async () => {
     setLoading(true);
     try {
-      const all = await userService.getAllUsers();
+      const all = await userService.getAllUsersLite();
       setUsers(all);
     } catch (error) {
       console.error("Erro ao buscar usuários:", error);
@@ -80,9 +80,9 @@ export const AdminUsersScreen: React.FC = () => {
     return (
       <View style={styles.item}>
         <View style={styles.avatar}>
-          {profilePhotoUri(item.photoBase64) ? (
+          {resolveProfilePhotoUri(item) ? (
             <Image
-              source={{ uri: profilePhotoUri(item.photoBase64) as string }}
+              source={{ uri: resolveProfilePhotoUri(item) as string }}
               style={styles.avatarImage}
             />
           ) : (

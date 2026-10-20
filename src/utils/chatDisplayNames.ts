@@ -28,6 +28,14 @@ export const profileInitial = (
   return (label.charAt(0) || fallback).toUpperCase();
 };
 
+export const resolveProfilePhotoUri = (
+  profile?: { photoUrl?: string | null; photoBase64?: string | null } | null,
+): string | null => {
+  const url = String(profile?.photoUrl || "").trim();
+  if (url) return url;
+  return profilePhotoUri(profile?.photoBase64);
+};
+
 export const profilePhotoUri = (
   photoBase64?: string | null,
 ): string | null => {

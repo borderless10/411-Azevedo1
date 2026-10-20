@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Tela de Perfil do Usuário
  */
 
@@ -18,6 +18,11 @@ import { Ionicons } from "@expo/vector-icons";
 import ProfilePhotoModal from "../../components/ui/ProfilePhotoModal";
 import { useAuth } from "../../hooks/useAuth";
 import { userService } from "../../services/userServices";
+import {
+  isProfilePhotoStorageEnabled,
+  uploadProfilePhoto,
+} from "../../services/profilePhotoStorage";
+import { canRegisterClient } from "../../utils/staffAccess";
 import { useNavigation } from "../../routes/NavigationContext";
 import { Layout } from "../../components/Layout/Layout";
 import {
@@ -25,6 +30,21 @@ import {
   profileInitial,
   profilePhotoUri,
 } from "../../utils/chatDisplayNames";
+
+const persistProfilePhoto = async (userId: string, base64: string | null) => {
+  if (isProfilePhotoStorageEnabled() && base64) {
+    const uploaded = await uploadProfilePhoto(userId, base64);
+    await userService.updateUser(userId, {
+      photoUrl: uploaded.url,
+      photoStoragePath: uploaded.path,
+      photoBase64: null,
+    });
+    return;
+  }
+  await userService.updateUser(userId, {
+    photoBase64: base64 || null,
+  });
+};
 
 export const ProfileScreen = () => {
   const { user, refreshUser } = useAuth();
@@ -222,11 +242,11 @@ export const ProfileScreen = () => {
                 if (!user?.id) return;
                 setSavingProfile(true);
                 try {
+                  await persistProfilePhoto(user.id, editingPhotoBase64 || null);
                   await userService.updateUser(user.id, {
                     name: editingName.trim(),
                     nickname: editingNickname.trim(),
                     phone: editingPhone.replace(/\D/g, "").trim(),
-                    photoBase64: editingPhotoBase64 || null,
                   });
                   await refreshUser();
                   setShowSuccess(true);
@@ -344,6 +364,24 @@ export const ProfileScreen = () => {
             </TouchableOpacity>
           </View>
 
+          {canRegisterClient(user) && !isAdmin ? (
+            <TouchableOpacity
+              style={styles.adminButton}
+              onPress={() => navigate("CadastrarCliente")}
+              activeOpacity={0.7}
+            >
+              <View style={styles.adminButtonIconContainer}>
+                <Ionicons name="person-add" size={24} color="#8c52ff" />
+              </View>
+              <View style={styles.adminButtonContent}>
+                <Text style={styles.adminButtonTitle}>Cadastrar cliente</Text>
+                <Text style={styles.adminCardDescription}>
+                  O novo cliente entra na sua operação.
+                </Text>
+              </View>
+            </TouchableOpacity>
+          ) : null}
+
           {/* Funcionalidades de Admin */}
           {isAdmin && (
             <View style={styles.adminCard}>
@@ -413,9 +451,7 @@ export const ProfileScreen = () => {
             if (!user?.id) return;
             try {
               setSavingProfile(true);
-              await userService.updateUser(user.id, {
-                photoBase64: base64 || null,
-              });
+              await persistProfilePhoto(user.id, base64 || null);
               await refreshUser();
               setShowSuccess(true);
               setSuccessMessage("Foto de perfil atualizada");

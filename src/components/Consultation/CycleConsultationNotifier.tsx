@@ -11,12 +11,14 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useConsultationScheduling } from "../../hooks/useConsultationScheduling";
 import {
   requestNotificationPermissions,
+  scheduleCycleConsultationNotifications,
   showCycleEndedConsultationNotification,
 } from "../../services/notificationServices";
 import {
   markCycleConsultationReminderSent,
   wasCycleConsultationReminderSent,
 } from "../../utils/consultationReminderStorage";
+import { getCycleNotificationInstants } from "../../utils/cycleNotificationSchedule";
 import { getPlanningCycleReminderKey } from "../../utils/planningCycle";
 import { useAuth } from "../../hooks/useAuth";
 import { useNavigation } from "../../routes/NavigationContext";
@@ -47,26 +49,42 @@ export const CycleConsultationNotifier: React.FC = () => {
   }, [user?.id]);
 
   useEffect(() => {
-    if (!user?.id || !shouldPulse) {
+    if (!user?.id) {
       setVisible(false);
       return;
     }
 
     const reminderKey = getPlanningCycleReminderKey(user.id, planning);
-    if (!reminderKey || notifiedKeysRef.current.has(reminderKey)) return;
+    if (!reminderKey) {
+      setVisible(false);
+      return;
+    }
 
     let cancelled = false;
 
     const notify = async () => {
+      const instants = getCycleNotificationInstants(planning);
+      const now = new Date();
+      const future = instants.filter((item) => item.at > now);
+      await scheduleCycleConsultationNotifications(future, reminderKey);
+      if (cancelled) return;
+      if (!shouldPulse) {
+        setVisible(false);
+        return;
+      }
+
+      setVisible(true);
+      if (notifiedKeysRef.current.has(reminderKey)) return;
       const alreadySent = await wasCycleConsultationReminderSent(reminderKey);
       if (cancelled || alreadySent) return;
+      const missed = instants.some((item) => item.at <= now);
+      if (!missed) return;
 
       notifiedKeysRef.current.add(reminderKey);
       await markCycleConsultationReminderSent(reminderKey);
-      setVisible(true);
       showCycleEndedConsultationNotification(preferredDayLabel, cycleEnded).catch(
-        () => {
-          // ignore push errors
+        (error) => {
+          console.error("[push] falha no aviso imediato de ciclo", error);
         },
       );
     };

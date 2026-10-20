@@ -10,14 +10,10 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../../hooks/useAuth";
-import { useUserChats } from "../../hooks/useUserChats";
+import { useGlobalChat, useUserChats } from "../../hooks/useUserChats";
 import { useNavigation } from "../../routes/NavigationContext";
-import {
-  requestNotificationPermissions,
-  showChatMessageNotification,
-} from "../../services/notificationServices";
+import { requestNotificationPermissions } from "../../services/notificationServices";
 import { userService } from "../../services/userServices";
-import chatService, { Chat } from "../../services/chatService";
 import { getChatLastMessageTime } from "../../utils/chatUtils";
 import { getActiveChatId } from "../../utils/chatActivity";
 
@@ -34,7 +30,8 @@ export const ChatMessageNotifier: React.FC = () => {
   const { user } = useAuth();
   const { navigate } = useNavigation();
   const { chats } = useUserChats(user?.id || null, user?.role || null);
-  const [globalChat, setGlobalChat] = useState<Chat | null>(null);
+  const globalChat = useGlobalChat();
+  const [appState, setAppState] = useState(AppState.currentState);
   const insets = useSafeAreaInsets();
   const [banner, setBanner] = useState<BannerState | null>(null);
   const slideAnim = useRef(new Animated.Value(-120)).current;
@@ -52,12 +49,9 @@ export const ChatMessageNotifier: React.FC = () => {
   }, [user?.id]);
 
   useEffect(() => {
-    if (!user?.id) {
-      setGlobalChat(null);
-      return;
-    }
-    return chatService.listenToChat("global", setGlobalChat);
-  }, [user?.id]);
+    const subscription = AppState.addEventListener("change", setAppState);
+    return () => subscription.remove();
+  }, []);
 
   useEffect(() => {
     if (!banner) return;
@@ -119,27 +113,52 @@ export const ChatMessageNotifier: React.FC = () => {
               continue;
             }
 
-            let senderName = senderCacheRef.current.get(senderId) || "";
-            if (!senderName) {
-              try {
-                const profile = await userService.getUserById(senderId);
-                senderName = getSenderDisplayName(profile);
-                senderCacheRef.current.set(senderId, senderName);
-              } catch {
-                senderName = "Nova mensagem";
+            const isGlobal =
+              chatId === "global" || chat.type === "global";
+            const mentionIds = Array.isArray(
+              (chat.lastMessage as { mentionUserIds?: string[] })
+                ?.mentionUserIds,
+            )
+              ? (chat.lastMessage as { mentionUserIds?: string[] })
+                  .mentionUserIds || []
+              : [];
+            // Bate-papo: banner interno só para quem foi @mencionado
+            // (igual à regra do push). Direto: qualquer mensagem.
+            if (isGlobal) {
+              if (!mentionIds.includes(user.id)) {
+                lastMessageTimesRef.current.set(chatId, currentTime);
+                continue;
               }
+            }
+
+            let senderName =
+              senderCacheRef.current.get(senderId) || "Nova mensagem";
+            if (!senderCacheRef.current.has(senderId)) {
+              userService
+                .getUserNotifyProfile(senderId)
+                .then((profile) => {
+                  if (!profile) return;
+                  senderCacheRef.current.set(
+                    senderId,
+                    getSenderDisplayName(profile),
+                  );
+                })
+                .catch(() => undefined);
             }
 
             if (cancelled) return;
 
-            const messageText = chat.lastMessage.text;
-            if (AppState.currentState !== "active") {
-              showChatMessageNotification(senderName, messageText, chatId).catch(
-                () => undefined,
-              );
-            } else {
-              setBanner({ chatId, senderName, messageText });
+            if (appState === "active") {
+              setBanner({
+                chatId,
+                senderName: isGlobal
+                  ? `${senderName} mencionou você`
+                  : senderName,
+                messageText: chat.lastMessage.text,
+              });
+              lastMessageTimesRef.current.set(chatId, currentTime);
             }
+            continue;
           }
         }
 
@@ -154,7 +173,7 @@ export const ChatMessageNotifier: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [chats, globalChat, user?.id]);
+  }, [appState, chats, globalChat, user?.id]);
 
   const openChat = () => {
     if (!banner) return;

@@ -1,4 +1,12 @@
-import React, { createContext, useContext, useState, ReactNode } from "react";
+import { perfMark, perfMeasure } from "../utils/perfMarks";
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useState,
+  ReactNode,
+} from "react";
 
 export type ScreenName =
   | "Login"
@@ -54,19 +62,21 @@ export const NavigationProvider = ({ children }: { children: ReactNode }) => {
   const [currentScreen, setCurrentScreen] = useState<ScreenName>("Login");
   const [params, setParams] = useState<any>(null);
 
-  const navigate = (screen: ScreenName, navigationParams?: any) => {
-    if (__DEV__)
-      console.log(
-        "🗺️ [NAVIGATION] Navegando para:",
-        screen,
-        navigationParams ? "com params" : "",
-      );
+  const navigate = useCallback((screen: ScreenName, navigationParams?: any) => {
+    perfMark("interaction.tap");
+    perfMark(`nav.${screen}`);
     setParams(navigationParams || null);
     setCurrentScreen(screen);
-  };
+    perfMeasure("interaction.handled", "interaction.tap");
+  }, []);
+
+  const value = useMemo(
+    () => ({ currentScreen, navigate, params }),
+    [currentScreen, navigate, params],
+  );
 
   return (
-    <NavigationContext.Provider value={{ currentScreen, navigate, params }}>
+    <NavigationContext.Provider value={value}>
       {children}
     </NavigationContext.Provider>
   );

@@ -19,6 +19,16 @@ export const incomeValueError = (
   return "";
 };
 
+export const incomeTransactionLabel = (income: {
+  description?: string | null;
+  origin?: string | null;
+}): string => {
+  const description = String(income.description || "").trim() || "Sem descrição";
+  const origin = normalizeIncomeOrigin(income.origin);
+  if (!origin || origin === description) return description;
+  return `${description}\n${origin}`;
+};
+
 export const normalizeIncomeOrigin = (raw?: string | null): string => {
   const text = String(raw || "").trim();
   if (!text) return "";

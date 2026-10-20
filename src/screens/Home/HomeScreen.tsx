@@ -36,7 +36,9 @@ import {
   syncExpectedIncomeNotifications,
 } from "../../services/notificationServices";
 import { formatCurrency } from "../../utils/currencyUtils";
+import { incomeTransactionLabel } from "../../utils/incomeEntry";
 import { computePlanningTotals } from "../../utils/planningDisplayUtils";
+import { perfMark, perfMeasure } from "../../utils/perfMarks";
 import MaskedAmount from "../../components/ui/MaskedAmount";
 import {
   formatDateForDisplay,
@@ -202,6 +204,7 @@ export const HomeScreen = () => {
     loadInProgressRef.current = true;
 
     try {
+      perfMark("home.load.start");
       console.log("🏠 [HOME] Iniciando carregamento de dados...", {
         userId: user.id,
         force,
@@ -222,6 +225,7 @@ export const HomeScreen = () => {
       try {
         if (user.role !== "consultor" && !user.isAdmin) {
           planning = await planningServices.getPlanning(user.id);
+          perfMeasure("home.planning", "home.load.start");
 
           if (planning?.consumoModeradoCycleStartedAt) {
             const cycleStartedAt = new Date(
@@ -264,32 +268,7 @@ export const HomeScreen = () => {
       });
 
       // Carregar totais, transações e dados dos gráficos em paralelo (respeitando ciclo)
-      const [
-        incomeTotal,
-        expenseTotal,
-        allIncomes,
-        allExpenses,
-        expensesByCategory,
-        last7DaysIncomes,
-        last7DaysExpenses,
-      ] = await Promise.all([
-        incomeServices
-          .getIncomesTotal(user.id, activeStartDate, activeEndDate, {
-            createdAtFrom,
-          })
-          .catch((err) => {
-            console.error("❌ [HOME] Erro ao buscar totais de renda:", err);
-            return 0;
-          }),
-        expenseServices
-          .getExpensesTotal(user.id, activeStartDate, activeEndDate, {
-            excludeSectionOnly: true,
-            createdAtFrom,
-          })
-          .catch((err) => {
-            console.error("❌ [HOME] Erro ao buscar totais de gastos:", err);
-            return 0;
-          }),
+      const [allIncomes, allExpenses] = await Promise.all([
         incomeServices
           .getIncomes(user.id, {
             startDate: activeStartDate,
@@ -304,58 +283,34 @@ export const HomeScreen = () => {
           .getExpenses(user.id, {
             startDate: activeStartDate,
             endDate: activeEndDate,
+            excludeSectionOnly: true,
             createdAtFrom,
           })
           .catch((err) => {
             console.error("❌ [HOME] Erro ao buscar gastos:", err);
             return [];
           }),
-        expenseServices
-          .getExpensesGroupedByCategory(
-            user.id,
-            activeStartDate,
-            activeEndDate,
-            { excludeSectionOnly: true, createdAtFrom },
-          )
-          .catch((err) => {
-            console.error(
-              "❌ [HOME] Erro ao buscar gastos por categoria:",
-              err,
-            );
-            return [];
-          }),
-        canLoadLineChart
-          ? incomeServices
-              .getIncomes(user.id, {
-                startDate: lineChartStartDate,
-                endDate: activeEndDate,
-                createdAtFrom,
-              })
-              .catch((err) => {
-                console.error(
-                  "❌ [HOME] Erro ao buscar rendas dos últimos 7 dias:",
-                  err,
-                );
-                return [];
-              })
-          : Promise.resolve([]),
-        canLoadLineChart
-          ? expenseServices
-              .getExpenses(user.id, {
-                startDate: lineChartStartDate,
-                endDate: activeEndDate,
-                excludeSectionOnly: true,
-                createdAtFrom,
-              })
-              .catch((err) => {
-                console.error(
-                  "❌ [HOME] Erro ao buscar gastos dos últimos 7 dias:",
-                  err,
-                );
-                return [];
-              })
-          : Promise.resolve([]),
       ]);
+      const incomeTotal = allIncomes.reduce(
+        (sum, income) => sum + Number(income.value || 0),
+        0,
+      );
+      const expenseTotal = allExpenses.reduce(
+        (sum, expense) => sum + Number(expense.value || 0),
+        0,
+      );
+      const expensesByCategory = expenseServices.groupLoadedExpenses(allExpenses);
+      const withinLineChart = (value: unknown) => {
+        const date =
+          value instanceof Date ? value : new Date(value as string | number);
+        return !Number.isNaN(date.getTime()) && date >= lineChartStartDate;
+      };
+      const last7DaysIncomes = canLoadLineChart
+        ? allIncomes.filter((income) => withinLineChart(income.date))
+        : [];
+      const last7DaysExpenses = canLoadLineChart
+        ? allExpenses.filter((expense) => withinLineChart(expense.date))
+        : [];
 
       setPlanningData(planning || null);
 
@@ -364,12 +319,6 @@ export const HomeScreen = () => {
       let calcExpectedIncomes: number | null = null;
       let calcExpectedSavings: number | null = null;
       if (planning) {
-        console.log("🏠 [HOME] planning data:", planning);
-        console.log(
-          "🏠 [HOME] planning.expectedExpenses:",
-          planning.expectedExpenses,
-        );
-
         const planningTotals = computePlanningTotals(planning);
         calcExpectedExpenses = planningTotals.totalCashExpenses;
         calcExpectedIncomes = planningTotals.totalResources;
@@ -380,20 +329,7 @@ export const HomeScreen = () => {
       setExpectedIncomes(calcExpectedIncomes);
       setExpectedSavings(calcExpectedSavings);
 
-      // Sincronizar notificações de renda prevista (somente cliente comum/premium).
-      if (planning && user.role !== "consultor" && !user.isAdmin) {
-        const hasPermission = await requestNotificationPermissions();
-        if (hasPermission) {
-          await syncExpectedIncomeNotifications(
-            user.id,
-            (planning.expectedIncomes || []).map((income: any) => ({
-              id: String(income.id || ""),
-              source: String(income.source || "Renda esperada"),
-              expectedMonth: income.expectedMonth,
-            })),
-          );
-        }
-      }
+      perfMeasure("home.incomes-expenses", "home.load.start");
 
       console.log("🏠 [HOME] Dados recebidos:", {
         incomeTotal,
@@ -468,14 +404,7 @@ export const HomeScreen = () => {
         return;
       }
 
-      if (user.role !== "consultor" && !user.isAdmin) {
-        const performance =
-          await budgetServices.getConsumoModeradoPerformance(user.id);
-        if (requestId !== loadRequestIdRef.current) {
-          return;
-        }
-        setConsumoModeradoPerformance(performance);
-      } else {
+      if (user.role === "consultor" || user.isAdmin) {
         setConsumoModeradoPerformance(null);
       }
 
@@ -498,6 +427,36 @@ export const HomeScreen = () => {
       setBalance(calculatedBalance);
       setAllTransactions(allTransactionsWithType);
       setHasLoaded(true);
+      perfMeasure("home.ready", "home.load.start");
+
+      if (user.role !== "consultor" && !user.isAdmin) {
+        // Secundário: não segura a tela. O card atualiza quando chegar.
+        void budgetServices
+          .getConsumoModeradoPerformance(user.id, {
+            planning,
+            expenses: allExpenses,
+          })
+          .then((performance) => {
+            if (requestId !== loadRequestIdRef.current) return;
+            setConsumoModeradoPerformance(performance);
+            perfMeasure("home.performance", "home.load.start");
+          })
+          .catch(() => undefined);
+      }
+
+      if (planning && user.role !== "consultor" && !user.isAdmin) {
+        const expected = (planning.expectedIncomes || []).map((income: any) => ({
+          id: String(income.id || ""),
+          source: String(income.source || "Renda esperada"),
+          expectedMonth: income.expectedMonth,
+        }));
+        void requestNotificationPermissions()
+          .then((hasPermission) => {
+            if (!hasPermission) return;
+            return syncExpectedIncomeNotifications(user.id, expected);
+          })
+          .catch(() => undefined);
+      }
 
       // Animar entrada
       Animated.parallel([
@@ -1206,7 +1165,7 @@ export const HomeScreen = () => {
           <View style={styles.transactionContent}>
             <View style={styles.transactionHeader}>
               <Text style={styles.transactionDescription} numberOfLines={3}>
-                {income.description || "Sem descrição"}
+                {incomeTransactionLabel(income)}
               </Text>
               <View style={styles.transactionActions}>
                 <TouchableOpacity

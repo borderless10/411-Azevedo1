@@ -18,11 +18,11 @@ import { useAuth } from "../../hooks/useAuth";
 import { useNavigation, ScreenName } from "../../routes/NavigationContext";
 import { useTheme } from "../../contexts/ThemeContext";
 import { planningServices } from "../../services/planningServices";
-import { useUserChats } from "../../hooks/useUserChats";
-import chatService, { Chat } from "../../services/chatService";
+import { useGlobalChat, useUserChats } from "../../hooks/useUserChats";
 import { isChatUnreadForUser } from "../../utils/chatUtils";
 import { useConsultationScheduling } from "../../hooks/useConsultationScheduling";
 import { isAppClientUser } from "../../services/userServices";
+import { perfMeasure } from "../../utils/perfMarks";
 
 interface SidebarProps {
   visible: boolean;
@@ -48,7 +48,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const { navigate, currentScreen, params } = useNavigation() as any;
   const { colors } = useTheme();
   const { chats } = useUserChats(user?.id || null, user?.role || null);
-  const [globalChat, setGlobalChat] = useState<Chat | null>(null);
+  const globalChat = useGlobalChat();
   const slideAnim = useRef(new Animated.Value(-300)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const isConsultor =
@@ -83,25 +83,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
   );
 
   useEffect(() => {
-    if (!user?.id) {
-      setGlobalChat(null);
-      return;
-    }
-    return chatService.listenToChat("global", setGlobalChat);
-  }, [user?.id]);
-
-  useEffect(() => {
     if (docked) return;
     if (visible) {
+      perfMeasure("sidebar.firstPaint", "sidebar.open.press");
+      perfMeasure("interaction.handled", "interaction.tap");
       Animated.parallel([
         Animated.timing(slideAnim, {
           toValue: 0,
-          duration: 300,
+          duration: 180,
           useNativeDriver: true,
         }),
         Animated.timing(fadeAnim, {
           toValue: 1,
-          duration: 300,
+          duration: 180,
           useNativeDriver: true,
         }),
       ]).start();
@@ -109,17 +103,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
       Animated.parallel([
         Animated.timing(slideAnim, {
           toValue: -300,
-          duration: 250,
+          duration: 150,
           useNativeDriver: true,
         }),
         Animated.timing(fadeAnim, {
           toValue: 0,
-          duration: 250,
+          duration: 150,
           useNativeDriver: true,
         }),
       ]).start();
     }
-  }, [visible, docked]);
+  }, [visible, docked, slideAnim, fadeAnim]);
 
   useEffect(() => {
     if (!shouldPulseConsultation) {
@@ -127,17 +121,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
       return;
     }
 
+    // Só anima opacity (native driver) para não travar o JS thread / toques.
     const loop = Animated.loop(
       Animated.sequence([
         Animated.timing(consultationPulseAnim, {
           toValue: 0.35,
           duration: 650,
-          useNativeDriver: false,
+          useNativeDriver: true,
         }),
         Animated.timing(consultationPulseAnim, {
           toValue: 1,
           duration: 650,
-          useNativeDriver: false,
+          useNativeDriver: true,
         }),
       ]),
     );
@@ -395,11 +390,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const renderConsultationItem = () => {
     if (!isCommonUser) return null;
 
-    const pulseBackground = consultationPulseAnim.interpolate({
-      inputRange: [0.35, 1],
-      outputRange: ["rgba(255, 77, 109, 0.28)", "transparent"],
-    });
-
     return (
       <TouchableOpacity
         key="consultation-scheduling"
@@ -408,14 +398,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
           styles.consultationMenuItem,
           { borderBottomColor: colors.border },
         ]}
+        activeOpacity={0.7}
+        delayPressIn={0}
         onPress={() => {
           handleNavigateWithParams("ConsultationScheduling");
         }}
       >
         <Animated.View
+          pointerEvents="none"
           style={[
             styles.consultationPulseBackground,
-            { backgroundColor: pulseBackground },
+            {
+              backgroundColor: "rgba(255, 77, 109, 0.28)",
+              opacity: consultationPulseAnim,
+            },
           ]}
         />
         <View style={styles.menuItemLeft}>
@@ -496,6 +492,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
             { backgroundColor: colors.background },
           ],
         ]}
+        activeOpacity={0.7}
+        delayPressIn={0}
         onPress={() => handleNavigate(item.id)}
       >
         <View style={styles.menuItemLeft}>
@@ -617,10 +615,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </View>
     );
   };
-
-  if (!visible && !docked) {
-    return null;
-  }
 
   const panel = (
     <>
@@ -776,7 +770,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
   }
 
   return (
-    <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
+    <Animated.View
+      pointerEvents={visible ? "auto" : "none"}
+      style={[styles.overlay, { opacity: fadeAnim }]}
+    >
       <TouchableOpacity
         style={StyleSheet.absoluteFillObject}
         activeOpacity={1}
@@ -791,7 +788,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
           },
           style,
         ]}
-        onStartShouldSetResponder={() => true}
       >
         {panel}
       </Animated.View>

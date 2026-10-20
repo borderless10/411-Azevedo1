@@ -869,9 +869,16 @@ export const budgetServices = {
 
   async getConsumoModeradoPerformance(
     userId: string,
+    preloaded?: {
+      planning?: Awaited<ReturnType<typeof planningServices.getPlanning>>;
+      expenses?: Awaited<ReturnType<typeof expenseServices.getExpenses>>;
+    },
   ): Promise<ConsumoModeradoPerformance | null> {
     try {
-      const planning = await planningServices.getPlanning(userId);
+      const planning =
+        preloaded?.planning !== undefined
+          ? preloaded.planning
+          : await planningServices.getPlanning(userId);
       const budgetValue = Number(planning?.consumoModerado ?? 0);
       const plannedCycleDurationDays = Number(
         planning?.consumoModeradoCycleDurationDays || 0,
@@ -907,11 +914,13 @@ export const budgetServices = {
           this.getCurrentBudget(userId),
           this.getCurrentBudget(userId, 1),
           this.getCurrentBudget(userId, 2),
-          expenseServices.getExpenses(userId, {
-            startDate: start,
-            endDate: end,
-            createdAtFrom: cycleStartedAtRaw || undefined,
-          }),
+          preloaded?.expenses
+            ? Promise.resolve(preloaded.expenses)
+            : expenseServices.getExpenses(userId, {
+                startDate: start,
+                endDate: end,
+                createdAtFrom: cycleStartedAtRaw || undefined,
+              }),
         ]);
       const zeroConfirmedDays = Array.from(
         new Set([

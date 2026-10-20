@@ -42,6 +42,9 @@
         "ascApiKeyId": "368P79H8BN",
         "ascApiKeyIssuerId": "611ffa7f-efe9-47c2-8770-cf2efe9d5660"
       }
+    },
+    "ios-appstore": {
+      "extends": "production"
     }
   }
 }

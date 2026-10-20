@@ -819,23 +819,7 @@ export const expenseServices = {
   /**
    * Agrupar gastos por categoria
    */
-  async getExpensesGroupedByCategory(
-    userId: string,
-    startDate?: Date,
-    endDate?: Date,
-    options?: { excludeSectionOnly?: boolean; createdAtFrom?: Date },
-  ): Promise<ExpenseByCategory[]> {
-    console.log("💸 [EXPENSE SERVICE] Agrupando gastos por categoria...");
-
-    try {
-      const expenses = await this.getExpenses(userId, {
-        startDate,
-        endDate,
-        excludeSectionOnly: options?.excludeSectionOnly,
-        createdAtFrom: options?.createdAtFrom,
-      });
-
-      // Agrupar por categoria
+  groupLoadedExpenses(expenses: Expense[]): ExpenseByCategory[] {
       const grouped: Record<string, Expense[]> = {};
       expenses.forEach((expense) => {
         if (!grouped[expense.category]) {
@@ -863,19 +847,22 @@ export const expenseServices = {
 
       // Ordenar por total (maior primeiro)
       result.sort((a, b) => b.total - a.total);
-
-      console.log(
-        "💸 [EXPENSE SERVICE] Gastos agrupados por categoria:",
-        result.length,
-      );
       return result;
-    } catch (error) {
-      console.error(
-        "❌ [EXPENSE SERVICE] Erro ao agrupar gastos por categoria:",
-        error,
-      );
-      throw error;
-    }
+  },
+
+  async getExpensesGroupedByCategory(
+    userId: string,
+    startDate?: Date,
+    endDate?: Date,
+    options?: { excludeSectionOnly?: boolean; createdAtFrom?: Date },
+  ): Promise<ExpenseByCategory[]> {
+    const expenses = await this.getExpenses(userId, {
+      startDate,
+      endDate,
+      excludeSectionOnly: options?.excludeSectionOnly,
+      createdAtFrom: options?.createdAtFrom,
+    });
+    return this.groupLoadedExpenses(expenses);
   },
 
   /**
@@ -888,8 +875,12 @@ export const expenseServices = {
     console.log("💸 [EXPENSE SERVICE] Buscando últimos", limitCount, "gastos");
 
     try {
-      // Buscar todos os gastos e ordenar no cliente (evita necessidade de índice composto)
-      const q = query(getExpensesCollection(), where("userId", "==", userId));
+      const q = query(
+        getExpensesCollection(),
+        where("userId", "==", userId),
+        orderBy("createdAt", "desc"),
+        limit(limitCount),
+      );
 
       const snapshot = await getDocs(q);
       let expenses = snapshot.docs.map((doc) =>
@@ -910,10 +901,13 @@ export const expenseServices = {
       );
       // Se houver erro de índice, retornar array vazio
       if (error?.code === "failed-precondition") {
-        console.warn(
-          "⚠️ [EXPENSE SERVICE] Índice não encontrado, retornando array vazio",
+        const snapshot = await getDocs(
+          query(getExpensesCollection(), where("userId", "==", userId)),
         );
-        return [];
+        return snapshot.docs
+          .map((doc) => convertExpenseFromFirestore(getDocData(doc)))
+          .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+          .slice(0, limitCount);
       }
       throw error;
     }

@@ -35,6 +35,7 @@ import {
 } from "../../types/creditCard";
 import { ConsultantCardInvoice } from "../../types/planning";
 import { addMonths } from "../../utils/dateUtils";
+import { canOperateAsConsultant } from "../../utils/staffAccess";
 import { toInvoiceKey } from "../../utils/creditCardUtils";
 import {
   applyCurrencyMask,
@@ -68,7 +69,7 @@ export const CardsScreen: React.FC = () => {
   const targetUserId = clientId || user?.id;
 
   // Consultant is managing a client's cards
-  const isConsultorManaging = !!clientId && user?.role === "consultor";
+  const isConsultorManaging = !!clientId && canOperateAsConsultant(user);
 
   // Only consultants managing a specific client can create/edit/delete cards
   const canEdit = isConsultorManaging;

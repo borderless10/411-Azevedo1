@@ -47,7 +47,9 @@ if (canUseNativeNotifications) {
       const inForeground = AppState.currentState === "active";
       const viewingChat = Boolean(chatId) && getActiveChatId() === chatId;
 
-      if (inForeground && (viewingChat || isChatPush)) {
+      // Só silencia push remoto se o usuário já está olhando aquele chat.
+      // Fora do app (background/killed) o SO entrega normalmente.
+      if (inForeground && isChatPush && viewingChat) {
         return {
           shouldShowAlert: false,
           shouldPlaySound: false,
@@ -657,6 +659,66 @@ export const showChatMessageNotification = async (
     type: "chat_message",
     chatId,
   }, { channelId: NOTIFICATION_CHANNEL_CHAT });
+};
+
+const CYCLE_NOTIFICATION_TYPE = "cycle_consultation";
+
+export const scheduleCycleConsultationNotifications = async (
+  instants: Array<{ kind: "renewal" | "ended"; at: Date }>,
+  cycleKey: string,
+): Promise<number> => {
+  if (!canUseNativeNotifications) return 0;
+
+  try {
+    const hasPermission = await requestNotificationPermissions();
+    if (!hasPermission) return 0;
+
+    const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+    await Promise.all(
+      scheduled
+        .filter(
+          (item) => item.content.data?.type === CYCLE_NOTIFICATION_TYPE,
+        )
+        .map((item) =>
+          Notifications.cancelScheduledNotificationAsync(item.identifier),
+        ),
+    );
+
+    const now = new Date();
+    let created = 0;
+    for (const instant of instants) {
+      if (!(instant.at instanceof Date) || instant.at <= now) continue;
+      await Notifications.scheduleNotificationAsync({
+        content: withChannel(
+          {
+            title:
+              instant.kind === "ended"
+                ? "Seu ciclo acabou!"
+                : "Seu ciclo acaba em breve",
+            body: "Agende uma consultoria com seu consultor.",
+            data: {
+              type: CYCLE_NOTIFICATION_TYPE,
+              kind: instant.kind,
+              cycleKey,
+            },
+            sound: true,
+          },
+          NOTIFICATION_CHANNEL_REMINDERS,
+        ),
+        trigger: {
+          date: instant.at,
+          type: Notifications.SchedulableTriggerInputTypes.DATE,
+          channelId: NOTIFICATION_CHANNEL_REMINDERS,
+        },
+      });
+      created += 1;
+    }
+    console.log("[push] ciclo agendado", { quantidade: created, cycleKey });
+    return created;
+  } catch (error) {
+    console.error("[push] falha ao agendar ciclo", error);
+    return 0;
+  }
 };
 
 /**
