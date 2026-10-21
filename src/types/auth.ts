@@ -39,6 +39,10 @@ export interface User {
   consultationBookedCycleStartedAt?: string;
   consultationSchedulingRequestPending?: boolean;
   consultationSchedulingRequestedAt?: Date;
+  consultationPreviousBookedDay?: string;
+  consultationPreviousBookedCycleStartedAt?: string;
+  consultationBookingReleasedAt?: Date;
+  consultationBookingReleasedBy?: string | null;
   expoPushToken?: string;
   activeChatId?: string | null;
   presenceState?: "foreground" | "background";

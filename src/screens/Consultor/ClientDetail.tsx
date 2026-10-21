@@ -45,6 +45,7 @@ import { isCoupleAccount } from "../../utils/coupleAccount";
 import {
   defaultConsultationPreferredDay,
   formatConsultationPreferredDay,
+  hasConsultationBookingLock,
   parseConsultationPreferredDay,
   toConsultationPreferredDayStorage,
 } from "../../utils/consultationScheduling";
@@ -79,6 +80,9 @@ export const ClientDetail: React.FC = () => {
   const [hasConsultationPreferredDay, setHasConsultationPreferredDay] =
     useState(false);
   const [savingConsultationUrl, setSavingConsultationUrl] = useState(false);
+  const [confirmingBookingRelease, setConfirmingBookingRelease] =
+    useState(false);
+  const [releasingBooking, setReleasingBooking] = useState(false);
   const insets = useSafeAreaInsets();
 
   const isSameDay = (a: Date | string, b: Date) => {
@@ -155,6 +159,50 @@ export const ClientDetail: React.FC = () => {
       );
     } finally {
       setSavingConsultationUrl(false);
+    }
+  };
+
+  const hasBookedConsultation = hasConsultationBookingLock(
+    clientDoc?.consultationBookedDay,
+    clientDoc?.consultationBookedCycleStartedAt,
+  );
+  const bookedDayLabel = formatConsultationPreferredDay(
+    clientDoc?.consultationBookedDay,
+  );
+
+  const handleReleaseConsultationBooking = async () => {
+    if (!clientId) return;
+
+    try {
+      setReleasingBooking(true);
+      await userService.releaseConsultationBooking(clientId, user?.id || null);
+      setClientDoc((current: any) =>
+        current
+          ? {
+              ...current,
+              consultationBookedDay: "",
+              consultationBookedCycleStartedAt: "",
+              consultationSchedulingRequestPending: false,
+              consultationPreviousBookedDay:
+                current.consultationBookedDay || "",
+              consultationPreviousBookedCycleStartedAt:
+                current.consultationBookedCycleStartedAt || "",
+            }
+          : current,
+      );
+      setConfirmingBookingRelease(false);
+      Alert.alert(
+        "Agendamento liberado",
+        "O botão Agende sua consultoria voltou a ficar ativo para este cliente. O link e o melhor dia foram mantidos.",
+      );
+    } catch (error: any) {
+      console.error("Erro ao liberar agendamento do cliente:", error);
+      Alert.alert(
+        "Erro",
+        error?.message || "Não foi possível liberar o agendamento agora.",
+      );
+    } finally {
+      setReleasingBooking(false);
     }
   };
 
@@ -466,6 +514,66 @@ export const ClientDetail: React.FC = () => {
                   <Text style={styles.consultationClearDate}>Remover melhor dia</Text>
                 </TouchableOpacity>
               </>
+            ) : null}
+
+            {hasBookedConsultation ? (
+              <View
+                style={[
+                  styles.consultationReleaseBox,
+                  { borderColor: colors.border },
+                ]}
+              >
+                <Text
+                  style={[styles.consultationReleaseTitle, { color: colors.text }]}
+                >
+                  Consultoria marcada neste ciclo
+                  {bookedDayLabel ? `: ${bookedDayLabel}` : ""}
+                </Text>
+                <Text
+                  style={[
+                    styles.consultationPreview,
+                    { color: colors.textSecondary },
+                  ]}
+                >
+                  Se o cliente confirmou sem querer, libere para ele poder
+                  agendar de novo. O link e o melhor dia não serão apagados.
+                </Text>
+                {confirmingBookingRelease ? (
+                  <>
+                    <TouchableOpacity
+                      style={[
+                        styles.consultationReleaseButton,
+                        releasingBooking && styles.consultationSaveDisabled,
+                      ]}
+                      onPress={handleReleaseConsultationBooking}
+                      disabled={releasingBooking}
+                    >
+                      {releasingBooking ? (
+                        <ActivityIndicator color="#fff" />
+                      ) : (
+                        <Text style={styles.consultationSaveText}>
+                          Confirmar liberação
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => setConfirmingBookingRelease(false)}
+                      disabled={releasingBooking}
+                    >
+                      <Text style={styles.consultationClearDate}>Cancelar</Text>
+                    </TouchableOpacity>
+                  </>
+                ) : (
+                  <TouchableOpacity
+                    style={styles.consultationReleaseButton}
+                    onPress={() => setConfirmingBookingRelease(true)}
+                  >
+                    <Text style={styles.consultationSaveText}>
+                      Liberar botão de agendamento novamente
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             ) : null}
 
             <TouchableOpacity
@@ -1257,6 +1365,22 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "600",
     marginTop: 4,
+  },
+  consultationReleaseBox: {
+    padding: 12,
+    borderWidth: 1,
+    borderRadius: 8,
+    gap: 6,
+  },
+  consultationReleaseTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  consultationReleaseButton: {
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: "center",
+    backgroundColor: "#ff4d6d",
   },
   consultationAddDateButton: {
     paddingVertical: 12,

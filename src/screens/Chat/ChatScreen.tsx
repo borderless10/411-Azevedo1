@@ -156,12 +156,25 @@ export const ChatScreen: React.FC = () => {
     const hideSub = Keyboard.addListener(hideEvent, () => {
       setKeyboardInset(0);
     });
+    // iOS: WillHide pode não disparar ao fechar a conversa ou trocar de tela;
+    // o DidHide garante o reset para o campo não ficar flutuando.
+    const didHideSub =
+      Platform.OS === "ios"
+        ? Keyboard.addListener("keyboardDidHide", () => setKeyboardInset(0))
+        : null;
 
     return () => {
       changeSub.remove();
       hideSub.remove();
+      didHideSub?.remove();
     };
   }, [windowSize.height]);
+
+  // Fechou ou trocou de conversa: nenhum inset de teclado pode sobrar.
+  useEffect(() => {
+    setKeyboardInset(0);
+    setShowEmojiPicker(false);
+  }, [selectedChatId]);
 
   const [userMap, setUserMap] = useState<Record<string, any>>({});
   const [previewSenderMap, setPreviewSenderMap] = useState<Record<string, string>>({});
@@ -1669,6 +1682,10 @@ export const ChatScreen: React.FC = () => {
             </View>
           ) : null}
 
+          {inputText.length >= 500 ? (
+            <Text style={styles.charCounter}>{inputText.length}/4000</Text>
+          ) : null}
+
           <View style={styles.inputContainer}>
             <TouchableOpacity
               style={styles.emojiToggleButton}
@@ -1694,7 +1711,7 @@ export const ChatScreen: React.FC = () => {
                 setInputSelection(event.nativeEvent.selection)
               }
               multiline
-              maxLength={500}
+              maxLength={4000}
               textAlignVertical="center"
             />
             <TouchableOpacity
@@ -2220,6 +2237,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     alignItems: "flex-end",
+  },
+  charCounter: {
+    alignSelf: "flex-end",
+    paddingHorizontal: 14,
+    paddingTop: 6,
+    fontSize: 11,
+    color: "#888",
   },
   emojiToggleButton: {
     width: 40,

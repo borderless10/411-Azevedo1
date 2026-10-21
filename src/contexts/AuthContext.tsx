@@ -10,6 +10,7 @@ import React, {
 import { authServices } from "../services/authServices";
 import { perfMark, perfMeasure } from "../utils/perfMarks";
 import { userService } from "../services/userServices";
+import { setWatchdogUser } from "../services/sessionWatchdog";
 import { updateOverdueBills } from "../services/billServices";
 import { User, LoginCredentials, RegisterCredentials, CoupleMember } from "../types/auth";
 import {
@@ -98,6 +99,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
     setActiveCoupleMemberState(null);
   };
+
+  useEffect(() => {
+    setWatchdogUser(user?.id || null);
+  }, [user?.id]);
 
   useEffect(() => {
     // Observar mudanças no estado de autenticação

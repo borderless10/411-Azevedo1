@@ -3,5 +3,5 @@
   "compilerOptions": {
     "strict": true
   },
-  "exclude": ["src/utils/planningBillRules.test.ts", "src/utils/deliveryRules.test.ts", "src/utils/chatMessagePipeline.test.ts", "src/utils/listenerOwnership.test.ts"]
+  "exclude": ["src/utils/planningBillRules.test.ts", "src/utils/deliveryRules.test.ts", "src/utils/chatMessagePipeline.test.ts", "src/utils/listenerOwnership.test.ts", "src/utils/consultationScheduling.test.ts"]
 }

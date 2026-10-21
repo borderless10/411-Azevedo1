@@ -23,6 +23,8 @@ import {
 } from "../../utils/coupleAccount";
 import {
   defaultConsultationPreferredDay,
+  formatConsultationPreferredDay,
+  hasConsultationBookingLock,
   parseConsultationPreferredDay,
   toConsultationPreferredDayStorage,
 } from "../../utils/consultationScheduling";
@@ -54,6 +56,12 @@ export const EditUserScreen: React.FC = ({}: any) => {
   >(null);
   const [hasConsultationPreferredDay, setHasConsultationPreferredDay] =
     useState(false);
+  const [consultationBookedDay, setConsultationBookedDay] = useState("");
+  const [consultationBookedCycleStartedAt, setConsultationBookedCycleStartedAt] =
+    useState("");
+  const [confirmingBookingRelease, setConfirmingBookingRelease] =
+    useState(false);
+  const [releasingBooking, setReleasingBooking] = useState(false);
   const [feedback, setFeedback] = useState<{
     visible: boolean;
     title: string;
@@ -97,6 +105,11 @@ export const EditUserScreen: React.FC = ({}: any) => {
         setCoupleMember1Name(u.coupleMember1Name || "");
         setCoupleMember2Name(u.coupleMember2Name || "");
         setConsultationSchedulingUrl(u.consultationSchedulingUrl || "");
+        setConsultationBookedDay(u.consultationBookedDay || "");
+        setConsultationBookedCycleStartedAt(
+          u.consultationBookedCycleStartedAt || "",
+        );
+        setConfirmingBookingRelease(false);
         const parsedPreferredDay = parseConsultationPreferredDay(
           u.consultationPreferredDate,
         );
@@ -166,7 +179,38 @@ export const EditUserScreen: React.FC = ({}: any) => {
     }
   };
 
+  const handleReleaseConsultationBooking = async () => {
+    if (!userId) return;
+    setReleasingBooking(true);
+    try {
+      await userService.releaseConsultationBooking(userId, user?.id || null);
+      setConsultationBookedDay("");
+      setConsultationBookedCycleStartedAt("");
+      setConfirmingBookingRelease(false);
+      setFeedback({
+        visible: true,
+        title: "Agendamento liberado",
+        message:
+          "O botão Agende sua consultoria voltou a ficar ativo para este cliente. O link e o melhor dia foram mantidos.",
+      });
+    } catch (error) {
+      console.error("Erro ao liberar agendamento do usuário", error);
+      setFeedback({
+        visible: true,
+        title: "Erro",
+        message: "Não foi possível liberar o agendamento agora.",
+      });
+    } finally {
+      setReleasingBooking(false);
+    }
+  };
+
   const isClientRole = role === "user" || role === "cliente_premium";
+  const hasBookedConsultation = hasConsultationBookingLock(
+    consultationBookedDay,
+    consultationBookedCycleStartedAt,
+  );
+  const bookedDayLabel = formatConsultationPreferredDay(consultationBookedDay);
 
   return (
     <Layout
@@ -427,6 +471,64 @@ export const EditUserScreen: React.FC = ({}: any) => {
                     <Text style={styles.clearDateText}>Remover melhor dia</Text>
                   </TouchableOpacity>
                 ) : null}
+
+                {hasBookedConsultation ? (
+                  <View
+                    style={[
+                      styles.releaseBox,
+                      { borderColor: colors.border },
+                    ]}
+                  >
+                    <Text style={[styles.releaseTitle, { color: colors.text }]}>
+                      Consultoria marcada neste ciclo
+                      {bookedDayLabel ? `: ${bookedDayLabel}` : ""}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.fieldHint,
+                        { color: colors.textSecondary },
+                      ]}
+                    >
+                      Se o cliente confirmou sem querer, libere para ele poder
+                      agendar de novo. O link e o melhor dia não serão apagados.
+                    </Text>
+                    {confirmingBookingRelease ? (
+                      <>
+                        <TouchableOpacity
+                          style={[
+                            styles.releaseButton,
+                            releasingBooking && styles.saveDisabled,
+                          ]}
+                          onPress={handleReleaseConsultationBooking}
+                          disabled={releasingBooking}
+                        >
+                          {releasingBooking ? (
+                            <ActivityIndicator color="#fff" />
+                          ) : (
+                            <Text style={styles.releaseButtonText}>
+                              Confirmar liberação
+                            </Text>
+                          )}
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() => setConfirmingBookingRelease(false)}
+                          disabled={releasingBooking}
+                        >
+                          <Text style={styles.clearDateText}>Cancelar</Text>
+                        </TouchableOpacity>
+                      </>
+                    ) : (
+                      <TouchableOpacity
+                        style={styles.releaseButton}
+                        onPress={() => setConfirmingBookingRelease(true)}
+                      >
+                        <Text style={styles.releaseButtonText}>
+                          Liberar botão de agendamento novamente
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                ) : null}
               </View>
             )}
 
@@ -531,6 +633,31 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginTop: 4,
     fontWeight: "600",
+  },
+  releaseBox: {
+    marginTop: 16,
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    gap: 6,
+  },
+  releaseTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  releaseButton: {
+    marginTop: 6,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    alignItems: "center",
+    backgroundColor: "#ff4d6d",
+  },
+  releaseButtonText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 14,
+    textAlign: "center",
   },
   datePicker: {
     marginBottom: 0,

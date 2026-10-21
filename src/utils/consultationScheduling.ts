@@ -68,3 +68,29 @@ export const isConsultationBookedForCycle = (
   if (String(bookedCycleStartedAt || "") !== cycleStartKey) return false;
   return parseConsultationPreferredDay(bookedDay) !== null;
 };
+
+export const hasConsultationBookingLock = (
+  bookedDay: string | null | undefined,
+  bookedCycleStartedAt: string | null | undefined,
+): boolean =>
+  parseConsultationPreferredDay(bookedDay) !== null &&
+  String(bookedCycleStartedAt || "").trim() !== "";
+
+export interface ConsultationBookingReleaseUpdate {
+  consultationBookedDay: "";
+  consultationBookedCycleStartedAt: "";
+  consultationPreviousBookedDay: string;
+  consultationPreviousBookedCycleStartedAt: string;
+}
+
+export const getConsultationBookingReleaseUpdate = (
+  bookedDay: string | null | undefined,
+  bookedCycleStartedAt: string | null | undefined,
+): ConsultationBookingReleaseUpdate => ({
+  consultationBookedDay: "",
+  consultationBookedCycleStartedAt: "",
+  consultationPreviousBookedDay: String(bookedDay || "").trim(),
+  consultationPreviousBookedCycleStartedAt: String(
+    bookedCycleStartedAt || "",
+  ).trim(),
+});

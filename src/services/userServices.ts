@@ -12,7 +12,10 @@ import {
 import { db, auth } from "../lib/firebase";
 import { RankingPreference, User } from "../types/auth";
 import { resolveAccountType } from "../utils/coupleAccount";
-import { isValidConsultationPreferredDay } from "../utils/consultationScheduling";
+import {
+  getConsultationBookingReleaseUpdate,
+  isValidConsultationPreferredDay,
+} from "../utils/consultationScheduling";
 import { consultationRequestService } from "./consultationRequestService";
 
 const resolveRankingPreference = (data: any): RankingPreference => {
@@ -78,6 +81,13 @@ export const mapUserDocument = (id: string, data: any): User => ({
   consultationSchedulingRequestedAt: data?.consultationSchedulingRequestedAt
     ? toDateValue(data.consultationSchedulingRequestedAt)
     : undefined,
+  consultationPreviousBookedDay: data?.consultationPreviousBookedDay || "",
+  consultationPreviousBookedCycleStartedAt:
+    data?.consultationPreviousBookedCycleStartedAt || "",
+  consultationBookingReleasedAt: data?.consultationBookingReleasedAt
+    ? toDateValue(data.consultationBookingReleasedAt)
+    : undefined,
+  consultationBookingReleasedBy: data?.consultationBookingReleasedBy || null,
   expoPushToken: data?.expoPushToken || "",
   activeChatId: data?.activeChatId || null,
   presenceState:
@@ -623,6 +633,43 @@ export const userService = {
       consultationBookedCycleStartedAt: cycleStartedAtKey,
       updatedAt: Timestamp.now(),
     });
+  },
+
+  async releaseConsultationBooking(
+    userId: string,
+    releasedByUserId?: string | null,
+  ): Promise<void> {
+    if (!userId) {
+      throw new Error("Não foi possível identificar a conta do cliente.");
+    }
+
+    const userRef = doc(db, "users", userId);
+    const snapshot = await getDoc(userRef);
+    if (!snapshot.exists()) {
+      throw new Error("Cliente não encontrado.");
+    }
+
+    const data = snapshot.data();
+    const now = Timestamp.now();
+    await updateDoc(userRef, {
+      ...getConsultationBookingReleaseUpdate(
+        data?.consultationBookedDay,
+        data?.consultationBookedCycleStartedAt,
+      ),
+      consultationSchedulingRequestPending: false,
+      consultationBookingReleasedAt: now,
+      consultationBookingReleasedBy: releasedByUserId || null,
+      updatedAt: now,
+    });
+
+    try {
+      await consultationRequestService.resolveRequest(userId);
+    } catch (error) {
+      console.warn(
+        "[CONSULTATION BOOKING] Falha ao marcar solicitação como resolvida:",
+        error,
+      );
+    }
   },
 
   async updatePushToken(userId: string, token: string | null): Promise<void> {

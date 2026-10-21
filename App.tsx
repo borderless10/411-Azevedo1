@@ -8,6 +8,7 @@ import { ConsultationSchedulingProvider } from "./src/hooks/useConsultationSched
 import { NavigationProvider } from "./src/routes/NavigationContext";
 import { Router } from "./src/routes/Router";
 import { AppContent } from "./src/components/AppContent";
+import { ErrorBoundary } from "./src/components/ErrorBoundary";
 
 /**
  * Componente principal da aplicação
@@ -22,7 +23,9 @@ export default function App() {
             <ConsultationSchedulingProvider>
               <ShowValuesProvider>
                 <NavigationProvider>
-                  <AppContent />
+                  <ErrorBoundary>
+                    <AppContent />
+                  </ErrorBoundary>
                 </NavigationProvider>
               </ShowValuesProvider>
             </ConsultationSchedulingProvider>

@@ -1,4 +1,5 @@
 import { perfMark, perfMeasure } from "../utils/perfMarks";
+import { setWatchdogScreen } from "../services/sessionWatchdog";
 import React, {
   createContext,
   useCallback,
@@ -65,6 +66,7 @@ export const NavigationProvider = ({ children }: { children: ReactNode }) => {
   const navigate = useCallback((screen: ScreenName, navigationParams?: any) => {
     perfMark("interaction.tap");
     perfMark(`nav.${screen}`);
+    setWatchdogScreen(screen);
     setParams(navigationParams || null);
     setCurrentScreen(screen);
     perfMeasure("interaction.handled", "interaction.tap");

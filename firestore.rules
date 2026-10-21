@@ -212,6 +212,12 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    match /sessionReports/{docId} {
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow read: if isAdmin();
+      allow update, delete: if false;
+    }
+
     match /rankingSnapshots/{userId} {
       allow read: if isSignedIn();
       allow create, update, delete: if isOwner(userId)

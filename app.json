@@ -15,7 +15,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.borderlesspc2.visao411",
-      "buildNumber": "16",
+      "buildNumber": "18",
       "infoPlist": {
         "CFBundleDisplayName": "Visão",
         "ITSAppUsesNonExemptEncryption": false,
@@ -67,7 +67,7 @@
       "expo-font"
     ],
     "owner": "visao",
-    "runtimeVersion": "1.0.7-sdk57-b16",
+    "runtimeVersion": "1.0.7-sdk57-b18",
     "extra": {
       "eas": {
         "projectId": "be2008b3-c7c7-453f-af2c-2cf82fcfcd56"
