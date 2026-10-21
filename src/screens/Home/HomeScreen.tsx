@@ -8,7 +8,7 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  ScrollView,
+  FlatList,
   ActivityIndicator,
   RefreshControl,
   Alert,
@@ -1018,12 +1018,12 @@ export const HomeScreen = () => {
         Animated.timing(fadeAnim, {
           toValue: 1,
           duration: 400,
-          delay: index * 50,
+          delay: Math.min(index, 6) * 40,
           useNativeDriver: true,
         }),
         Animated.spring(slideAnim, {
           toValue: 0,
-          delay: index * 50,
+          delay: Math.min(index, 6) * 40,
           friction: 8,
           tension: 40,
           useNativeDriver: true,
@@ -1252,8 +1252,17 @@ export const HomeScreen = () => {
 
   return (
     <Layout showHeader={true} showSidebar={true} desktopWidth="full">
-      <ScrollView
+      <FlatList
         style={styles.container}
+        data={filteredTransactions}
+        keyExtractor={(item, index) =>
+          String((item.item as { id?: string }).id || index)
+        }
+        renderItem={({ item, index }) => renderTransactionItem(item, index)}
+        initialNumToRender={12}
+        maxToRenderPerBatch={8}
+        windowSize={7}
+        removeClippedSubviews
         keyboardShouldPersistTaps="handled"
         refreshControl={
           <RefreshControl
@@ -1262,7 +1271,16 @@ export const HomeScreen = () => {
             colors={["#8c52ff"]}
           />
         }
-      >
+        ListEmptyComponent={
+          <View style={styles.emptyState}>
+            <Ionicons name="file-tray-outline" size={48} color="#ccc" />
+            <Text style={styles.emptyText}>Nenhuma transação ainda</Text>
+            <Text style={styles.emptySubtext}>
+              Comece adicionando uma renda ou gasto
+            </Text>
+          </View>
+        }
+        ListHeaderComponent={
         <View style={styles.content}>
           <View style={styles.pageGreeting}>
             <Text style={styles.pageGreetingHello}>Olá,</Text>
@@ -1949,37 +1967,9 @@ export const HomeScreen = () => {
             </View>
           </View>
 
-          {/* Lista de transações */}
-          <View style={styles.transactionsContainer}>
-            {filteredTransactions.length === 0 ? (
-              <View style={styles.emptyState}>
-                <Ionicons name="file-tray-outline" size={48} color="#ccc" />
-                <Text style={styles.emptyText}>Nenhuma transação ainda</Text>
-                <Text style={styles.emptySubtext}>
-                  Comece adicionando uma renda ou gasto
-                </Text>
-              </View>
-            ) : (
-              <Animated.View
-                style={[
-                  styles.transactionsList,
-                  {
-                    opacity: fadeAnim,
-                  },
-                ]}
-              >
-                {filteredTransactions.map((item, index) => (
-                  <TransactionItem
-                    key={(item.item as any).id ?? index}
-                    transaction={item}
-                    index={index}
-                  />
-                ))}
-              </Animated.View>
-            )}
-          </View>
         </View>
-      </ScrollView>
+        }
+      />
 
       <ZeroPlanilhaConfirmModal
         visible={zeroConfirmVisible}

@@ -5,7 +5,10 @@
 
 import React, { useEffect } from "react";
 import { StatusBar } from "expo-status-bar";
-import { startSessionWatchdog } from "../services/sessionWatchdog";
+import {
+  startSessionWatchdog,
+  stopSessionWatchdog,
+} from "../services/sessionWatchdog";
 import { Router } from "../routes/Router";
 import { useTheme } from "../contexts/ThemeContext";
 import { ChatMessageNotifier } from "./Chat/ChatMessageNotifier";
@@ -19,6 +22,7 @@ export const AppContent = () => {
 
   useEffect(() => {
     void startSessionWatchdog();
+    return () => stopSessionWatchdog();
   }, []);
 
   return (

@@ -45,11 +45,16 @@ const persistProfilePhoto = async (userId: string, base64: string | null) => {
       photoUrl: uploaded.url,
       photoStoragePath: uploaded.path,
       photoBase64: null,
+      photoUpdatedAt: Date.now(),
     });
+    void import("../../services/rankingServices").then(({ rankingServices }) =>
+      rankingServices.refreshUserSnapshot(userId),
+    );
     return;
   }
   await userService.updateUser(userId, {
     photoBase64: base64 || null,
+    photoUpdatedAt: Date.now(),
   });
 };
 
@@ -80,6 +85,16 @@ export const ProfileScreen = () => {
     [],
   );
   const [selectingBorder, setSelectingBorder] = useState<boolean>(false);
+  const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flashSuccess = (message: string, durationMs = 4000) => {
+    setShowSuccess(true);
+    setSuccessMessage(message);
+    if (successTimerRef.current) clearTimeout(successTimerRef.current);
+    successTimerRef.current = setTimeout(() => {
+      setShowSuccess(false);
+      setSuccessMessage("");
+    }, durationMs);
+  };
 
   // Verificar se o usuário é admin
   const isAdmin = user?.role === "admin" || user?.isAdmin === true;
@@ -165,6 +180,13 @@ export const ProfileScreen = () => {
       return () => clearTimeout(timer);
     }
   }, [params]);
+
+  useEffect(
+    () => () => {
+      if (successTimerRef.current) clearTimeout(successTimerRef.current);
+    },
+    [],
+  );
 
   return (
     <Layout title="Perfil" showBackButton={false} showSidebar={true}>
@@ -302,9 +324,10 @@ export const ProfileScreen = () => {
                     phone: editingPhone.replace(/\D/g, "").trim(),
                   });
                   await refreshUser();
-                  setShowSuccess(true);
-                  setSuccessMessage("Perfil atualizado com sucesso");
-                  setTimeout(() => setShowSuccess(false), 4000);
+                  void import("../../services/rankingServices").then(({ rankingServices }) =>
+                    rankingServices.refreshUserSnapshot(user.id),
+                  );
+                  flashSuccess("Perfil atualizado com sucesso");
                 } catch (e) {
                   console.error("Erro ao atualizar perfil", e);
                   Alert.alert("Erro", "Não foi possível atualizar o perfil");
@@ -397,9 +420,7 @@ export const ProfileScreen = () => {
                   });
                   // refresh user data in context
                   await refreshUser();
-                  setShowSuccess(true);
-                  setSuccessMessage("Preferências salvas com sucesso");
-                  setTimeout(() => setShowSuccess(false), 4000);
+                  flashSuccess("Preferências salvas com sucesso");
                 } catch (e) {
                   console.error("Erro ao salvar preferências", e);
                   Alert.alert(
@@ -582,9 +603,7 @@ export const ProfileScreen = () => {
               setSavingProfile(true);
               await persistProfilePhoto(user.id, base64 || null);
               await refreshUser();
-              setShowSuccess(true);
-              setSuccessMessage("Foto de perfil atualizada");
-              setTimeout(() => setShowSuccess(false), 3000);
+              flashSuccess("Foto de perfil atualizada", 3000);
             } catch (e) {
               console.error("Erro ao salvar foto de perfil", e);
               Alert.alert("Erro", "Não foi possível salvar a foto de perfil.");

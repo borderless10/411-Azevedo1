@@ -3,7 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
+  FlatList,
   ActivityIndicator,
   Modal,
   TouchableOpacity,
@@ -11,6 +11,7 @@ import {
   Image,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Layout } from "../../components/Layout/Layout";
 import { rankingServices, RankingEntry, RankingLeague } from "../../services/rankingServices";
 import { userService } from "../../services/userServices";
@@ -27,6 +28,12 @@ import {
 } from "../../components/Gamification/BadgeEmblem";
 import { PodiumView } from "../../components/Gamification/PodiumView";
 import type { BadgeDefinition } from "../../types/rankingGamification";
+import {
+  acceptRankingCache,
+  prepareRankingCache,
+  rankingCacheKey,
+  rankingRowsChanged,
+} from "../../utils/rankingCache";
 
 type Row = {
   position: number;
@@ -53,6 +60,7 @@ export const RankingScreen = () => {
   const [leagueTab, setLeagueTab] = useState<RankingLeague>("individual");
   const leagueTabInitialized = useRef(false);
   const [resetting, setResetting] = useState(false);
+  const [staleNotice, setStaleNotice] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [cutoffDateKey, setCutoffDateKey] = useState<string | null>(null);
   const [mainTab, setMainTab] = useState<"current" | "previous" | "history">(
@@ -147,21 +155,36 @@ export const RankingScreen = () => {
       if (lastReloadKeyRef.current !== reloadKey) {
         leagueRowsCacheRef.current = {};
         lastReloadKeyRef.current = reloadKey;
+        await AsyncStorage.multiRemove([
+          rankingCacheKey("individual"),
+          rankingCacheKey("couple"),
+        ]).catch(() => undefined);
       }
-      const cached = leagueRowsCacheRef.current[activeLeague];
-      if (cached) {
-        // Liga já carregada nesta sessão: troca instantânea, sem rede.
-        setCutoffDateKey(cached.cutoff);
-        setRows(cached.rows);
+      const memory = leagueRowsCacheRef.current[activeLeague];
+      if (memory) {
+        setCutoffDateKey(memory.cutoff);
+        setRows(memory.rows);
         setLoading(false);
-        return;
+      } else {
+        setLoading(true);
       }
-      setLoading(true);
+      const storedPromise = AsyncStorage.getItem(rankingCacheKey(activeLeague))
+        .then((raw) =>
+          acceptRankingCache<Row>(raw ? JSON.parse(raw) : null, activeLeague),
+        )
+        .catch(() => null);
+      const networkPromise = Promise.all([
+        rankingServices.getRanking(500, activeLeague),
+        rankingServices.getRankingConfig(),
+      ]);
+      const stored = await storedPromise;
+      if (mounted && stored && !memory) {
+        setRows(stored.rows);
+        setCutoffDateKey(stored.cutoffDateKey);
+        setLoading(false);
+      }
       try {
-        const [ranking, config] = await Promise.all([
-          rankingServices.getRanking(500, activeLeague),
-          rankingServices.getRankingConfig(),
-        ]);
+        const [ranking, config] = await networkPromise;
         if (!mounted) return;
         setCutoffDateKey(config.cutoffDateKey);
         const out: Row[] = ranking.map((r: RankingEntry, i) => ({
@@ -173,15 +196,21 @@ export const RankingScreen = () => {
           isCouple: r.isCouple,
           photoUrl: r.photoUrl ?? photoCacheRef.current.get(r.userId) ?? null,
         }));
-        setRows(out);
-        setLoading(false);
+        setStaleNotice(false);
+        setRows((current) => (rankingRowsChanged(current, out) ? out : current));
         leagueRowsCacheRef.current[activeLeague] = {
           rows: out,
           cutoff: config.cutoffDateKey,
         };
+        await AsyncStorage.setItem(
+          rankingCacheKey(activeLeague),
+          JSON.stringify(
+            prepareRankingCache(activeLeague, config.cutoffDateKey, out),
+          ),
+        ).catch(() => undefined);
 
         const missingPhoto = out
-          .slice(0, 20)
+          .slice(0, 12)
           .filter((row) => !row.photoUrl && !photoCacheRef.current.has(row.userId));
         if (missingPhoto.length === 0) return;
         const withPhotos = await Promise.all(
@@ -216,6 +245,7 @@ export const RankingScreen = () => {
         });
       } catch (error) {
         console.error("❌ [RANKING SCREEN] Erro ao carregar ranking:", error);
+        if (mounted && (memory || stored)) setStaleNotice(true);
       } finally {
         if (mounted) setLoading(false);
       }
@@ -340,10 +370,46 @@ export const RankingScreen = () => {
 
   return (
     <Layout title="Ranking — Consumo moderado" showBackButton={false} showSidebar={true}>
-      <ScrollView
+      <FlatList
         style={styles.container}
         contentContainerStyle={styles.content}
-      >
+        data={mainTab === "current" && !loading ? rows : []}
+        keyExtractor={(item) => item.userId}
+        initialNumToRender={12}
+        maxToRenderPerBatch={8}
+        windowSize={7}
+        removeClippedSubviews
+        renderItem={({ item: r }) => (
+          <View style={[styles.row, r.position <= 3 ? styles.rowTop : null]}>
+            <View style={styles.posWrapper}>
+              <Text style={[styles.pos, r.position <= 3 ? styles.posTop : null]}>
+                {r.position}º
+              </Text>
+            </View>
+            <View style={styles.avatarWrapper}>
+              <BadgedAvatar
+                photoUri={resolveProfilePhotoUri(r)}
+                displayName={r.displayName}
+                size={r.position <= 3 ? 56 : 48}
+                definition={borderDefinitionByUser(r.userId)}
+              />
+            </View>
+            <View style={styles.info}>
+              <Text style={[styles.name, r.position <= 3 ? styles.nameTop : null]}>
+                {r.displayName}
+              </Text>
+              <Text style={styles.detail}>
+                {r.zeroDays} pts{r.isCouple ? " · Casal" : ""}
+              </Text>
+              <BadgeEmblemRow
+                definitions={gamification.badgesByUser.get(r.userId) || []}
+                onPress={setSelectedBadge}
+              />
+            </View>
+          </View>
+        )}
+        ListHeaderComponent={
+        <>
         <View style={styles.headerRow}>
           <Text style={styles.header}>Ranking — Consumo moderado</Text>
           <TouchableOpacity
@@ -391,8 +457,10 @@ export const RankingScreen = () => {
           style={styles.holdersButton}
           onPress={() => navigate("BadgeHolders")}
         >
-          <Ionicons name="medal" size={19} color="#e7b958" />
-          <Text style={styles.holdersButtonText}>Ver Detentores de Insígnias</Text>
+          <Ionicons name="medal" size={14} color="#e7b958" />
+          <Text style={styles.holdersButtonText} numberOfLines={1}>
+            Ver Detentores de Insígnias
+          </Text>
         </TouchableOpacity>
 
         <View
@@ -519,6 +587,11 @@ export const RankingScreen = () => {
             ? "Classificação — Casais"
             : "Classificação — Individuais"}
         </Text>
+        {staleNotice ? (
+          <Text style={styles.detail}>
+            Sem conexão. Exibindo a última classificação salva.
+          </Text>
+        ) : null}
         {loading ? (
           <View style={styles.loadingRow}>
             <ActivityIndicator size="large" color="#8c52ff" />
@@ -529,46 +602,7 @@ export const RankingScreen = () => {
               Ainda não há participantes no ranking.
             </Text>
           </View>
-        ) : (
-          rows.map((r) => (
-            <View
-              key={r.userId}
-              style={[styles.row, r.position <= 3 ? styles.rowTop : null]}
-            >
-              <View style={styles.posWrapper}>
-                <Text
-                  style={[styles.pos, r.position <= 3 ? styles.posTop : null]}
-                >
-                  {r.position}º
-                </Text>
-              </View>
-
-              <View style={styles.avatarWrapper}>
-                <BadgedAvatar
-                  photoUri={resolveProfilePhotoUri(r)}
-                  displayName={r.displayName}
-                  size={r.position <= 3 ? 56 : 48}
-                  definition={borderDefinitionByUser(r.userId)}
-                />
-              </View>
-
-              <View style={styles.info}>
-                <Text
-                  style={[styles.name, r.position <= 3 ? styles.nameTop : null]}
-                >
-                  {r.displayName}
-                </Text>
-                <Text style={styles.detail}>
-                  {r.zeroDays} pts{r.isCouple ? " · Casal" : ""}
-                </Text>
-                <BadgeEmblemRow
-                  definitions={gamification.badgesByUser.get(r.userId) || []}
-                  onPress={setSelectedBadge}
-                />
-              </View>
-            </View>
-          ))
-        )}
+        ) : null}
           </>
         ) : mainTab === "previous" ? (
           gamification.loading ? (
@@ -658,7 +692,9 @@ export const RankingScreen = () => {
           ))
         )}
         </View>
-      </ScrollView>
+        </>
+        }
+      />
 
       <BadgeDetailModal
         definition={selectedBadge}
@@ -857,13 +893,16 @@ const styles = StyleSheet.create({
   detail: { color: "#999", fontSize: 13 },
   holdersButton: {
     alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
     backgroundColor: "#241541",
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    borderRadius: 8,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
     marginBottom: 12,
   },
-  holdersButtonText: { color: "#c084fc", fontSize: 13, fontWeight: "700" },
+  holdersButtonText: { color: "#c084fc", fontSize: 12, fontWeight: "700" },
   seasonCard: {
     backgroundColor: "#161616",
     borderRadius: 14,

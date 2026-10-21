@@ -54,6 +54,7 @@ export const BadgedAvatar = ({
       {photoUri ? (
         <Image
           source={{ uri: photoUri }}
+          key={photoUri}
           style={{ width: size, height: size, borderRadius: size / 2 }}
         />
       ) : (

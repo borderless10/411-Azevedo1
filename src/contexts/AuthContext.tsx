@@ -10,7 +10,10 @@ import React, {
 import { authServices } from "../services/authServices";
 import { perfMark, perfMeasure } from "../utils/perfMarks";
 import { userService } from "../services/userServices";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { setWatchdogUser } from "../services/sessionWatchdog";
+import { invalidateUserLiteCache } from "../services/userServices";
+import { rankingCacheKey } from "../utils/rankingCache";
 import { updateOverdueBills } from "../services/billServices";
 import { User, LoginCredentials, RegisterCredentials, CoupleMember } from "../types/auth";
 import {
@@ -452,12 +455,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
    */
   const signOut = async (): Promise<void> => {
     try {
-      setLoading(true);
       const userId = user?.id;
-      setUser(null);
       setActiveCoupleMemberState(null);
       await clearStoredCoupleMember(userId);
+      invalidateUserLiteCache();
+      await AsyncStorage.multiRemove([
+        rankingCacheKey("individual"),
+        rankingCacheKey("couple"),
+      ]).catch(() => undefined);
       await authServices.logout();
+      setUser(null);
     } catch (error: any) {
       if (__DEV__) {
         console.log("Erro ao fazer logout:", error);

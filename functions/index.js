@@ -7,6 +7,7 @@ import { createGamificationHandlers } from "./gamification.js";
 import { Expo } from "expo-server-sdk";
 import {
   buildChatPushMessages,
+  isActivelyViewingChat,
   resolveChatRecipientIds,
 } from "./chatPushPayload.js";
 
@@ -65,10 +66,14 @@ export const sendChatMessagePush = onDocumentCreated(
     const sender = senderSnapshot.data() || {};
     const senderName =
       String(sender.nickname || sender.name || "").trim() || "Nova mensagem";
-    const recipients = recipientSnapshots.map((snapshot, index) => ({
-      userId: recipientIds[index],
-      expoPushToken: String(snapshot.data()?.expoPushToken || "").trim(),
-    }));
+    const now = Date.now();
+    const recipients = recipientSnapshots
+      .map((snapshot, index) => ({
+        userId: recipientIds[index],
+        expoPushToken: String(snapshot.data()?.expoPushToken || "").trim(),
+        presence: snapshot.data() || {},
+      }))
+      .filter((item) => !isActivelyViewingChat(item.presence, chatId, now));
 
     const messages = buildChatPushMessages({
       recipients,
@@ -146,6 +151,9 @@ export const upsertBadgeDefinition = onCall(callOpts, (request) =>
 );
 export const setBadgeDefinitionActive = onCall(callOpts, (request) =>
   gamification.setBadgeDefinitionActive(request),
+);
+export const deleteBadgeDefinition = onCall(callOpts, (request) =>
+  gamification.deleteBadgeDefinition(request),
 );
 export const grantBadge = onCall(callOpts, (request) =>
   gamification.grantBadge(request),

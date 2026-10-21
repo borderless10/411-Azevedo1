@@ -211,8 +211,9 @@ export const SettingsScreen = () => {
         text: "Sair",
         style: "destructive",
         onPress: () => {
-          signOut();
-          navigate("Login");
+          void signOut()
+            .catch(() => undefined)
+            .finally(() => navigate("Login"));
         },
       },
     ]);

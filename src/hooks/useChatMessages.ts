@@ -7,6 +7,7 @@ import chatService, {
 } from "../services/chatService";
 import { ChatMention } from "../utils/chatMentions";
 import {
+  capChatWindow,
   mergeChatMessages,
   reconcilePendingMessages,
 } from "../utils/chatMessagePipeline";
@@ -25,6 +26,8 @@ interface UseChatMessagesResult {
   isLoading: boolean;
   isLoadingMore: boolean;
   hasMore: boolean;
+  trimmed: boolean;
+  returnToRecent: () => void;
 }
 
 export function useChatMessages(
@@ -39,6 +42,7 @@ export function useChatMessages(
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
+  const [trimmed, setTrimmed] = useState(false);
   const oldestCursorRef = useRef<any | null>(null);
   const loadingMoreRef = useRef(false);
   const hasOlderRef = useRef(false);
@@ -147,15 +151,24 @@ export function useChatMessages(
         oldestCursorRef.current = page.oldestCursor;
         hasOlderRef.current = true;
         setHasMore(page.hasMore);
-        setOlderMessages((previous) =>
-          mergeChatMessages(page.messages, previous),
-        );
+        setOlderMessages((previous) => {
+          const merged = mergeChatMessages(page.messages, previous);
+          const capped = capChatWindow(merged);
+          setTrimmed(capped.trimmed);
+          return capped.messages;
+        });
       }
     } finally {
       loadingMoreRef.current = false;
       setIsLoadingMore(false);
     }
   }, [chatId, hasMore]);
+
+  const returnToRecent = useCallback(() => {
+    setOlderMessages([]);
+    setTrimmed(false);
+    hasOlderRef.current = false;
+  }, []);
 
   const messages = useMemo(
     () =>
@@ -173,6 +186,8 @@ export function useChatMessages(
     isLoading,
     isLoadingMore,
     hasMore,
+    trimmed,
+    returnToRecent,
   };
 }
 

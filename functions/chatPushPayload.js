@@ -1,7 +1,13 @@
-const compactText = (value) => {
-  const text = String(value || "").trim().replace(/\s+/g, " ");
-  if (!text) return "Nova mensagem";
-  return text.length > 120 ? `${text.slice(0, 117)}...` : text;
+const PRESENCE_FRESH_MS = 90_000;
+
+export const isActivelyViewingChat = (user, chatId, nowMs) => {
+  if (!user || user.presenceState !== "foreground") return false;
+  if (user.activeChatId !== chatId) return false;
+  const updated =
+    typeof user.presenceUpdatedAt?.toMillis === "function"
+      ? user.presenceUpdatedAt.toMillis()
+      : Number(user.presenceUpdatedAtMs || 0);
+  return Boolean(updated) && nowMs - updated <= PRESENCE_FRESH_MS;
 };
 
 export const resolveChatRecipientIds = ({
@@ -41,7 +47,7 @@ export const buildChatPushMessages = ({
       return {
         to: expoPushToken,
         title: mentioned ? `${senderName} mencionou você` : senderName,
-        body: compactText(text),
+        body: "Nova mensagem",
         sound: "default",
         priority: "high",
         channelId: "chat_messages",

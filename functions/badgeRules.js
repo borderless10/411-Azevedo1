@@ -50,3 +50,9 @@ export const validateBadgeDefinitionInput = (input = {}) => {
   if (!BADGE_BORDER_PRESETS.includes(input.borderPreset)) errors.push("borda não permitida");
   return { valid: errors.length === 0, errors };
 };
+
+export const decideBadgeRemoval = ({ isOfficial, hasGrantHistory }) => {
+  if (isOfficial) return "reject";
+  if (hasGrantHistory) return "archive";
+  return "delete";
+};

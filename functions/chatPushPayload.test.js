@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildChatPushMessages,
+  isActivelyViewingChat,
   resolveChatRecipientIds,
 } from "./chatPushPayload.js";
 
@@ -46,7 +47,7 @@ test("monta push visível com som, badge e rota para o chat", () => {
     {
       to: "ExponentPushToken[abc]",
       title: "Eduardo",
-      body: "Olá",
+      body: "Nova mensagem",
       sound: "default",
       priority: "high",
       channelId: "chat_messages",
@@ -78,4 +79,34 @@ test("ignora token inválido e identifica menção", () => {
   assert.equal(messages.length, 1);
   assert.equal(messages[0].title, "Ana mencionou você");
   assert.equal(messages[0].data.type, "chat_mention");
+  assert.equal(messages[0].body, "Nova mensagem");
+  assert.equal(messages[0].body.includes("Oi"), false);
+});
+
+test("não notifica quem está com o mesmo chat aberto agora", () => {
+  const now = 1_000_000;
+  assert.equal(
+    isActivelyViewingChat(
+      {
+        presenceState: "foreground",
+        activeChatId: "chat-1",
+        presenceUpdatedAtMs: now - 1_000,
+      },
+      "chat-1",
+      now,
+    ),
+    true,
+  );
+  assert.equal(
+    isActivelyViewingChat(
+      {
+        presenceState: "background",
+        activeChatId: "chat-1",
+        presenceUpdatedAtMs: now,
+      },
+      "chat-1",
+      now,
+    ),
+    false,
+  );
 });

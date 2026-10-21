@@ -1,5 +1,6 @@
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { recordRenderError } from "../services/sessionWatchdog";
 
 type Props = { children: React.ReactNode };
 type State = { error: Error | null };
@@ -15,8 +16,9 @@ export class ErrorBoundary extends React.Component<Props, State> {
     return { error };
   }
 
-  componentDidCatch(error: Error, info: React.ErrorInfo) {
-    console.error("[ErrorBoundary]", error?.message, info?.componentStack);
+  componentDidCatch(error: Error) {
+    recordRenderError(error);
+    console.error("[ErrorBoundary]", error?.message);
   }
 
   reset = () => this.setState({ error: null });

@@ -14,6 +14,7 @@ import { getActiveChatId } from "../../utils/chatActivity";
 
 const EXPO_PROJECT_ID = "be2008b3-c7c7-453f-af2c-2cf82fcfcd56";
 
+
 const openChatFromData = (
   navigate: (screen: "Chat", params?: Record<string, unknown>) => void,
   data?: Record<string, unknown> | null,
@@ -31,6 +32,7 @@ export const PushBootstrap: React.FC = () => {
   const { user } = useAuth();
   const { navigate } = useNavigation();
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
+  const lastSavedTokenRef = useRef("");
 
   useEffect(() => {
     if (!user?.id || Platform.OS === "web") return;
@@ -43,6 +45,16 @@ export const PushBootstrap: React.FC = () => {
       });
       const token = String(tokenResponse?.data || "").trim();
       if (!token || cancelled) return;
+      // Só grava quando o token muda de verdade: cada gravação é uma
+      // escrita no Firestore e dispara os listeners do documento do usuário.
+      if (
+        token === lastSavedTokenRef.current ||
+        token === String(user.expoPushToken || "").trim()
+      ) {
+        lastSavedTokenRef.current = token;
+        return;
+      }
+      lastSavedTokenRef.current = token;
       await userService.updatePushToken(user.id, token);
     };
 
@@ -67,18 +79,23 @@ export const PushBootstrap: React.FC = () => {
     };
 
     register().catch(() => undefined);
-    const tokenSubscription = Notifications.addPushTokenListener(() => {
-      saveExpoPushToken().catch((error) => {
-        console.warn("Não foi possível renovar o token de push:", error);
-      });
+
+    // Sem addPushTokenListener: no Expo Go/iOS ele dispara em tempestade
+    // (mais de 1.000 eventos por segundo), cada um virando escrita no
+    // Firestore, até o sistema matar o app por CPU e memória.
+    // O token é salvo no login e quando o app volta ao primeiro plano.
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      if (nextState !== "active" || cancelled) return;
+      saveExpoPushToken().catch(() => undefined);
     });
 
     return () => {
       cancelled = true;
-      tokenSubscription.remove();
+      subscription.remove();
     };
   }, [
     user?.id,
+    user?.expoPushToken,
     user?.expenseReminderEnabled,
     user?.expenseReminderHour,
     user?.expenseReminderMinute,

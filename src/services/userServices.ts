@@ -42,6 +42,18 @@ const resolveRankingPreference = (data: any): RankingPreference => {
 
 export const resolveRankingPreferenceFromData = resolveRankingPreference;
 
+const USER_LITE_TTL_MS = 60_000;
+const userLiteCache = new Map<string, { at: number; user: User | null }>();
+const userLiteInflight = new Map<string, Promise<User | null>>();
+
+export const invalidateUserLiteCache = (userId?: string): void => {
+  if (!userId) {
+    userLiteCache.clear();
+    return;
+  }
+  userLiteCache.delete(userId);
+};
+
 const toDateValue = (value: any, fallback = new Date()): Date => {
   if (!value) return fallback;
   if (value.toDate && typeof value.toDate === "function") return value.toDate();
@@ -58,6 +70,8 @@ export const mapUserDocument = (id: string, data: any): User => ({
   photoBase64: data?.photoBase64 || "",
   photoUrl: data?.photoUrl || "",
   photoStoragePath: data?.photoStoragePath || "",
+  photoUpdatedAt:
+    typeof data?.photoUpdatedAt === "number" ? data.photoUpdatedAt : null,
   activeBadgeBorderId: data?.activeBadgeBorderId || null,
   email: data?.email || "",
   username: data?.username || "",
@@ -200,9 +214,21 @@ export const userService = {
 
   /** Usuário sem photoBase64 retido em memória (listas). Mantém photoUrl do Storage. */
   async getUserLiteById(userId: string): Promise<User | null> {
-    const user = await this.getUserById(userId);
-    if (!user) return null;
-    return { ...user, photoBase64: "" };
+    const cached = userLiteCache.get(userId);
+    if (cached && Date.now() - cached.at < USER_LITE_TTL_MS) return cached.user;
+    const pending = userLiteInflight.get(userId);
+    if (pending) return pending;
+    const request = this.getUserById(userId)
+      .then((user) => {
+        const lite = user ? { ...user, photoBase64: "" } : null;
+        userLiteCache.set(userId, { at: Date.now(), user: lite });
+        return lite;
+      })
+      .finally(() => {
+        userLiteInflight.delete(userId);
+      });
+    userLiteInflight.set(userId, request);
+    return request;
   },
 
   /** Todos os usuários sem photoBase64 retido (evita OOM em listas grandes). */
@@ -550,6 +576,7 @@ export const userService = {
       photoBase64?: string | null;
       photoUrl?: string | null;
       photoStoragePath?: string | null;
+      photoUpdatedAt?: number | null;
       role?: string;
       isAdmin?: boolean;
       consultantId?: string | null;
@@ -573,6 +600,15 @@ export const userService = {
       if (payload.photoUrl !== undefined) updatePayload.photoUrl = payload.photoUrl;
       if (payload.photoStoragePath !== undefined)
         updatePayload.photoStoragePath = payload.photoStoragePath;
+      if (payload.photoUpdatedAt !== undefined)
+        updatePayload.photoUpdatedAt = payload.photoUpdatedAt;
+      if (
+        payload.photoUrl !== undefined ||
+        payload.photoBase64 !== undefined ||
+        payload.name !== undefined
+      ) {
+        invalidateUserLiteCache(userId);
+      }
       if (payload.phone !== undefined) updatePayload.phone = payload.phone;
       if (payload.role !== undefined) updatePayload.role = payload.role;
       if (payload.isAdmin !== undefined)

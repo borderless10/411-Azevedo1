@@ -31,6 +31,7 @@ import chatService, {
 import { userService } from "../../services/userServices";
 import consultantServices from "../../services/consultantServices";
 import { setActiveChatId } from "../../utils/chatActivity";
+import { mapWithConcurrency } from "../../utils/asyncPool";
 import { useNavigation } from "../../routes/NavigationContext";
 import { MessageBubble } from "../../components/Chat/MessageBubble";
 import { EmojiPickerPanel } from "../../components/Chat/EmojiPickerPanel";
@@ -113,6 +114,8 @@ export const ChatScreen: React.FC = () => {
     hasMore,
     isLoadingMore,
     isLoading: messagesLoading,
+    trimmed,
+    returnToRecent,
   } = useChatMessages(
       selectedChatId || "",
       user?.id || "",
@@ -181,6 +184,7 @@ export const ChatScreen: React.FC = () => {
   const userMapRef = useRef<Record<string, any>>({});
   const profilesLoadingRef = useRef<Set<string>>(new Set());
   const flatListRef = useRef<FlatList<any> | null>(null);
+  const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const allowOlderLoadRef = useRef(false);
 
   useEffect(() => {
@@ -237,11 +241,9 @@ export const ChatScreen: React.FC = () => {
 
         if (user.role === "consultor") {
           const clients = await consultantServices.getClientsByConsultant(user.id);
-          await Promise.all(
-            clients.map((client) =>
-              chatService.createChatIfNotExists(user.id, client.id, "direct"),
-            ),
-          );
+          await mapWithConcurrency(clients, 4, async (client) => {
+            await chatService.createChatIfNotExists(user.id, client.id, "direct");
+          });
         }
 
         if (user.role === "user" || user.role === "cliente_premium") {
@@ -272,6 +274,13 @@ export const ChatScreen: React.FC = () => {
   useEffect(() => {
     allowOlderLoadRef.current = false;
   }, [selectedChatId]);
+
+  useEffect(
+    () => () => {
+      if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+    },
+    [],
+  );
 
   useEffect(() => {
     setActiveChatId(selectedChatId);
@@ -353,16 +362,15 @@ export const ChatScreen: React.FC = () => {
       const nameUpdates: Record<string, string> = {};
 
       perfMark("profiles.load.start");
-      await Promise.all(
-        uniqueIds.map(async (id) => {
+      await mapWithConcurrency(uniqueIds, 6, async (id) => {
           try {
-            const userData = await userService.getUserById(id);
+            const userData = await userService.getUserLiteById(id);
             if (userData) {
               // Sem base64 em massa no bate-papo (app fechava por memória).
               // Direto / allowlist: mantém foto. photoUrl sempre preservado.
               updates[id] = {
                 ...userData,
-                photoBase64: keepPhotoIds.has(id) ? userData.photoBase64 : "",
+                photoBase64: "",
               };
               nameUpdates[id] = profileDisplayName(userData);
             }
@@ -371,8 +379,7 @@ export const ChatScreen: React.FC = () => {
           } finally {
             profilesLoadingRef.current.delete(id);
           }
-        }),
-      );
+      });
       perfMeasure("profiles.load.done", "profiles.load.start");
 
       if (Object.keys(updates).length > 0) {
@@ -384,6 +391,11 @@ export const ChatScreen: React.FC = () => {
     },
     [],
   );
+
+  const recentSenderKey = (messages || [])
+    .slice(-30)
+    .map((msg: any) => msg?.senderId || "")
+    .join("|");
 
   // Resolve participant profiles for chats and messages
   useEffect(() => {
@@ -433,7 +445,7 @@ export const ChatScreen: React.FC = () => {
     loadProfiles(ids, keepPhotoIds);
   }, [
     processedChats,
-    messages,
+    recentSenderKey,
     user?.id,
     primaryAdminId,
     loadProfiles,
@@ -693,7 +705,10 @@ export const ChatScreen: React.FC = () => {
       animated: true,
       viewPosition: 0.4,
     });
-    setTimeout(() => setHighlightedMessageId(null), 3500);
+    if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+    highlightTimerRef.current = setTimeout(() => {
+      setHighlightedMessageId(null);
+    }, 3500);
   };
 
   useEffect(() => {
@@ -713,9 +728,12 @@ export const ChatScreen: React.FC = () => {
   useEffect(() => {
     if (!selectedChatId || !user?.id || !newestMessageId) return;
     if (newestMessageId.startsWith("pending-")) return;
-    chatService.markChatAsRead(selectedChatId, user.id).catch(() => {
-      // ignore read marker errors
-    });
+    const timer = setTimeout(() => {
+      chatService.markChatAsRead(selectedChatId, user.id).catch(() => {
+        // ignore read marker errors
+      });
+    }, 1500);
+    return () => clearTimeout(timer);
   }, [selectedChatId, user?.id, newestMessageId]);
 
   const reactionSheet = useMemo(() => {
@@ -1623,9 +1641,23 @@ export const ChatScreen: React.FC = () => {
                   color="#8c52ff"
                   style={{ marginVertical: 12 }}
                 />
+              ) : trimmed ? (
+                <TouchableOpacity
+                  onPress={returnToRecent}
+                  style={{ paddingVertical: 12, alignItems: "center" }}
+                >
+                  <Text style={{ color: "#c084fc", fontWeight: "700" }}>
+                    Voltar às mensagens recentes
+                  </Text>
+                </TouchableOpacity>
               ) : null
             }
-            onScrollToIndexFailed={() => undefined}
+            onScrollToIndexFailed={(info) => {
+              flatListRef.current?.scrollToOffset({
+                offset: Math.max(0, info.averageItemLength * info.index),
+                animated: false,
+              });
+            }}
           />
           {unseenMentions.length > 0 ? (
             <TouchableOpacity

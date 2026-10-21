@@ -115,6 +115,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
   }, [visible, docked, slideAnim, fadeAnim]);
 
+  useEffect(
+    () => () => {
+      slideAnim.stopAnimation();
+      fadeAnim.stopAnimation();
+      consultationPulseAnim.stopAnimation();
+    },
+    [consultationPulseAnim, fadeAnim, slideAnim],
+  );
+
   useEffect(() => {
     if (!shouldPulseConsultation) {
       consultationPulseAnim.setValue(1);
@@ -242,6 +251,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
             label: "Gerenciar Usuários",
             icon: "people",
             color: "#8c52ff",
+          },
+          {
+            id: "BadgeManagement",
+            label: "Insígnias",
+            icon: "ribbon",
+            color: "#e7b958",
           },
           {
             id: "Feed",
@@ -372,9 +387,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
   };
 
   const handleLogout = () => {
-    signOut();
-    navigate("Login");
     onClose();
+    setTimeout(() => {
+      void signOut()
+        .catch(() => undefined)
+        .finally(() => navigate("Login"));
+    }, 180);
   };
 
   const homeMenuItem = menuItems.find((item) => item.id === "Home");

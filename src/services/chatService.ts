@@ -27,7 +27,6 @@ import {
   normalizeHeartEmojisInText,
   normalizeReactionEmoji,
 } from "../utils/chatMentions";
-import { notifyChatMessageRecipients } from "./chatPushService";
 
 export type ChatType = "direct" | "group" | "global";
 
@@ -258,17 +257,6 @@ export async function sendMessage(
 
   await batch.commit();
 
-  // Push não pode travar o envio da mensagem (senão o botão parece morto).
-  void notifyChatMessageRecipients({
-    chatId,
-    messageId: msgRef.id,
-    senderId,
-    text,
-    mentionUserIds: mentions.map((mention) => mention.userId),
-  }).catch((error) => {
-    console.warn("Falha ao enviar push do chat:", error);
-  });
-
   return { id: msgRef.id };
 }
 
@@ -350,20 +338,26 @@ export function listenToMessages(
   const messagesCol = collection(chatRef, MESSAGES_SUBCOL);
   const q = query(messagesCol, orderBy("createdAt", "desc"), limit(limitCount));
 
-  const unsubscribe = onSnapshot(q, (snap: QuerySnapshot<DocumentData>) => {
-    const msgs: Message[] = [];
-    snap.docs.forEach((d) => {
-      msgs.push(mapMessage(d.id, d.data()));
-    });
+  const unsubscribe = onSnapshot(
+    q,
+    (snap: QuerySnapshot<DocumentData>) => {
+      const msgs: Message[] = [];
+      snap.docs.forEach((d) => {
+        msgs.push(mapMessage(d.id, d.data()));
+      });
 
-    // Firestore returns newest first (desc) — reverse for UI chronological order
-    const ordered = msgs.reverse();
-    const oldestCursor = snap.docs.length ? snap.docs[snap.docs.length - 1] : null;
-    onUpdate(ordered, {
-      hasMore: snap.size >= limitCount,
-      oldestCursor,
-    });
-  });
+      // Firestore returns newest first (desc) — reverse for UI chronological order
+      const ordered = msgs.reverse();
+      const oldestCursor = snap.docs.length ? snap.docs[snap.docs.length - 1] : null;
+      onUpdate(ordered, {
+        hasMore: snap.size >= limitCount,
+        oldestCursor,
+      });
+    },
+    (error) => {
+      console.warn("Não foi possível ouvir as mensagens", chatId, error);
+    },
+  );
 
   return unsubscribe;
 }
@@ -445,7 +439,6 @@ export function listenToUserChats(
     },
     (err) => {
       console.error("Firestore listener error (listenToUserChats):", err);
-      onUpdate([]);
     },
   );
 

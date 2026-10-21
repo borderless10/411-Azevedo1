@@ -66,12 +66,17 @@ export const MessageBubble = React.memo(function MessageBubble({
       >
         {showAvatar && !isOwn && (
           <View style={styles.msgAvatarContainer}>
-            {profilePhotoUri(senderPhotoBase64) ? (
+            {(() => {
+              const photoUri = profilePhotoUri(senderPhotoBase64);
+              const safeUri =
+                photoUri && !photoUri.startsWith("data:") ? photoUri : null;
+              return safeUri ? (
               <Image
-                source={{ uri: profilePhotoUri(senderPhotoBase64) as string }}
+                source={{ uri: safeUri }}
                 style={styles.msgAvatar}
               />
-            ) : (
+              ) : null;
+            })() || (
               <View style={styles.msgAvatarFallback}>
                 <Text style={styles.msgAvatarInitial}>{initial}</Text>
               </View>

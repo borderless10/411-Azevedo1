@@ -13,7 +13,7 @@ import {
   orderBy,
   limit,
 } from "firebase/firestore";
-import { db } from "../lib/firebase";
+import { auth, db } from "../lib/firebase";
 import {
   getBudgetsCollection,
   convertBudgetFromFirestore,
@@ -45,6 +45,7 @@ export type RankingEntry = {
   nickname?: string | null;
   isCouple: boolean;
   photoUrl?: string | null;
+  photoUpdatedAt?: number | null;
   /** @deprecated use rankingPoints */
   zeroDays?: number;
 };
@@ -64,6 +65,7 @@ const snapshotFromUser = (
   nickname: user.nickname ?? null,
   isCouple: isCoupleAccount(user),
   photoUrl: user.photoUrl || null,
+  photoUpdatedAt: user.photoUpdatedAt || null,
   zeroDays: rankingPoints,
 });
 
@@ -76,6 +78,8 @@ const entryFromSnapshot = (id: string, data: Record<string, unknown>): RankingEn
     nickname: typeof data.nickname === "string" ? data.nickname : null,
     isCouple: data.isCouple === true,
     photoUrl: typeof data.photoUrl === "string" ? data.photoUrl : null,
+    photoUpdatedAt:
+      typeof data.photoUpdatedAt === "number" ? data.photoUpdatedAt : null,
     zeroDays: rankingPoints,
   };
 };
@@ -149,6 +153,7 @@ export const rankingServices = {
         nickname: entry.nickname || "",
         isCouple: entry.isCouple,
         photoUrl: entry.photoUrl || "",
+        photoUpdatedAt: entry.photoUpdatedAt || null,
         updatedAt: serverTimestamp(),
       });
     } catch (error) {
@@ -270,10 +275,16 @@ export const rankingServices = {
   },
 
   async writeSnapshots(entries: RankingEntry[]): Promise<void> {
+    // As regras só permitem gravar o resumo do próprio usuário (admin e
+    // supervisor gravam todos pela tela de reset, não por aqui). Gravar o
+    // lote inteiro a partir de um cliente comum estoura permission-denied.
+    const currentUid = auth.currentUser?.uid;
+    if (!currentUid) return;
+    const writable = entries.filter((entry) => entry.userId === currentUid);
     const chunkSize = 400;
-    for (let index = 0; index < entries.length; index += chunkSize) {
+    for (let index = 0; index < writable.length; index += chunkSize) {
       const batch = writeBatch(db);
-      entries.slice(index, index + chunkSize).forEach((entry) => {
+      writable.slice(index, index + chunkSize).forEach((entry) => {
         batch.set(getRankingSnapshotDoc(entry.userId), {
           userId: entry.userId,
           rankingPoints: entry.rankingPoints,
@@ -282,6 +293,7 @@ export const rankingServices = {
           nickname: entry.nickname || "",
           isCouple: entry.isCouple,
           photoUrl: entry.photoUrl || "",
+          photoUpdatedAt: entry.photoUpdatedAt || null,
           updatedAt: serverTimestamp(),
         });
       });

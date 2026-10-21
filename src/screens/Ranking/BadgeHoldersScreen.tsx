@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  FlatList,
   ScrollView,
   StyleSheet,
   Text,
@@ -104,7 +105,17 @@ export const BadgeHoldersScreen = () => {
 
   return (
     <Layout title="Detentores de Insígnias" showBackButton showSidebar>
-      <ScrollView style={styles.container}>
+      <FlatList
+        style={styles.container}
+        data={gamification.loading || gamification.error ? [] : holders}
+        keyExtractor={(item) => item.userId}
+        numColumns={2}
+        columnWrapperStyle={styles.column}
+        initialNumToRender={8}
+        maxToRenderPerBatch={6}
+        windowSize={5}
+        ListHeaderComponent={
+          <>
         <View style={styles.searchRow}>
           <Ionicons name="search" size={18} color="#888" />
           <TextInput
@@ -162,45 +173,41 @@ export const BadgeHoldersScreen = () => {
               </TouchableOpacity>
             ))}
         </ScrollView>
-
-        {gamification.loading ? (
-          <View style={styles.center}>
-            <ActivityIndicator size="large" color="#8c52ff" />
-          </View>
-        ) : gamification.error ? (
-          <View style={styles.center}>
-            <Text style={styles.emptyText}>
-              Não foi possível carregar os detentores.
+          </>
+        }
+        ListEmptyComponent={
+          gamification.loading ? (
+            <View style={styles.center}>
+              <ActivityIndicator size="large" color="#8c52ff" />
+            </View>
+          ) : (
+            <View style={styles.center}>
+              <Text style={styles.emptyText}>
+                {gamification.error
+                  ? "Não foi possível carregar os detentores."
+                  : "Nenhum detentor encontrado."}
+              </Text>
+            </View>
+          )
+        }
+        renderItem={({ item: holder }) => (
+          <View style={styles.card}>
+            <BadgedAvatar
+              photoUri={holder.photoUri}
+              displayName={holder.displayName}
+              size={56}
+              definition={holder.borderDefinition}
+            />
+            <Text style={styles.cardName} numberOfLines={1}>
+              {holder.displayName}
             </Text>
-          </View>
-        ) : holders.length === 0 ? (
-          <View style={styles.center}>
-            <Text style={styles.emptyText}>
-              Nenhum detentor encontrado.
-            </Text>
-          </View>
-        ) : (
-          <View style={styles.grid}>
-            {holders.map((holder) => (
-              <View key={holder.userId} style={styles.card}>
-                <BadgedAvatar
-                  photoUri={holder.photoUri}
-                  displayName={holder.displayName}
-                  size={56}
-                  definition={holder.borderDefinition}
-                />
-                <Text style={styles.cardName} numberOfLines={1}>
-                  {holder.displayName}
-                </Text>
-                <BadgeEmblemRow
-                  definitions={holder.badges}
-                  onPress={setSelectedBadge}
-                />
-              </View>
-            ))}
+            <BadgeEmblemRow
+              definitions={holder.badges}
+              onPress={setSelectedBadge}
+            />
           </View>
         )}
-      </ScrollView>
+      />
 
       <BadgeDetailModal
         definition={selectedBadge}
@@ -239,9 +246,9 @@ const styles = StyleSheet.create({
   chipTextActive: { color: "#fff" },
   center: { alignItems: "center", paddingVertical: 40 },
   emptyText: { color: "#999", fontSize: 14, textAlign: "center" },
-  grid: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
+  column: { gap: 12, marginBottom: 12 },
   card: {
-    width: "47%",
+    flex: 1,
     backgroundColor: "#161616",
     borderRadius: 14,
     padding: 14,

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  capChatWindow,
   mergeChatMessages,
   reconcilePendingMessages,
 } from "./chatMessagePipeline.ts";
@@ -19,6 +20,17 @@ test("merge deduplica por id e ordena uma vez", () => {
     merged.map((item) => item.text),
     ["antiga atualizada", "nova"],
   );
+});
+
+test("janela do chat descarta as mais antigas ao passar do teto", () => {
+  const messages = Array.from({ length: 5 }, (_, index) => ({ id: index }));
+  const capped = capChatWindow(messages, 3);
+  assert.deepEqual(
+    capped.messages.map((item) => item.id),
+    [2, 3, 4],
+  );
+  assert.equal(capped.trimmed, true);
+  assert.equal(capChatWindow(messages, 5).trimmed, false);
 });
 
 test("mensagem pendente sai quando o snapshot confirma", () => {

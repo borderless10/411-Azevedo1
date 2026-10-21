@@ -4,6 +4,7 @@ import { buildSeasonPodiums } from "./rankingSeason.js";
 import {
   grantDocId,
   resolveActiveBorderAfterRevoke,
+  decideBadgeRemoval,
   validateBadgeDefinitionInput,
 } from "./badgeRules.js";
 
@@ -21,6 +22,12 @@ test("grant id determinístico e borda revogada cai para padrão", () => {
   assert.equal(grantDocId("u1", "legado-visao"), "u1_legado-visao");
   assert.equal(resolveActiveBorderAfterRevoke("legado-visao", "legado-visao"), null);
   assert.equal(resolveActiveBorderAfterRevoke("guardiao-do-zero", "legado-visao"), "guardiao-do-zero");
+});
+
+test("exclusão preserva oficial e histórico", () => {
+  assert.equal(decideBadgeRemoval({ isOfficial: true, hasGrantHistory: false }), "reject");
+  assert.equal(decideBadgeRemoval({ isOfficial: false, hasGrantHistory: true }), "archive");
+  assert.equal(decideBadgeRemoval({ isOfficial: false, hasGrantHistory: false }), "delete");
 });
 
 test("definição inválida é rejeitada", () => {

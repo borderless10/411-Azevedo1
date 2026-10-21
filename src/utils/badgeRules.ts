@@ -33,3 +33,15 @@ export const validateBadgeDefinitionInput = (
     errors.push("borda não permitida");
   return { valid: errors.length === 0, errors };
 };
+
+export const decideBadgeRemoval = ({
+  isOfficial,
+  hasGrantHistory,
+}: {
+  isOfficial: boolean;
+  hasGrantHistory: boolean;
+}): "reject" | "archive" | "delete" => {
+  if (isOfficial) return "reject";
+  if (hasGrantHistory) return "archive";
+  return "delete";
+};

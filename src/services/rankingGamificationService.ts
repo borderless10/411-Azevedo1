@@ -89,6 +89,16 @@ export const rankingGamificationService = {
     await call("setBadgeDefinitionActive")({ badgeId, isActive });
   },
 
+  async deleteBadgeDefinition(
+    badgeId: string,
+  ): Promise<{ archived: boolean; deleted: boolean }> {
+    const result = await call<
+      { badgeId: string },
+      { archived: boolean; deleted: boolean }
+    >("deleteBadgeDefinition")({ badgeId });
+    return result.data;
+  },
+
   async grantBadge(userId: string, badgeId: string): Promise<void> {
     await call("grantBadge")({ userId, badgeId });
   },

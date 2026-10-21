@@ -17,6 +17,7 @@ import ConsultantPicker from "../../components/ui/ConsultantPicker";
 import { ConsultationPreferredDayPicker } from "../../components/Consultation/ConsultationPreferredDayPicker";
 import CustomModal from "../../components/ui/CustomModal";
 import { AccountType } from "../../types/auth";
+import { UserBadgeGrantEditor } from "../../components/Gamification/UserBadgeGrantEditor";
 import {
   coupleAccountFieldsFromInput,
   isCoupleAccount,
@@ -532,6 +533,18 @@ export const EditUserScreen: React.FC = ({}: any) => {
               </View>
             )}
 
+            {isAdminUser(user) && userId ? (
+              <View style={styles.badgeSection}>
+                <Text style={[styles.label, { color: colors.text }]}>
+                  Insígnias do Usuário
+                </Text>
+                <Text style={styles.badgeHint}>
+                  Toque para adicionar ou remover. A alteração vale na hora.
+                </Text>
+                <UserBadgeGrantEditor userId={userId} userName={name} />
+              </View>
+            ) : null}
+
             <TouchableOpacity
               style={[
                 styles.saveButton,
@@ -662,6 +675,8 @@ const styles = StyleSheet.create({
   datePicker: {
     marginBottom: 0,
   },
+  badgeSection: { marginTop: 18, marginBottom: 8 },
+  badgeHint: { color: "#999", fontSize: 12, marginBottom: 8 },
   saveButton: {
     marginTop: 24,
     padding: 14,

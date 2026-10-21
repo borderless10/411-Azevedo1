@@ -22,6 +22,8 @@ import {
   type BadgeDefinition,
   type BadgeDefinitionInput,
 } from "../../types/rankingGamification";
+import { BadgeColorPicker } from "../../components/Gamification/BadgeColorPicker";
+import { UserBadgeGrantEditor } from "../../components/Gamification/UserBadgeGrantEditor";
 
 const emptyForm: BadgeDefinitionInput = {
   id: "",
@@ -46,7 +48,7 @@ export const BadgeManagementScreen = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [userQuery, setUserQuery] = useState("");
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
-  const [busyKey, setBusyKey] = useState<string | null>(null);
+  const [tab, setTab] = useState<"manage" | "grant">("manage");
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -108,6 +110,40 @@ export const BadgeManagementScreen = () => {
     }
   };
 
+  const handleDelete = async (definition: BadgeDefinition) => {
+    Alert.alert(
+      definition.isOfficial ? "Insígnia oficial" : "Excluir insígnia",
+      definition.isOfficial
+        ? "Insígnias oficiais não podem ser excluídas. Você pode desativá-las."
+        : `Excluir ${definition.name}? Se alguém já a recebeu, ela será arquivada e o histórico permanece.`,
+      definition.isOfficial
+        ? [{ text: "Entendi" }]
+        : [
+            { text: "Cancelar", style: "cancel" },
+            {
+              text: "Excluir",
+              style: "destructive",
+              onPress: async () => {
+                try {
+                  const result =
+                    await rankingGamificationService.deleteBadgeDefinition(
+                      definition.id,
+                    );
+                  Alert.alert(
+                    "Insígnias",
+                    result.archived
+                      ? "A insígnia foi arquivada porque já possui histórico."
+                      : "Insígnia excluída.",
+                  );
+                } catch (error: any) {
+                  Alert.alert("Erro", error?.message || "Não foi possível excluir.");
+                }
+              },
+            },
+          ],
+    );
+  };
+
   const handleToggleActive = async (definition: BadgeDefinition) => {
     try {
       await rankingGamificationService.setBadgeDefinitionActive(
@@ -116,39 +152,6 @@ export const BadgeManagementScreen = () => {
       );
     } catch (error: any) {
       Alert.alert("Erro", error?.message || "Não foi possível atualizar.");
-    }
-  };
-
-  const handleGrantToggle = async (badgeId: string, hasBadge: boolean) => {
-    if (!selectedUser || busyKey) return;
-    const run = async () => {
-      try {
-        setBusyKey(badgeId);
-        if (hasBadge) {
-          await rankingGamificationService.revokeBadge(selectedUser.id, badgeId);
-        } else {
-          await rankingGamificationService.grantBadge(selectedUser.id, badgeId);
-        }
-      } catch (error: any) {
-        Alert.alert(
-          "Erro",
-          error?.message || "Não foi possível atualizar a concessão.",
-        );
-      } finally {
-        setBusyKey(null);
-      }
-    };
-    if (hasBadge) {
-      Alert.alert(
-        "Remover insígnia",
-        `Remover esta insígnia de ${selectedUser.name}? Se for a borda ativa, ela volta ao padrão.`,
-        [
-          { text: "Cancelar", style: "cancel" },
-          { text: "Remover", style: "destructive", onPress: run },
-        ],
-      );
-    } else {
-      run();
     }
   };
 
@@ -164,15 +167,29 @@ export const BadgeManagementScreen = () => {
     );
   }
 
-  const selectedUserBadgeIds = new Set(
-    (gamification.grantsByUser.get(selectedUser?.id || "") || []).map(
-      (grant) => grant.badgeId,
-    ),
-  );
-
   return (
     <Layout title="Gerenciar Insígnias" showBackButton showSidebar>
       <ScrollView style={styles.container}>
+        <View style={styles.tabs}>
+          <TouchableOpacity
+            style={[styles.tab, tab === "manage" && styles.tabActive]}
+            onPress={() => setTab("manage")}
+          >
+            <Text style={[styles.tabText, tab === "manage" && styles.tabTextActive]}>
+              Gerenciar Insígnias
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, tab === "grant" && styles.tabActive]}
+            onPress={() => setTab("grant")}
+          >
+            <Text style={[styles.tabText, tab === "grant" && styles.tabTextActive]}>
+              Conceder e Remover
+            </Text>
+          </TouchableOpacity>
+        </View>
+        {tab === "manage" ? (
+        <>
         <Text style={styles.sectionTitle}>
           {editingId ? "Editar insígnia" : "Nova insígnia"}
         </Text>
@@ -232,46 +249,16 @@ export const BadgeManagementScreen = () => {
             </TouchableOpacity>
           ))}
         </View>
-        <View style={styles.colorRow}>
-          <TextInput
-            style={[styles.input, styles.colorInput]}
-            placeholder="#8c52ff"
-            placeholderTextColor="#777"
-            autoCapitalize="none"
-            value={form.primaryColor}
-            onChangeText={(value) => setForm({ ...form, primaryColor: value })}
-          />
-          <View
-            style={[
-              styles.colorPreview,
-              {
-                backgroundColor: HEX.test(form.primaryColor)
-                  ? form.primaryColor
-                  : "#333",
-              },
-            ]}
-          />
-          <TextInput
-            style={[styles.input, styles.colorInput]}
-            placeholder="#c0c6d4"
-            placeholderTextColor="#777"
-            autoCapitalize="none"
-            value={form.secondaryColor}
-            onChangeText={(value) =>
-              setForm({ ...form, secondaryColor: value })
-            }
-          />
-          <View
-            style={[
-              styles.colorPreview,
-              {
-                backgroundColor: HEX.test(form.secondaryColor)
-                  ? form.secondaryColor
-                  : "#333",
-              },
-            ]}
-          />
-        </View>
+        <BadgeColorPicker
+          label="Cor principal"
+          value={form.primaryColor}
+          onChange={(primaryColor) => setForm({ ...form, primaryColor })}
+        />
+        <BadgeColorPicker
+          label="Cor secundária"
+          value={form.secondaryColor}
+          onChange={(secondaryColor) => setForm({ ...form, secondaryColor })}
+        />
         <Text style={styles.label}>Borda</Text>
         <View style={styles.wrap}>
           {BADGE_BORDER_PRESETS.map((preset) => (
@@ -367,10 +354,18 @@ export const BadgeManagementScreen = () => {
                   {definition.isActive ? "Desativar" : "Ativar"}
                 </Text>
               </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.smallButton, styles.dangerButton]}
+                onPress={() => void handleDelete(definition)}
+              >
+                <Text style={styles.smallButtonText}>Excluir</Text>
+              </TouchableOpacity>
             </View>
           ))
         )}
-
+        </>
+        ) : (
+        <>
         <Text style={styles.sectionTitle}>Conceder ou remover</Text>
         <TextInput
           style={styles.input}
@@ -410,43 +405,13 @@ export const BadgeManagementScreen = () => {
                 <Text style={styles.smallButtonText}>Trocar</Text>
               </TouchableOpacity>
             </View>
-            {gamification.definitions
-              .filter((definition) => definition.isActive)
-              .map((definition) => {
-                const hasBadge = selectedUserBadgeIds.has(definition.id);
-                return (
-                  <View key={definition.id} style={styles.card}>
-                    <Ionicons
-                      name={definition.icon as any}
-                      size={20}
-                      color={definition.primaryColor}
-                    />
-                    <View style={styles.cardInfo}>
-                      <Text style={styles.cardName}>{definition.name}</Text>
-                      <Text style={styles.cardMeta}>
-                        {hasBadge ? "Concedida" : "Não concedida"}
-                      </Text>
-                    </View>
-                    <TouchableOpacity
-                      style={[
-                        styles.smallButton,
-                        hasBadge && styles.dangerButton,
-                      ]}
-                      disabled={busyKey === definition.id}
-                      onPress={() => handleGrantToggle(definition.id, hasBadge)}
-                    >
-                      <Text style={styles.smallButtonText}>
-                        {busyKey === definition.id
-                          ? "..."
-                          : hasBadge
-                            ? "Remover"
-                            : "Conceder"}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                );
-              })}
+            <UserBadgeGrantEditor
+              userId={selectedUser.id}
+              userName={selectedUser.name}
+            />
           </>
+        )}
+        </>
         )}
       </ScrollView>
     </Layout>
@@ -457,6 +422,17 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#000", padding: 16 },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   emptyText: { color: "#999", fontSize: 14 },
+  tabs: { flexDirection: "row", gap: 8, marginBottom: 8 },
+  tab: {
+    flex: 1,
+    backgroundColor: "#1c1c1c",
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: "center",
+  },
+  tabActive: { backgroundColor: "#8c52ff" },
+  tabText: { color: "#ccc", fontSize: 12, fontWeight: "700", textAlign: "center" },
+  tabTextActive: { color: "#fff" },
   sectionTitle: {
     color: "#fff",
     fontSize: 17,

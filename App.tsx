@@ -16,22 +16,22 @@ import { ErrorBoundary } from "./src/components/ErrorBoundary";
  */
 export default function App() {
   return (
-    <ThemeProvider>
-      <SafeAreaProvider>
-        <AuthProvider>
-          <ChatsProvider>
-            <ConsultationSchedulingProvider>
-              <ShowValuesProvider>
-                <NavigationProvider>
-                  <ErrorBoundary>
+    <ErrorBoundary>
+      <ThemeProvider>
+        <SafeAreaProvider>
+          <AuthProvider>
+            <ChatsProvider>
+              <ConsultationSchedulingProvider>
+                <ShowValuesProvider>
+                  <NavigationProvider>
                     <AppContent />
-                  </ErrorBoundary>
-                </NavigationProvider>
-              </ShowValuesProvider>
-            </ConsultationSchedulingProvider>
-          </ChatsProvider>
-        </AuthProvider>
-      </SafeAreaProvider>
-    </ThemeProvider>
+                  </NavigationProvider>
+                </ShowValuesProvider>
+              </ConsultationSchedulingProvider>
+            </ChatsProvider>
+          </AuthProvider>
+        </SafeAreaProvider>
+      </ThemeProvider>
+    </ErrorBoundary>
   );
 }

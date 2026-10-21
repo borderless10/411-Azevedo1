@@ -71,11 +71,11 @@ const ConfettiCelebration: React.FC<Props> = ({ active, onComplete }) => {
       }),
     );
 
-    Animated.parallel(animations).start(({ finished }) => {
-      if (finished) {
-        onComplete?.();
-      }
+    const composite = Animated.parallel(animations);
+    composite.start(({ finished }) => {
+      if (finished) onComplete?.();
     });
+    return () => composite.stop();
   }, [active, onComplete, particles, progressRefs]);
 
   if (!active) return null;

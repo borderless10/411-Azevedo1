@@ -7,6 +7,7 @@ import {
   userParticipates,
 } from "./rankingSeason.js";
 import {
+  decideBadgeRemoval,
   grantDocId,
   resolveActiveBorderAfterRevoke,
   validateBadgeDefinitionInput,
@@ -166,6 +167,37 @@ export const createGamificationHandlers = (db) => ({
       updatedAt: FieldValue.serverTimestamp(),
     });
     return { badgeId };
+  },
+
+  async deleteBadgeDefinition(request) {
+    const adminUid = requireAuth(request);
+    await requireAdmin(db, adminUid);
+    const badgeId = String(request.data?.badgeId || "");
+    const ref = db.doc(`badgeDefinitions/${badgeId}`);
+    const snap = await ref.get();
+    if (!snap.exists) throw new HttpsError("not-found", "Insígnia não encontrada");
+    const history = await db
+      .collection("userBadgeGrants")
+      .where("badgeId", "==", badgeId)
+      .limit(1)
+      .get();
+    const action = decideBadgeRemoval({
+      isOfficial: snap.data().isOfficial === true,
+      hasGrantHistory: !history.empty,
+    });
+    if (action === "reject") {
+      throw new HttpsError("failed-precondition", "Insígnia oficial não pode ser excluída");
+    }
+    if (action === "archive") {
+      await ref.update({
+        isActive: false,
+        updatedBy: adminUid,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      return { badgeId, archived: true, deleted: false };
+    }
+    await ref.delete();
+    return { badgeId, archived: false, deleted: true };
   },
 
   async grantBadge(request) {

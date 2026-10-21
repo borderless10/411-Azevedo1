@@ -5,6 +5,17 @@ export type PipelineMessage = {
   createdAt: Date;
 };
 
+export const CHAT_MEMORY_LIMIT = 400;
+
+/** Mantém as mensagens mais recentes e informa quando o histórico antigo saiu da memória. */
+export const capChatWindow = <T>(
+  messages: T[],
+  limit = CHAT_MEMORY_LIMIT,
+): { messages: T[]; trimmed: boolean } => {
+  if (messages.length <= limit) return { messages, trimmed: false };
+  return { messages: messages.slice(messages.length - limit), trimmed: true };
+};
+
 export const mergeChatMessages = <T extends PipelineMessage>(
   older: T[],
   live: T[],
