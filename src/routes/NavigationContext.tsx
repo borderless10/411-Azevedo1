@@ -31,6 +31,8 @@ export type ScreenName =
   | "Investments"
   | "Recomendacao"
   | "Ranking"
+  | "BadgeHolders"
+  | "BadgeManagement"
   | "ClientPlanning"
   | "ClientInvestments"
   | "ClientInvestmentsView"

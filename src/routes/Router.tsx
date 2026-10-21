@@ -20,6 +20,8 @@ import { InvestmentsScreen } from "../screens/Investments/InvestmentsScreen";
 import { RecomendacaoScreen } from "../screens/Recomendacao/RecomendacaoScreen";
 import { BudgetScreen } from "../screens/Budget/BudgetScreen";
 import { RankingScreen } from "../screens/Ranking/RankingScreen";
+import { BadgeHoldersScreen } from "../screens/Ranking/BadgeHoldersScreen";
+import { BadgeManagementScreen } from "../screens/Admin/BadgeManagementScreen";
 import { BillsScreen } from "../screens/Bills/BillsScreen";
 import { CadastrarClienteScreen } from "../screens/Admin/CadastrarClienteScreen";
 import { AdminUsersScreen } from "../screens/Admin/AdminUsersScreen";
@@ -179,6 +181,10 @@ export const Router = () => {
         return <BillsScreen />;
       case "Ranking":
         return <RankingScreen />;
+      case "BadgeHolders":
+        return <BadgeHoldersScreen />;
+      case "BadgeManagement":
+        return <BadgeManagementScreen />;
       case "Profile":
         return <ProfileScreen />;
       case "Settings":

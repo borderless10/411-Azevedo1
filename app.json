@@ -2,7 +2,7 @@
   "expo": {
     "name": "Visão",
     "slug": "411-Azevedo",
-    "version": "1.0.7",
+    "version": "1.0.8",
     "orientation": "portrait",
     "scheme": "plan411azevedo",
     "icon": "./assets/icon.png",
@@ -15,7 +15,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.borderlesspc2.visao411",
-      "buildNumber": "18",
+      "buildNumber": "19",
       "infoPlist": {
         "CFBundleDisplayName": "Visão",
         "ITSAppUsesNonExemptEncryption": false,
@@ -67,7 +67,7 @@
       "expo-font"
     ],
     "owner": "visao",
-    "runtimeVersion": "1.0.7-sdk57-b18",
+    "runtimeVersion": "1.0.8-sdk57-b19",
     "extra": {
       "eas": {
         "projectId": "be2008b3-c7c7-453f-af2c-2cf82fcfcd56"

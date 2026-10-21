@@ -1,7 +1,9 @@
 import { initializeApp } from "firebase-admin/app";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
+import { onCall } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions";
+import { createGamificationHandlers } from "./gamification.js";
 import { Expo } from "expo-server-sdk";
 import {
   buildChatPushMessages,
@@ -131,4 +133,26 @@ export const sendChatMessagePush = onDocumentCreated(
       });
     }
   },
+);
+
+const gamification = createGamificationHandlers(db);
+const callOpts = { region: "southamerica-east1" };
+
+export const closeRankingSeason = onCall(callOpts, (request) =>
+  gamification.closeRankingSeason(request),
+);
+export const upsertBadgeDefinition = onCall(callOpts, (request) =>
+  gamification.upsertBadgeDefinition(request),
+);
+export const setBadgeDefinitionActive = onCall(callOpts, (request) =>
+  gamification.setBadgeDefinitionActive(request),
+);
+export const grantBadge = onCall(callOpts, (request) =>
+  gamification.grantBadge(request),
+);
+export const revokeBadge = onCall(callOpts, (request) =>
+  gamification.revokeBadge(request),
+);
+export const selectBadgeBorder = onCall(callOpts, (request) =>
+  gamification.selectBadgeBorder(request),
 );

@@ -19,6 +19,14 @@ import { useNavigation } from "../../routes/NavigationContext";
 import { RankingPreference } from "../../types/auth";
 import { resolveProfilePhotoUri } from "../../utils/chatDisplayNames";
 import { isCoupleAccount } from "../../utils/coupleAccount";
+import { useRankingGamification } from "../../hooks/useRankingGamification";
+import { BadgedAvatar } from "../../components/Gamification/BadgedAvatar";
+import {
+  BadgeDetailModal,
+  BadgeEmblemRow,
+} from "../../components/Gamification/BadgeEmblem";
+import { PodiumView } from "../../components/Gamification/PodiumView";
+import type { BadgeDefinition } from "../../types/rankingGamification";
 
 type Row = {
   position: number;
@@ -47,6 +55,19 @@ export const RankingScreen = () => {
   const [resetting, setResetting] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [cutoffDateKey, setCutoffDateKey] = useState<string | null>(null);
+  const [mainTab, setMainTab] = useState<"current" | "previous" | "history">(
+    "current",
+  );
+  const [selectedBadge, setSelectedBadge] = useState<BadgeDefinition | null>(
+    null,
+  );
+  const [expandedSeason, setExpandedSeason] = useState<number | null>(null);
+  const [borderByUser, setBorderByUser] = useState<Map<string, string | null>>(
+    new Map(),
+  );
+  const borderLoadingRef = useRef<Set<string>>(new Set());
+  const touchStartXRef = useRef<number | null>(null);
+  const gamification = useRankingGamification();
   const leagueRowsCacheRef = useRef<
     Partial<Record<RankingLeague, { rows: Row[]; cutoff: string | null }>>
   >({});
@@ -210,7 +231,7 @@ export const RankingScreen = () => {
 
     Alert.alert(
       "Reiniciar ranking",
-      "Todos os pontos atuais serão zerados. Os participantes voltam a pontuar a partir de amanhã. Esta ação não apaga os registros da planilha.",
+      "Os três primeiros de Individuais e de Casais serão salvos no Pódio Anterior. Depois os pontos serão zerados e os participantes voltam a pontuar a partir de amanhã.",
       [
         { text: "Cancelar", style: "cancel" },
         {
@@ -219,9 +240,12 @@ export const RankingScreen = () => {
           onPress: async () => {
             try {
               setResetting(true);
-              await rankingServices.resetRanking(user.id);
+              const result = await rankingServices.resetRanking(user.id);
               setReloadKey((k) => k + 1);
-              Alert.alert("Ranking reiniciado", "A classificação foi zerada.");
+              Alert.alert(
+                "Ranking reiniciado",
+                `A edição ${result.seasonNumber} foi encerrada e o pódio ficou salvo.`,
+              );
             } catch (error) {
               console.error("❌ [RANKING SCREEN] Erro ao reiniciar ranking:", error);
               Alert.alert("Erro", "Não foi possível reiniciar o ranking.");
@@ -232,6 +256,57 @@ export const RankingScreen = () => {
         },
       ],
     );
+  };
+
+  useEffect(() => {
+    const ids = new Set<string>();
+    rows.slice(0, 20).forEach((row) => ids.add(row.userId));
+    gamification.seasons.slice(0, 5).forEach((season) => {
+      [...season.podiums.individual, ...season.podiums.couple].forEach((entry) =>
+        ids.add(entry.userId),
+      );
+    });
+    const missing = [...ids].filter(
+      (id) => !borderByUser.has(id) && !borderLoadingRef.current.has(id),
+    );
+    if (!missing.length) return;
+    missing.forEach((id) => borderLoadingRef.current.add(id));
+    let cancelled = false;
+    Promise.all(
+      missing.map(async (id) => {
+        try {
+          const profile: any = await userService.getUserLiteById(id);
+          return { id, border: profile?.activeBadgeBorderId || null };
+        } catch {
+          return { id, border: null };
+        } finally {
+          borderLoadingRef.current.delete(id);
+        }
+      }),
+    ).then((results) => {
+      if (cancelled) return;
+      setBorderByUser((current) => {
+        const next = new Map(current);
+        results.forEach((item) => next.set(item.id, item.border));
+        return next;
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [rows, gamification.seasons, borderByUser]);
+
+  const borderDefinitionByUser = (userId: string) => {
+    const badgeId = borderByUser.get(userId);
+    return badgeId ? gamification.definitionsById.get(badgeId) || null : null;
+  };
+
+  const podiumBorderMap = (entries: { userId: string }[]) => {
+    const map = new Map<string, BadgeDefinition | null>();
+    entries.forEach((entry) =>
+      map.set(entry.userId, borderDefinitionByUser(entry.userId)),
+    );
+    return map;
   };
 
   const handleSelectRankingPreference = (preference: RankingPreference) => {
@@ -284,7 +359,63 @@ export const RankingScreen = () => {
           </TouchableOpacity>
         </View>
 
-        {showLeagueTabs ? (
+        <View style={styles.leagueTabs}>
+          {(
+            [
+              ["current", "Ranking Atual"],
+              ["previous", "Pódio Anterior"],
+              ["history", "Histórico"],
+            ] as const
+          ).map(([tab, label]) => (
+            <TouchableOpacity
+              key={tab}
+              style={[
+                styles.leagueTab,
+                mainTab === tab && styles.leagueTabActive,
+              ]}
+              onPress={() => setMainTab(tab)}
+            >
+              <Text
+                style={[
+                  styles.leagueTabText,
+                  mainTab === tab && styles.leagueTabTextActive,
+                ]}
+              >
+                {label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <TouchableOpacity
+          style={styles.holdersButton}
+          onPress={() => navigate("BadgeHolders")}
+        >
+          <Ionicons name="medal" size={19} color="#e7b958" />
+          <Text style={styles.holdersButtonText}>Ver Detentores de Insígnias</Text>
+        </TouchableOpacity>
+
+        <View
+          onTouchStart={(event) => {
+            touchStartXRef.current = event.nativeEvent.pageX;
+          }}
+          onTouchEnd={(event) => {
+            const start = touchStartXRef.current;
+            touchStartXRef.current = null;
+            if (start === null) return;
+            const delta = event.nativeEvent.pageX - start;
+            if (Math.abs(delta) < 70) return;
+            const order = ["current", "previous", "history"] as const;
+            const index = order.indexOf(mainTab);
+            const next =
+              delta < 0
+                ? order[Math.min(order.length - 1, index + 1)]
+                : order[Math.max(0, index - 1)];
+            setMainTab(next);
+          }}
+        >
+
+        {showLeagueTabs && mainTab !== "history" ? (
           <View style={styles.leagueTabs}>
             <TouchableOpacity
               style={[
@@ -321,6 +452,8 @@ export const RankingScreen = () => {
           </View>
         ) : null}
 
+        {mainTab === "current" ? (
+          <>
         {isAdminUser ? (
           <TouchableOpacity
             style={[styles.resetButton, resetting && styles.resetButtonDisabled]}
@@ -411,36 +544,12 @@ export const RankingScreen = () => {
               </View>
 
               <View style={styles.avatarWrapper}>
-                {resolveProfilePhotoUri(r) ? (
-                  <Image
-                    source={{ uri: resolveProfilePhotoUri(r) as string }}
-                    style={[
-                      styles.avatar,
-                      r.position <= 3 ? styles.avatarTop : null,
-                    ]}
-                  />
-                ) : (
-                  <View
-                    style={[
-                      styles.avatarFallback,
-                      r.position <= 3 ? styles.avatarTop : null,
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.avatarInitials,
-                        r.position <= 3 ? styles.avatarInitialsTop : null,
-                      ]}
-                    >
-                      {r.displayName
-                        .split(" ")
-                        .map((p) => p[0])
-                        .slice(0, 2)
-                        .join("")
-                        .toUpperCase()}
-                    </Text>
-                  </View>
-                )}
+                <BadgedAvatar
+                  photoUri={resolveProfilePhotoUri(r)}
+                  displayName={r.displayName}
+                  size={r.position <= 3 ? 56 : 48}
+                  definition={borderDefinitionByUser(r.userId)}
+                />
               </View>
 
               <View style={styles.info}>
@@ -452,11 +561,109 @@ export const RankingScreen = () => {
                 <Text style={styles.detail}>
                   {r.zeroDays} pts{r.isCouple ? " · Casal" : ""}
                 </Text>
+                <BadgeEmblemRow
+                  definitions={gamification.badgesByUser.get(r.userId) || []}
+                  onPress={setSelectedBadge}
+                />
               </View>
             </View>
           ))
         )}
+          </>
+        ) : mainTab === "previous" ? (
+          gamification.loading ? (
+            <View style={styles.loadingRow}>
+              <ActivityIndicator size="large" color="#8c52ff" />
+            </View>
+          ) : gamification.error ? (
+            <View style={styles.loadingRow}>
+              <Text style={styles.emptyText}>
+                Não foi possível carregar o pódio anterior.
+              </Text>
+            </View>
+          ) : !gamification.latestSeason ? (
+            <View style={styles.loadingRow}>
+              <Text style={styles.emptyText}>
+                Ainda não há uma edição encerrada.
+              </Text>
+            </View>
+          ) : (
+            <>
+              <Text style={styles.sectionTitle}>
+                Edição {gamification.latestSeason.seasonNumber} encerrada
+                {gamification.latestSeason.endedAt
+                  ? ` em ${gamification.latestSeason.endedAt.toLocaleDateString("pt-BR")}`
+                  : ""}
+              </Text>
+              <PodiumView
+                entries={gamification.latestSeason.podiums[activeLeague]}
+                activeBadgesByUser={gamification.badgesByUser}
+                activeBorderDefinitionByUser={podiumBorderMap(
+                  gamification.latestSeason.podiums[activeLeague],
+                )}
+                onBadgePress={setSelectedBadge}
+              />
+            </>
+          )
+        ) : gamification.loading ? (
+          <View style={styles.loadingRow}>
+            <ActivityIndicator size="large" color="#8c52ff" />
+          </View>
+        ) : gamification.seasons.length === 0 ? (
+          <View style={styles.loadingRow}>
+            <Text style={styles.emptyText}>
+              Nenhuma edição encerrada até agora.
+            </Text>
+          </View>
+        ) : (
+          gamification.seasons.map((season) => (
+            <View key={season.seasonNumber} style={styles.seasonCard}>
+              <TouchableOpacity
+                onPress={() =>
+                  setExpandedSeason(
+                    expandedSeason === season.seasonNumber
+                      ? null
+                      : season.seasonNumber,
+                  )
+                }
+              >
+                <Text style={styles.seasonTitle}>
+                  Edição {season.seasonNumber}
+                  {season.endedAt
+                    ? ` · ${season.endedAt.toLocaleDateString("pt-BR")}`
+                    : ""}
+                </Text>
+                <Text style={styles.seasonSummary}>
+                  Individual:{" "}
+                  {season.podiums.individual
+                    .map((entry) => entry.displayName)
+                    .join(", ") || "sem vencedores"}
+                  {"\n"}Casais:{" "}
+                  {season.podiums.couple
+                    .map((entry) => entry.displayName)
+                    .join(", ") || "sem vencedores"}
+                </Text>
+              </TouchableOpacity>
+              {expandedSeason === season.seasonNumber ? (
+                <PodiumView
+                  entries={season.podiums[activeLeague]}
+                  activeBadgesByUser={gamification.badgesByUser}
+                  activeBorderDefinitionByUser={podiumBorderMap(
+                    season.podiums[activeLeague],
+                  )}
+                  onBadgePress={setSelectedBadge}
+                />
+              ) : null}
+            </View>
+          ))
+        )}
+        </View>
       </ScrollView>
+
+      <BadgeDetailModal
+        definition={selectedBadge}
+        onClose={() => setSelectedBadge(null)}
+      />
 
       <Modal
         visible={showPreferenceModal}
@@ -648,6 +855,23 @@ const styles = StyleSheet.create({
   info: { flex: 1 },
   name: { color: "#fff", fontSize: 16, fontWeight: "600" },
   detail: { color: "#999", fontSize: 13 },
+  holdersButton: {
+    alignSelf: "flex-start",
+    backgroundColor: "#241541",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 12,
+  },
+  holdersButtonText: { color: "#c084fc", fontSize: 13, fontWeight: "700" },
+  seasonCard: {
+    backgroundColor: "#161616",
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 10,
+  },
+  seasonTitle: { color: "#fff", fontSize: 15, fontWeight: "700" },
+  seasonSummary: { color: "#999", fontSize: 12, lineHeight: 18, marginTop: 6 },
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.7)",

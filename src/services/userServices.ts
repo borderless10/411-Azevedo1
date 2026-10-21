@@ -58,6 +58,7 @@ export const mapUserDocument = (id: string, data: any): User => ({
   photoBase64: data?.photoBase64 || "",
   photoUrl: data?.photoUrl || "",
   photoStoragePath: data?.photoStoragePath || "",
+  activeBadgeBorderId: data?.activeBadgeBorderId || null,
   email: data?.email || "",
   username: data?.username || "",
   bio: data?.bio || "",

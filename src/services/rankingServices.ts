@@ -112,14 +112,13 @@ export const rankingServices = {
   /**
    * Zera o ranking para todos: só pontos de dias posteriores à data do reset entram.
    */
-  async resetRanking(adminUserId: string): Promise<void> {
-    const cutoffDateKey = formatDateToString(new Date());
-    await setDoc(getAppConfigDoc(RANKING_CONFIG_ID), {
-      cutoffDateKey,
-      resetAt: serverTimestamp(),
-      resetBy: adminUserId,
-    });
-    await this.zeroSnapshots();
+  async resetRanking(_adminUserId?: string): Promise<{ seasonNumber: number }> {
+    // Reset oficial é transacional no servidor: grava o pódio histórico
+    // (Individual e Casais) antes de zerar. Sem fallback local inseguro.
+    const { rankingGamificationService } = await import(
+      "./rankingGamificationService"
+    );
+    return rankingGamificationService.closeRankingSeason();
   },
 
   async refreshUserSnapshot(userId: string): Promise<void> {

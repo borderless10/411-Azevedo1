@@ -26,6 +26,8 @@ export interface User {
   /** URL do Firebase Storage. Prioridade sobre photoBase64 quando existir. */
   photoUrl?: string;
   photoStoragePath?: string;
+  /** Insígnia cuja borda está ativa no avatar. Validado por Cloud Function. */
+  activeBadgeBorderId?: string | null;
   accountType?: AccountType;
   coupleMember1Name?: string;
   coupleMember2Name?: string;

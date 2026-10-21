@@ -181,6 +181,13 @@ export const AdminUsersScreen: React.FC = () => {
             <Ionicons name="person-add" size={20} color="#fff" />
             <Text style={styles.createText}>Criar Usuário</Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.createBtn}
+            onPress={() => navigate("BadgeManagement")}
+          >
+            <Ionicons name="ribbon" size={20} color="#fff" />
+            <Text style={styles.createText}>Insígnias</Text>
+          </TouchableOpacity>
         </View>
 
         <View style={styles.listSection}>

@@ -43,6 +43,9 @@ export const COLLECTIONS = {
   RECOMMENDATIONS: "recommendations",
   APP_CONFIG: "appConfig",
   RANKING_SNAPSHOTS: "rankingSnapshots",
+  RANKING_SEASONS: "rankingSeasons",
+  BADGE_DEFINITIONS: "badgeDefinitions",
+  USER_BADGE_GRANTS: "userBadgeGrants",
 } as const;
 
 /**
@@ -102,6 +105,18 @@ export const getRankingSnapshotsCollection = (): CollectionReference => {
 
 export const getRankingSnapshotDoc = (userId: string): DocumentReference => {
   return doc(db, COLLECTIONS.RANKING_SNAPSHOTS, userId);
+};
+
+export const getRankingSeasonsCollection = (): CollectionReference => {
+  return collection(db, COLLECTIONS.RANKING_SEASONS);
+};
+
+export const getBadgeDefinitionsCollection = (): CollectionReference => {
+  return collection(db, COLLECTIONS.BADGE_DEFINITIONS);
+};
+
+export const getUserBadgeGrantsCollection = (): CollectionReference => {
+  return collection(db, COLLECTIONS.USER_BADGE_GRANTS);
 };
 
 /**

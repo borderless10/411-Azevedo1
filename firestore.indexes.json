@@ -80,6 +80,22 @@
         { "fieldPath": "league", "order": "ASCENDING" },
         { "fieldPath": "rankingPoints", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "userBadgeGrants",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "badgeId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "userBadgeGrants",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

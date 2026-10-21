@@ -29,7 +29,14 @@ import {
   profileDisplayName,
   profileInitial,
   profilePhotoUri,
+  resolveProfilePhotoUri,
 } from "../../utils/chatDisplayNames";
+import { rankingGamificationService } from "../../services/rankingGamificationService";
+import { BadgedAvatar } from "../../components/Gamification/BadgedAvatar";
+import type {
+  BadgeDefinition,
+  UserBadgeGrant,
+} from "../../types/rankingGamification";
 
 const persistProfilePhoto = async (userId: string, base64: string | null) => {
   if (isProfilePhotoStorageEnabled() && base64) {
@@ -68,9 +75,55 @@ export const ProfileScreen = () => {
     (user as any)?.photoBase64 || null,
   );
   const [showPhotoModal, setShowPhotoModal] = useState<boolean>(false);
+  const [myGrants, setMyGrants] = useState<UserBadgeGrant[]>([]);
+  const [badgeDefinitions, setBadgeDefinitions] = useState<BadgeDefinition[]>(
+    [],
+  );
+  const [selectingBorder, setSelectingBorder] = useState<boolean>(false);
 
   // Verificar se o usuário é admin
   const isAdmin = user?.role === "admin" || user?.isAdmin === true;
+
+  useEffect(() => {
+    if (!user?.id) return;
+    const unsubGrants = rankingGamificationService.subscribeUserGrants(
+      user.id,
+      setMyGrants,
+      () => {},
+    );
+    const unsubDefinitions =
+      rankingGamificationService.subscribeBadgeDefinitions(
+        setBadgeDefinitions,
+        () => {},
+      );
+    return () => {
+      unsubGrants();
+      unsubDefinitions();
+    };
+  }, [user?.id]);
+
+  const definitionsById = new Map(
+    badgeDefinitions.map((definition) => [definition.id, definition]),
+  );
+  const myBadges = myGrants
+    .map((grant) => definitionsById.get(grant.badgeId))
+    .filter((definition): definition is BadgeDefinition => Boolean(definition));
+  const activeBorderDefinition =
+    definitionsById.get((user as any)?.activeBadgeBorderId) || null;
+
+  const handleSelectBorder = async (badgeId: string | null) => {
+    if (selectingBorder) return;
+    try {
+      setSelectingBorder(true);
+      await rankingGamificationService.selectBadgeBorder(badgeId);
+      await refreshUser();
+    } catch (e) {
+      console.error("Erro ao selecionar borda", e);
+      Alert.alert("Erro", "Não foi possível atualizar a borda.");
+    } finally {
+      setSelectingBorder(false);
+    }
+  };
 
   useEffect(() => {
     Animated.parallel([
@@ -362,6 +415,82 @@ export const ProfileScreen = () => {
                 {savingPrefs ? "Salvando..." : "Salvar Preferências"}
               </Text>
             </TouchableOpacity>
+          </View>
+
+          {/* Minha borda de insígnia */}
+          <View style={styles.infoCard}>
+            <View style={styles.infoHeader}>
+              <Ionicons name="ribbon" size={24} color="#8c52ff" />
+              <Text style={styles.infoTitle}>Minha borda</Text>
+            </View>
+            <View style={{ alignItems: "center", paddingVertical: 8 }}>
+              <BadgedAvatar
+                photoUri={resolveProfilePhotoUri(user as any)}
+                displayName={profileDisplayName(user as any)}
+                size={72}
+                definition={activeBorderDefinition}
+              />
+              <Text style={styles.infoValue}>
+                {activeBorderDefinition
+                  ? activeBorderDefinition.name
+                  : "Borda padrão"}
+              </Text>
+            </View>
+            {myBadges.length === 0 ? (
+              <Text style={styles.infoValue}>
+                Você ainda não possui insígnias. Conquiste uma para liberar
+                bordas personalizadas.
+              </Text>
+            ) : (
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                <TouchableOpacity
+                  style={[
+                    styles.currencyButton,
+                    !activeBorderDefinition && styles.currencyButtonActive,
+                  ]}
+                  disabled={selectingBorder}
+                  onPress={() => handleSelectBorder(null)}
+                >
+                  <Text
+                    style={
+                      !activeBorderDefinition
+                        ? styles.currencyButtonTextActive
+                        : styles.currencyButtonText
+                    }
+                  >
+                    Padrão
+                  </Text>
+                </TouchableOpacity>
+                {myBadges.map((definition) => (
+                  <TouchableOpacity
+                    key={definition.id}
+                    style={[
+                      styles.currencyButton,
+                      styles.borderOption,
+                      activeBorderDefinition?.id === definition.id &&
+                        styles.currencyButtonActive,
+                    ]}
+                    disabled={selectingBorder}
+                    onPress={() => handleSelectBorder(definition.id)}
+                  >
+                    <Ionicons
+                      name={definition.icon as any}
+                      size={14}
+                      color={definition.primaryColor}
+                    />
+                    <Text
+                      style={
+                        activeBorderDefinition?.id === definition.id
+                          ? styles.currencyButtonTextActive
+                          : styles.currencyButtonText
+                      }
+                    >
+                      {definition.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
           </View>
 
           {canRegisterClient(user) && !isAdmin ? (
@@ -756,6 +885,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 24,
   },
+  borderOption: { flexDirection: "row", alignItems: "center", gap: 6 },
   currencyButton: {
     paddingHorizontal: 12,
     paddingVertical: 8,

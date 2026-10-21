@@ -35,6 +35,10 @@ service cloud.firestore {
       return !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'isAdmin']);
     }
 
+    function badgeBorderUnchanged() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(['activeBadgeBorderId']);
+    }
+
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
@@ -113,7 +117,7 @@ service cloud.firestore {
       // Admin cadastra cliente/consultor com app Auth secundário:
       // o write usa o uid do admin, não o uid do documento criado.
       allow create: if isSignedIn() && (
-        request.auth.uid == userId
+        (request.auth.uid == userId && !('activeBadgeBorderId' in request.resource.data))
         || isAdmin()
         || (
           (isConsultor() || isSupervisor())
@@ -126,7 +130,7 @@ service cloud.firestore {
         )
       );
       allow update: if isAdmin()
-        || ((isOwner(userId) || isConsultantOf(userId)) && staffRoleUnchanged());
+        || ((isOwner(userId) || isConsultantOf(userId)) && staffRoleUnchanged() && badgeBorderUnchanged());
       allow delete: if isAdmin();
 
       match /planning/{planningId} {
@@ -210,6 +214,21 @@ service cloud.firestore {
     match /appConfig/{docId} {
       allow read: if isSignedIn();
       allow write: if isAdmin();
+    }
+
+    match /rankingSeasons/{docId} {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
+
+    match /badgeDefinitions/{badgeId} {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
+
+    match /userBadgeGrants/{grantId} {
+      allow read: if isSignedIn();
+      allow write: if false;
     }
 
     match /sessionReports/{docId} {
