@@ -334,7 +334,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.65)",
   },
   modalContent: {
-    backgroundColor: "#0a0a0a",
+    backgroundColor: "#07050D",
     borderRadius: 16,
     padding: 16,
     maxHeight: "90%",
@@ -366,11 +366,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     color: "#fff",
-    backgroundColor: "#121212",
+    backgroundColor: "#171321",
   },
   saveButton: {
     marginTop: 12,
-    backgroundColor: "#8c52ff",
+    backgroundColor: "#B900FF",
     borderRadius: 10,
     paddingVertical: 12,
     alignItems: "center",

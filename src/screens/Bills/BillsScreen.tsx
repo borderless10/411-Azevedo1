@@ -1039,7 +1039,7 @@ export const BillsScreen = () => {
                       {(bill as any)._isExpectedExpense && (
                         <View
                           style={{
-                            backgroundColor: "#8c52ff40",
+                            backgroundColor: "#B900FF40",
                             paddingHorizontal: 8,
                             paddingVertical: 2,
                             borderRadius: 4,
@@ -1047,7 +1047,7 @@ export const BillsScreen = () => {
                         >
                           <Text
                             style={{
-                              color: "#8c52ff",
+                              color: "#B900FF",
                               fontSize: 11,
                               fontWeight: "600",
                             }}

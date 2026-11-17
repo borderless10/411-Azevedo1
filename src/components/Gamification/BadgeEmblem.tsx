@@ -105,7 +105,7 @@ const styles = StyleSheet.create({
   card: {
     width: "100%",
     maxWidth: 420,
-    backgroundColor: "#161616",
+    backgroundColor: "#171321",
     borderRadius: 16,
     borderWidth: 1,
     borderColor: "#333",
@@ -126,7 +126,7 @@ const styles = StyleSheet.create({
   description: { color: "#bbb", fontSize: 14, lineHeight: 20, textAlign: "center" },
   closeButton: {
     marginTop: 10,
-    backgroundColor: "#8c52ff",
+    backgroundColor: "#B900FF",
     borderRadius: 10,
     paddingHorizontal: 22,
     paddingVertical: 11,

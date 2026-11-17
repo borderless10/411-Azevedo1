@@ -311,7 +311,7 @@ export const AdminUsersScreen: React.FC = () => {
           </View>
 
           {loading ? (
-            <ActivityIndicator size="large" color="#8c52ff" />
+            <ActivityIndicator size="large" color="#B900FF" />
           ) : (
             <FlatList
               data={filteredUsers}
@@ -348,7 +348,7 @@ const styles = StyleSheet.create({
   createBtn: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#8c52ff",
+    backgroundColor: "#B900FF",
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
@@ -382,7 +382,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: "#1a1a1a",
+    backgroundColor: "#171321",
     alignItems: "center",
     justifyContent: "center",
     marginRight: 12,
@@ -426,10 +426,10 @@ const styles = StyleSheet.create({
     backgroundColor: "#6b6480",
   },
   activeSmall: {
-    backgroundColor: "#ff4d6d",
+    backgroundColor: "#FF008A",
   },
   inactiveSmall: {
-    backgroundColor: "#8c52ff",
+    backgroundColor: "#B900FF",
   },
   actionButton: {
     flexDirection: "row",
@@ -440,10 +440,10 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   active: {
-    backgroundColor: "#ff4d6d",
+    backgroundColor: "#FF008A",
   },
   inactive: {
-    backgroundColor: "#8c52ff",
+    backgroundColor: "#B900FF",
   },
   actionText: {
     color: "#fff",
@@ -466,7 +466,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   tabActive: {
-    backgroundColor: "#8c52ff",
+    backgroundColor: "#B900FF",
   },
   tabText: {
     color: "#bbb",
@@ -499,7 +499,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#111",
   },
   filterActive: {
-    backgroundColor: "#8c52ff",
+    backgroundColor: "#B900FF",
   },
   filterText: {
     color: "#bbb",

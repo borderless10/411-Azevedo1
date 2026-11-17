@@ -198,7 +198,7 @@ export const RegisterScreen = () => {
             {/* Header */}
             <View style={styles.header}>
               <View style={styles.iconContainer}>
-                <Ionicons name="wallet" size={64} color="#8c52ff" />
+                <Ionicons name="wallet" size={64} color="#B900FF" />
               </View>
               <Text style={styles.title}>Criar Conta</Text>
               <Text style={styles.subtitle}>
@@ -211,14 +211,14 @@ export const RegisterScreen = () => {
               {/* Mensagem de erro geral */}
               {errors.general ? (
                 <View style={styles.errorContainer}>
-                  <Ionicons name="alert-circle" size={20} color="#ff4d6d" />
+                  <Ionicons name="alert-circle" size={20} color="#FF008A" />
                   <Text style={styles.errorText}>{errors.general}</Text>
                 </View>
               ) : null}
 
               <View style={styles.inputContainer}>
                 <Text style={styles.label}>
-                  <Ionicons name="person" size={16} color="#8c52ff" /> Nome
+                  <Ionicons name="person" size={16} color="#B900FF" /> Nome
                   completo
                 </Text>
                 <View
@@ -230,7 +230,7 @@ export const RegisterScreen = () => {
                   <Ionicons
                     name="person-outline"
                     size={20}
-                    color={errors.name ? "#ff4d6d" : "#999"}
+                    color={errors.name ? "#FF008A" : "#999"}
                     style={styles.inputIcon}
                   />
                   <TextInput
@@ -246,14 +246,14 @@ export const RegisterScreen = () => {
                     <Ionicons
                       name="close-circle"
                       size={20}
-                      color="#ff4d6d"
+                      color="#FF008A"
                       style={styles.errorIcon}
                     />
                   ) : name.trim() && !errors.name ? (
                     <Ionicons
                       name="checkmark-circle"
                       size={20}
-                      color="#8c52ff"
+                      color="#B900FF"
                       style={styles.errorIcon}
                     />
                   ) : null}
@@ -265,7 +265,7 @@ export const RegisterScreen = () => {
 
               <View style={styles.inputContainer}>
                 <Text style={styles.label}>
-                  <Ionicons name="mail" size={16} color="#8c52ff" /> Email
+                  <Ionicons name="mail" size={16} color="#B900FF" /> Email
                 </Text>
                 <View
                   style={[
@@ -276,7 +276,7 @@ export const RegisterScreen = () => {
                   <Ionicons
                     name="mail-outline"
                     size={20}
-                    color={errors.email ? "#ff4d6d" : "#999"}
+                    color={errors.email ? "#FF008A" : "#999"}
                     style={styles.inputIcon}
                   />
                   <TextInput
@@ -293,14 +293,14 @@ export const RegisterScreen = () => {
                     <Ionicons
                       name="close-circle"
                       size={20}
-                      color="#ff4d6d"
+                      color="#FF008A"
                       style={styles.errorIcon}
                     />
                   ) : email.trim() && !errors.email ? (
                     <Ionicons
                       name="checkmark-circle"
                       size={20}
-                      color="#8c52ff"
+                      color="#B900FF"
                       style={styles.errorIcon}
                     />
                   ) : null}
@@ -312,7 +312,7 @@ export const RegisterScreen = () => {
 
               <View style={styles.inputContainer}>
                 <Text style={styles.label}>
-                  <Ionicons name="lock-closed" size={16} color="#8c52ff" />{" "}
+                  <Ionicons name="lock-closed" size={16} color="#B900FF" />{" "}
                   Senha
                 </Text>
                 <View
@@ -324,7 +324,7 @@ export const RegisterScreen = () => {
                   <Ionicons
                     name="lock-closed-outline"
                     size={20}
-                    color={errors.password ? "#ff4d6d" : "#999"}
+                    color={errors.password ? "#FF008A" : "#999"}
                     style={styles.inputIcon}
                   />
                   <TextInput
@@ -340,14 +340,14 @@ export const RegisterScreen = () => {
                     <Ionicons
                       name="close-circle"
                       size={20}
-                      color="#ff4d6d"
+                      color="#FF008A"
                       style={styles.errorIcon}
                     />
                   ) : password.length >= 6 ? (
                     <Ionicons
                       name="checkmark-circle"
                       size={20}
-                      color="#8c52ff"
+                      color="#B900FF"
                       style={styles.errorIcon}
                     />
                   ) : null}
@@ -359,7 +359,7 @@ export const RegisterScreen = () => {
 
               <View style={styles.inputContainer}>
                 <Text style={styles.label}>
-                  <Ionicons name="shield-checkmark" size={16} color="#8c52ff" />{" "}
+                  <Ionicons name="shield-checkmark" size={16} color="#B900FF" />{" "}
                   Confirmar senha
                 </Text>
                 <View
@@ -371,7 +371,7 @@ export const RegisterScreen = () => {
                   <Ionicons
                     name="shield-checkmark-outline"
                     size={20}
-                    color={errors.confirmPassword ? "#ff4d6d" : "#999"}
+                    color={errors.confirmPassword ? "#FF008A" : "#999"}
                     style={styles.inputIcon}
                   />
                   <TextInput
@@ -387,14 +387,14 @@ export const RegisterScreen = () => {
                     <Ionicons
                       name="close-circle"
                       size={20}
-                      color="#ff4d6d"
+                      color="#FF008A"
                       style={styles.errorIcon}
                     />
                   ) : confirmPassword && confirmPassword === password ? (
                     <Ionicons
                       name="checkmark-circle"
                       size={20}
-                      color="#8c52ff"
+                      color="#B900FF"
                       style={styles.errorIcon}
                     />
                   ) : null}
@@ -463,7 +463,7 @@ const styles = StyleSheet.create({
   iconContainer: {
     marginBottom: 16,
     padding: 20,
-    backgroundColor: "#1a1a1a",
+    backgroundColor: "#171321",
     borderRadius: 100,
   },
   title: {
@@ -494,7 +494,7 @@ const styles = StyleSheet.create({
   inputWrapper: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#1a1a1a",
+    backgroundColor: "#171321",
     borderRadius: 12,
     borderWidth: 1,
     borderColor: "#333",
@@ -502,7 +502,7 @@ const styles = StyleSheet.create({
     paddingRight: 16,
   },
   inputWrapperError: {
-    borderColor: "#ff4d6d",
+    borderColor: "#FF008A",
     borderWidth: 2,
   },
   inputIcon: {
@@ -512,7 +512,7 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   input: {
-    backgroundColor: "#1a1a1a",
+    backgroundColor: "#171321",
     borderRadius: 12,
     padding: 16,
     fontSize: 16,
@@ -527,12 +527,12 @@ const styles = StyleSheet.create({
     color: "#fff",
   },
   button: {
-    backgroundColor: "#8c52ff",
+    backgroundColor: "#B900FF",
     borderRadius: 12,
     padding: 16,
     alignItems: "center",
     marginTop: 8,
-    shadowColor: "#8c52ff",
+    shadowColor: "#B900FF",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -563,7 +563,7 @@ const styles = StyleSheet.create({
     color: "#999",
   },
   linkTextBold: {
-    color: "#8c52ff",
+    color: "#B900FF",
     fontWeight: "bold",
   },
   errorContainer: {
@@ -575,16 +575,16 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     gap: 8,
     borderWidth: 1,
-    borderColor: "#ff4d6d40",
+    borderColor: "#FF008A40",
   },
   errorText: {
     flex: 1,
-    color: "#ff4d6d",
+    color: "#FF008A",
     fontSize: 14,
     fontWeight: "500",
   },
   errorTextSmall: {
-    color: "#ff4d6d",
+    color: "#FF008A",
     fontSize: 12,
     marginTop: 4,
     marginLeft: 4,

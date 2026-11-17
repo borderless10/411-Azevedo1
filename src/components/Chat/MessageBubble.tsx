@@ -259,7 +259,7 @@ const styles = StyleSheet.create({
     maxWidth: "70%",
     position: "relative",
   },
-  ownMessage: { alignSelf: "flex-end", backgroundColor: "#8c52ff" },
+  ownMessage: { alignSelf: "flex-end", backgroundColor: "#B900FF" },
   otherMessage: { alignSelf: "flex-start", backgroundColor: "#f4eaff" },
   highlighted: {
     borderWidth: 2,
@@ -323,7 +323,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.12)",
   },
   replyBoxOther: {
-    borderLeftColor: "#8c52ff",
+    borderLeftColor: "#B900FF",
     backgroundColor: "rgba(140,82,255,0.12)",
   },
   replyAuthor: {

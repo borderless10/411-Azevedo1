@@ -311,7 +311,7 @@ export const CadastrarClienteScreen = () => {
             ]}
           >
             <View style={styles.header}>
-              <Ionicons name="person-add-outline" size={64} color="#8c52ff" />
+              <Ionicons name="person-add-outline" size={64} color="#B900FF" />
               <Text style={styles.title}>
                 {role === "supervisor"
                   ? "Cadastrar Novo Supervisor"
@@ -682,7 +682,7 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#1a1a1a",
+    backgroundColor: "#171321",
     borderRadius: 12,
     borderWidth: 1,
     borderColor: "#333",
@@ -701,7 +701,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#8c52ff",
+    backgroundColor: "#B900FF",
     borderRadius: 12,
     padding: 16,
     marginTop: 8,
@@ -721,9 +721,9 @@ const styles = StyleSheet.create({
     padding: 24,
     marginBottom: 24,
     borderWidth: 2,
-    borderColor: "#8c52ff",
+    borderColor: "#B900FF",
     alignItems: "center",
-    shadowColor: "#8c52ff",
+    shadowColor: "#B900FF",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -735,7 +735,7 @@ const styles = StyleSheet.create({
   successTitle: {
     fontSize: 24,
     fontWeight: "bold",
-    color: "#8c52ff",
+    color: "#B900FF",
     marginBottom: 12,
     textAlign: "center",
   },
@@ -754,7 +754,7 @@ const styles = StyleSheet.create({
   },
   successInfoText: {
     fontSize: 12,
-    color: "#8c52ff",
+    color: "#B900FF",
     fontStyle: "italic",
   },
   roleRow: {
@@ -768,13 +768,13 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 12,
-    backgroundColor: "#1a1a1a",
+    backgroundColor: "#171321",
     borderWidth: 1,
     borderColor: "#333",
   },
   roleActive: {
-    backgroundColor: "#8c52ff",
-    borderColor: "#8c52ff",
+    backgroundColor: "#B900FF",
+    borderColor: "#B900FF",
   },
   roleText: {
     color: "#fff",

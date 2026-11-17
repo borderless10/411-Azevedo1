@@ -391,7 +391,7 @@ export const RecomendacaoScreen = () => {
                           style={styles.iconButton}
                           onPress={() => handleDeleteRecommendation(item)}
                         >
-                          <Ionicons name="trash" size={18} color="#ff4d6d" />
+                          <Ionicons name="trash" size={18} color="#FF008A" />
                         </TouchableOpacity>
                       </View>
                     )}
@@ -529,7 +529,7 @@ export const RecomendacaoScreen = () => {
                   style={styles.removeTopicButton}
                   accessibilityLabel={`Remover tópico ${index + 1}`}
                 >
-                  <Ionicons name="trash-outline" size={18} color="#ff4d6d" />
+                  <Ionicons name="trash-outline" size={18} color="#FF008A" />
                 </TouchableOpacity>
               </View>
             ))}
@@ -661,7 +661,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: "#8c52ff",
+    backgroundColor: "#B900FF",
     borderRadius: 999,
     paddingVertical: 5,
     paddingHorizontal: 10,

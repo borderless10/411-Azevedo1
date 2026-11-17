@@ -23,7 +23,7 @@ const IncomeCreatedModal: React.FC<Props> = ({
       <View style={styles.backdrop}>
         <View style={styles.container}>
           <View style={styles.iconWrap}>
-            <Ionicons name="checkmark-circle" size={64} color="#8c52ff" />
+            <Ionicons name="checkmark-circle" size={64} color="#B900FF" />
           </View>
 
           <Text style={styles.title}>Renda cadastrada</Text>
@@ -97,7 +97,7 @@ const styles = StyleSheet.create({
   amount: {
     fontSize: 22,
     fontWeight: "800",
-    color: "#8c52ff",
+    color: "#B900FF",
     marginBottom: 8,
   },
   message: {
@@ -114,7 +114,7 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     flex: 1,
-    backgroundColor: "#8c52ff",
+    backgroundColor: "#B900FF",
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 10,
@@ -129,7 +129,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "transparent",
     borderWidth: 1,
-    borderColor: "#2a2040",
+    borderColor: "#21172D",
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 10,

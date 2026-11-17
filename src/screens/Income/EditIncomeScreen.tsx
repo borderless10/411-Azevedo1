@@ -227,7 +227,7 @@ export const EditIncomeScreen = () => {
     return (
       <Layout title="Editar Renda" showBackButton={true} showSidebar={false}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#8c52ff" />
+          <ActivityIndicator size="large" color="#B900FF" />
           <Text style={styles.loadingText}>Carregando dados...</Text>
         </View>
       </Layout>
@@ -249,7 +249,7 @@ export const EditIncomeScreen = () => {
             {/* Header visual */}
             <View style={styles.header}>
               <View style={styles.iconContainer}>
-                <Ionicons name="cash-outline" size={64} color="#8c52ff" />
+                <Ionicons name="cash-outline" size={64} color="#B900FF" />
               </View>
               <Text style={styles.subtitle}>Edite as informações da renda</Text>
             </View>
@@ -257,7 +257,7 @@ export const EditIncomeScreen = () => {
             {/* Erro geral */}
             {errors.general ? (
               <View style={styles.errorContainer}>
-                <Ionicons name="alert-circle" size={20} color="#ff4d6d" />
+                <Ionicons name="alert-circle" size={20} color="#FF008A" />
                 <Text style={styles.errorText}>{errors.general}</Text>
               </View>
             ) : null}
@@ -294,7 +294,7 @@ export const EditIncomeScreen = () => {
               {/* Descrição */}
               <View style={styles.inputContainer}>
                 <Text style={styles.label}>
-                  <Ionicons name="document-text" size={16} color="#8c52ff" />{" "}
+                  <Ionicons name="document-text" size={16} color="#B900FF" />{" "}
                   Descrição
                 </Text>
                 <View
@@ -306,7 +306,7 @@ export const EditIncomeScreen = () => {
                   <Ionicons
                     name="document-text-outline"
                     size={20}
-                    color={errors.description ? "#ff4d6d" : "#999"}
+                    color={errors.description ? "#FF008A" : "#999"}
                     style={styles.inputIcon}
                   />
                   <TextInput
@@ -324,14 +324,14 @@ export const EditIncomeScreen = () => {
                     <Ionicons
                       name="close-circle"
                       size={20}
-                      color="#ff4d6d"
+                      color="#FF008A"
                       style={styles.icon}
                     />
                   ) : description.trim().length >= 3 ? (
                     <Ionicons
                       name="checkmark-circle"
                       size={20}
-                      color="#8c52ff"
+                      color="#B900FF"
                       style={styles.icon}
                     />
                   ) : null}
@@ -450,7 +450,7 @@ const styles = StyleSheet.create({
   },
   errorText: {
     flex: 1,
-    color: "#ff4d6d",
+    color: "#FF008A",
     fontSize: 14,
     fontWeight: "500",
   },
@@ -476,7 +476,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   inputWrapperError: {
-    borderColor: "#ff4d6d",
+    borderColor: "#FF008A",
     borderWidth: 2,
   },
   inputIcon: {
@@ -492,7 +492,7 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   errorTextSmall: {
-    color: "#ff4d6d",
+    color: "#FF008A",
     fontSize: 12,
     marginTop: 4,
     marginLeft: 4,

@@ -8,9 +8,9 @@ import {
 } from "react-native";
 
 const COLORS = [
-  "#8c52ff",
+  "#B900FF",
   "#c084fc",
-  "#ff4d6d",
+  "#FF008A",
   "#ffd166",
   "#4ade80",
   "#60a5fa",

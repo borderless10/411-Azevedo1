@@ -46,8 +46,8 @@ export const EmojiPickerPanel = ({
 const styles = StyleSheet.create({
   container: {
     borderTopWidth: 1,
-    borderTopColor: "#2a2a2a",
-    backgroundColor: "#121212",
+    borderTopColor: "#21172D",
+    backgroundColor: "#171321",
     maxHeight: 200,
   },
   scroll: {

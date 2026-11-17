@@ -176,7 +176,7 @@ export const ExpenseChangeRequestPanel: React.FC<Props> = ({
       ) : null}
 
       {loading ? (
-        <ActivityIndicator color="#8c52ff" style={{ marginTop: 12 }} />
+        <ActivityIndicator color="#B900FF" style={{ marginTop: 12 }} />
       ) : (
         <View style={{ marginTop: 12 }}>
           {requests.length === 0 ? (
@@ -234,25 +234,25 @@ const styles = StyleSheet.create({
     padding: 14,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#2a2040",
-    backgroundColor: "#14101f",
+    borderColor: "#21172D",
+    backgroundColor: "#171321",
   },
   title: { color: "#fff", fontWeight: "700", fontSize: 16, marginBottom: 8 },
   typeRow: { flexDirection: "row", gap: 8, marginBottom: 8 },
   typeChip: {
     flex: 1,
     borderWidth: 1,
-    borderColor: "#2a2040",
+    borderColor: "#21172D",
     borderRadius: 8,
     paddingVertical: 8,
     alignItems: "center",
   },
-  typeChipActive: { backgroundColor: "#8c52ff", borderColor: "#8c52ff" },
+  typeChipActive: { backgroundColor: "#B900FF", borderColor: "#B900FF" },
   typeChipText: { color: "#a89fc0", fontWeight: "600" },
   typeChipTextActive: { color: "#fff" },
   input: {
     borderWidth: 1,
-    borderColor: "#2a2040",
+    borderColor: "#21172D",
     borderRadius: 8,
     color: "#fff",
     paddingHorizontal: 10,
@@ -261,7 +261,7 @@ const styles = StyleSheet.create({
   },
   notesInput: { minHeight: 64, textAlignVertical: "top" },
   primaryBtn: {
-    backgroundColor: "#8c52ff",
+    backgroundColor: "#B900FF",
     borderRadius: 8,
     alignItems: "center",
     paddingVertical: 12,
@@ -273,7 +273,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     borderTopWidth: 1,
-    borderTopColor: "#2a2040",
+    borderTopColor: "#21172D",
     paddingVertical: 10,
     gap: 8,
   },

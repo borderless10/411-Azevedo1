@@ -49,7 +49,7 @@ export const CategoryPicker: React.FC<CategoryPickerProps> = ({
   return (
     <View style={[styles.container, style]}>
       <Text style={styles.label}>
-        <Ionicons name="pricetag" size={16} color="#8c52ff" /> {label}
+        <Ionicons name="pricetag" size={16} color="#B900FF" /> {label}
         {required && <Text style={styles.required}> *</Text>}
       </Text>
 
@@ -67,7 +67,7 @@ export const CategoryPicker: React.FC<CategoryPickerProps> = ({
             <Ionicons
               name={selectedCat.icon as any}
               size={20}
-              color={error ? "#ff4d6d" : selectedCat.color}
+              color={error ? "#FF008A" : selectedCat.color}
               style={styles.inputIcon}
             />
             <Text style={styles.categoryText}>{selectedCat.name}</Text>
@@ -77,7 +77,7 @@ export const CategoryPicker: React.FC<CategoryPickerProps> = ({
             <Ionicons
               name="pricetag-outline"
               size={20}
-              color={error ? "#ff4d6d" : "#a89fc0"}
+              color={error ? "#FF008A" : "#a89fc0"}
               style={styles.inputIcon}
             />
             <Text style={styles.placeholderText}>
@@ -88,7 +88,7 @@ export const CategoryPicker: React.FC<CategoryPickerProps> = ({
         <Ionicons
           name={error ? "close-circle" : "chevron-down"}
           size={20}
-          color={error ? "#ff4d6d" : "#a89fc0"}
+          color={error ? "#FF008A" : "#a89fc0"}
           style={styles.icon}
         />
       </TouchableOpacity>
@@ -135,7 +135,7 @@ export const CategoryPicker: React.FC<CategoryPickerProps> = ({
                   />
                   <Text style={styles.categoryItemText}>{item.name}</Text>
                   {selectedCategory === item.name && (
-                    <Ionicons name="checkmark" size={24} color="#8c52ff" />
+                    <Ionicons name="checkmark" size={24} color="#B900FF" />
                   )}
                 </TouchableOpacity>
               )}
@@ -158,7 +158,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   required: {
-    color: "#ff4d6d",
+    color: "#FF008A",
   },
   inputWrapper: {
     flexDirection: "row",
@@ -166,16 +166,16 @@ const styles = StyleSheet.create({
     backgroundColor: "#0e0c14",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#2a2040",
+    borderColor: "#21172D",
     paddingHorizontal: 16,
     paddingVertical: 16,
   },
   inputWrapperError: {
-    borderColor: "#ff4d6d",
+    borderColor: "#FF008A",
     borderWidth: 2,
   },
   inputWrapperDisabled: {
-    backgroundColor: "#1a1528",
+    backgroundColor: "#21172D",
   },
   inputIcon: {
     marginRight: 12,
@@ -195,7 +195,7 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   errorText: {
-    color: "#ff4d6d",
+    color: "#FF008A",
     fontSize: 12,
     marginTop: 4,
     marginLeft: 4,

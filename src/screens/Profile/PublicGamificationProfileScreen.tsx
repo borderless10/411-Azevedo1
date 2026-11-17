@@ -107,7 +107,7 @@ export const PublicGamificationProfileScreen = () => {
       >
         {loadState.kind === "loading" ? (
           <View style={styles.stateCard}>
-            <ActivityIndicator size="large" color="#8c52ff" />
+            <ActivityIndicator size="large" color="#B900FF" />
             <Text style={styles.stateText}>Carregando conquistas...</Text>
           </View>
         ) : loadState.kind === "unavailable" ? (
@@ -295,7 +295,7 @@ const styles = StyleSheet.create({
     minHeight: 44,
     paddingHorizontal: 20,
     borderRadius: 12,
-    backgroundColor: "#8c52ff",
+    backgroundColor: "#B900FF",
     alignItems: "center",
     justifyContent: "center",
   },

@@ -61,14 +61,14 @@ export const DEFAULT_INCOME_CATEGORIES: Omit<
   Category,
   "id" | "userId" | "createdAt" | "isDefault"
 >[] = [
-  { name: "Salário", icon: "cash", color: "#8c52ff", type: "income" },
+  { name: "Salário", icon: "cash", color: "#B900FF", type: "income" },
   { name: "Freelancer", icon: "briefcase", color: "#a47aff", type: "income" },
   { name: "Show", icon: "musical-notes", color: "#c084fc", type: "income" },
-  { name: "Produção", icon: "film", color: "#8c52ff", type: "income" },
+  { name: "Produção", icon: "film", color: "#B900FF", type: "income" },
   {
     name: "Investimentos",
     icon: "trending-up",
-    color: "#8c52ff",
+    color: "#B900FF",
     type: "income",
   },
   { name: "Presente", icon: "gift", color: "#c084fc", type: "income" },
@@ -88,15 +88,15 @@ export const DEFAULT_EXPENSE_CATEGORIES: Omit<
   {
     name: "Alimentação",
     icon: "restaurant",
-    color: "#ff4d6d",
+    color: "#FF008A",
     type: "expense",
   },
   { name: "Transporte", icon: "car", color: "#6b6480", type: "expense" },
   { name: "Moradia", icon: "home", color: "#a89fc0", type: "expense" },
-  { name: "Saúde", icon: "medical", color: "#ff4d6d", type: "expense" },
+  { name: "Saúde", icon: "medical", color: "#FF008A", type: "expense" },
   { name: "Educação", icon: "school", color: "#a47aff", type: "expense" },
   { name: "Lazer", icon: "game-controller", color: "#c084fc", type: "expense" },
-  { name: "Compras", icon: "basket", color: "#ff4d6d", type: "expense" },
+  { name: "Compras", icon: "basket", color: "#FF008A", type: "expense" },
   { name: "Serviços", icon: "construct", color: "#6b6480", type: "expense" },
   {
     name: "Outros",

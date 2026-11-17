@@ -395,7 +395,7 @@ export const CardsScreen: React.FC = () => {
                         <TouchableOpacity
                           onPress={() => handleDeleteCard(card)}
                         >
-                          <Text style={{ color: "#ff4d6d", fontWeight: "700" }}>
+                          <Text style={{ color: "#FF008A", fontWeight: "700" }}>
                             Excluir
                           </Text>
                         </TouchableOpacity>
@@ -643,12 +643,12 @@ export const CardsScreen: React.FC = () => {
                             disabled={deletingExpenseId === expense.id}
                           >
                             {deletingExpenseId === expense.id ? (
-                              <ActivityIndicator size="small" color="#ff4d6d" />
+                              <ActivityIndicator size="small" color="#FF008A" />
                             ) : (
                               <Ionicons
                                 name="trash-outline"
                                 size={18}
-                                color="#ff4d6d"
+                                color="#FF008A"
                               />
                             )}
                           </TouchableOpacity>

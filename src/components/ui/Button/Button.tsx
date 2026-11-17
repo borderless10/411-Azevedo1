@@ -122,7 +122,7 @@ export const Button: React.FC<ButtonProps> = ({
 
   const iconSize = size === "small" ? 16 : size === "medium" ? 20 : 24;
   const iconColor =
-    variant === "outline" || variant === "secondary" ? "#8c52ff" : "#fff";
+    variant === "outline" || variant === "secondary" ? "#B900FF" : "#fff";
 
   const renderIcon = () => {
     if (loading) {
@@ -188,31 +188,31 @@ const styles = StyleSheet.create({
 
   // Variantes
   buttonPrimary: {
-    backgroundColor: "#8c52ff",
-    shadowColor: "#8c52ff",
+    backgroundColor: "#B900FF",
+    shadowColor: "#B900FF",
     shadowOpacity: 0.3,
   },
   buttonSecondary: {
-    backgroundColor: "#1a1528",
+    backgroundColor: "#21172D",
     borderWidth: 1.5,
-    borderColor: "#2a2040",
+    borderColor: "#21172D",
     shadowColor: "#000",
     shadowOpacity: 0.08,
   },
   buttonDanger: {
-    backgroundColor: "#ff4d6d",
-    shadowColor: "#ff4d6d",
+    backgroundColor: "#FF008A",
+    shadowColor: "#FF008A",
     shadowOpacity: 0.3,
   },
   buttonSuccess: {
-    backgroundColor: "#8c52ff",
-    shadowColor: "#8c52ff",
+    backgroundColor: "#B900FF",
+    shadowColor: "#B900FF",
     shadowOpacity: 0.3,
   },
   buttonOutline: {
     backgroundColor: "transparent",
     borderWidth: 2,
-    borderColor: "#8c52ff",
+    borderColor: "#B900FF",
     shadowOpacity: 0,
     elevation: 0,
   },
@@ -258,7 +258,7 @@ const styles = StyleSheet.create({
     color: "#fff",
   },
   textOutline: {
-    color: "#8c52ff",
+    color: "#B900FF",
   },
 
   textSmall: {

@@ -36,7 +36,7 @@ const tips: Tip[] = [
     description:
       "Liste seus gastos fixos (aluguel, contas, mercado) antes de qualquer compra por impulso.",
     icon: "checkbox-outline",
-    color: "#8c52ff",
+    color: "#B900FF",
     tag: "Organização",
   },
   {
@@ -228,7 +228,7 @@ export const FeedScreen = () => {
     return (
       <Layout title="Linha do Tempo" showBackButton={false} showSidebar={true}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#8c52ff" />
+          <ActivityIndicator size="large" color="#B900FF" />
           <Text style={styles.loadingText}>Carregando linha do tempo...</Text>
         </View>
       </Layout>
@@ -243,8 +243,8 @@ export const FeedScreen = () => {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor="#8c52ff"
-            colors={["#8c52ff"]}
+            tintColor="#B900FF"
+            colors={["#B900FF"]}
           />
         }
       >
@@ -259,7 +259,7 @@ export const FeedScreen = () => {
         >
           {/* Cabeçalho */}
           <View style={styles.header}>
-            <Ionicons name="newspaper-outline" size={64} color="#8c52ff" />
+            <Ionicons name="newspaper-outline" size={64} color="#B900FF" />
             <Text style={styles.title}>Linha do Tempo</Text>
             <Text style={styles.subtitle}>
               Dicas rápidas e suas atividades recentes
@@ -366,7 +366,7 @@ const styles = StyleSheet.create({
   },
   tipCard: {
     flexDirection: "row",
-    backgroundColor: "#1a1a1a",
+    backgroundColor: "#171321",
     borderRadius: 14,
     padding: 14,
     marginBottom: 10,
@@ -414,7 +414,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   timeline: {
-    backgroundColor: "#1a1a1a",
+    backgroundColor: "#171321",
     borderRadius: 16,
     paddingVertical: 8,
     paddingRight: 12,
@@ -470,7 +470,7 @@ const styles = StyleSheet.create({
   },
   timelineCategory: {
     fontSize: 11,
-    color: "#8c52ff",
+    color: "#B900FF",
     marginBottom: 2,
   },
   timelineTime: {
@@ -478,7 +478,7 @@ const styles = StyleSheet.create({
     color: "#777",
   },
   emptyState: {
-    backgroundColor: "#1a1a1a",
+    backgroundColor: "#171321",
     borderRadius: 16,
     padding: 40,
     alignItems: "center",

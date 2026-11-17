@@ -428,7 +428,7 @@ export const ClientDetail: React.FC = () => {
               styles.consultationCard,
               {
                 backgroundColor: colors.card,
-                borderColor: focusConsultation ? "#ff4d6d" : colors.border,
+                borderColor: focusConsultation ? "#FF008A" : colors.border,
                 borderWidth: focusConsultation ? 2 : 1,
               },
             ]}
@@ -1138,7 +1138,7 @@ export const ClientDetail: React.FC = () => {
                 <Text>Cancelar</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.modalButton, { backgroundColor: "#8c52ff" }]}
+                style={[styles.modalButton, { backgroundColor: "#B900FF" }]}
                 onPress={handleSendMessage}
                 disabled={sendingMessage}
               >
@@ -1336,7 +1336,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   consultationFocusHint: {
-    color: "#ff4d6d",
+    color: "#FF008A",
     fontSize: 13,
     fontWeight: "700",
   },
@@ -1392,7 +1392,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 8,
     alignItems: "center",
-    backgroundColor: "#ff4d6d",
+    backgroundColor: "#FF008A",
   },
   consultationAddDateButton: {
     paddingVertical: 12,

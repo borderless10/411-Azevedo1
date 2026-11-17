@@ -189,7 +189,7 @@ export const BadgeHoldersScreen = () => {
         ListEmptyComponent={
           gamification.loading ? (
             <View style={styles.center}>
-              <ActivityIndicator size="large" color="#8c52ff" />
+              <ActivityIndicator size="large" color="#B900FF" />
             </View>
           ) : (
             <View style={styles.center}>
@@ -235,7 +235,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    backgroundColor: "#161616",
+    backgroundColor: "#171321",
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
@@ -253,7 +253,7 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     marginRight: 8,
   },
-  chipActive: { backgroundColor: "#8c52ff" },
+  chipActive: { backgroundColor: "#B900FF" },
   chipText: { color: "#ccc", fontSize: 12, fontWeight: "600" },
   chipTextActive: { color: "#fff" },
   center: { alignItems: "center", paddingVertical: 40 },
@@ -261,7 +261,7 @@ const styles = StyleSheet.create({
   column: { gap: 12, marginBottom: 12 },
   card: {
     flex: 1,
-    backgroundColor: "#161616",
+    backgroundColor: "#171321",
     borderRadius: 14,
     padding: 14,
     alignItems: "center",

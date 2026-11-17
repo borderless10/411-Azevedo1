@@ -316,7 +316,7 @@ export const MetasScreen = () => {
         showSidebar={!showBack}
       >
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#ff4d6d" />
+          <ActivityIndicator size="large" color="#FF008A" />
           <Text style={styles.loadingText}>Carregando metas...</Text>
         </View>
       </Layout>
@@ -341,7 +341,7 @@ export const MetasScreen = () => {
         >
           {/* Header */}
           <View style={styles.header}>
-            <Ionicons name="flag" size={64} color="#ff4d6d" />
+            <Ionicons name="flag" size={64} color="#FF008A" />
             <Text style={styles.title}>Metas Financeiras</Text>
             <Text style={styles.subtitle}>Defina e acompanhe suas metas</Text>
           </View>
@@ -349,19 +349,19 @@ export const MetasScreen = () => {
           {/* Estatísticas */}
           <View style={styles.statsContainer}>
             <View style={styles.statCard}>
-              <Ionicons name="flag-outline" size={24} color="#ff4d6d" />
+              <Ionicons name="flag-outline" size={24} color="#FF008A" />
               <Text style={styles.statLabel}>Total</Text>
               <Text style={styles.statValue}>{goals.length}</Text>
             </View>
 
             <View style={styles.statCard}>
-              <Ionicons name="play-circle" size={24} color="#8c52ff" />
+              <Ionicons name="play-circle" size={24} color="#B900FF" />
               <Text style={styles.statLabel}>Ativas</Text>
               <Text style={styles.statValue}>{activeGoals.length}</Text>
             </View>
 
             <View style={styles.statCard}>
-              <Ionicons name="checkmark-circle" size={24} color="#8c52ff" />
+              <Ionicons name="checkmark-circle" size={24} color="#B900FF" />
               <Text style={styles.statLabel}>Concluídas</Text>
               <Text style={styles.statValue}>{completedGoals.length}</Text>
             </View>
@@ -524,7 +524,7 @@ export const MetasScreen = () => {
                           <Ionicons
                             name="checkmark-circle"
                             size={24}
-                            color="#8c52ff"
+                            color="#B900FF"
                           />
                         </View>
                       )}
@@ -582,7 +582,7 @@ export const MetasScreen = () => {
                           {
                             width: `${Math.min(progress, 100)}%`,
                             backgroundColor: isCompleted
-                              ? "#8c52ff"
+                              ? "#B900FF"
                               : categoryInfo.color,
                           },
                         ]}
@@ -1001,7 +1001,7 @@ const styles = StyleSheet.create({
   },
   statCard: {
     flex: 1,
-    backgroundColor: "#1a1a1a",
+    backgroundColor: "#171321",
     borderRadius: 12,
     padding: 16,
     borderWidth: 1,
@@ -1020,7 +1020,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   totalProgressCard: {
-    backgroundColor: "#1a1a1a",
+    backgroundColor: "#171321",
     borderRadius: 12,
     padding: 16,
     borderWidth: 1,
@@ -1035,11 +1035,11 @@ const styles = StyleSheet.create({
   totalProgressValue: {
     fontSize: 32,
     fontWeight: "bold",
-    color: "#8c52ff",
+    color: "#B900FF",
     marginBottom: 8,
   },
   createButton: {
-    backgroundColor: "#ff4d6d",
+    backgroundColor: "#FF008A",
     borderRadius: 12,
     padding: 16,
     flexDirection: "row",
@@ -1063,14 +1063,14 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderRadius: 8,
-    backgroundColor: "#1a1a1a",
+    backgroundColor: "#171321",
     borderWidth: 1,
     borderColor: "#333",
     alignItems: "center",
   },
   filterButtonActive: {
-    backgroundColor: "#ff4d6d",
-    borderColor: "#ff4d6d",
+    backgroundColor: "#FF008A",
+    borderColor: "#FF008A",
   },
   filterText: {
     fontSize: 14,
@@ -1084,7 +1084,7 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   goalCard: {
-    backgroundColor: "#1a1a1a",
+    backgroundColor: "#171321",
     borderRadius: 12,
     padding: 16,
     borderWidth: 1,
@@ -1139,7 +1139,7 @@ const styles = StyleSheet.create({
   currentAmount: {
     fontSize: 24,
     fontWeight: "bold",
-    color: "#8c52ff",
+    color: "#B900FF",
   },
   targetAmount: {
     fontSize: 14,
@@ -1154,7 +1154,7 @@ const styles = StyleSheet.create({
   },
   progressBarFill: {
     height: "100%",
-    backgroundColor: "#8c52ff",
+    backgroundColor: "#B900FF",
     borderRadius: 4,
   },
   progressText: {
@@ -1176,10 +1176,10 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   addButton: {
-    backgroundColor: "#8c52ff",
+    backgroundColor: "#B900FF",
   },
   deleteButton: {
-    backgroundColor: "#ff4d6d",
+    backgroundColor: "#FF008A",
   },
   actionButtonText: {
     fontSize: 14,
@@ -1189,7 +1189,7 @@ const styles = StyleSheet.create({
   emptyState: {
     alignItems: "center",
     padding: 40,
-    backgroundColor: "#1a1a1a",
+    backgroundColor: "#171321",
     borderRadius: 12,
     borderWidth: 1,
     borderColor: "#333",
@@ -1214,7 +1214,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   modalContent: {
-    backgroundColor: "#1a1a1a",
+    backgroundColor: "#171321",
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     maxHeight: "90%",
@@ -1252,7 +1252,7 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#0a0a0a",
+    backgroundColor: "#07050D",
     borderRadius: 8,
     borderWidth: 1,
     borderColor: "#333",
@@ -1268,7 +1268,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#fff",
     paddingVertical: 12,
-    backgroundColor: "#0a0a0a",
+    backgroundColor: "#07050D",
     borderRadius: 8,
     borderWidth: 1,
     borderColor: "#333",
@@ -1287,7 +1287,7 @@ const styles = StyleSheet.create({
   categoryButton: {
     width: "30%",
     aspectRatio: 1,
-    backgroundColor: "#0a0a0a",
+    backgroundColor: "#07050D",
     borderRadius: 12,
     borderWidth: 2,
     borderColor: "#333",
@@ -1296,7 +1296,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   categoryButtonActive: {
-    backgroundColor: "#1a1a1a",
+    backgroundColor: "#171321",
     borderWidth: 3,
     transform: [{ scale: 1.05 }],
   },
@@ -1313,15 +1313,15 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 10,
     borderRadius: 8,
-    backgroundColor: "#0a0a0a",
+    backgroundColor: "#07050D",
     borderWidth: 1,
     borderColor: "#333",
     alignItems: "center",
     justifyContent: "center",
   },
   prazoButtonActive: {
-    backgroundColor: "#8c52ff",
-    borderColor: "#8c52ff",
+    backgroundColor: "#B900FF",
+    borderColor: "#B900FF",
   },
   prazoText: {
     color: "#999",
@@ -1331,7 +1331,7 @@ const styles = StyleSheet.create({
     color: "#fff",
   },
   saveButton: {
-    backgroundColor: "#8c52ff",
+    backgroundColor: "#B900FF",
     margin: 20,
     padding: 16,
     borderRadius: 12,

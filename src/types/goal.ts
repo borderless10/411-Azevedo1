@@ -132,14 +132,14 @@ export interface GoalCategoryInfo {
  * Categorias de metas disponíveis
  */
 export const GOAL_CATEGORIES: GoalCategoryInfo[] = [
-  { value: "savings", label: "Poupança", icon: "wallet", color: "#8c52ff" },
+  { value: "savings", label: "Poupança", icon: "wallet", color: "#B900FF" },
   { value: "purchase", label: "Compra", icon: "cart", color: "#a47aff" },
-  { value: "debt", label: "Dívida", icon: "card", color: "#ff4d6d" },
+  { value: "debt", label: "Dívida", icon: "card", color: "#FF008A" },
   {
     value: "investment",
     label: "Investimento",
     icon: "trending-up",
-    color: "#8c52ff",
+    color: "#B900FF",
   },
   {
     value: "emergency",
@@ -148,7 +148,7 @@ export const GOAL_CATEGORIES: GoalCategoryInfo[] = [
     color: "#c084fc",
   },
   { value: "travel", label: "Viagem", icon: "airplane", color: "#a47aff" },
-  { value: "education", label: "Educação", icon: "school", color: "#8c52ff" },
+  { value: "education", label: "Educação", icon: "school", color: "#B900FF" },
   {
     value: "other",
     label: "Outro",

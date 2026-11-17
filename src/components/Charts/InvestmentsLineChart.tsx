@@ -32,7 +32,7 @@ export const InvestmentsLineChart: React.FC<Props> = ({ data }) => {
     datasets: [
       {
         data: data.slice(-8).map(d => d.caixa),
-        color: () => '#8c52ff',
+        color: () => '#B900FF',
         strokeWidth: 2,
       },
       {
@@ -68,7 +68,7 @@ export const InvestmentsLineChart: React.FC<Props> = ({ data }) => {
     <View>
       <View style={styles.legend}>
         <View style={styles.legendItem}>
-          <View style={[styles.legendDot, { backgroundColor: '#8c52ff' }]} />
+          <View style={[styles.legendDot, { backgroundColor: '#B900FF' }]} />
           <Text style={styles.legendText}>Caixa</Text>
         </View>
         <View style={styles.legendItem}>

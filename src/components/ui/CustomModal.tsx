@@ -90,7 +90,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   primaryButton: {
-    backgroundColor: "#8c52ff",
+    backgroundColor: "#B900FF",
     paddingVertical: 12,
     paddingHorizontal: 20,
     borderRadius: 10,

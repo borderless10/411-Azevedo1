@@ -79,7 +79,7 @@ export const PodiumView = ({
                 styles.base,
                 {
                   height: isFirst ? 64 : entry.position === 2 ? 44 : 32,
-                  backgroundColor: MEDAL[entry.position - 1] || "#8c52ff",
+                  backgroundColor: MEDAL[entry.position - 1] || "#B900FF",
                 },
               ]}
             >

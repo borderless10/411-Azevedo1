@@ -167,7 +167,7 @@ export const WishlistScreen = () => {
         showSidebar={true}
       >
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#ff4d6d" />
+          <ActivityIndicator size="large" color="#FF008A" />
           <Text style={styles.loadingText}>Carregando...</Text>
         </View>
       </Layout>
@@ -185,7 +185,7 @@ export const WishlistScreen = () => {
       <ScrollView style={styles.container}>
         <Animated.View style={{ opacity: fadeAnim }}>
           <View style={styles.header}>
-            <Ionicons name="heart" size={64} color="#ff4d6d" />
+            <Ionicons name="heart" size={64} color="#FF008A" />
             <Text style={styles.title}>Lista de Desejos</Text>
             <Text style={styles.subtitle}>
               Salve itens que você deseja comprar
@@ -224,13 +224,13 @@ export const WishlistScreen = () => {
                       style={styles.iconButton}
                       onPress={() => openEdit(item)}
                     >
-                      <Ionicons name="pencil" size={18} color="#8c52ff" />
+                      <Ionicons name="pencil" size={18} color="#B900FF" />
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.iconButton}
                       onPress={() => handleDelete(item)}
                     >
-                      <Ionicons name="trash" size={18} color="#ff4d6d" />
+                      <Ionicons name="trash" size={18} color="#FF008A" />
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -339,7 +339,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    backgroundColor: "#ff4d6d",
+    backgroundColor: "#FF008A",
     padding: 12,
     borderRadius: 8,
     marginVertical: 12,
@@ -350,7 +350,7 @@ const styles = StyleSheet.create({
   emptySubtext: { color: "#666", marginTop: 4 },
   list: { marginTop: 8 },
   card: {
-    backgroundColor: "#1a1a1a",
+    backgroundColor: "#171321",
     borderRadius: 12,
     padding: 16,
     borderWidth: 1,
@@ -363,7 +363,7 @@ const styles = StyleSheet.create({
   cardLeft: { flex: 1 },
   itemName: { fontSize: 16, fontWeight: "700", color: "#fff", marginBottom: 4 },
   itemDesc: { color: "#ccc", marginTop: 4 },
-  itemValue: { marginTop: 6, fontWeight: "700", color: "#8c52ff" },
+  itemValue: { marginTop: 6, fontWeight: "700", color: "#B900FF" },
   cardActions: { flexDirection: "row", gap: 8 },
   iconButton: { padding: 8 },
   modalOverlay: {
@@ -373,7 +373,7 @@ const styles = StyleSheet.create({
   },
   modalOverlayTouchable: { flex: 1 },
   modalContent: {
-    backgroundColor: "#1a1a1a",
+    backgroundColor: "#171321",
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     maxHeight: "90%",
@@ -398,7 +398,7 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#0a0a0a",
+    backgroundColor: "#07050D",
     borderRadius: 8,
     borderWidth: 1,
     borderColor: "#333",
@@ -409,7 +409,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#fff",
     paddingVertical: 12,
-    backgroundColor: "#0a0a0a",
+    backgroundColor: "#07050D",
     borderRadius: 8,
     borderWidth: 1,
     borderColor: "#333",
@@ -421,7 +421,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    backgroundColor: "#8c52ff",
+    backgroundColor: "#B900FF",
     padding: 12,
     borderRadius: 8,
     marginTop: 12,

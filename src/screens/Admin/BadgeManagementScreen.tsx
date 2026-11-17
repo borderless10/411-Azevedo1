@@ -31,7 +31,7 @@ const emptyForm: BadgeDefinitionInput = {
   meaning: "",
   description: "",
   icon: "medal",
-  primaryColor: "#8c52ff",
+  primaryColor: "#B900FF",
   secondaryColor: "#c0c6d4",
   borderPreset: "solid-violet",
 };
@@ -330,7 +330,7 @@ export const BadgeManagementScreen = () => {
 
         <Text style={styles.sectionTitle}>Catálogo</Text>
         {gamification.loading ? (
-          <ActivityIndicator size="large" color="#8c52ff" />
+          <ActivityIndicator size="large" color="#B900FF" />
         ) : (
           gamification.definitions.map((definition) => (
             <View key={definition.id} style={styles.card}>
@@ -452,7 +452,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     alignItems: "center",
   },
-  tabActive: { backgroundColor: "#8c52ff" },
+  tabActive: { backgroundColor: "#B900FF" },
   tabText: { color: "#ccc", fontSize: 12, fontWeight: "700", textAlign: "center" },
   tabTextActive: { color: "#fff" },
   sectionTitle: {
@@ -464,7 +464,7 @@ const styles = StyleSheet.create({
   },
   label: { color: "#aaa", fontSize: 12, fontWeight: "700", marginVertical: 8 },
   input: {
-    backgroundColor: "#161616",
+    backgroundColor: "#171321",
     color: "#fff",
     borderRadius: 10,
     paddingHorizontal: 12,
@@ -483,14 +483,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 11,
     paddingVertical: 7,
   },
-  chipActive: { backgroundColor: "#8c52ff" },
+  chipActive: { backgroundColor: "#B900FF" },
   chipText: { color: "#ccc", fontSize: 12, fontWeight: "600" },
   chipTextActive: { color: "#fff" },
   colorRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   colorInput: { flex: 1 },
   colorPreview: { width: 26, height: 26, borderRadius: 13, marginBottom: 10 },
   saveButton: {
-    backgroundColor: "#8c52ff",
+    backgroundColor: "#B900FF",
     borderRadius: 10,
     paddingVertical: 12,
     alignItems: "center",
@@ -504,7 +504,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    backgroundColor: "#161616",
+    backgroundColor: "#171321",
     borderRadius: 12,
     padding: 12,
     marginBottom: 8,

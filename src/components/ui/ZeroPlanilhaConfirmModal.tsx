@@ -134,7 +134,7 @@ const ZeroPlanilhaConfirmModal: React.FC<Props> = ({
             <Ionicons
               name={step === "question" ? "help-circle" : "cash"}
               size={56}
-              color="#8c52ff"
+              color="#B900FF"
             />
           </View>
 
@@ -197,7 +197,7 @@ const ZeroPlanilhaConfirmModal: React.FC<Props> = ({
                           setRows((prev) => prev.filter((r) => r.id !== row.id))
                         }
                       >
-                        <Ionicons name="trash-outline" size={18} color="#ff4d6d" />
+                        <Ionicons name="trash-outline" size={18} color="#FF008A" />
                       </TouchableOpacity>
                     ) : null}
                   </View>
@@ -313,7 +313,7 @@ const ZeroPlanilhaConfirmModal: React.FC<Props> = ({
                   ])
                 }
               >
-                <Ionicons name="add-circle-outline" size={18} color="#8c52ff" />
+                <Ionicons name="add-circle-outline" size={18} color="#B900FF" />
                 <Text style={styles.addRowText}>Adicionar outro gasto</Text>
               </TouchableOpacity>
 
@@ -376,7 +376,7 @@ const styles = StyleSheet.create({
     padding: 22,
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#2a2040",
+    borderColor: "#21172D",
   },
   entriesScroll: { width: "100%" },
   entriesContent: { paddingBottom: 8 },
@@ -399,10 +399,10 @@ const styles = StyleSheet.create({
   },
   entryCard: {
     width: "100%",
-    backgroundColor: "#1a1528",
+    backgroundColor: "#21172D",
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#2a2040",
+    borderColor: "#21172D",
     padding: 12,
     marginBottom: 10,
   },
@@ -424,21 +424,21 @@ const styles = StyleSheet.create({
   kindChip: {
     flex: 1,
     borderWidth: 1,
-    borderColor: "#2a2040",
+    borderColor: "#21172D",
     borderRadius: 8,
     paddingVertical: 8,
     alignItems: "center",
   },
   kindChipActive: {
-    backgroundColor: "#8c52ff",
-    borderColor: "#8c52ff",
+    backgroundColor: "#B900FF",
+    borderColor: "#B900FF",
   },
   kindChipText: { color: "#a89fc0", fontWeight: "600", fontSize: 12 },
   kindChipTextActive: { color: "#fff" },
   trackedScroll: { marginBottom: 8 },
   trackedChip: {
     borderWidth: 1,
-    borderColor: "#2a2040",
+    borderColor: "#21172D",
     borderRadius: 999,
     paddingVertical: 6,
     paddingHorizontal: 10,
@@ -446,13 +446,13 @@ const styles = StyleSheet.create({
   },
   trackedChipActive: {
     backgroundColor: "#3d2a66",
-    borderColor: "#8c52ff",
+    borderColor: "#B900FF",
   },
   trackedChipText: { color: "#a89fc0", fontSize: 12 },
   trackedChipTextActive: { color: "#fff", fontWeight: "700" },
   titleInput: {
     borderWidth: 1,
-    borderColor: "#2a2040",
+    borderColor: "#21172D",
     borderRadius: 8,
     color: "#fff",
     paddingHorizontal: 10,
@@ -463,7 +463,7 @@ const styles = StyleSheet.create({
     width: "100%",
     backgroundColor: "#0e0c14",
     borderWidth: 1,
-    borderColor: "#2a2040",
+    borderColor: "#21172D",
     borderRadius: 10,
     color: "#fff",
     fontSize: 20,
@@ -479,7 +479,7 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start",
     marginBottom: 12,
   },
-  addRowText: { color: "#8c52ff", fontWeight: "700" },
+  addRowText: { color: "#B900FF", fontWeight: "700" },
   totalHelper: {
     color: "#cfc6e8",
     fontWeight: "700",
@@ -497,7 +497,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "transparent",
     borderWidth: 1,
-    borderColor: "#2a2040",
+    borderColor: "#21172D",
     borderRadius: 10,
     minHeight: 46,
     alignItems: "center",
@@ -510,7 +510,7 @@ const styles = StyleSheet.create({
   },
   yesButton: {
     flex: 1,
-    backgroundColor: "#8c52ff",
+    backgroundColor: "#B900FF",
     borderRadius: 10,
     minHeight: 46,
     alignItems: "center",
@@ -534,7 +534,7 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   errorText: {
-    color: "#ff4d6d",
+    color: "#FF008A",
     fontSize: 13,
     marginBottom: 8,
     alignSelf: "flex-start",

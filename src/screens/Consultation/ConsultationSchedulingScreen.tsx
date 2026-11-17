@@ -262,10 +262,10 @@ export const ConsultationSchedulingScreen: React.FC = () => {
         accessibilityLabel="Falar com a Visão"
       >
         {openingVisaoChat ? (
-          <ActivityIndicator color="#ff4d6d" />
+          <ActivityIndicator color="#FF008A" />
         ) : (
           <>
-            <Ionicons name="chatbubbles-outline" size={20} color="#ff4d6d" />
+            <Ionicons name="chatbubbles-outline" size={20} color="#FF008A" />
             <Text style={styles.supportHelpButtonText}>Falar com a Visão</Text>
           </>
         )}
@@ -302,7 +302,7 @@ export const ConsultationSchedulingScreen: React.FC = () => {
         disabled={confirming || !selectedDay || !cycleStartKey}
       >
         {confirming ? (
-          <ActivityIndicator color="#8c52ff" />
+          <ActivityIndicator color="#B900FF" />
         ) : (
           <>
             <Ionicons name="checkmark-circle-outline" size={20} color="#fff" />
@@ -334,7 +334,7 @@ export const ConsultationSchedulingScreen: React.FC = () => {
             ]}
           >
             <View style={styles.iconCircle}>
-              <Ionicons name="calendar" size={32} color="#8c52ff" />
+              <Ionicons name="calendar" size={32} color="#B900FF" />
             </View>
             <Text style={[styles.title, { color: colors.text }]}>
               {schedulingState === "booked"
@@ -359,7 +359,7 @@ export const ConsultationSchedulingScreen: React.FC = () => {
                   { backgroundColor: colors.background, borderColor: colors.border },
                 ]}
               >
-                <Ionicons name="sparkles" size={18} color="#8c52ff" />
+                <Ionicons name="sparkles" size={18} color="#B900FF" />
                 <Text style={[styles.dayBadgeText, { color: colors.text }]}>
                   Melhor dia sugerido: {preferredDayLabel} de cada mês
                 </Text>
@@ -488,10 +488,10 @@ export const ConsultationSchedulingScreen: React.FC = () => {
               style={[
                 styles.statusBox,
                 styles.statusBoxSuccess,
-                { borderColor: "#8c52ff", backgroundColor: colors.background },
+                { borderColor: "#B900FF", backgroundColor: colors.background },
               ]}
             >
-              <Ionicons name="checkmark-circle" size={22} color="#8c52ff" />
+              <Ionicons name="checkmark-circle" size={22} color="#B900FF" />
               <Text style={[styles.statusText, { color: colors.text }]}>
                 {requestSentRecently
                   ? "Solicitação enviada! A equipe Visão foi avisada. Aguarde a liberação do link."
@@ -593,7 +593,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   pulseHint: {
-    color: "#ff4d6d",
+    color: "#FF008A",
     fontSize: 14,
     fontWeight: "600",
     textAlign: "center",
@@ -662,7 +662,7 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 14,
     borderRadius: 12,
-    backgroundColor: "#8c52ff",
+    backgroundColor: "#B900FF",
   },
   confirmationCta: {
     flexDirection: "row",
@@ -672,7 +672,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 14,
     borderRadius: 12,
-    backgroundColor: "#8c52ff",
+    backgroundColor: "#B900FF",
   },
   bookedMessage: {
     color: "#c4b5fd",
@@ -687,7 +687,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   supportHelpText: {
-    color: "#ff4d6d",
+    color: "#FF008A",
     fontSize: 14,
     lineHeight: 20,
     fontWeight: "600",
@@ -702,12 +702,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: 12,
     borderWidth: 1.5,
-    borderColor: "#ff4d6d",
+    borderColor: "#FF008A",
     backgroundColor: "rgba(255, 77, 109, 0.12)",
     alignSelf: "stretch",
   },
   supportHelpButtonText: {
-    color: "#ff4d6d",
+    color: "#FF008A",
     fontSize: 15,
     fontWeight: "700",
   },

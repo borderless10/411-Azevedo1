@@ -51,7 +51,7 @@ export const CoupleMemberPickerScreen = () => {
             <ActivityIndicator color="#fff" />
           ) : (
             <>
-              <Ionicons name="heart" size={22} color="#ff4d6d" />
+              <Ionicons name="heart" size={22} color="#FF008A" />
               <Text style={styles.memberText}>
                 {getCoupleMemberLabel(user, 1)}
               </Text>
@@ -68,7 +68,7 @@ export const CoupleMemberPickerScreen = () => {
             <ActivityIndicator color="#fff" />
           ) : (
             <>
-              <Ionicons name="heart" size={22} color="#ff4d6d" />
+              <Ionicons name="heart" size={22} color="#FF008A" />
               <Text style={styles.memberText}>
                 {getCoupleMemberLabel(user, 2)}
               </Text>
@@ -121,7 +121,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   memberButton: {
-    backgroundColor: "#1a1a1a",
+    backgroundColor: "#171321",
     borderWidth: 1,
     borderColor: "#333",
     borderRadius: 12,

@@ -260,12 +260,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const menuItems: MenuItem[] = isConsultor
     ? [
-        { id: "Home", label: "Início", icon: "home", color: "#8c52ff" },
+        { id: "Home", label: "Início", icon: "home", color: "#B900FF" },
         {
           id: "Feed",
           label: "Linha do Tempo",
           icon: "newspaper",
-          color: "#8c52ff",
+          color: "#B900FF",
         },
         { id: "Chat", label: "Chats", icon: "chatbubbles", color: "#a47aff" },
         { id: "Ranking", label: "Ranking", icon: "trophy", color: "#c084fc" },
@@ -276,7 +276,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             id: "AdminUsers",
             label: "Gerenciar Usuários",
             icon: "people",
-            color: "#8c52ff",
+            color: "#B900FF",
           },
           {
             id: "BadgeManagement",
@@ -288,7 +288,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             id: "Feed",
             label: "Linha do Tempo",
             icon: "newspaper",
-            color: "#8c52ff",
+            color: "#B900FF",
           },
           {
             id: "Chat",
@@ -304,7 +304,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           },
         ]
       : [
-          { id: "Home", label: "Início", icon: "home", color: "#8c52ff" },
+          { id: "Home", label: "Início", icon: "home", color: "#B900FF" },
           {
             id: "Budget",
             label: "Consumo Moderado",
@@ -315,20 +315,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
             id: "Bills",
             label: "Contas a Pagar",
             icon: "receipt",
-            color: "#ff4d6d",
+            color: "#FF008A",
           },
           {
             id: "IncomeList",
             label: "Rendas Acompanhadas",
             icon: "cash",
-            color: "#8c52ff",
+            color: "#B900FF",
           },
-          { id: "Cartoes", label: "Cartões", icon: "card", color: "#8c52ff" },
+          { id: "Cartoes", label: "Cartões", icon: "card", color: "#B900FF" },
           {
             id: "Feed",
             label: "Linha do Tempo",
             icon: "newspaper",
-            color: "#8c52ff",
+            color: "#B900FF",
           },
           { id: "Chat", label: "Chats", icon: "chatbubbles", color: "#a47aff" },
           { id: "Ranking", label: "Ranking", icon: "trophy", color: "#c084fc" },
@@ -356,19 +356,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
       id: "Metas",
       label: "Metas",
       icon: "flag",
-      color: "#8c52ff",
+      color: "#B900FF",
     });
     menuItems.push({
       id: "Wishlist",
       label: "Lista de Desejos",
       icon: "heart",
-      color: "#ff4d6d",
+      color: "#FF008A",
     });
     menuItems.push({
       id: "Investments",
       label: "Investimentos",
       icon: "trending-up",
-      color: "#8c52ff",
+      color: "#B900FF",
     });
     menuItems.push({
       id: "UserNotes",
@@ -380,7 +380,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       id: "ShoppingList",
       label: "Lista de compras",
       icon: "cart",
-      color: "#8c52ff",
+      color: "#B900FF",
     });
   }
 
@@ -389,7 +389,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     id: "Profile",
     label: "Perfil",
     icon: "person",
-    color: "#8c52ff",
+    color: "#B900FF",
   });
   menuItems.push({
     id: "Settings",
@@ -474,7 +474,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <Ionicons
             name="calendar"
             size={24}
-            color={shouldPulseConsultation ? "#ff4d6d" : "#8c52ff"}
+            color={shouldPulseConsultation ? "#FF008A" : "#B900FF"}
           />
           <View style={styles.consultationTextWrap}>
             <Text
@@ -533,9 +533,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
           size={20}
           color={
             shouldPulseConsultation
-              ? "#ff4d6d"
+              ? "#FF008A"
               : hasBookedCurrentCycle
-                ? "#8c52ff"
+                ? "#B900FF"
                 : colors.textSecondary
           }
         />
@@ -576,7 +576,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 name={item.icon}
                 size={24}
                 color={
-                  isActive ? item.color || "#8c52ff" : colors.textSecondary
+                  isActive ? item.color || "#B900FF" : colors.textSecondary
                 }
               />
               {rankingPositionLabel(rankingPosition) ? (
@@ -600,7 +600,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               name={item.icon}
               size={24}
               color={
-                isActive ? item.color || "#8c52ff" : colors.textSecondary
+                isActive ? item.color || "#B900FF" : colors.textSecondary
               }
             />
           )}
@@ -622,7 +622,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <Ionicons
             name="chevron-forward"
             size={20}
-            color={item.color || "#8c52ff"}
+            color={item.color || "#B900FF"}
           />
         )}
       </TouchableOpacity>
@@ -650,14 +650,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <Ionicons
               name="analytics"
               size={24}
-              color={sectionActive ? "#8c52ff" : colors.textSecondary}
+              color={sectionActive ? "#B900FF" : colors.textSecondary}
             />
             <Text
               style={[
                 styles.menuItemText,
                 { color: colors.textSecondary },
                 sectionActive && styles.menuItemTextActive,
-                sectionActive && { color: "#8c52ff" },
+                sectionActive && { color: "#B900FF" },
               ]}
             >
               Gastos acompanhados
@@ -666,7 +666,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <Ionicons
             name={trackedExpensesExpanded ? "chevron-up" : "chevron-down"}
             size={20}
-            color={sectionActive ? "#8c52ff" : colors.textSecondary}
+            color={sectionActive ? "#B900FF" : colors.textSecondary}
           />
         </TouchableOpacity>
 
@@ -699,14 +699,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       styles.trackedExpenseSubItemText,
                       { color: colors.textSecondary },
                       isActive && styles.menuItemTextActive,
-                      isActive && { color: "#8c52ff" },
+                      isActive && { color: "#B900FF" },
                     ]}
                     numberOfLines={1}
                   >
                     {title}
                   </Text>
                   {isActive ? (
-                    <Ionicons name="chevron-forward" size={20} color="#8c52ff" />
+                    <Ionicons name="chevron-forward" size={20} color="#B900FF" />
                   ) : null}
                 </TouchableOpacity>
               );
@@ -810,14 +810,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       <Ionicons
                         name="cash-outline"
                         size={24}
-                        color={isActive ? "#8c52ff" : colors.textSecondary}
+                        color={isActive ? "#B900FF" : colors.textSecondary}
                       />
                       <Text
                         style={[
                           styles.menuItemText,
                           { color: colors.textSecondary },
                           isActive && styles.menuItemTextActive,
-                          isActive && { color: "#8c52ff" },
+                          isActive && { color: "#B900FF" },
                         ]}
                       >
                         {title}
@@ -827,7 +827,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       <Ionicons
                         name="chevron-forward"
                         size={20}
-                        color="#8c52ff"
+                        color="#B900FF"
                       />
                     )}
                   </TouchableOpacity>
@@ -842,11 +842,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <TouchableOpacity
             style={[
               styles.logoutButton,
-              { backgroundColor: colors.background, borderColor: "#ff4d6d" },
+              { backgroundColor: colors.background, borderColor: "#FF008A" },
             ]}
             onPress={handleLogout}
           >
-            <Ionicons name="log-out-outline" size={24} color="#ff4d6d" />
+            <Ionicons name="log-out-outline" size={24} color="#FF008A" />
             <Text style={styles.logoutText}>Sair</Text>
           </TouchableOpacity>
         </View>
@@ -1006,7 +1006,7 @@ const styles = StyleSheet.create({
   },
   menuItemActive: {
     borderLeftWidth: 4,
-    borderLeftColor: "#8c52ff",
+    borderLeftColor: "#B900FF",
   },
   consultationMenuItem: {
     overflow: "hidden",
@@ -1047,11 +1047,11 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   consultationMenuTextPulse: {
-    color: "#ff4d6d",
+    color: "#FF008A",
     fontWeight: "700",
   },
   consultationMenuTextBooked: {
-    color: "#8c52ff",
+    color: "#B900FF",
     fontWeight: "700",
   },
   consultationTextWrap: {
@@ -1073,14 +1073,14 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: "#ff4d6d",
+    backgroundColor: "#FF008A",
     marginLeft: 8,
   },
   unreadDot: {
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: "#8c52ff",
+    backgroundColor: "#B900FF",
     marginLeft: 10,
   },
   footer: {
@@ -1098,7 +1098,7 @@ const styles = StyleSheet.create({
   logoutText: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#ff4d6d",
+    color: "#FF008A",
   },
 });
 

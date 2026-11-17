@@ -581,7 +581,7 @@ export const EditUserScreen: React.FC = ({}: any) => {
                   styles.sectionCard,
                   {
                     backgroundColor: colors.card,
-                    borderColor: focusConsultation ? "#ff4d6d" : colors.border,
+                    borderColor: focusConsultation ? "#FF008A" : colors.border,
                   },
                 ]}
               >
@@ -840,7 +840,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 8,
     alignItems: "center",
-    backgroundColor: "#ff4d6d",
+    backgroundColor: "#FF008A",
   },
   releaseButtonText: {
     color: "#fff",

@@ -596,7 +596,6 @@ export const userService = {
       consultationSchedulingUrl?: string | null;
       consultationPreferredDate?: string | null;
       consultationSchedulingRequestPending?: boolean;
-      autoZeroTrackedExpensesEnabled?: boolean;
     },
   ): Promise<void> {
     try {
@@ -647,11 +646,11 @@ export const userService = {
         updatePayload.consultationSchedulingRequestPending =
           payload.consultationSchedulingRequestPending;
       }
+      await updateDoc(userRef, updatePayload);
       if (payload.autoZeroTrackedExpensesEnabled !== undefined) {
         updatePayload.autoZeroTrackedExpensesEnabled =
           payload.autoZeroTrackedExpensesEnabled;
       }
-      await updateDoc(userRef, updatePayload);
       if (
         payload.consultationSchedulingUrl !== undefined &&
         String(payload.consultationSchedulingUrl || "").trim()

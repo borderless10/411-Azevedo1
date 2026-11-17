@@ -175,7 +175,7 @@ const styles = StyleSheet.create({
   },
   today: {
     borderWidth: 1,
-    borderColor: "#8c52ff",
+    borderColor: "#B900FF",
   },
   dayText: {
     fontSize: 14,

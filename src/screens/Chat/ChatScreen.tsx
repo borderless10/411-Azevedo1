@@ -413,6 +413,7 @@ export const ChatScreen: React.FC = () => {
     allowOlderLoadRef.current = false;
     setEditingMessage(null);
     setActionMessage(null);
+    setReplyTo(null);
   }, [selectedChatId]);
 
   useEffect(
@@ -604,6 +605,7 @@ export const ChatScreen: React.FC = () => {
     [previewSenderMap, user?.id, userMap],
   );
 
+  const getParticipantRole = (id?: string | null): string => {
   const isOwnMessage = useCallback(
     (msg: Message) => {
       if (!user?.id || msg.senderId !== user.id) return false;
@@ -631,7 +633,6 @@ export const ChatScreen: React.FC = () => {
       !isChatMessageDeleted(actionMessage),
   );
 
-  const getParticipantRole = (id?: string | null): string => {
     if (!id) return "";
     return String(userMap[id]?.role || "").toLowerCase();
   };
@@ -1179,7 +1180,6 @@ export const ChatScreen: React.FC = () => {
         ? "Não foi possível editar a mensagem. Tente de novo."
         : "Não foi possível enviar a mensagem. Tente de novo.";
       Alert.alert("Erro", errorLabel);
-    } finally {
       sendingRef.current = false;
     }
   };
@@ -1200,6 +1200,7 @@ export const ChatScreen: React.FC = () => {
     });
   };
 
+  const handleToggleReaction = async (msg: Message, emoji: string) => {
   const handleStartEditMessage = () => {
     if (!actionMessage || !actionMessageCanMutate) return;
     setEditingMessage(actionMessage);
@@ -1239,7 +1240,6 @@ export const ChatScreen: React.FC = () => {
     ]);
   };
 
-  const handleToggleReaction = async (msg: Message, emoji: string) => {
     if (!user?.id || !selectedChatId || !msg.id) return;
     const next = normalizeReactionEmoji(emoji);
     const current = normalizeReactionEmoji(msg.reactions?.[user.id] || "");
@@ -1449,6 +1449,7 @@ export const ChatScreen: React.FC = () => {
     }
     if (!person && fallbackIcon) {
       return <Ionicons name={fallbackIcon} size={Math.round(size * 0.66)} color="#8c52ff" />;
+      return <Ionicons name={fallbackIcon} size={Math.round(size * 0.66)} color="#B900FF" />;
     }
     return (
       <Text style={[styles.listAvatarInitial, { fontSize: Math.round(size * 0.38) }]}>
@@ -1698,7 +1699,7 @@ export const ChatScreen: React.FC = () => {
                 />
 
                 {startChatLoading ? (
-                  <ActivityIndicator color="#8c52ff" style={{ marginTop: 24 }} />
+                  <ActivityIndicator color="#B900FF" style={{ marginTop: 24 }} />
                 ) : (
                   <FlatList
                     data={filteredStartChatUsers}
@@ -1807,7 +1808,7 @@ export const ChatScreen: React.FC = () => {
             onPress={() => setSelectedChatId(null)}
             style={styles.backButton}
           >
-            <Ionicons name="chevron-back" size={28} color="#8c52ff" />
+            <Ionicons name="chevron-back" size={28} color="#B900FF" />
           </TouchableOpacity>
           )}
 
@@ -1861,7 +1862,7 @@ export const ChatScreen: React.FC = () => {
               accessibilityLabel="Opções de segurança"
               disabled={moderationBusy}
             >
-              <Ionicons name="ellipsis-vertical" size={22} color="#8c52ff" />
+              <Ionicons name="ellipsis-vertical" size={22} color="#B900FF" />
             </TouchableOpacity>
           ) : (
             <View style={styles.headerRight} />
@@ -1872,7 +1873,7 @@ export const ChatScreen: React.FC = () => {
         <View style={styles.messagesPane}>
           {messagesLoading && orderedMessages.length === 0 ? (
             <View style={styles.centerContainer}>
-              <ActivityIndicator size="large" color="#8c52ff" />
+              <ActivityIndicator size="large" color="#B900FF" />
             </View>
           ) : null}
           <FlatList
@@ -1978,7 +1979,7 @@ export const ChatScreen: React.FC = () => {
             ListFooterComponent={
               isLoadingMore ? (
                 <ActivityIndicator
-                  color="#8c52ff"
+                  color="#B900FF"
                   style={{ marginVertical: 12 }}
                 />
               ) : trimmed ? (
@@ -2081,7 +2082,7 @@ export const ChatScreen: React.FC = () => {
               <Ionicons
                 name={showEmojiPicker ? "happy" : "happy-outline"}
                 size={24}
-                color={showEmojiPicker ? "#8c52ff" : "#aaa"}
+                color={showEmojiPicker ? "#B900FF" : "#aaa"}
               />
             </TouchableOpacity>
 
@@ -2111,7 +2112,7 @@ export const ChatScreen: React.FC = () => {
               <Ionicons
                 name="send"
                 size={20}
-                color={inputText.trim() ? "#8c52ff" : "#ccc"}
+                color={inputText.trim() ? "#B900FF" : "#ccc"}
               />
             </TouchableOpacity>
           </View>
@@ -2320,7 +2321,7 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     alignSelf: "stretch",
     borderRightWidth: 1,
-    borderRightColor: "#2a2a2a",
+    borderRightColor: "#21172D",
   },
   desktopThread: {
     flex: 1,
@@ -2334,7 +2335,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: "#8c52ff",
+    backgroundColor: "#B900FF",
     alignItems: "center",
     justifyContent: "center",
     zIndex: 5,
@@ -2498,7 +2499,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: "#1a1a1a",
+    backgroundColor: "#171321",
     justifyContent: "center",
     alignItems: "center",
     marginRight: 12,
@@ -2527,7 +2528,7 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: "#8c52ff",
+    backgroundColor: "#B900FF",
     marginBottom: 6,
   },
   timestampText: { fontSize: 12, color: "#d0d0d0" },
@@ -2538,7 +2539,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: "#2a2a2a",
+    borderBottomColor: "#21172D",
     backgroundColor: "#000000",
   },
   backButton: { paddingHorizontal: 8 },
@@ -2577,20 +2578,20 @@ const styles = StyleSheet.create({
   inputWrapper: {
     flexShrink: 0,
     borderTopWidth: 1,
-    borderTopColor: "#2a2a2a",
+    borderTopColor: "#21172D",
     backgroundColor: "#000000",
   },
   mentionList: {
-    backgroundColor: "#161616",
+    backgroundColor: "#171321",
     borderTopWidth: 1,
-    borderTopColor: "#2a2a2a",
+    borderTopColor: "#21172D",
     maxHeight: 180,
   },
   mentionItem: {
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: "#2a2a2a",
+    borderBottomColor: "#21172D",
   },
   mentionName: {
     color: "#fff",
@@ -2602,16 +2603,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 14,
     paddingVertical: 8,
-    backgroundColor: "#1a1a1a",
+    backgroundColor: "#171321",
     borderLeftWidth: 3,
-    borderLeftColor: "#8c52ff",
+    borderLeftColor: "#B900FF",
   },
   replyPreviewBody: {
     flex: 1,
     marginRight: 8,
   },
   replyPreviewLabel: {
-    color: "#8c52ff",
+    color: "#B900FF",
     fontSize: 12,
     fontWeight: "700",
   },
@@ -2645,7 +2646,7 @@ const styles = StyleSheet.create({
     minHeight: 44,
     borderWidth: 1,
     borderColor: "#2f2f2f",
-    backgroundColor: "#121212",
+    backgroundColor: "#171321",
     color: "#ffffff",
     borderRadius: 20,
     paddingHorizontal: 16,
@@ -2670,7 +2671,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginTop: 12,
     marginBottom: 8,
-    backgroundColor: "#8c52ff",
+    backgroundColor: "#B900FF",
     borderRadius: 10,
     minHeight: 44,
   },
@@ -2691,7 +2692,7 @@ const styles = StyleSheet.create({
     padding: 16,
     maxHeight: "85%",
     borderWidth: 1,
-    borderColor: "#2a2040",
+    borderColor: "#21172D",
   },
   startChatTitle: {
     color: "#fff",
@@ -2719,7 +2720,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   startChatTabActive: {
-    backgroundColor: "#8c52ff",
+    backgroundColor: "#B900FF",
   },
   startChatTabText: {
     color: "#a89fc0",
@@ -2754,8 +2755,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "#1a1a1a",
-    justifyContent: "center",
+    backgroundColor: "#171321",
     alignItems: "center",
     overflow: "hidden",
   },

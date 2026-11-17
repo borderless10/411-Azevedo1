@@ -10,3 +10,6 @@ export type { LineChartData } from './LineChart';
 
 export { PieChart } from './PieChart';
 export type { PieChartData } from './PieChart';
+
+export { ConsumoSparkline } from './ConsumoSparkline';
+export { ConsumoModeradoBg } from './ConsumoModeradoBg';

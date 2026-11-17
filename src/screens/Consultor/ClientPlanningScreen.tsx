@@ -1574,7 +1574,7 @@ export const ClientPlanningScreen = () => {
               </View>
 
               <View style={[styles.trackingInfoCard, { marginTop: 8 }]}>
-                <Ionicons name="analytics" size={16} color="#8c52ff" />
+                <Ionicons name="analytics" size={16} color="#B900FF" />
                 <Text style={styles.trackingInfoText}>
                   {totals.dailyTrackedCount} gasto(s) com Acompanhamento Diário
                 </Text>
@@ -1629,7 +1629,7 @@ export const ClientPlanningScreen = () => {
                               <Ionicons
                                 name="analytics"
                                 size={12}
-                                color="#8c52ff"
+                                color="#B900FF"
                               />
                               <Text style={styles.dailyTrackingBadgeText}>
                                 Acompanhado diariamente
@@ -1655,7 +1655,7 @@ export const ClientPlanningScreen = () => {
                           <TouchableOpacity
                             style={[
                               styles.actionButton,
-                              { backgroundColor: "#8c52ff" },
+                              { backgroundColor: "#B900FF" },
                             ]}
                             onPress={() => {
                               const split = resolveSplitAmounts(bill as any);
@@ -1710,7 +1710,7 @@ export const ClientPlanningScreen = () => {
                             <Ionicons
                               name="analytics"
                               size={12}
-                              color="#8c52ff"
+                              color="#B900FF"
                             />
                             <Text style={styles.dailyTrackingBadgeText}>
                               Acompanhado diariamente
@@ -1735,7 +1735,7 @@ export const ClientPlanningScreen = () => {
                         <TouchableOpacity
                           style={[
                             styles.actionButton,
-                            { backgroundColor: "#8c52ff" },
+                            { backgroundColor: "#B900FF" },
                           ]}
                           onPress={() => {
                             setExpenseSource(item.source || "");
@@ -1822,7 +1822,7 @@ export const ClientPlanningScreen = () => {
                     <TouchableOpacity
                       style={[
                         styles.actionButton,
-                        { backgroundColor: "#8c52ff" },
+                        { backgroundColor: "#B900FF" },
                       ]}
                       onPress={() => {
                         const split = resolveSplitAmounts(bill as any);
@@ -1927,7 +1927,7 @@ export const ClientPlanningScreen = () => {
                       <TouchableOpacity
                         style={[
                           styles.actionButton,
-                          { backgroundColor: "#8c52ff" },
+                          { backgroundColor: "#B900FF" },
                         ]}
                         onPress={() => {
                           setExpenseSource(item.source || "");
@@ -2028,7 +2028,7 @@ export const ClientPlanningScreen = () => {
 
             {loadingCardsTab ? (
               <View style={styles.loadingCardsRow}>
-                <ActivityIndicator color="#8c52ff" />
+                <ActivityIndicator color="#B900FF" />
                 <Text style={styles.emptyListText}>Carregando cartões...</Text>
               </View>
             ) : clientCards.length === 0 ? (
@@ -2059,7 +2059,7 @@ export const ClientPlanningScreen = () => {
                     <TouchableOpacity
                       style={[
                         styles.actionButton,
-                        { backgroundColor: "#8c52ff" },
+                        { backgroundColor: "#B900FF" },
                         planningReadOnly && styles.hiddenActions,
                       ]}
                       onPress={() => openEditCardModal(card)}
@@ -2177,7 +2177,7 @@ export const ClientPlanningScreen = () => {
                     <Ionicons
                       name="information-circle-outline"
                       size={16}
-                      color="#8c52ff"
+                      color="#B900FF"
                     />
                   </TouchableOpacity>
                 </View>
@@ -2261,7 +2261,7 @@ export const ClientPlanningScreen = () => {
                           <Ionicons
                             name="analytics"
                             size={12}
-                            color="#8c52ff"
+                            color="#B900FF"
                           />
                           <Text style={styles.dailyTrackingBadgeText}>
                             Acompanhado diariamente
@@ -2289,7 +2289,7 @@ export const ClientPlanningScreen = () => {
                     <TouchableOpacity
                       style={[
                         styles.actionButton,
-                        { backgroundColor: "#8c52ff" },
+                        { backgroundColor: "#B900FF" },
                       ]}
                       onPress={() => {
                         setIncomeSource(item.source || "");
@@ -2402,7 +2402,7 @@ export const ClientPlanningScreen = () => {
               onPress={(e) => e.stopPropagation()}
             >
               <View
-                style={[styles.modalContent, { backgroundColor: "#0a0a0a" }]}
+                style={[styles.modalContent, { backgroundColor: "#07050D" }]}
               >
                 <View style={styles.modalHeader}>
                   <Text style={[styles.modalTitle]}>Nova Conta</Text>
@@ -2565,7 +2565,7 @@ export const ClientPlanningScreen = () => {
                   styles.modalContent,
                   styles.expenseModalContent,
                   { maxHeight: incomeModalMaxHeight },
-                  { backgroundColor: "#0a0a0a" },
+                  { backgroundColor: "#07050D" },
                 ]}
               >
                 <View style={styles.modalHeader}>
@@ -2706,7 +2706,7 @@ export const ClientPlanningScreen = () => {
                 styles.modalContent,
                 styles.expenseModalContent,
                 { maxHeight: expenseModalMaxHeight },
-                { backgroundColor: "#0a0a0a" },
+                { backgroundColor: "#07050D" },
               ]}
             >
                 <View style={styles.modalHeader}>
@@ -2913,7 +2913,7 @@ export const ClientPlanningScreen = () => {
               onPress={(e) => e.stopPropagation()}
             >
               <View
-                style={[styles.modalContent, { backgroundColor: "#0a0a0a" }]}
+                style={[styles.modalContent, { backgroundColor: "#07050D" }]}
               >
                 <View style={styles.modalHeader}>
                   <Text style={[styles.modalTitle]}>
@@ -2984,7 +2984,7 @@ export const ClientPlanningScreen = () => {
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           style={styles.modalOverlay}
         >
-          <View style={[styles.modalContent, { backgroundColor: "#0a0a0a" }]}>
+          <View style={[styles.modalContent, { backgroundColor: "#07050D" }]}>
             <Text style={styles.modalTitle}>Período do ciclo</Text>
             <DatePicker
               label="Início"
@@ -3040,7 +3040,7 @@ export const ClientPlanningScreen = () => {
               onPress={(e) => e.stopPropagation()}
             >
               <View
-                style={[styles.modalContent, { backgroundColor: "#0a0a0a" }]}
+                style={[styles.modalContent, { backgroundColor: "#07050D" }]}
               >
                 <View style={styles.modalHeader}>
                   <Text style={[styles.modalTitle]}>
@@ -3122,7 +3122,7 @@ export const ClientPlanningScreen = () => {
               onPress={(e) => e.stopPropagation()}
             >
               <View
-                style={[styles.modalContent, { backgroundColor: "#0a0a0a" }]}
+                style={[styles.modalContent, { backgroundColor: "#07050D" }]}
               >
                 <View style={styles.modalHeader}>
                   <Text style={styles.modalTitle}>Confirmar exclusão</Text>
@@ -3178,7 +3178,7 @@ export const ClientPlanningScreen = () => {
       >
         <View style={styles.successModalBackdrop}>
           <View style={styles.successModalCard}>
-            <Ionicons name="checkmark-circle" size={64} color="#8c52ff" />
+            <Ionicons name="checkmark-circle" size={64} color="#B900FF" />
             <Text style={styles.successModalTitle}>Ciclo renovado</Text>
             <Text style={styles.successModalMessage}>{cycleSuccessMessage}</Text>
             <TouchableOpacity
@@ -3247,7 +3247,7 @@ const styles = StyleSheet.create({
   cycleCard: {
     backgroundColor: "#121218",
     borderWidth: 1,
-    borderColor: "#2a2040",
+    borderColor: "#21172D",
     borderRadius: 12,
     padding: 14,
     marginBottom: 14,
@@ -3288,7 +3288,7 @@ const styles = StyleSheet.create({
   },
   cycleActionButton: {
     flex: 1,
-    backgroundColor: "#8c52ff",
+    backgroundColor: "#B900FF",
     borderRadius: 10,
     paddingVertical: 12,
     alignItems: "center",
@@ -3296,7 +3296,7 @@ const styles = StyleSheet.create({
   cycleActionButtonSecondary: {
     backgroundColor: "#1a1a1f",
     borderWidth: 1,
-    borderColor: "#8c52ff",
+    borderColor: "#B900FF",
   },
   cycleActionText: {
     color: "#fff",
@@ -3315,7 +3315,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#0d0d0d",
   },
   tabActive: {
-    backgroundColor: "#8c52ff",
+    backgroundColor: "#B900FF",
   },
   tabText: {
     color: "#bbb",
@@ -3331,7 +3331,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   input: {
-    backgroundColor: "#0a0a0a",
+    backgroundColor: "#07050D",
     color: "#fff",
     padding: 12,
     borderRadius: 8,
@@ -3350,11 +3350,11 @@ const styles = StyleSheet.create({
     borderColor: "#666",
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#0a0a0a",
+    backgroundColor: "#07050D",
   },
   checkboxActive: {
-    backgroundColor: "#8c52ff",
-    borderColor: "#8c52ff",
+    backgroundColor: "#B900FF",
+    borderColor: "#B900FF",
   },
   tabPanel: {
     marginTop: 16,
@@ -3362,7 +3362,7 @@ const styles = StyleSheet.create({
   highlightCard: {
     backgroundColor: "#1a1a2e",
     borderWidth: 2,
-    borderColor: "#8c52ff",
+    borderColor: "#B900FF",
     borderRadius: 12,
     padding: 16,
     alignItems: "center",
@@ -3371,7 +3371,7 @@ const styles = StyleSheet.create({
   highlightCardFull: {
     backgroundColor: "#1a1a2e",
     borderWidth: 2,
-    borderColor: "#8c52ff",
+    borderColor: "#B900FF",
     borderRadius: 12,
     padding: 16,
     alignItems: "center",
@@ -3502,7 +3502,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   addReleaseButton: {
-    backgroundColor: "#8c52ff",
+    backgroundColor: "#B900FF",
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 8,
@@ -3514,7 +3514,7 @@ const styles = StyleSheet.create({
   },
   releaseCard: {
     borderWidth: 1,
-    borderColor: "#2a2040",
+    borderColor: "#21172D",
     borderRadius: 12,
     padding: 12,
     backgroundColor: "#11101a",
@@ -3553,7 +3553,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   categoryChipActive: {
-    borderColor: "#8c52ff",
+    borderColor: "#B900FF",
     backgroundColor: "#2d1a58",
   },
   categoryChipDisabled: {
@@ -3619,7 +3619,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   inputDisabled: {
-    backgroundColor: "#1a1a1a",
+    backgroundColor: "#171321",
     color: "#666",
   },
   billDescription: {
@@ -3720,14 +3720,14 @@ const styles = StyleSheet.create({
     color: "#fff",
   },
   saveButton: {
-    backgroundColor: "#8c52ff",
+    backgroundColor: "#B900FF",
     padding: 14,
     borderRadius: 8,
     alignItems: "center",
     marginTop: 8,
   },
   primarySaveButton: {
-    backgroundColor: "#8c52ff",
+    backgroundColor: "#B900FF",
     padding: 14,
     borderRadius: 8,
     alignItems: "center",
@@ -3797,7 +3797,7 @@ const styles = StyleSheet.create({
     height: 24,
   },
   fixedFooter: {
-    backgroundColor: "#0a0a0a",
+    backgroundColor: "#07050D",
     borderTopWidth: 1,
     borderTopColor: "#333",
     paddingHorizontal: 12,
@@ -3833,7 +3833,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   successModalButton: {
-    backgroundColor: "#8c52ff",
+    backgroundColor: "#B900FF",
     paddingVertical: 12,
     paddingHorizontal: 32,
     borderRadius: 10,

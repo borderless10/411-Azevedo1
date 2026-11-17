@@ -151,10 +151,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   buttonDefault: {
-    backgroundColor: "#8c52ff",
+    backgroundColor: "#B900FF",
   },
   buttonDestructive: {
-    backgroundColor: "#ff4d6d",
+    backgroundColor: "#FF008A",
   },
   buttonCancel: {
     backgroundColor: "transparent",

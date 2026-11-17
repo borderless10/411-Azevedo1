@@ -135,7 +135,7 @@ export const ConsultantPicker: React.FC<Props> = ({
 
 const styles = StyleSheet.create({
   trigger: {
-    backgroundColor: "#1a1a1a",
+    backgroundColor: "#171321",
     padding: 12,
     borderRadius: 8,
     borderWidth: 1,
@@ -164,7 +164,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   noneButton: { paddingVertical: 8 },
-  noneText: { color: "#8c52ff", fontWeight: "600" },
+  noneText: { color: "#B900FF", fontWeight: "600" },
   item: {
     paddingVertical: 12,
     borderBottomWidth: 1,

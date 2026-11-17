@@ -33,7 +33,7 @@ export const ConsultationRequestsBanner: React.FC = () => {
         styles.wrapper,
         {
           backgroundColor: colors.card,
-          borderColor: requests.length ? "#ff4d6d" : colors.border,
+          borderColor: requests.length ? "#FF008A" : colors.border,
         },
       ]}
     >
@@ -41,7 +41,7 @@ export const ConsultationRequestsBanner: React.FC = () => {
         <View
           style={[
             styles.headerIcon,
-            { backgroundColor: requests.length ? "#ff4d6d" : "#8c52ff" },
+            { backgroundColor: requests.length ? "#FF008A" : "#B900FF" },
           ]}
         >
           <Ionicons name="calendar" size={20} color="#fff" />

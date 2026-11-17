@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Tela para visualização read-only do planejamento pelo cliente
  */
 
@@ -207,7 +207,7 @@ export const PlanningViewScreen = () => {
       >
         {loading ? (
           <View style={{ alignItems: "center", padding: 24 }}>
-            <ActivityIndicator size="large" color="#8c52ff" />
+            <ActivityIndicator size="large" color="#B900FF" />
             <Text style={{ color: "#999", marginTop: 12 }}>
               Carregando planejamento...
             </Text>
@@ -508,7 +508,7 @@ export const PlanningViewScreen = () => {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#000" },
   card: {
-    backgroundColor: "#1a1a1a",
+    backgroundColor: "#171321",
     borderRadius: 12,
     padding: 16,
     borderWidth: 1,
@@ -540,7 +540,7 @@ const styles = StyleSheet.create({
   moduleDesc: { color: "#999", marginTop: 4 },
   notes: { color: "#ccc" },
   input: {
-    backgroundColor: "#0a0a0a",
+    backgroundColor: "#07050D",
     color: "#fff",
     minHeight: 80,
     padding: 12,
@@ -549,7 +549,7 @@ const styles = StyleSheet.create({
     borderColor: "#333",
   },
   sendButton: {
-    backgroundColor: "#8c52ff",
+    backgroundColor: "#B900FF",
     padding: 12,
     borderRadius: 8,
     alignItems: "center",
@@ -575,7 +575,7 @@ const styles = StyleSheet.create({
   },
   invoiceSummaryCard: {
     flex: 1,
-    backgroundColor: "#1a1a1a",
+    backgroundColor: "#171321",
     borderRadius: 10,
     borderWidth: 1,
     borderColor: "#333",

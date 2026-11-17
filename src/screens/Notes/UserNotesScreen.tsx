@@ -125,7 +125,7 @@ export const UserNotesScreen: React.FC = () => {
                       await load();
                     }}
                   >
-                    <Text style={[styles.link, { color: "#ff4d6d" }]}>
+                    <Text style={[styles.link, { color: "#FF008A" }]}>
                       Excluir
                     </Text>
                   </TouchableOpacity>
@@ -146,7 +146,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, padding: 16 },
   input: {
     borderWidth: 1,
-    borderColor: "#2a2040",
+    borderColor: "#21172D",
     borderRadius: 8,
     color: "#fff",
     padding: 10,
@@ -154,7 +154,7 @@ const styles = StyleSheet.create({
   },
   body: { minHeight: 90, textAlignVertical: "top" },
   saveBtn: {
-    backgroundColor: "#8c52ff",
+    backgroundColor: "#B900FF",
     borderRadius: 8,
     paddingVertical: 12,
     alignItems: "center",
@@ -164,7 +164,7 @@ const styles = StyleSheet.create({
   empty: { color: "#a89fc0", marginTop: 8 },
   card: {
     borderWidth: 1,
-    borderColor: "#2a2040",
+    borderColor: "#21172D",
     borderRadius: 10,
     padding: 12,
     marginBottom: 10,
@@ -176,7 +176,7 @@ const styles = StyleSheet.create({
   },
   cardTitle: { color: "#fff", fontWeight: "700", flex: 1 },
   cardActions: { flexDirection: "row", gap: 10 },
-  link: { color: "#8c52ff", fontWeight: "600", fontSize: 12 },
+  link: { color: "#B900FF", fontWeight: "600", fontSize: 12 },
   cardBody: { color: "#cfc6e8", marginTop: 8 },
 });
 

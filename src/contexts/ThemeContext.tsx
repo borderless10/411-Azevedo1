@@ -1,5 +1,6 @@
 /**
- * Context para gerenciar o tema (claro/escuro) da aplicação
+ * Context para gerenciar o tema (claro/escuro) da aplicação.
+ * Dark mode = identidade premium da Home (visaoPremium).
  */
 
 import React, {
@@ -10,16 +11,20 @@ import React, {
   ReactNode,
 } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { premium } from "../theme/visaoPremium";
 
 type ThemeMode = "light" | "dark";
 
 interface ThemeColors {
   background: string;
   card: string;
+  cardElevated: string;
   text: string;
   textSecondary: string;
   border: string;
   primary: string;
+  primarySoft: string;
+  magenta: string;
   success: string;
   danger: string;
   warning: string;
@@ -39,30 +44,36 @@ interface ThemeContextData {
 const lightColors: ThemeColors = {
   background: "#f4f2fa",
   card: "#ede9f9",
+  cardElevated: "#e4dff5",
   text: "#010100",
   textSecondary: "#4a4060",
   border: "#d4cbea",
-  primary: "#8c52ff",
-  success: "#8c52ff",
-  danger: "#ff4d6d",
+  primary: premium.purpleSoft,
+  primarySoft: premium.purpleSoft,
+  magenta: premium.magenta,
+  success: premium.purpleSoft,
+  danger: premium.magentaSoft,
   warning: "#c084fc",
-  info: "#8c52ff",
+  info: premium.purpleSoft,
   inputBackground: "#e4dff5",
   placeholder: "#6b6480",
 };
 
 const darkColors: ThemeColors = {
-  background: "#010100",
-  card: "#0e0c14",
-  text: "#ffffff",
-  textSecondary: "#a89fc0",
-  border: "#2a2040",
-  primary: "#8c52ff",
-  success: "#8c52ff",
-  danger: "#ff4d6d",
+  background: premium.bg,
+  card: premium.surface,
+  cardElevated: premium.surfaceElevated,
+  text: premium.text,
+  textSecondary: premium.textSecondary,
+  border: premium.border,
+  primary: premium.purple,
+  primarySoft: premium.purpleSoft,
+  magenta: premium.magenta,
+  success: premium.purpleBright,
+  danger: premium.magenta,
   warning: "#c084fc",
-  info: "#8c52ff",
-  inputBackground: "#1a1528",
+  info: premium.purpleSoft,
+  inputBackground: premium.surfaceElevated,
   placeholder: "#6b6480",
 };
 

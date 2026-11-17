@@ -331,7 +331,7 @@ export const CategoryBudgetScreen = () => {
       return {
         label: "Acima da meta",
         detail: `${formatCurrency(Math.abs(difference))} acima da meta diária.`,
-        color: "#ff4d6d",
+        color: "#FF008A",
         icon: "trending-up" as const,
       };
     }
@@ -340,7 +340,7 @@ export const CategoryBudgetScreen = () => {
       return {
         label: "Abaixo da meta",
         detail: `${formatCurrency(Math.abs(difference))} abaixo da meta diária.`,
-        color: "#8c52ff",
+        color: "#B900FF",
         icon: "trending-down" as const,
       };
     }
@@ -454,7 +454,7 @@ export const CategoryBudgetScreen = () => {
         showSidebar={!isSpectator}
       >
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#8c52ff" />
+          <ActivityIndicator size="large" color="#B900FF" />
           <Text style={styles.loadingText}>Carregando acompanhamento...</Text>
         </View>
       </Layout>
@@ -478,7 +478,7 @@ export const CategoryBudgetScreen = () => {
           ]}
         >
           <View style={styles.header}>
-            <Ionicons name="wallet-outline" size={64} color="#8c52ff" />
+            <Ionicons name="wallet-outline" size={64} color="#B900FF" />
             <Text style={styles.title}>{trackedTitle}</Text>
             <Text style={styles.subtitle}>
               Acompanhe os gastos diarios desse titulo personalizado
@@ -517,13 +517,13 @@ export const CategoryBudgetScreen = () => {
           {budgetValue > 0 ? (
             <View style={styles.statsContainer}>
               <View style={styles.statCard}>
-                <Ionicons name="calendar-outline" size={24} color="#8c52ff" />
+                <Ionicons name="calendar-outline" size={24} color="#B900FF" />
                 <Text style={styles.statLabel}>Dias no ciclo</Text>
                 <Text style={styles.statValue}>{daysInCycle}</Text>
               </View>
 
               <View style={styles.statCard}>
-                <Ionicons name="cash-outline" size={24} color="#8c52ff" />
+                <Ionicons name="cash-outline" size={24} color="#B900FF" />
                 <Text style={styles.statLabel}>Total gasto</Text>
                 <Text style={styles.statValue}>{formatCurrency(totalSpent)}</Text>
               </View>
@@ -537,7 +537,7 @@ export const CategoryBudgetScreen = () => {
                 <Ionicons
                   name={isOverBudget ? "trending-up" : "trending-down"}
                   size={24}
-                  color={isOverBudget ? "#ff4d6d" : "#8c52ff"}
+                  color={isOverBudget ? "#FF008A" : "#B900FF"}
                 />
                 <Text style={styles.statLabel}>Média real/dia</Text>
                 <Text
@@ -638,7 +638,7 @@ export const CategoryBudgetScreen = () => {
                           <Ionicons
                             name="checkmark-circle"
                             size={14}
-                            color="#8c52ff"
+                            color="#B900FF"
                           />
                           <Text style={styles.zeroConfirmedText}>
                             Zero confirmado
@@ -666,7 +666,7 @@ export const CategoryBudgetScreen = () => {
                             <Text style={styles.editItemAmount}>
                               {formatCurrency(item.value)}
                             </Text>
-                            <Ionicons name="pencil" size={16} color="#8c52ff" />
+                            <Ionicons name="pencil" size={16} color="#B900FF" />
                           </TouchableOpacity>
                         ))}
                         <TouchableOpacity
@@ -695,7 +695,7 @@ export const CategoryBudgetScreen = () => {
                         <Ionicons
                           name="alert-circle"
                           size={24}
-                          color="#ff4d6d"
+                          color="#FF008A"
                         />
                       </TouchableOpacity>
                     ) : (
@@ -703,7 +703,7 @@ export const CategoryBudgetScreen = () => {
                         style={styles.editIconButton}
                         onPress={() => setEditingDateKey(dateKey)}
                       >
-                        <Ionicons name="pencil" size={18} color="#8c52ff" />
+                        <Ionicons name="pencil" size={18} color="#B900FF" />
                       </TouchableOpacity>
                     )}
                   </View>
@@ -835,7 +835,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   card: {
-    backgroundColor: "#1a1a1a",
+    backgroundColor: "#171321",
     borderRadius: 12,
     padding: 16,
     borderWidth: 1,
@@ -856,7 +856,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#0a0a0a",
+    backgroundColor: "#07050D",
     borderRadius: 8,
     borderWidth: 1,
     borderColor: "#333",
@@ -876,7 +876,7 @@ const styles = StyleSheet.create({
   },
   overPlannedText: {
     marginTop: 10,
-    color: "#ff4d6d",
+    color: "#FF008A",
     fontSize: 15,
     fontWeight: "700",
     lineHeight: 20,
@@ -897,7 +897,7 @@ const styles = StyleSheet.create({
   infoValue: {
     fontSize: 16,
     fontWeight: "bold",
-    color: "#8c52ff",
+    color: "#B900FF",
   },
   statsContainer: {
     flexDirection: "row",
@@ -905,7 +905,7 @@ const styles = StyleSheet.create({
   },
   statCard: {
     flex: 1,
-    backgroundColor: "#1a1a1a",
+    backgroundColor: "#171321",
     borderRadius: 12,
     padding: 12,
     borderWidth: 1,
@@ -913,7 +913,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   statCardWarning: {
-    borderColor: "#ff4d6d",
+    borderColor: "#FF008A",
     backgroundColor: "#2a1a1a",
   },
   statLabel: {
@@ -930,10 +930,10 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   statValueWarning: {
-    color: "#ff4d6d",
+    color: "#FF008A",
   },
   performanceCard: {
-    backgroundColor: "#1a1a1a",
+    backgroundColor: "#171321",
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
@@ -970,7 +970,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   daysCard: {
-    backgroundColor: "#1a1a1a",
+    backgroundColor: "#171321",
     borderRadius: 12,
     padding: 16,
     borderWidth: 1,
@@ -990,7 +990,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    backgroundColor: "#0a0a0a",
+    backgroundColor: "#07050D",
     padding: 12,
     borderRadius: 8,
     borderWidth: 1,
@@ -1030,7 +1030,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   editItemAmount: {
-    color: "#8c52ff",
+    color: "#B900FF",
     fontWeight: "700",
     marginRight: 8,
   },
@@ -1038,7 +1038,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#8c52ff",
+    backgroundColor: "#B900FF",
     borderRadius: 8,
     paddingVertical: 8,
     marginBottom: 6,
@@ -1068,7 +1068,7 @@ const styles = StyleSheet.create({
   },
   dayExpense: {
     fontSize: 12,
-    color: "#8c52ff",
+    color: "#B900FF",
     marginTop: 2,
   },
   dayEmpty: {
@@ -1109,7 +1109,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   historyCard: {
-    backgroundColor: "#1a1a1a",
+    backgroundColor: "#171321",
     borderRadius: 12,
     padding: 16,
     borderWidth: 1,
@@ -1119,7 +1119,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: "#8c52ff",
+    backgroundColor: "#B900FF",
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 10,
@@ -1135,7 +1135,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#2a2a2a",
+    borderBottomColor: "#21172D",
   },
   historyInfo: {
     flex: 1,
@@ -1153,7 +1153,7 @@ const styles = StyleSheet.create({
     textTransform: "capitalize",
   },
   historyAmount: {
-    color: "#ff4d6d",
+    color: "#FF008A",
     fontSize: 15,
     fontWeight: "700",
   },

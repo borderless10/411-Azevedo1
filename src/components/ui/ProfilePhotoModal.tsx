@@ -206,7 +206,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   actionBtn: {
-    backgroundColor: "#1a1a1a",
+    backgroundColor: "#171321",
     paddingVertical: 10,
     paddingHorizontal: 14,
     borderRadius: 8,
@@ -233,7 +233,7 @@ const styles = StyleSheet.create({
   ghostText: { color: "#fff" },
   saveBtn: {
     flex: 1,
-    backgroundColor: "#8c52ff",
+    backgroundColor: "#B900FF",
     padding: 12,
     borderRadius: 8,
     alignItems: "center",

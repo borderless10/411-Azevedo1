@@ -32,7 +32,7 @@ const ExpenseCreatedModal: React.FC<Props> = ({
 
           <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
             <View style={styles.iconWrap}>
-            <Ionicons name="checkmark-circle" size={64} color="#ff4d6d" />
+            <Ionicons name="checkmark-circle" size={64} color="#FF008A" />
           </View>
 
           <Text style={styles.title}>Gasto cadastrado</Text>
@@ -122,7 +122,7 @@ const styles = StyleSheet.create({
   amount: {
     fontSize: 22,
     fontWeight: "800",
-    color: "#ff4d6d",
+    color: "#FF008A",
     marginBottom: 8,
   },
   message: {
@@ -139,7 +139,7 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     flex: 1,
-    backgroundColor: "#ff4d6d",
+    backgroundColor: "#FF008A",
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 10,
@@ -154,7 +154,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "transparent",
     borderWidth: 1,
-    borderColor: "#2a2040",
+    borderColor: "#21172D",
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 10,

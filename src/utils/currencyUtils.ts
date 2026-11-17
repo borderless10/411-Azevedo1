@@ -211,15 +211,15 @@ export const sumCurrency = (...values: number[]): number => {
  * Obter cor baseada no tipo de transação
  */
 export const getTransactionColor = (type: "income" | "expense"): string => {
-  return type === "income" ? "#8c52ff" : "#ff4d6d";
+  return type === "income" ? "#B900FF" : "#FF008A";
 };
 
 /**
  * Obter cor baseada no saldo (positivo/negativo)
  */
 export const getBalanceColor = (balance: number): string => {
-  if (balance > 0) return "#8c52ff"; // Verde
-  if (balance < 0) return "#ff4d6d"; // Vermelho
+  if (balance > 0) return "#B900FF"; // Verde
+  if (balance < 0) return "#FF008A"; // Vermelho
   return "#6b6480"; // Cinza
 };
 

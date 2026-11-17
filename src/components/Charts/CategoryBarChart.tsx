@@ -197,7 +197,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: '#2a2040',
+    borderColor: '#21172D',
   },
   bar: {
     height: '100%',

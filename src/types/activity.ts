@@ -91,13 +91,13 @@ export const ACTIVITY_TYPES: Record<ActivityType, ActivityTypeInfo> = {
   income_created: {
     type: "income_created",
     icon: "arrow-down-circle",
-    color: "#8c52ff",
+    color: "#B900FF",
     label: "Renda criada",
   },
   income_updated: {
     type: "income_updated",
     icon: "create",
-    color: "#8c52ff",
+    color: "#B900FF",
     label: "Renda atualizada",
   },
   income_deleted: {
@@ -109,13 +109,13 @@ export const ACTIVITY_TYPES: Record<ActivityType, ActivityTypeInfo> = {
   expense_created: {
     type: "expense_created",
     icon: "arrow-up-circle",
-    color: "#ff4d6d",
+    color: "#FF008A",
     label: "Gasto criado",
   },
   expense_updated: {
     type: "expense_updated",
     icon: "create",
-    color: "#ff4d6d",
+    color: "#FF008A",
     label: "Gasto atualizado",
   },
   expense_deleted: {
@@ -127,19 +127,19 @@ export const ACTIVITY_TYPES: Record<ActivityType, ActivityTypeInfo> = {
   goal_created: {
     type: "goal_created",
     icon: "flag",
-    color: "#8c52ff",
+    color: "#B900FF",
     label: "Meta criada",
   },
   goal_updated: {
     type: "goal_updated",
     icon: "create",
-    color: "#8c52ff",
+    color: "#B900FF",
     label: "Meta atualizada",
   },
   goal_completed: {
     type: "goal_completed",
     icon: "checkmark-circle",
-    color: "#8c52ff",
+    color: "#B900FF",
     label: "Meta concluída",
   },
   goal_deleted: {

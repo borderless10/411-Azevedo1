@@ -12,8 +12,9 @@ import {
   Image,
   Animated,
 } from "react-native";
+import Svg, { Path, Defs, LinearGradient, Stop } from "react-native-svg";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import { useShowValues } from "../../contexts/ShowValuesContext";
+import { premium } from "../../theme/visaoPremium";
 import { useAuth } from "../../hooks/useAuth";
 import { useNavigation } from "../../routes/NavigationContext";
 import { useTheme } from "../../contexts/ThemeContext";
@@ -44,7 +45,6 @@ export const Header: React.FC<HeaderProps> = ({
   const { navigate, currentScreen, params, goBack, canGoBack } =
     useNavigation();
   const { colors } = useTheme();
-  const { showValues, toggleShowValues } = useShowValues();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(-20)).current;
   const [badgeDefinitions, setBadgeDefinitions] = useState<BadgeDefinition[]>(
@@ -173,58 +173,68 @@ export const Header: React.FC<HeaderProps> = ({
       )}
 
       <View style={styles.right}>
-        {rightAction || (
-          <>
-            {currentScreen === "Home" && (
-              <TouchableOpacity
-                onPress={toggleShowValues}
-                style={styles.eyeButton}
-              >
-                <Ionicons
-                  name={showValues ? "eye" : "eye-off"}
-                  size={22}
-                  color={colors.text}
-                />
-              </TouchableOpacity>
-            )}
-
-            {showProfile && (
-              <TouchableOpacity
-                onPress={handleProfile}
-                style={styles.profileButton}
-              >
-                <View style={styles.profileWrapper}>
-                  <BadgedAvatar
-                    photoUri={resolveProfilePhotoUri(user)}
-                    displayName={profileDisplayName(
-                      user,
-                      user?.email || "Usuário",
-                    )}
-                    size={34}
-                    ringDefinition={ownBadgeDefinition}
-                    badgeDefinition={ownBadgeDefinition}
-                  />
-
-                  {user?.role === "cliente_premium" && (
-                    <View style={styles.crownContainer} pointerEvents="none">
-                      <MaterialCommunityIcons
-                        name="crown"
-                        size={14}
-                        color="#8c52ff"
-                      />
-                    </View>
+        {rightAction ||
+          (showProfile ? (
+            <TouchableOpacity
+              onPress={handleProfile}
+              style={styles.profileButton}
+            >
+              <View style={styles.profileWrapper}>
+                <BadgedAvatar
+                  photoUri={resolveProfilePhotoUri(user)}
+                  displayName={profileDisplayName(
+                    user,
+                    user?.email || "Usuário",
                   )}
-                </View>
-              </TouchableOpacity>
-            )}
-          </>
-        )}
+                  size={34}
+                  ringDefinition={ownBadgeDefinition}
+                  badgeDefinition={ownBadgeDefinition}
+                />
+
+                {user?.role === "cliente_premium" && (
+                  <View style={styles.crownContainer} pointerEvents="none">
+                    <MaterialCommunityIcons
+                      name="crown"
+                      size={14}
+                      color="#B900FF"
+                    />
+                  </View>
+                )}
+              </View>
+            </TouchableOpacity>
+          ) : null)}
       </View>
+      {currentScreen === "Home" && !title ? (
+        <View style={styles.glowLine} pointerEvents="none">
+          <Svg width="100%" height={10} viewBox="0 0 390 10" preserveAspectRatio="none">
+            <Defs>
+              <LinearGradient id="headerGlow" x1="0" y1="0" x2="1" y2="0">
+                <Stop offset="0%" stopColor={premium.purple} stopOpacity="0.05" />
+                <Stop offset="50%" stopColor={premium.purple} stopOpacity="0.95" />
+                <Stop offset="100%" stopColor={premium.magenta} stopOpacity="0.15" />
+              </LinearGradient>
+            </Defs>
+            <Path
+              d="M0 6 C 60 1, 120 10, 180 5 S 300 0, 390 6"
+              stroke="url(#headerGlow)"
+              strokeWidth={2.2}
+              fill="none"
+            />
+          </Svg>
+        </View>
+      ) : null}
     </Animated.View>
   );
 };
 
 const styles = StyleSheet.create({
+  glowLine: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: -1,
+    height: 10,
+  },
   container: {
     flexDirection: "row",
     alignItems: "center",
@@ -232,6 +242,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 6,
     borderBottomWidth: 0,
+    position: "relative",
+    overflow: "visible",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
@@ -269,9 +281,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "flex-start",
     gap: 8,
-  },
-  eyeButton: {
-    padding: 6,
   },
   centerLogo: {
     position: "absolute",

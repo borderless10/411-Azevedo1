@@ -81,7 +81,7 @@ const styles = StyleSheet.create({
   value: { fontSize: 14, fontWeight: "600", color: "#111" },
   percent: { fontSize: 12, color: "#666", marginLeft: 6 },
   moreButton: { marginTop: 6, alignSelf: "flex-end" },
-  moreText: { color: "#8c52ff", fontWeight: "600" },
+  moreText: { color: "#B900FF", fontWeight: "600" },
   empty: { color: "#666", fontSize: 13 },
 });
 

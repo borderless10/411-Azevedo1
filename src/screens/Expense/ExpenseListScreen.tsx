@@ -66,7 +66,7 @@ const ScopeBadge = ({ expense }: { expense: Expense }) => {
 const CategoryBadge = ({ expense }: { expense: Expense }) => {
   if (!shouldShowExpenseCategoryTag(expense)) return null;
   return (
-    <View style={[tagStyles.base, { backgroundColor: "#1a1a1a", borderColor: "#333" }]}>
+    <View style={[tagStyles.base, { backgroundColor: "#171321", borderColor: "#333" }]}>
       <Text style={[tagStyles.text, { color: "#888" }]}>{expense.category}</Text>
     </View>
   );
@@ -197,7 +197,7 @@ export const ExpenseListScreen = () => {
     >
       <View style={styles.expenseItemLeft}>
         <View style={styles.expenseIconContainer}>
-          <Ionicons name="remove-circle" size={24} color="#ff4d6d" />
+          <Ionicons name="remove-circle" size={24} color="#FF008A" />
         </View>
         <View style={styles.expenseInfo}>
           <Text style={styles.expenseDescription} numberOfLines={1}>
@@ -226,9 +226,9 @@ export const ExpenseListScreen = () => {
           disabled={deletingExpenseId === expense.id}
         >
           {deletingExpenseId === expense.id ? (
-            <ActivityIndicator size="small" color="#ff4d6d" />
+            <ActivityIndicator size="small" color="#FF008A" />
           ) : (
-            <Ionicons name="trash-outline" size={18} color="#ff4d6d" />
+            <Ionicons name="trash-outline" size={18} color="#FF008A" />
           )}
         </TouchableOpacity>
       </View>
@@ -263,7 +263,7 @@ export const ExpenseListScreen = () => {
     return (
       <Layout title="Meus Gastos" showBackButton={true} showSidebar={false}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#8c52ff" />
+          <ActivityIndicator size="large" color="#B900FF" />
           <Text style={styles.loadingText}>Carregando gastos...</Text>
         </View>
       </Layout>
@@ -287,7 +287,7 @@ export const ExpenseListScreen = () => {
               style={styles.addButton}
               onPress={() => navigate("AddExpense")}
             >
-              <Ionicons name="add-circle" size={32} color="#ff4d6d" />
+              <Ionicons name="add-circle" size={32} color="#FF008A" />
             </TouchableOpacity>
           </View>
 
@@ -346,7 +346,7 @@ export const ExpenseListScreen = () => {
               <RefreshControl
                 refreshing={refreshing}
                 onRefresh={handleRefresh}
-                colors={["#8c52ff"]}
+                colors={["#B900FF"]}
               />
             }
           >
@@ -379,7 +379,7 @@ const styles = StyleSheet.create({
     color: "#ccc",
   },
   header: {
-    backgroundColor: "#1a1a1a",
+    backgroundColor: "#171321",
     borderBottomWidth: 1,
     borderBottomColor: "#333",
     padding: 20,
@@ -400,7 +400,7 @@ const styles = StyleSheet.create({
   totalValue: {
     fontSize: 32,
     fontWeight: "bold",
-    color: "#ff4d6d",
+    color: "#FF008A",
   },
   totalSubtext: {
     fontSize: 12,
@@ -425,8 +425,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#2b2b2b",
   },
   filterChipActive: {
-    backgroundColor: "#8c52ff",
-    borderColor: "#8c52ff",
+    backgroundColor: "#B900FF",
+    borderColor: "#B900FF",
   },
   filterChipText: {
     color: "#ddd",
@@ -460,10 +460,10 @@ const styles = StyleSheet.create({
   dateTotal: {
     fontSize: 16,
     fontWeight: "bold",
-    color: "#ff4d6d",
+    color: "#FF008A",
   },
   expenseList: {
-    backgroundColor: "#1a1a1a",
+    backgroundColor: "#171321",
     borderRadius: 12,
     overflow: "hidden",
     shadowColor: "#000",
@@ -491,7 +491,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     backgroundColor: "#3a1a1a",
     borderWidth: 1,
-    borderColor: "#ff4d6d40",
+    borderColor: "#FF008A40",
     alignItems: "center",
     justifyContent: "center",
     marginRight: 12,
@@ -541,7 +541,7 @@ const styles = StyleSheet.create({
   expenseValue: {
     fontSize: 18,
     fontWeight: "bold",
-    color: "#ff4d6d",
+    color: "#FF008A",
   },
   emptyContainer: {
     flex: 1,

@@ -330,14 +330,14 @@ export const LoginScreen = () => {
             {/* Mensagem de erro geral */}
             {errors.general ? (
               <View style={styles.errorContainer}>
-                <Ionicons name="alert-circle" size={20} color="#ff4d6d" />
+                <Ionicons name="alert-circle" size={20} color="#FF008A" />
                 <Text style={styles.errorText}>{errors.general}</Text>
               </View>
             ) : null}
 
             <View style={styles.inputContainer}>
               <Text style={styles.label}>
-                <Ionicons name="mail" size={16} color="#8c52ff" /> Email
+                <Ionicons name="mail" size={16} color="#B900FF" /> Email
               </Text>
               <View
                 style={[
@@ -348,7 +348,7 @@ export const LoginScreen = () => {
                 <Ionicons
                   name="mail-outline"
                   size={20}
-                  color={errors.email ? "#ff4d6d" : "#999"}
+                  color={errors.email ? "#FF008A" : "#999"}
                   style={styles.inputIcon}
                 />
                 <TextInput
@@ -365,14 +365,14 @@ export const LoginScreen = () => {
                   <Ionicons
                     name="close-circle"
                     size={20}
-                    color="#ff4d6d"
+                    color="#FF008A"
                     style={styles.errorIcon}
                   />
                 ) : email.trim() && !errors.email ? (
                   <Ionicons
                     name="checkmark-circle"
                     size={20}
-                    color="#8c52ff"
+                    color="#B900FF"
                     style={styles.errorIcon}
                   />
                 ) : null}
@@ -384,7 +384,7 @@ export const LoginScreen = () => {
 
             <View style={styles.inputContainer}>
               <Text style={styles.label}>
-                <Ionicons name="lock-closed" size={16} color="#8c52ff" /> Senha
+                <Ionicons name="lock-closed" size={16} color="#B900FF" /> Senha
               </Text>
               <View
                 style={[
@@ -395,7 +395,7 @@ export const LoginScreen = () => {
                 <Ionicons
                   name="lock-closed-outline"
                   size={20}
-                  color={errors.password ? "#ff4d6d" : "#999"}
+                  color={errors.password ? "#FF008A" : "#999"}
                   style={styles.inputIcon}
                 />
                 <TextInput
@@ -423,14 +423,14 @@ export const LoginScreen = () => {
                   <Ionicons
                     name="close-circle"
                     size={20}
-                    color="#ff4d6d"
+                    color="#FF008A"
                     style={styles.errorIcon}
                   />
                 ) : password.trim() && !errors.password ? (
                   <Ionicons
                     name="checkmark-circle"
                     size={20}
-                    color="#8c52ff"
+                    color="#B900FF"
                     style={styles.errorIcon}
                   />
                 ) : null}
@@ -449,7 +449,7 @@ export const LoginScreen = () => {
               <Ionicons
                 name={rememberEmail ? "checkbox" : "square-outline"}
                 size={20}
-                color={rememberEmail ? "#8c52ff" : "#999"}
+                color={rememberEmail ? "#B900FF" : "#999"}
               />
               <Text style={styles.rememberText}>Salvar meu login</Text>
             </TouchableOpacity>
@@ -572,7 +572,7 @@ const styles = StyleSheet.create({
   inputWrapper: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#1a1a1a",
+    backgroundColor: "#171321",
     borderRadius: 12,
     borderWidth: 1,
     borderColor: "#333",
@@ -580,7 +580,7 @@ const styles = StyleSheet.create({
     paddingRight: 16,
   },
   inputWrapperError: {
-    borderColor: "#ff4d6d",
+    borderColor: "#FF008A",
     borderWidth: 2,
   },
   inputIcon: {
@@ -597,7 +597,7 @@ const styles = StyleSheet.create({
     // kept for future adjustments
   },
   input: {
-    backgroundColor: "#1a1a1a",
+    backgroundColor: "#171321",
     borderRadius: 12,
     padding: 16,
     fontSize: 16,
@@ -622,12 +622,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   button: {
-    backgroundColor: "#8c52ff",
+    backgroundColor: "#B900FF",
     borderRadius: 12,
     padding: 16,
     alignItems: "center",
     marginTop: 8,
-    shadowColor: "#8c52ff",
+    shadowColor: "#B900FF",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -670,7 +670,7 @@ const styles = StyleSheet.create({
     color: "#999",
   },
   linkTextBold: {
-    color: "#8c52ff",
+    color: "#B900FF",
     fontWeight: "bold",
   },
   errorContainer: {
@@ -682,16 +682,16 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     gap: 8,
     borderWidth: 1,
-    borderColor: "#ff4d6d40",
+    borderColor: "#FF008A40",
   },
   errorText: {
     flex: 1,
-    color: "#ff4d6d",
+    color: "#FF008A",
     fontSize: 14,
     fontWeight: "500",
   },
   errorTextSmall: {
-    color: "#ff4d6d",
+    color: "#FF008A",
     fontSize: 12,
     marginTop: 4,
     marginLeft: 4,

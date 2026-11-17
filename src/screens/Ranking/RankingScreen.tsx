@@ -647,7 +647,7 @@ Tem certeza de que deseja continuar?`,
             <Ionicons
               name={showRules ? "information-circle" : "information-circle-outline"}
               size={26}
-              color="#8c52ff"
+              color="#B900FF"
             />
           </TouchableOpacity>
         </View>
@@ -832,7 +832,7 @@ Tem certeza de que deseja continuar?`,
                     <Ionicons
                       name={selected ? "checkbox" : "square-outline"}
                       size={20}
-                      color={selected ? "#ff4d6d" : "#aaa"}
+                      color={selected ? "#FF008A" : "#aaa"}
                     />
                     <Text style={styles.purgeSeasonText}>
                       {rankingSeasonPeriodLabel(season)}
@@ -849,7 +849,7 @@ Tem certeza de que deseja continuar?`,
               <Ionicons
                 name={wipeCurrentOnPurge ? "checkbox" : "square-outline"}
                 size={20}
-                color={wipeCurrentOnPurge ? "#ff4d6d" : "#aaa"}
+                color={wipeCurrentOnPurge ? "#FF008A" : "#aaa"}
               />
               <Text style={styles.purgeSeasonText}>
                 Também zerar ranking atual (pontos)
@@ -941,7 +941,7 @@ Tem certeza de que deseja continuar?`,
         ) : null}
         {loading ? (
           <View style={styles.loadingRow}>
-            <ActivityIndicator size="large" color="#8c52ff" />
+            <ActivityIndicator size="large" color="#B900FF" />
           </View>
         ) : rows.length === 0 ? (
           <View style={styles.loadingRow}>
@@ -954,7 +954,7 @@ Tem certeza de que deseja continuar?`,
         ) : mainTab === "previous" ? (
           gamification.loading ? (
             <View style={styles.loadingRow}>
-              <ActivityIndicator size="large" color="#8c52ff" />
+              <ActivityIndicator size="large" color="#B900FF" />
             </View>
           ) : gamification.error ? (
             <View style={styles.loadingRow}>
@@ -987,7 +987,7 @@ Tem certeza de que deseja continuar?`,
           )
         ) : gamification.loading ? (
           <View style={styles.loadingRow}>
-            <ActivityIndicator size="large" color="#8c52ff" />
+            <ActivityIndicator size="large" color="#B900FF" />
           </View>
         ) : gamification.seasons.length === 0 ? (
           <View style={styles.loadingRow}>
@@ -1159,7 +1159,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    backgroundColor: "#ff4d6d",
+    backgroundColor: "#FF008A",
     borderRadius: 10,
     paddingVertical: 12,
     marginBottom: 14,
@@ -1206,7 +1206,7 @@ const styles = StyleSheet.create({
   },
   purgeSeasonRowSelected: {
     borderWidth: 1,
-    borderColor: "#ff4d6d",
+    borderColor: "#FF008A",
   },
   purgeOptionRow: {
     flexDirection: "row",
@@ -1236,7 +1236,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "#ff4d6d",
+    borderColor: "#FF008A",
   },
   purgeButtonOutlineText: {
     color: "#ff8fa3",
@@ -1244,7 +1244,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   infoCard: {
-    backgroundColor: "#1a1a1a",
+    backgroundColor: "#171321",
     borderRadius: 12,
     borderWidth: 1,
     borderColor: "#333",
@@ -1253,7 +1253,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   infoTitle: {
-    color: "#8c52ff",
+    color: "#B900FF",
     fontSize: 15,
     fontWeight: "700",
     marginBottom: 4,
@@ -1283,7 +1283,7 @@ const styles = StyleSheet.create({
   },
   leagueTabs: {
     flexDirection: "row",
-    backgroundColor: "#161616",
+    backgroundColor: "#171321",
     borderRadius: 10,
     padding: 4,
     marginBottom: 16,
@@ -1297,7 +1297,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   leagueTabActive: {
-    backgroundColor: "#8c52ff",
+    backgroundColor: "#B900FF",
   },
   leagueTabText: {
     color: "#aaa",
@@ -1345,7 +1345,7 @@ const styles = StyleSheet.create({
   },
   holdersButtonText: { color: "#c084fc", fontSize: 12, fontWeight: "700" },
   seasonCard: {
-    backgroundColor: "#161616",
+    backgroundColor: "#171321",
     borderRadius: 14,
     padding: 14,
     marginBottom: 10,
@@ -1361,7 +1361,7 @@ const styles = StyleSheet.create({
   },
   modalCard: {
     width: "100%",
-    backgroundColor: "#161616",
+    backgroundColor: "#171321",
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
@@ -1386,7 +1386,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#1f1f1f",
   },
   optionPrimary: {
-    borderColor: "#8c52ff",
+    borderColor: "#B900FF",
   },
   optionTitle: {
     color: "#fff",
@@ -1399,14 +1399,14 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   optionSelected: {
-    borderColor: "#8c52ff",
+    borderColor: "#B900FF",
     backgroundColor: "rgba(140,82,255,0.08)",
   },
   saveButton: {
     marginTop: 8,
     paddingVertical: 12,
     borderRadius: 12,
-    backgroundColor: "#8c52ff",
+    backgroundColor: "#B900FF",
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
@@ -1440,11 +1440,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     marginVertical: 6,
     borderLeftWidth: 6,
-    borderLeftColor: "#8c52ff",
+    borderLeftColor: "#B900FF",
   },
   posTop: {
     fontSize: 18,
-    color: "#8c52ff",
+    color: "#B900FF",
     fontWeight: "800",
   },
   avatarWrapper: {

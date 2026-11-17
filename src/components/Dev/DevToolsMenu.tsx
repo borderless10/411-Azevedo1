@@ -130,7 +130,7 @@ export const DevToolsMenu = () => {
           </TouchableOpacity>
 
           {busy ? (
-            <ActivityIndicator color="#8c52ff" style={{ marginTop: 8 }} />
+            <ActivityIndicator color="#B900FF" style={{ marginTop: 8 }} />
           ) : null}
           {status ? <Text style={styles.status}>{status}</Text> : null}
 
@@ -158,7 +158,7 @@ const styles = StyleSheet.create({
   card: {
     width: "100%",
     maxWidth: 440,
-    backgroundColor: "#14101f",
+    backgroundColor: "#171321",
     borderRadius: 16,
     borderWidth: 1,
     borderColor: "#3a2f55",
@@ -178,7 +178,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#2a1848",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#8c52ff",
+    borderColor: "#B900FF",
     padding: 12,
     marginTop: 8,
   },
@@ -205,7 +205,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 10,
-    backgroundColor: "#2a2040",
+    backgroundColor: "#21172D",
   },
   closeText: {
     color: "#fff",

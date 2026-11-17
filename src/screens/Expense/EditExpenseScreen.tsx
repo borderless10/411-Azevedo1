@@ -306,7 +306,7 @@ export const EditExpenseScreen = () => {
     return (
       <Layout title="Editar Gasto" showBackButton={true} showSidebar={false}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#8c52ff" />
+          <ActivityIndicator size="large" color="#B900FF" />
           <Text style={styles.loadingText}>Carregando dados...</Text>
         </View>
       </Layout>
@@ -332,7 +332,7 @@ export const EditExpenseScreen = () => {
                 <Ionicons
                   name="remove-circle-outline"
                   size={64}
-                  color="#ff4d6d"
+                  color="#FF008A"
                 />
               </View>
               <Text style={styles.subtitle}>Edite as informações do gasto</Text>
@@ -341,7 +341,7 @@ export const EditExpenseScreen = () => {
             {/* Erro geral */}
             {errors.general ? (
               <View style={styles.errorContainer}>
-                <Ionicons name="alert-circle" size={20} color="#ff4d6d" />
+                <Ionicons name="alert-circle" size={20} color="#FF008A" />
                 <Text style={styles.errorText}>{errors.general}</Text>
               </View>
             ) : null}
@@ -361,7 +361,7 @@ export const EditExpenseScreen = () => {
               {/* Descrição */}
               <View style={styles.inputContainer}>
                 <Text style={styles.label}>
-                  <Ionicons name="document-text" size={16} color="#8c52ff" />{" "}
+                  <Ionicons name="document-text" size={16} color="#B900FF" />{" "}
                   Descrição
                 </Text>
                 <View
@@ -373,7 +373,7 @@ export const EditExpenseScreen = () => {
                   <Ionicons
                     name="document-text-outline"
                     size={20}
-                    color={errors.description ? "#ff4d6d" : "#999"}
+                    color={errors.description ? "#FF008A" : "#999"}
                     style={styles.inputIcon}
                   />
                   <TextInput
@@ -391,14 +391,14 @@ export const EditExpenseScreen = () => {
                     <Ionicons
                       name="close-circle"
                       size={20}
-                      color="#ff4d6d"
+                      color="#FF008A"
                       style={styles.icon}
                     />
                   ) : description.trim().length >= 3 ? (
                     <Ionicons
                       name="checkmark-circle"
                       size={20}
-                      color="#8c52ff"
+                      color="#B900FF"
                       style={styles.icon}
                     />
                   ) : null}
@@ -446,7 +446,7 @@ export const EditExpenseScreen = () => {
 
               <View style={styles.inputContainer}>
                 <Text style={styles.label}>
-                  <Ionicons name="card" size={16} color="#8c52ff" /> Forma de
+                  <Ionicons name="card" size={16} color="#B900FF" /> Forma de
                   pagamento
                 </Text>
                 <View style={styles.paymentMethodsRow}>
@@ -601,7 +601,7 @@ const styles = StyleSheet.create({
   },
   errorText: {
     flex: 1,
-    color: "#ff4d6d",
+    color: "#FF008A",
     fontSize: 14,
     fontWeight: "500",
   },
@@ -627,7 +627,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   inputWrapperError: {
-    borderColor: "#ff4d6d",
+    borderColor: "#FF008A",
     borderWidth: 2,
   },
   inputIcon: {
@@ -643,7 +643,7 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   errorTextSmall: {
-    color: "#ff4d6d",
+    color: "#FF008A",
     fontSize: 12,
     marginTop: 4,
     marginLeft: 4,
@@ -676,8 +676,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#2b2b2b",
   },
   paymentChipActive: {
-    backgroundColor: "#8c52ff",
-    borderColor: "#8c52ff",
+    backgroundColor: "#B900FF",
+    borderColor: "#B900FF",
   },
   paymentChipText: {
     color: "#ddd",

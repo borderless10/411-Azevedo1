@@ -692,7 +692,7 @@ export const AddExpenseScreen = () => {
                   <Ionicons
                     name="wallet"
                     size={20}
-                    color={expenseType === "consumption" ? "#8c52ff" : "#999"}
+                    color={expenseType === "consumption" ? "#B900FF" : "#999"}
                   />
                   <Text
                     style={[
@@ -714,7 +714,7 @@ export const AddExpenseScreen = () => {
                   <Ionicons
                     name="analytics"
                     size={20}
-                    color={expenseType === "tracked" ? "#8c52ff" : "#999"}
+                    color={expenseType === "tracked" ? "#B900FF" : "#999"}
                   />
                   <Text
                     style={[
@@ -736,7 +736,7 @@ export const AddExpenseScreen = () => {
                   <Ionicons
                     name="document-text"
                     size={20}
-                    color={expenseType === "bill" ? "#8c52ff" : "#999"}
+                    color={expenseType === "bill" ? "#B900FF" : "#999"}
                   />
                   <Text
                     style={[
@@ -752,7 +752,7 @@ export const AddExpenseScreen = () => {
 
             {loadingData ? (
               <View style={styles.centerContainer}>
-                <ActivityIndicator color="#8c52ff" size="large" />
+                <ActivityIndicator color="#B900FF" size="large" />
               </View>
             ) : (
               <>
@@ -760,7 +760,7 @@ export const AddExpenseScreen = () => {
                 {expenseType === "consumption" && (
                   <View style={styles.form}>
                     <View style={styles.header}>
-                      <Ionicons name="wallet" size={48} color="#8c52ff" />
+                      <Ionicons name="wallet" size={48} color="#B900FF" />
                       <Text style={styles.headerSubtitle}>
                         Registre o consumo moderado do ciclo
                       </Text>
@@ -771,7 +771,7 @@ export const AddExpenseScreen = () => {
                         <Ionicons
                           name="alert-circle"
                           size={20}
-                          color="#ff4d6d"
+                          color="#FF008A"
                         />
                         <Text style={styles.errorText}>
                           {errors.consumoValue}
@@ -790,7 +790,7 @@ export const AddExpenseScreen = () => {
                         <Ionicons
                           name="document-text"
                           size={20}
-                          color={errors.consumoDescription ? "#ff4d6d" : "#999"}
+                          color={errors.consumoDescription ? "#FF008A" : "#999"}
                           style={{ marginRight: 12 }}
                         />
                         <TextInput
@@ -814,7 +814,7 @@ export const AddExpenseScreen = () => {
                       <Text style={styles.label}>Data</Text>
                       {lockedConsumoDate ? (
                         <View style={styles.lockedDateBox}>
-                          <Ionicons name="calendar" size={18} color="#8c52ff" />
+                          <Ionicons name="calendar" size={18} color="#B900FF" />
                           <Text style={styles.lockedDateText}>
                             {consumoDate.toLocaleDateString("pt-BR")}
                           </Text>
@@ -969,7 +969,7 @@ export const AddExpenseScreen = () => {
                         <Ionicons
                           name="alert-circle"
                           size={20}
-                          color="#ff4d6d"
+                          color="#FF008A"
                         />
                         <Text style={styles.errorText}>
                           {errors.trackedTitle}
@@ -1028,7 +1028,7 @@ export const AddExpenseScreen = () => {
                         <Ionicons
                           name="alert-circle"
                           size={20}
-                          color="#ff4d6d"
+                          color="#FF008A"
                         />
                         <Text style={styles.errorText}>
                           {errors.trackedValue}
@@ -1172,7 +1172,7 @@ export const AddExpenseScreen = () => {
                         <Ionicons
                           name="alert-circle"
                           size={20}
-                          color="#ff4d6d"
+                          color="#FF008A"
                         />
                         <Text style={styles.errorText}>
                           {errors.billId || errors.billCustomTitle}
@@ -1287,7 +1287,7 @@ export const AddExpenseScreen = () => {
                             name="create-outline"
                             size={20}
                             color={
-                              errors.billCustomTitle ? "#ff4d6d" : "#999"
+                              errors.billCustomTitle ? "#FF008A" : "#999"
                             }
                             style={{ marginRight: 12 }}
                           />
@@ -1316,7 +1316,7 @@ export const AddExpenseScreen = () => {
                         <Ionicons
                           name="alert-circle"
                           size={20}
-                          color="#ff4d6d"
+                          color="#FF008A"
                         />
                         <Text style={styles.errorText}>
                           {errors.billAmount}
@@ -1505,7 +1505,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 8,
     marginBottom: 32,
-    backgroundColor: "#1a1a1a",
+    backgroundColor: "#171321",
     borderRadius: 16,
     padding: 8,
   },
@@ -1524,7 +1524,7 @@ const styles = StyleSheet.create({
   },
   typeTabActive: {
     backgroundColor: "rgba(140, 82, 255, 0.1)",
-    borderColor: "#8c52ff",
+    borderColor: "#B900FF",
   },
   typeTabText: {
     fontSize: 12,
@@ -1533,7 +1533,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   typeTabTextActive: {
-    color: "#8c52ff",
+    color: "#B900FF",
   },
   header: {
     alignItems: "center",
@@ -1568,16 +1568,16 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     gap: 8,
     borderWidth: 1,
-    borderColor: "#ff4d6d",
+    borderColor: "#FF008A",
   },
   errorText: {
     flex: 1,
-    color: "#ff4d6d",
+    color: "#FF008A",
     fontSize: 14,
     fontWeight: "500",
   },
   errorTextSmall: {
-    color: "#ff4d6d",
+    color: "#FF008A",
     fontSize: 12,
     marginTop: 4,
   },
@@ -1592,14 +1592,14 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    backgroundColor: "#1a1a1a",
+    backgroundColor: "#171321",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
   },
   paymentChipActive: {
-    backgroundColor: "#8c52ff",
-    borderColor: "#8c52ff",
+    backgroundColor: "#B900FF",
+    borderColor: "#B900FF",
   },
   quickAmountRow: {
     flexDirection: "row",
@@ -1609,14 +1609,14 @@ const styles = StyleSheet.create({
   },
   quickAmountChip: {
     borderWidth: 1,
-    borderColor: "#2a2040",
+    borderColor: "#21172D",
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    backgroundColor: "#14101f",
+    backgroundColor: "#171321",
   },
   quickAmountText: {
-    color: "#8c52ff",
+    color: "#B900FF",
     fontWeight: "700",
     fontSize: 13,
   },
@@ -1642,12 +1642,12 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    backgroundColor: "#1a1a1a",
+    backgroundColor: "#171321",
     justifyContent: "space-between",
   },
   pickerOptionActive: {
     backgroundColor: "rgba(140, 82, 255, 0.15)",
-    borderColor: "#8c52ff",
+    borderColor: "#B900FF",
   },
   pickerOptionText: {
     fontSize: 14,
@@ -1655,7 +1655,7 @@ const styles = StyleSheet.create({
     color: "#bbb",
   },
   pickerOptionTextActive: {
-    color: "#8c52ff",
+    color: "#B900FF",
   },
   billOptionContent: {
     flexDirection: "row",
@@ -1669,7 +1669,7 @@ const styles = StyleSheet.create({
     color: "#999",
   },
   billOptionAmountActive: {
-    color: "#8c52ff",
+    color: "#B900FF",
   },
   pickerPlaceholder: {
     borderWidth: 1,
@@ -1677,12 +1677,12 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 16,
-    backgroundColor: "#1a1a1a",
+    backgroundColor: "#171321",
     justifyContent: "center",
     alignItems: "center",
   },
   pickerPlaceholderError: {
-    borderColor: "#ff4d6d",
+    borderColor: "#FF008A",
   },
   pickerPlaceholderLabel: {
     color: "#666",
@@ -1692,14 +1692,14 @@ const styles = StyleSheet.create({
   inputWrapper: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#1a1a1a",
+    backgroundColor: "#171321",
     borderRadius: 12,
     borderWidth: 1,
     borderColor: "#333",
     paddingHorizontal: 12,
   },
   inputWrapperError: {
-    borderColor: "#ff4d6d",
+    borderColor: "#FF008A",
   },
   input: {
     flex: 1,
@@ -1720,7 +1720,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    backgroundColor: "#1a1a1a",
+    backgroundColor: "#171321",
     borderRadius: 12,
     borderWidth: 1,
     borderColor: "#333",

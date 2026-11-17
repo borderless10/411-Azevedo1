@@ -97,7 +97,7 @@ const DatePicker: React.FC<DatePickerProps> = ({
     <View style={[styles.container, style]}>
       {showLabel ? (
         <Text style={styles.label}>
-          <Ionicons name="calendar" size={16} color="#8c52ff" /> {label}
+          <Ionicons name="calendar" size={16} color="#B900FF" /> {label}
         </Text>
       ) : null}
 
@@ -113,7 +113,7 @@ const DatePicker: React.FC<DatePickerProps> = ({
         <Ionicons
           name="calendar-outline"
           size={20}
-          color={error ? "#ff4d6d" : "#a89fc0"}
+          color={error ? "#FF008A" : "#a89fc0"}
           style={styles.inputIcon}
         />
         <Text style={styles.dateText}>{formatDateForDisplay(date)}</Text>
@@ -121,7 +121,7 @@ const DatePicker: React.FC<DatePickerProps> = ({
           <Ionicons
             name="close-circle"
             size={20}
-            color="#ff4d6d"
+            color="#FF008A"
             style={styles.icon}
           />
         ) : (
@@ -227,19 +227,19 @@ const styles = StyleSheet.create({
   inputWrapper: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#1a1528",
+    backgroundColor: "#21172D",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#2a2040",
+    borderColor: "#21172D",
     paddingHorizontal: 16,
     paddingVertical: 16,
   },
   inputWrapperError: {
-    borderColor: "#ff4d6d",
+    borderColor: "#FF008A",
     borderWidth: 2,
   },
   inputWrapperDisabled: {
-    backgroundColor: "#1a1528",
+    backgroundColor: "#21172D",
   },
   inputIcon: {
     marginRight: 12,
@@ -254,7 +254,7 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   errorText: {
-    color: "#ff4d6d",
+    color: "#FF008A",
     fontSize: 12,
     marginTop: 4,
     marginLeft: 4,
@@ -288,7 +288,7 @@ const styles = StyleSheet.create({
     marginVertical: 8,
   },
   smallButton: {
-    backgroundColor: "#8c52ff",
+    backgroundColor: "#B900FF",
     padding: 8,
     borderRadius: 8,
   },
@@ -304,13 +304,13 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   modalButtonPrimary: {
-    backgroundColor: "#8c52ff",
+    backgroundColor: "#B900FF",
     paddingVertical: 10,
     paddingHorizontal: 18,
     borderRadius: 10,
   },
   modalButtonSecondary: {
-    backgroundColor: "#2a2040",
+    backgroundColor: "#21172D",
     paddingVertical: 10,
     paddingHorizontal: 18,
     borderRadius: 10,

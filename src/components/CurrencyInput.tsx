@@ -80,7 +80,7 @@ export const CurrencyInput: React.FC<CurrencyInputProps> = ({
   return (
     <View style={[styles.container, style]}>
       <Text style={styles.label}>
-        <Ionicons name={icon as any} size={16} color="#8c52ff" /> {label}
+        <Ionicons name={icon as any} size={16} color="#B900FF" /> {label}
       </Text>
 
       <View
@@ -117,14 +117,14 @@ export const CurrencyInput: React.FC<CurrencyInputProps> = ({
           <Ionicons
             name="close-circle"
             size={20}
-            color="#ff4d6d"
+            color="#FF008A"
             style={styles.icon}
           />
         ) : value > 0 ? (
           <Ionicons
             name="checkmark-circle"
             size={20}
-            color="#8c52ff"
+            color="#B900FF"
             style={styles.icon}
           />
         ) : null}
@@ -151,20 +151,20 @@ const styles = StyleSheet.create({
     backgroundColor: "#0e0c14",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#2a2040",
+    borderColor: "#21172D",
     paddingHorizontal: 16,
   },
   inputWrapperError: {
-    borderColor: "#ff4d6d",
+    borderColor: "#FF008A",
     borderWidth: 2,
   },
   inputWrapperDisabled: {
-    backgroundColor: "#1a1528",
+    backgroundColor: "#21172D",
   },
   currencySymbol: {
     fontSize: 16,
     fontWeight: "bold",
-    color: "#8c52ff",
+    color: "#B900FF",
     marginRight: 8,
   },
   input: {
@@ -178,7 +178,7 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   errorText: {
-    color: "#ff4d6d",
+    color: "#FF008A",
     fontSize: 12,
     marginTop: 4,
     marginLeft: 4,

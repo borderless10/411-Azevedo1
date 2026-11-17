@@ -2,7 +2,7 @@
  * Tela Home - Dashboard Inicial
  */
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   View,
   Text,
@@ -17,11 +17,12 @@ import {
   LayoutAnimation,
   Modal,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useNavigation } from "../../routes/NavigationContext";
 import { Layout } from "../../components/Layout/Layout";
 import { useDesktopWeb } from "../../utils/desktopWeb";
 import { useAuth } from "../../hooks/useAuth";
+import { useShowValues } from "../../contexts/ShowValuesContext";
 import { isStaffUser } from "../../services/userServices";
 import incomeServices from "../../services/incomeServices";
 import expenseServices from "../../services/expenseServices";
@@ -40,6 +41,7 @@ import { incomeTransactionLabel } from "../../utils/incomeEntry";
 import { computePlanningTotals } from "../../utils/planningDisplayUtils";
 import { perfMark, perfMeasure } from "../../utils/perfMarks";
 import MaskedAmount from "../../components/ui/MaskedAmount";
+import CardWaveBg from "../../components/ui/CardWaveBg";
 import {
   formatDateForDisplay,
   formatDateToString,
@@ -56,11 +58,13 @@ import {
 import { Income } from "../../types/income";
 import { Expense } from "../../types/expense";
 import {
-  CategoryBarChart,
   CategoryData,
   LineChart,
   LineChartData,
+  PieChart,
+  ConsumoModeradoBg,
 } from "../../components/Charts";
+import { premium, premiumCardShadow } from "../../theme/visaoPremium";
 import { DEFAULT_EXPENSE_CATEGORIES } from "../../types/category";
 import ZeroPlanilhaConfirmModal from "../../components/ui/ZeroPlanilhaConfirmModal";
 import { getRankingRegistrationFeedback } from "../../services/rankingPlanilhaService";
@@ -79,6 +83,7 @@ export const HomeScreen = () => {
   const desktop = useDesktopWeb();
   const { navigate, currentScreen } = useNavigation();
   const { user, activeCoupleMember } = useAuth();
+  const { showValues, toggleShowValues } = useShowValues();
 
   const [totalIncome, setTotalIncome] = useState(0);
   const [totalExpense, setTotalExpense] = useState(0);
@@ -107,6 +112,7 @@ export const HomeScreen = () => {
   );
   const [lineChartData, setLineChartData] = useState<LineChartData[]>([]);
   const [activePeriodLabel, setActivePeriodLabel] = useState("Este mês");
+  const [consumoCardSize, setConsumoCardSize] = useState({ w: 320, h: 168 });
   const [consumoModeradoPerformance, setConsumoModeradoPerformance] =
     useState<ConsumoModeradoPerformance | null>(null);
 
@@ -148,15 +154,15 @@ export const HomeScreen = () => {
 
     // Cores padrão para categorias não mapeadas
     const colors = [
-      "#ff4d6d",
-      "#8c52ff",
+      "#FF008A",
+      "#B900FF",
       "#6b6480",
-      "#ff4d6d",
+      "#FF008A",
       "#a47aff",
-      "#ff4d6d",
+      "#FF008A",
       "#c084fc",
       "#6b6480",
-      "#8c52ff",
+      "#B900FF",
       "#a47aff",
     ];
     const hash = categoryName
@@ -1052,7 +1058,8 @@ export const HomeScreen = () => {
     color: string;
     onPress: () => void;
     delay: number;
-  }> = ({ icon, label, color, onPress, delay }) => {
+    fullWidth?: boolean;
+  }> = ({ icon, label, color, onPress, delay, fullWidth }) => {
     const scaleAnim = useRef(new Animated.Value(0)).current;
     const opacityAnim = useRef(new Animated.Value(0)).current;
 
@@ -1093,6 +1100,7 @@ export const HomeScreen = () => {
         style={[
           styles.actionCardWrapper,
           desktop && styles.actionCardDesktop,
+          fullWidth && styles.actionCardFullWidth,
           {
             opacity: opacityAnim,
             transform: [{ scale: scaleAnim }],
@@ -1100,7 +1108,10 @@ export const HomeScreen = () => {
         ]}
       >
         <TouchableOpacity
-          style={[styles.actionCard, { borderTopColor: color }]}
+          style={[
+            styles.actionCard,
+            { borderColor: `${color}40`, ...premiumCardShadow },
+          ]}
           onPressIn={handlePressIn}
           onPressOut={handlePressOut}
           onPress={onPress}
@@ -1109,10 +1120,13 @@ export const HomeScreen = () => {
           <View
             style={[
               styles.actionIconContainer,
-              { backgroundColor: `${color}15` },
+              {
+                backgroundColor: `${color}22`,
+                borderColor: `${color}35`,
+              },
             ]}
           >
-            <Ionicons name={icon} size={32} color={color} />
+            <Ionicons name={icon} size={18} color={color} />
           </View>
           <Text style={styles.actionLabel}>{label}</Text>
         </TouchableOpacity>
@@ -1167,7 +1181,7 @@ export const HomeScreen = () => {
                 styles.transactionIconExpense,
               ]}
             >
-              <Ionicons name="remove-circle" size={22} color="#ff4d6d" />
+              <Ionicons name="remove-circle" size={22} color="#FF008A" />
             </View>
           </View>
           <View style={styles.transactionContent}>
@@ -1181,7 +1195,7 @@ export const HomeScreen = () => {
                   onPress={() => handleEditTransaction(expense.id, "expense")}
                   activeOpacity={0.7}
                 >
-                  <Ionicons name="create-outline" size={18} color="#8c52ff" />
+                  <Ionicons name="create-outline" size={18} color="#B900FF" />
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.actionButton}
@@ -1195,7 +1209,7 @@ export const HomeScreen = () => {
                   }
                   activeOpacity={0.7}
                 >
-                  <Ionicons name="trash-outline" size={18} color="#ff4d6d" />
+                  <Ionicons name="trash-outline" size={18} color="#FF008A" />
                 </TouchableOpacity>
               </View>
             </View>
@@ -1232,7 +1246,7 @@ export const HomeScreen = () => {
                       </Text>
                     </View>
                     {showCategory ? (
-                      <View style={[styles.transactionTag, { backgroundColor: "#1a1a1a", borderColor: "#333" }]}>
+                      <View style={[styles.transactionTag, { backgroundColor: "#171321", borderColor: "#333" }]}>
                         <Text style={[styles.transactionTagText, { color: "#888" }]}>{expense.category}</Text>
                       </View>
                     ) : null}
@@ -1243,7 +1257,7 @@ export const HomeScreen = () => {
             <View style={styles.transactionFooter}>
               <View style={styles.transactionPriceContainer}>
                 <Text style={styles.transactionValueExpense}>
-                  -{formatCurrency(expense.value)}
+                  {showValues ? `-${formatCurrency(expense.value)}` : "R$ •••"}
                 </Text>
               </View>
               <View style={styles.transactionDateContainer}>
@@ -1275,7 +1289,7 @@ export const HomeScreen = () => {
                 styles.transactionIconIncome,
               ]}
             >
-              <Ionicons name="cash" size={22} color="#8c52ff" />
+              <Ionicons name="cash" size={22} color="#B900FF" />
             </View>
           </View>
           <View style={styles.transactionContent}>
@@ -1289,7 +1303,7 @@ export const HomeScreen = () => {
                   onPress={() => handleEditTransaction(income.id, "income")}
                   activeOpacity={0.7}
                 >
-                  <Ionicons name="create-outline" size={18} color="#8c52ff" />
+                  <Ionicons name="create-outline" size={18} color="#B900FF" />
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.actionButton}
@@ -1303,14 +1317,14 @@ export const HomeScreen = () => {
                   }
                   activeOpacity={0.7}
                 >
-                  <Ionicons name="trash-outline" size={18} color="#ff4d6d" />
+                  <Ionicons name="trash-outline" size={18} color="#FF008A" />
                 </TouchableOpacity>
               </View>
             </View>
             <View style={styles.transactionFooter}>
               <View style={styles.transactionPriceContainer}>
                 <Text style={styles.transactionValueIncome}>
-                  +{formatCurrency(income.value)}
+                  {showValues ? `+${formatCurrency(income.value)}` : "R$ •••"}
                 </Text>
               </View>
               <View style={styles.transactionDateContainer}>
@@ -1346,6 +1360,29 @@ export const HomeScreen = () => {
     return true;
   });
 
+  const showExpectedSavingsHelp = () => {
+    Alert.alert(
+      "Poupança estimada",
+      "Valor estimado a partir do seu planejamento: recursos previstos menos gastos previstos no período ativo (ciclo de consumo moderado ou mês corrente).",
+    );
+  };
+
+  const pieChartVisualData = useMemo(
+    () =>
+      categoryChartData.map((item) => ({
+        category: item.category,
+        value: item.total,
+        percentage: item.percentage,
+        color: item.color,
+      })),
+    [categoryChartData],
+  );
+
+  const savingsPeriodLabel =
+    activePeriodLabel === "No ciclo"
+      ? "No ciclo (estimado)"
+      : `${activePeriodLabel} (estimado)`;
+
   // Renderizar item de transação
   const renderTransactionItem = (
     transaction: { item: Income | Expense; type: "income" | "expense" },
@@ -1359,7 +1396,7 @@ export const HomeScreen = () => {
     return (
       <Layout showHeader={true} showSidebar={true} desktopWidth="full">
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#8c52ff" />
+          <ActivityIndicator size="large" color={premium.purple} />
           <Text style={styles.loadingText}>Carregando dados...</Text>
         </View>
       </Layout>
@@ -1384,7 +1421,7 @@ export const HomeScreen = () => {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            colors={["#8c52ff"]}
+            colors={[premium.purple]}
           />
         }
         ListEmptyComponent={
@@ -1399,10 +1436,27 @@ export const HomeScreen = () => {
         ListHeaderComponent={
         <View style={styles.content}>
           <View style={styles.pageGreeting}>
-            <Text style={styles.pageGreetingHello}>Olá,</Text>
-            <Text style={styles.pageGreetingName} numberOfLines={1}>
-              {profileDisplayName(user, user?.email || "Usuário")}
-            </Text>
+            <View style={styles.pageGreetingText}>
+              <Text style={styles.pageGreetingHello}>Olá,</Text>
+              <Text style={styles.pageGreetingName} numberOfLines={1}>
+                {profileDisplayName(user, user?.email || "Usuário")}
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={toggleShowValues}
+              style={styles.greetingEyeButton}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              accessibilityRole="button"
+              accessibilityLabel={
+                showValues ? "Ocultar valores" : "Mostrar valores"
+              }
+            >
+              <Ionicons
+                name={showValues ? "eye" : "eye-off"}
+                size={24}
+                color={premium.purpleSoft}
+              />
+            </TouchableOpacity>
           </View>
           {/* Cards de resumo rápido */}
           <Animated.View
@@ -1443,8 +1497,18 @@ export const HomeScreen = () => {
                           },
                         ]}
                       >
-                        <View style={styles.cardIconContainer}>
-                          <Ionicons name="cash" size={18} color="#8c52ff" />
+                        <CardWaveBg variant="v2Purple" crop="fill" opacity={1} />
+                        <View
+                          style={[
+                            styles.cardIconContainer,
+                            { backgroundColor: "rgba(185,0,255,0.16)" },
+                          ]}
+                        >
+                          <Ionicons
+                            name="cash"
+                            size={18}
+                            color={premium.purple}
+                          />
                         </View>
                         <Text style={styles.summaryLabelIncome}>
                           Recursos Disponíveis
@@ -1506,8 +1570,18 @@ export const HomeScreen = () => {
                           },
                         ]}
                       >
-                        <View style={styles.cardIconContainer}>
-                          <Ionicons name="calendar" size={18} color="#ff4d6d" />
+                        <CardWaveBg variant="v2Magenta" crop="fill" opacity={1} />
+                        <View
+                          style={[
+                            styles.cardIconContainer,
+                            { backgroundColor: "rgba(255,0,138,0.16)" },
+                          ]}
+                        >
+                          <Ionicons
+                            name="calendar"
+                            size={18}
+                            color={premium.magenta}
+                          />
                         </View>
                         <Text style={styles.summaryLabelExpense}>
                           Gasto Esperado
@@ -1559,37 +1633,50 @@ export const HomeScreen = () => {
                 <Animated.View
                   style={[
                     styles.summaryCardHorizontal,
-                    styles.cardGreen,
+                    styles.premiumSavingsCard,
                     {
                       opacity: fadeAnim,
                       transform: [{ translateY: slideAnim }],
                     },
                   ]}
                 >
-                  <View style={styles.balanceContent}>
+                  <CardWaveBg variant="v2Wide" crop="band" opacity={1} />
+                  <View style={styles.premiumSavingsRow}>
+                    <View style={styles.premiumSavingsIconCircle}>
+                      <MaterialCommunityIcons
+                        name="piggy-bank-outline"
+                        size={20}
+                        color={premium.purple}
+                      />
+                    </View>
                     <View style={styles.balanceTextContainer}>
                       <Text style={styles.summaryLabelBalance}>
                         Poupança Esperada
                       </Text>
-                      {expectedSavings === null ? (
-                        <Text style={styles.summaryValue}>-</Text>
-                      ) : (
-                        <MaskedAmount
-                          value={expectedSavings}
-                          style={styles.summaryValue}
-                        />
-                      )}
                       <Text style={styles.summarySubtext}>
-                        {activePeriodLabel} (estimado)
+                        {savingsPeriodLabel}
                       </Text>
                     </View>
-                    <View style={styles.balanceIconContainer}>
-                      <Ionicons
-                        name={"piggy-bank" as any}
-                        size={28}
-                        color="#8c52ff"
+                    {expectedSavings === null ? (
+                      <Text style={styles.premiumSavingsValue}>-</Text>
+                    ) : (
+                      <MaskedAmount
+                        value={expectedSavings}
+                        style={styles.premiumSavingsValue}
                       />
-                    </View>
+                    )}
+                    <TouchableOpacity
+                      onPress={showExpectedSavingsHelp}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      style={styles.premiumSavingsHelpBtn}
+                      accessibilityLabel="O que é poupança estimada"
+                    >
+                      <Ionicons
+                        name="help-circle-outline"
+                        size={22}
+                        color={premium.textSecondary}
+                      />
+                    </TouchableOpacity>
                   </View>
                 </Animated.View>
 
@@ -1599,61 +1686,92 @@ export const HomeScreen = () => {
                     onPress={() => navigate("Budget")}
                   >
                     <View style={styles.consumoModeradoCard}>
-                      <View style={styles.consumoModeradoHeader}>
-                        <Ionicons
-                          name="wallet-outline"
-                          size={20}
-                          color="#8c52ff"
-                        />
-                        <Text style={styles.consumoModeradoTitle}>
-                          Consumo Moderado
-                        </Text>
-                        <Ionicons
-                          name="chevron-forward"
-                          size={18}
-                          color="#999"
+                      <View
+                        style={styles.consumoModeradoBgLayer}
+                        onLayout={(e) => {
+                          const { width, height } = e.nativeEvent.layout;
+                          if (
+                            width !== consumoCardSize.w ||
+                            height !== consumoCardSize.h
+                          ) {
+                            setConsumoCardSize({ w: width, h: height });
+                          }
+                        }}
+                      >
+                        <ConsumoModeradoBg
+                          width={Math.max(consumoCardSize.w, 160)}
+                          height={Math.max(consumoCardSize.h, 120)}
+                          color={premium.magenta}
                         />
                       </View>
 
-                      <View style={styles.consumoModeradoStatusRow}>
-                        <Ionicons
-                          name={consumoModeradoPerformance.icon}
-                          size={22}
-                          color={consumoModeradoPerformance.color}
-                        />
-                        <Text
-                          style={[
-                            styles.consumoModeradoStatusLabel,
-                            { color: consumoModeradoPerformance.color },
-                          ]}
-                        >
-                          {consumoModeradoPerformance.label}
-                        </Text>
-                      </View>
+                      <View style={styles.consumoModeradoForeground}>
+                        <View style={styles.consumoModeradoHeader}>
+                          <Ionicons
+                            name="wallet-outline"
+                            size={20}
+                            color={premium.purple}
+                          />
+                          <Text style={styles.consumoModeradoTitle}>
+                            Consumo Moderado
+                          </Text>
+                          <Ionicons
+                            name="chevron-forward"
+                            size={18}
+                            color={premium.textSecondary}
+                          />
+                        </View>
 
-                      <Text style={styles.consumoModeradoDetail}>
-                        {consumoModeradoPerformance.detail}
-                      </Text>
+                        <View style={styles.consumoModeradoStatusRow}>
+                          <Ionicons
+                            name={consumoModeradoPerformance.icon}
+                            size={20}
+                            color={consumoModeradoPerformance.color}
+                          />
+                          <Text
+                            style={[
+                              styles.consumoModeradoStatusLabel,
+                              { color: consumoModeradoPerformance.color },
+                            ]}
+                          >
+                            {consumoModeradoPerformance.label}
+                          </Text>
+                        </View>
 
-                      <View style={styles.consumoModeradoMetaRow}>
-                        <Text style={styles.consumoModeradoMetaLabel}>
-                          Média real/dia
+                        <Text style={styles.consumoModeradoDetail}>
+                          {showValues
+                            ? consumoModeradoPerformance.detail
+                            : consumoModeradoPerformance.detail.replace(
+                                /R\$\s*[\d.,]+/g,
+                                "R$ •••",
+                              )}
                         </Text>
-                        <Text style={styles.consumoModeradoMetaValue}>
-                          {formatCurrency(
-                            consumoModeradoPerformance.actualDailyAverage,
-                          )}
-                        </Text>
-                      </View>
-                      <View style={styles.consumoModeradoMetaRow}>
-                        <Text style={styles.consumoModeradoMetaLabel}>
-                          Média diária ideal
-                        </Text>
-                        <Text style={styles.consumoModeradoMetaValue}>
-                          {formatCurrency(
-                            consumoModeradoPerformance.idealDailyAverage,
-                          )}
-                        </Text>
+
+                        <View style={styles.consumoModeradoMetaBlock}>
+                          <View style={styles.consumoModeradoMetaRow}>
+                            <Text style={styles.consumoModeradoMetaLabel}>
+                              Média realizada
+                            </Text>
+                            <MaskedAmount
+                              value={
+                                consumoModeradoPerformance.actualDailyAverage
+                              }
+                              style={styles.consumoModeradoMetaValue}
+                            />
+                          </View>
+                          <View style={styles.consumoModeradoMetaDivider} />
+                          <View style={styles.consumoModeradoMetaRow}>
+                            <Text style={styles.consumoModeradoMetaLabel}>
+                              Média diária ideal
+                            </Text>
+                            <MaskedAmount
+                              value={
+                                consumoModeradoPerformance.idealDailyAverage
+                              }
+                              style={styles.consumoModeradoMetaValue}
+                            />
+                          </View>
+                        </View>
                       </View>
                     </View>
                   </TouchableOpacity>
@@ -1662,96 +1780,145 @@ export const HomeScreen = () => {
                 <View style={styles.balanceCardsSection}>
                   <Text style={styles.sectionTitle}>Saldo</Text>
                   <View style={styles.balanceCardsRow}>
-                    <View style={[styles.expectedSummaryColumn, desktop && styles.expectedSummaryColumnDesktop]}>
-                      <View style={styles.expectedCardPressable}>
-                        <View
-                          style={[styles.expectedCardSquare, styles.cardGreen]}
-                        >
-                          <View style={styles.cardIconContainer}>
-                            <Ionicons name="cash" size={18} color="#8c52ff" />
-                          </View>
-                          <Text style={styles.summaryLabelIncome}>
-                            Rendas Realizadas
-                          </Text>
-                          <MaskedAmount
-                            value={totalIncome}
-                            style={styles.summaryValueSquare}
-                            numberOfLines={1}
-                            adjustsFontSizeToFit={true}
-                            minimumFontScale={0.7}
-                          />
-                          <Text style={styles.summarySubtext}>
-                            {activePeriodLabel}
-                          </Text>
-                        </View>
-                      </View>
-                    </View>
-
-                    <View style={[styles.expectedSummaryColumn, desktop && styles.expectedSummaryColumnDesktop]}>
-                      <View style={styles.expectedCardPressable}>
-                        <View
-                          style={[styles.expectedCardSquare, styles.cardRed]}
-                        >
-                          <View style={styles.cardIconContainer}>
+                    <View
+                      style={[
+                        styles.expectedSummaryColumn,
+                        desktop && styles.expectedSummaryColumnDesktop,
+                      ]}
+                    >
+                      <View
+                        style={[
+                          styles.premiumBalanceCard,
+                          styles.premiumBalanceCardPurple,
+                        ]}
+                      >
+                        <CardWaveBg variant="v2Purple" crop="fill" opacity={0.95} />
+                        <View style={styles.premiumBalanceTitleRow}>
+                          <View style={styles.premiumBalanceIcon}>
                             <Ionicons
-                              name="trending-down"
-                              size={18}
-                              color="#ff4d6d"
+                              name="cash"
+                              size={14}
+                              color={premium.purple}
                             />
                           </View>
-                          <Text style={styles.summaryLabelExpense}>
-                            Gastos Realizados
-                          </Text>
-                          <MaskedAmount
-                            value={realizedExpenseTotal}
-                            style={styles.summaryValueSquare}
-                            numberOfLines={1}
-                            adjustsFontSizeToFit={true}
-                            minimumFontScale={0.7}
-                          />
-                          <Text style={styles.summarySubtext}>
-                            {activePeriodLabel}
+                          <Text
+                            style={styles.premiumBalanceLabel}
+                            numberOfLines={2}
+                          >
+                            Rendas Realizadas
                           </Text>
                         </View>
+                        <MaskedAmount
+                          value={totalIncome}
+                          style={styles.premiumBalanceValue}
+                          numberOfLines={1}
+                          adjustsFontSizeToFit
+                          minimumFontScale={0.7}
+                        />
+                        <Text style={styles.summarySubtext}>
+                          {activePeriodLabel}
+                        </Text>
                       </View>
                     </View>
 
-                    <View style={[styles.expectedSummaryColumn, desktop && styles.expectedSummaryColumnDesktop]}>
-                      <View style={styles.expectedCardPressable}>
-                        <View
-                          style={[
-                            styles.expectedCardSquare,
-                            styles.cardBalance,
-                          ]}
-                        >
-                          <View style={styles.cardIconContainer}>
+                    <View
+                      style={[
+                        styles.expectedSummaryColumn,
+                        desktop && styles.expectedSummaryColumnDesktop,
+                      ]}
+                    >
+                      <View
+                        style={[
+                          styles.premiumBalanceCard,
+                          styles.premiumBalanceCardMagenta,
+                        ]}
+                      >
+                        <CardWaveBg variant="v2Magenta" crop="fill" opacity={0.95} />
+                        <View style={styles.premiumBalanceTitleRow}>
+                          <View
+                            style={[
+                              styles.premiumBalanceIcon,
+                              styles.premiumBalanceIconMagenta,
+                            ]}
+                          >
+                            <Ionicons
+                              name="trending-down"
+                              size={14}
+                              color={premium.magenta}
+                            />
+                          </View>
+                          <Text
+                            style={[
+                              styles.premiumBalanceLabel,
+                              styles.premiumBalanceLabelMagenta,
+                            ]}
+                            numberOfLines={2}
+                          >
+                            Gastos Realizados
+                          </Text>
+                        </View>
+                        <MaskedAmount
+                          value={realizedExpenseTotal}
+                          style={styles.premiumBalanceValue}
+                          numberOfLines={1}
+                          adjustsFontSizeToFit
+                          minimumFontScale={0.7}
+                        />
+                        <Text style={styles.summarySubtext}>
+                          {activePeriodLabel}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View
+                      style={[
+                        styles.expectedSummaryColumn,
+                        desktop && styles.expectedSummaryColumnDesktop,
+                      ]}
+                    >
+                      <View
+                        style={[
+                          styles.premiumBalanceCard,
+                          styles.premiumBalanceCardPurpleGlow,
+                        ]}
+                      >
+                        <CardWaveBg variant="v2Square" crop="square" opacity={0.95} />
+                        <View style={styles.premiumBalanceTitleRow}>
+                          <View style={styles.premiumBalanceIcon}>
                             <Ionicons
                               name="wallet"
-                              size={18}
+                              size={14}
                               color={
-                                realizedBalance < 0 ? "#ff4d6d" : "#8c52ff"
+                                realizedBalance < 0
+                                  ? premium.magenta
+                                  : premium.purple
                               }
                             />
                           </View>
-                          <Text style={styles.summaryLabelBalance}>Saldo</Text>
-                          <MaskedAmount
-                            value={realizedBalance}
-                            style={
-                              [
-                                styles.summaryValueSquare,
-                                realizedBalance < 0
-                                  ? styles.summaryValueNegative
-                                  : null,
-                              ] as any
-                            }
+                          <Text
+                            style={styles.premiumBalanceLabel}
                             numberOfLines={1}
-                            adjustsFontSizeToFit={true}
-                            minimumFontScale={0.7}
-                          />
-                          <Text style={styles.summarySubtext}>
-                            {activePeriodLabel}
+                          >
+                            Saldo
                           </Text>
                         </View>
+                        <MaskedAmount
+                          value={realizedBalance}
+                          style={
+                            [
+                              styles.premiumBalanceValue,
+                              realizedBalance < 0
+                                ? styles.summaryValueNegative
+                                : null,
+                            ] as any
+                          }
+                          numberOfLines={1}
+                          adjustsFontSizeToFit
+                          minimumFontScale={0.7}
+                        />
+                        <Text style={styles.summarySubtext}>
+                          {activePeriodLabel}
+                        </Text>
                       </View>
                     </View>
                   </View>
@@ -1795,7 +1962,7 @@ export const HomeScreen = () => {
                       <Ionicons
                         name="wallet"
                         size={28}
-                        color={balance < 0 ? "#ff4d6d" : "#8c52ff"}
+                        color={balance < 0 ? "#FF008A" : "#B900FF"}
                       />
                     </View>
                   </View>
@@ -1820,8 +1987,9 @@ export const HomeScreen = () => {
                       },
                     ]}
                   >
+                    <CardWaveBg variant="v2Purple" crop="fill" opacity={1} />
                     <View style={styles.cardIconContainer}>
-                      <Ionicons name="trending-up" size={18} color="#8c52ff" />
+                      <Ionicons name="trending-up" size={18} color="#B900FF" />
                     </View>
                     <Text style={styles.summaryLabelIncome}>
                       Total Recebido
@@ -1855,11 +2023,12 @@ export const HomeScreen = () => {
                       },
                     ]}
                   >
+                    <CardWaveBg variant="v2Magenta" crop="fill" opacity={1} />
                     <View style={styles.cardIconContainer}>
                       <Ionicons
                         name="trending-down"
                         size={18}
-                        color="#ff4d6d"
+                        color="#FF008A"
                       />
                     </View>
                     <Text style={styles.summaryLabelExpense}>Total Gasto</Text>
@@ -1887,14 +2056,14 @@ export const HomeScreen = () => {
               <ActionCard
                 icon="add-circle"
                 label="Adicionar Renda"
-                color="#8c52ff"
+                color="#B900FF"
                 onPress={() => navigate("AddIncome")}
                 delay={0}
               />
               <ActionCard
                 icon="remove-circle"
                 label="Adicionar Gasto"
-                color="#ff4d6d"
+                color="#FF008A"
                 onPress={() => navigate("AddExpense")}
                 delay={100}
               />
@@ -1916,9 +2085,10 @@ export const HomeScreen = () => {
                 <ActionCard
                   icon="calendar"
                   label="Planejamento"
-                  color="#c084fc"
+                  color={premium.purpleBright}
                   onPress={() => navigate("PlanningView")}
                   delay={400}
+                  fullWidth
                 />
               )}
             </View>
@@ -1938,24 +2108,32 @@ export const HomeScreen = () => {
             >
               <Text style={styles.sectionTitle}>Visualizações</Text>
 
-              {/* Gráfico de Gastos por Categoria */}
-              {categoryChartData.length > 0 && (
-                <View style={[styles.chartCard, desktop && styles.chartCardDesktop]}>
-                  <View style={styles.chartHeader}>
-                    <Ionicons
-                      name="pie-chart-outline"
-                      size={20}
-                      color="#8c52ff"
-                    />
-                    <Text style={styles.chartTitle}>Gastos por Categoria</Text>
-                  </View>
-                  <CategoryBarChart
-                    data={categoryChartData}
-                    showValues={true}
-                    showPercentages={true}
+              <View
+                style={[styles.chartCard, desktop && styles.chartCardDesktop]}
+              >
+                <View style={styles.chartHeader}>
+                  <Ionicons
+                    name="pie-chart-outline"
+                    size={20}
+                    color={premium.purple}
                   />
+                  <Text style={styles.chartTitle}>Gastos por Categoria</Text>
                 </View>
-              )}
+                {pieChartVisualData.length > 0 ? (
+                  <PieChart data={pieChartVisualData} size={112} />
+                ) : (
+                  <View style={styles.chartEmptyState}>
+                    <Ionicons
+                      name="ellipse-outline"
+                      size={36}
+                      color={premium.textSecondary}
+                    />
+                    <Text style={styles.chartEmptyText}>
+                      Sem gastos por categoria no período
+                    </Text>
+                  </View>
+                )}
+              </View>
 
               {/* Gráfico de Evolução Temporal */}
               {lineChartData.length > 0 && (
@@ -1964,7 +2142,7 @@ export const HomeScreen = () => {
                     <Ionicons
                       name="trending-up-outline"
                       size={20}
-                      color="#8c52ff"
+                      color={premium.purple}
                     />
                     <Text style={styles.chartTitle}>
                       Evolução (Últimos 7 dias)
@@ -1972,7 +2150,7 @@ export const HomeScreen = () => {
                   </View>
                   <LineChart
                     data={lineChartData}
-                    height={180}
+                    height={120}
                     showLabels={true}
                   />
                 </View>
@@ -1988,14 +2166,14 @@ export const HomeScreen = () => {
             <View style={styles.searchContainer}>
               <Ionicons
                 name="search-outline"
-                size={20}
-                color="#999"
+                size={18}
+                color={premium.purpleSoft}
                 style={styles.searchIcon}
               />
               <TextInput
                 style={styles.searchInput}
                 placeholder="Buscar por descrição..."
-                placeholderTextColor="#666"
+                placeholderTextColor={premium.textSecondary}
                 value={searchTerm}
                 onChangeText={setSearchTerm}
                 autoCapitalize="none"
@@ -2022,8 +2200,8 @@ export const HomeScreen = () => {
               >
                 <Ionicons
                   name="list"
-                  size={18}
-                  color={filterType === "all" ? "#fff" : "#999"}
+                  size={16}
+                  color={filterType === "all" ? premium.text : premium.textSecondary}
                 />
                 <Text
                   style={[
@@ -2045,13 +2223,13 @@ export const HomeScreen = () => {
                 <Ionicons
                   name="trending-up"
                   size={18}
-                  color={filterType === "income" ? "#8c52ff" : "#999"}
+                  color={filterType === "income" ? premium.purple : premium.textSecondary}
                 />
                 <Text
                   style={[
                     styles.filterButtonText,
                     filterType === "income" && styles.filterButtonTextActive,
-                    filterType === "income" && { color: "#8c52ff" },
+                    filterType === "income" && { color: premium.purple },
                   ]}
                 >
                   Rendas
@@ -2068,13 +2246,13 @@ export const HomeScreen = () => {
                 <Ionicons
                   name="trending-down"
                   size={18}
-                  color={filterType === "expense" ? "#ff4d6d" : "#999"}
+                  color={filterType === "expense" ? premium.magenta : premium.textSecondary}
                 />
                 <Text
                   style={[
                     styles.filterButtonText,
                     filterType === "expense" && styles.filterButtonTextActive,
-                    filterType === "expense" && { color: "#ff4d6d" },
+                    filterType === "expense" && { color: premium.magenta },
                   ]}
                 >
                   Gastos
@@ -2176,38 +2354,59 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    padding: 12,
-    backgroundColor: "#000",
+    padding: 8,
+    backgroundColor: premium.bg,
   },
   pageGreeting: {
     marginBottom: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  pageGreetingText: {
+    flex: 1,
+    minWidth: 0,
   },
   pageGreetingHello: {
-    color: "#bbb",
-    fontSize: 14,
+    color: premium.textSecondary,
+    fontSize: 15,
+    fontWeight: "500",
   },
   pageGreetingName: {
-    color: "#fff",
+    color: premium.text,
     fontSize: 20,
-    fontWeight: "700",
+    fontWeight: "800",
     marginTop: 2,
     maxWidth: "100%",
+    letterSpacing: -0.4,
+  },
+  greetingEyeButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(185,0,255,0.1)",
+    borderWidth: 1,
+    borderColor: premium.border,
   },
   summaryContainer: {
-    marginBottom: 16,
+    marginBottom: 8,
   },
   balanceCardsSection: {
-    marginTop: 8,
-    marginBottom: 14,
+    marginTop: 2,
+    marginBottom: 6,
   },
   balanceCardsRow: {
     flexDirection: "row",
     alignItems: "stretch",
     marginTop: 8,
+    gap: 8,
   },
   balanceMetricCard: {
     flex: 1,
-    backgroundColor: "#1a1a1a",
+    backgroundColor: "#171321",
     borderRadius: 12,
     paddingVertical: 12,
     paddingHorizontal: 10,
@@ -2217,15 +2416,15 @@ const styles = StyleSheet.create({
   },
   balanceMetricCardExpense: {
     borderLeftWidth: 4,
-    borderLeftColor: "#ff4d6d",
+    borderLeftColor: "#FF008A",
   },
   balanceMetricCardIncome: {
     borderLeftWidth: 4,
-    borderLeftColor: "#8c52ff",
+    borderLeftColor: "#B900FF",
   },
   balanceMetricCardBalance: {
     borderLeftWidth: 4,
-    borderLeftColor: "#8c52ff",
+    borderLeftColor: "#B900FF",
   },
   balanceMetricHeader: {
     flexDirection: "row",
@@ -2246,23 +2445,47 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   balanceMetricValueNegative: {
-    color: "#ff4d6d",
+    color: "#FF008A",
   },
   // Card Horizontal (Saldo Atual)
   summaryCardHorizontal: {
-    backgroundColor: "#1a1a1a",
-    borderRadius: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    marginBottom: 8,
-    marginTop: 8,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 3,
+    backgroundColor: "#0E0B14",
+    borderRadius: 14,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    marginBottom: 6,
+    marginTop: 2,
     borderWidth: 1,
-    borderColor: "#333",
+    borderColor: "rgba(185,0,255,0.28)",
+    ...premiumCardShadow,
+    overflow: "hidden",
+    position: "relative",
+    minHeight: 48,
+  },
+  premiumSavingsCard: {
+    backgroundColor: "#0E0B14",
+    borderColor: "rgba(185,0,255,0.32)",
+    shadowColor: premium.purple,
+    shadowOpacity: 0.22,
+  },
+  premiumSavingsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    zIndex: 2,
+  },
+  premiumSavingsIconCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "rgba(185,0,255,0.12)",
+    borderWidth: 1,
+    borderColor: premium.borderStrong,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  premiumSavingsHelpBtn: {
+    padding: 4,
   },
   balanceContent: {
     flexDirection: "row",
@@ -2271,12 +2494,13 @@ const styles = StyleSheet.create({
   },
   balanceTextContainer: {
     flex: 1,
+    zIndex: 2,
   },
   balanceIconContainer: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: "#2a2a2a",
+    backgroundColor: "#21172D",
     alignItems: "center",
     justifyContent: "center",
     marginLeft: 10,
@@ -2286,7 +2510,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-start",
     marginBottom: 12,
-    // espaçamento entre colunas (RN não tem `gap` em todas as versões)
+    gap: 12,
   },
   summaryRowDesktop: {
     flexWrap: "wrap",
@@ -2320,31 +2544,30 @@ const styles = StyleSheet.create({
   },
   expectedSummaryColumn: {
     flex: 1,
-    paddingHorizontal: 4,
+    paddingHorizontal: 0,
+    alignSelf: "stretch",
   },
   expectedCardPressable: {
     width: "100%",
   },
   expectedCardSquare: {
-    backgroundColor: "#1a1a1a",
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 3,
-    borderWidth: 1,
-    borderColor: "#333",
-    minHeight: 118,
+    backgroundColor: "#0E0B14",
+    borderRadius: 18,
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    borderWidth: 1.2,
+    borderColor: "rgba(190,130,255,0.22)",
+    ...premiumCardShadow,
+    minHeight: 86,
     alignItems: "center",
     justifyContent: "center",
     width: "100%",
+    overflow: "hidden",
+    position: "relative",
   },
   expectedCardSquareExpanded: {
-    backgroundColor: "#161616",
-    borderRadius: 14,
+    backgroundColor: "#14101C",
+    borderRadius: 18,
     paddingVertical: 14,
     paddingHorizontal: 14,
     shadowColor: "#000",
@@ -2352,27 +2575,33 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.35,
     shadowRadius: 12,
     elevation: 5,
-    borderWidth: 1,
-    borderColor: "#2a2040",
+    borderWidth: 1.2,
+    borderColor: "rgba(190,130,255,0.28)",
     minHeight: 140,
     alignItems: "center",
     justifyContent: "center",
     width: "100%",
+    overflow: "hidden",
+    position: "relative",
   },
   summaryCardSquare: {
     flex: 1,
-    backgroundColor: "#1a1a1a",
-    borderRadius: 12,
+    backgroundColor: "#0E0B14",
+    borderRadius: 18,
     paddingVertical: 10,
     paddingHorizontal: 12,
     shadowColor: "#000",
     minHeight: 110,
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden",
+    position: "relative",
+    borderWidth: 1.2,
+    borderColor: "rgba(190,130,255,0.22)",
   },
   summaryCardSquareExpanded: {
     flex: 1,
-    backgroundColor: "#161616",
+    backgroundColor: "#171321",
     borderRadius: 14,
     paddingVertical: 14,
     paddingHorizontal: 14,
@@ -2382,19 +2611,20 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 5,
     borderWidth: 1,
-    borderColor: "#2a2040",
+    borderColor: "#21172D",
     minHeight: 140,
     alignItems: "center",
     justifyContent: "center",
   },
   cardIconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "#2a2a2a",
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "#21172D",
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 4,
+    zIndex: 2,
   },
   chevronContainer: {
     position: "absolute",
@@ -2404,22 +2634,108 @@ const styles = StyleSheet.create({
     height: 28,
     alignItems: "center",
     justifyContent: "center",
+    zIndex: 2,
   },
   cardGreen: {
-    borderLeftWidth: 4,
-    borderLeftColor: "#8c52ff",
+    borderColor: "rgba(200,160,255,0.28)",
+    shadowColor: premium.purple,
+    shadowOpacity: 0.3,
+    shadowRadius: 18,
   },
   cardRed: {
-    borderLeftWidth: 4,
-    borderLeftColor: "#ff4d6d",
+    borderColor: "rgba(255,140,200,0.3)",
+    shadowColor: premium.magenta,
+    shadowOpacity: 0.28,
+    shadowRadius: 18,
   },
   cardBlue: {
-    borderLeftWidth: 4,
-    borderLeftColor: "#8c52ff",
+    borderLeftWidth: 3,
+    borderLeftColor: premium.purple,
   },
   cardBalance: {
-    borderLeftWidth: 4,
-    borderLeftColor: "#8c52ff",
+    borderLeftWidth: 3,
+    borderLeftColor: premium.purpleBright,
+  },
+  premiumBalanceCard: {
+    backgroundColor: "#0E0B14",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: premium.border,
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    minHeight: 78,
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    width: "100%",
+    overflow: "hidden",
+    position: "relative",
+  },
+  premiumBalanceCardPurple: {
+    borderColor: "rgba(185,0,255,0.35)",
+    shadowColor: premium.purple,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  premiumBalanceCardMagenta: {
+    borderColor: "rgba(255,0,138,0.32)",
+    shadowColor: premium.magenta,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.16,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  premiumBalanceCardPurpleGlow: {
+    borderColor: "rgba(185,0,255,0.35)",
+    shadowColor: premium.purple,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  premiumBalanceTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    zIndex: 2,
+    width: "100%",
+    paddingHorizontal: 2,
+  },
+  premiumBalanceIcon: {
+    width: 22,
+    height: 22,
+    borderRadius: 8,
+    backgroundColor: "rgba(185,0,255,0.16)",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 2,
+  },
+  premiumBalanceIconMagenta: {
+    backgroundColor: "rgba(255,0,138,0.16)",
+  },
+  premiumBalanceLabel: {
+    color: premium.purple,
+    fontSize: 10,
+    fontWeight: "700",
+    textAlign: "left",
+    lineHeight: 12,
+    flexShrink: 1,
+    zIndex: 2,
+  },
+  premiumBalanceLabelMagenta: {
+    color: premium.magenta,
+  },
+  premiumBalanceValue: {
+    color: premium.text,
+    fontSize: 14,
+    fontWeight: "800",
+    marginTop: 4,
+    textAlign: "center",
+    width: "100%",
+    zIndex: 2,
   },
   summaryLabel: {
     fontSize: 12,
@@ -2430,29 +2746,31 @@ const styles = StyleSheet.create({
   },
   summaryLabelBalance: {
     fontSize: 13,
-    color: "#8c52ff",
+    color: premium.purple,
     marginTop: 0,
     fontWeight: "700",
     letterSpacing: 0.2,
   },
   summaryLabelIncome: {
     fontSize: 13,
-    color: "#8c52ff",
+    color: premium.purple,
     marginTop: 0,
     fontWeight: "700",
     letterSpacing: 0.2,
+    zIndex: 2,
   },
   summaryLabelExpense: {
     fontSize: 13,
-    color: "#ff4d6d",
+    color: premium.magenta,
     marginTop: 0,
     fontWeight: "700",
     letterSpacing: 0.2,
+    zIndex: 2,
   },
   summaryValue: {
     fontSize: 17,
     fontWeight: "700",
-    color: "#fff",
+    color: premium.text,
     marginTop: 1,
     letterSpacing: -0.3,
     flexShrink: 1,
@@ -2462,47 +2780,76 @@ const styles = StyleSheet.create({
   summaryValueSquare: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#fff",
+    color: premium.text,
     marginTop: 1,
     letterSpacing: -0.3,
     flexShrink: 1,
     width: "100%",
     textAlign: "center",
+    zIndex: 2,
   },
   summarySubtext: {
-    fontSize: 10,
-    color: "#999",
-    marginTop: 0,
+    fontSize: 9,
+    color: premium.textSecondary,
+    marginTop: 1,
+    textAlign: "center",
+    zIndex: 2,
+  },
+  premiumSavingsValue: {
+    color: premium.text,
+    fontSize: 16,
+    fontWeight: "800",
+    zIndex: 2,
+    marginLeft: 8,
   },
   actionsContainer: {
-    marginTop: 16,
-    marginBottom: 16,
+    marginTop: 4,
+    marginBottom: 6,
   },
   sectionTitle: {
-    fontSize: 22,
+    fontSize: 16,
     fontWeight: "700",
-    color: "#fff",
-    marginBottom: 10,
-    letterSpacing: -0.3,
+    color: premium.text,
+    marginBottom: 6,
+    letterSpacing: -0.2,
   },
   consumoModeradoCard: {
-    backgroundColor: "#1a1a1a",
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: "#333",
-    marginBottom: 16,
+    backgroundColor: "#120818",
+    borderRadius: 14,
+    padding: 10,
+    borderWidth: 1.5,
+    borderColor: "rgba(255,0,138,0.55)",
+    marginBottom: 8,
+    overflow: "hidden",
+    minHeight: 112,
+    shadowColor: premium.magenta,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.45,
+    shadowRadius: 18,
+    elevation: 6,
+  },
+  consumoModeradoBgLayer: {
+    position: "absolute",
+    right: -8,
+    bottom: -6,
+    top: 22,
+    width: "58%",
+    opacity: 1,
+  },
+  consumoModeradoForeground: {
+    position: "relative",
+    zIndex: 2,
     gap: 8,
   },
   consumoModeradoHeader: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    marginBottom: 4,
+    marginBottom: 2,
   },
   consumoModeradoTitle: {
     flex: 1,
-    color: "#fff",
+    color: premium.text,
     fontSize: 16,
     fontWeight: "700",
   },
@@ -2510,30 +2857,49 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
+    maxWidth: "62%",
   },
   consumoModeradoStatusLabel: {
-    fontSize: 17,
-    fontWeight: "700",
+    fontSize: 18,
+    fontWeight: "800",
   },
   consumoModeradoDetail: {
-    color: "#ccc",
+    color: "#E6E1EE",
     fontSize: 13,
     lineHeight: 18,
+    marginBottom: 2,
+    maxWidth: "62%",
+  },
+  consumoModeradoMetaBlock: {
+    marginTop: 4,
+    gap: 0,
+    maxWidth: "58%",
+    backgroundColor: "rgba(8, 3, 14, 0.82)",
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
   },
   consumoModeradoMetaRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingTop: 4,
+    paddingVertical: 4,
+    gap: 8,
+  },
+  consumoModeradoMetaDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: "rgba(255,255,255,0.16)",
   },
   consumoModeradoMetaLabel: {
-    color: "#aaa",
+    color: "#C9C3D4",
     fontSize: 13,
   },
   consumoModeradoMetaValue: {
-    color: "#fff",
-    fontSize: 14,
-    fontWeight: "700",
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "800",
   },
   actionsGrid: {
     flexDirection: "row",
@@ -2544,54 +2910,55 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: "45%",
   },
+  actionCardFullWidth: {
+    flexBasis: "100%",
+    width: "100%",
+    minWidth: "100%",
+    maxWidth: "100%",
+  },
   actionCard: {
-    backgroundColor: "#1a1a1a",
-    borderRadius: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    backgroundColor: premium.surface,
+    borderRadius: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
     alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 4,
-    borderTopWidth: 4,
+    justifyContent: "flex-start",
+    flexDirection: "row",
+    gap: 6,
     borderWidth: 1,
-    borderColor: "#333",
-    minHeight: 85,
+    minHeight: 40,
   },
   actionIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 6,
+    borderWidth: 1,
   },
   actionGreen: {
     borderTopWidth: 3,
-    borderTopColor: "#8c52ff",
+    borderTopColor: "#B900FF",
   },
   actionRed: {
     borderTopWidth: 3,
-    borderTopColor: "#ff4d6d",
+    borderTopColor: "#FF008A",
   },
   actionBlue: {
     borderTopWidth: 3,
-    borderTopColor: "#8c52ff",
+    borderTopColor: "#B900FF",
   },
   actionOrange: {
     borderTopWidth: 3,
     borderTopColor: "#c084fc",
   },
   actionLabel: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#fff",
-    marginTop: 2,
-    textAlign: "center",
-    letterSpacing: 0.2,
+    flex: 1,
+    fontSize: 12,
+    fontWeight: "700",
+    color: premium.text,
+    textAlign: "left",
+    letterSpacing: 0.1,
   },
   filtersContainer: {
     marginBottom: 16,
@@ -2599,21 +2966,21 @@ const styles = StyleSheet.create({
   searchContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#1a1a1a",
-    borderRadius: 12,
-    paddingHorizontal: 16,
+    backgroundColor: premium.surface,
+    borderRadius: 16,
+    paddingHorizontal: 14,
     paddingVertical: 12,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: "#333",
+    borderColor: premium.border,
   },
   searchIcon: {
-    marginRight: 12,
+    marginRight: 10,
   },
   searchInput: {
     flex: 1,
-    color: "#fff",
-    fontSize: 16,
+    color: premium.text,
+    fontSize: 15,
   },
   clearButton: {
     marginLeft: 8,
@@ -2628,25 +2995,25 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#1a1a1a",
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    backgroundColor: premium.surface,
+    borderRadius: 14,
+    paddingVertical: 11,
+    paddingHorizontal: 10,
     borderWidth: 1,
-    borderColor: "#333",
-    gap: 8,
+    borderColor: premium.border,
+    gap: 6,
   },
   filterButtonActive: {
-    backgroundColor: "#2a2a2a",
-    borderColor: "#8c52ff",
+    backgroundColor: premium.surfaceElevated,
+    borderColor: premium.borderStrong,
   },
   filterButtonText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#999",
+    fontSize: 13,
+    fontWeight: "700",
+    color: premium.textSecondary,
   },
   filterButtonTextActive: {
-    color: "#fff",
+    color: premium.text,
   },
   transactionsContainer: {
     marginTop: 10,
@@ -2654,19 +3021,21 @@ const styles = StyleSheet.create({
   },
   emptyState: {
     alignItems: "center",
-    padding: 40,
-    backgroundColor: "#1a1a1a",
+    padding: 32,
+    backgroundColor: premium.surface,
     borderRadius: 16,
+    borderWidth: 1,
+    borderColor: premium.border,
   },
   emptyText: {
     fontSize: 16,
-    fontWeight: "600",
-    color: "#ccc",
+    fontWeight: "700",
+    color: premium.text,
     marginTop: 16,
   },
   emptySubtext: {
     fontSize: 14,
-    color: "#999",
+    color: premium.textSecondary,
     marginTop: 8,
     textAlign: "center",
   },
@@ -2682,13 +3051,13 @@ const styles = StyleSheet.create({
     color: "#ccc",
   },
   cardNegative: {
-    borderLeftColor: "#ff4d6d",
+    borderLeftColor: "#FF008A",
   },
   summaryValueNegative: {
-    color: "#ff4d6d",
+    color: "#FF008A",
   },
   transactionsList: {
-    backgroundColor: "#1a1a1a",
+    backgroundColor: "#171321",
     borderRadius: 12,
     overflow: "hidden",
     shadowColor: "#000",
@@ -2700,29 +3069,32 @@ const styles = StyleSheet.create({
   transactionItem: {
     flexDirection: "row",
     alignItems: "flex-start",
-    padding: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: "#333",
+    padding: 10,
+    marginBottom: 6,
+    backgroundColor: premium.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: premium.border,
   },
   transactionIcon: {
     marginRight: 12,
     marginTop: 2,
   },
   transactionIconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 2,
+    borderWidth: 1,
   },
   transactionIconIncome: {
-    backgroundColor: "#1a3a1a",
-    borderColor: "#8c52ff40",
+    backgroundColor: "rgba(185,0,255,0.14)",
+    borderColor: "rgba(185,0,255,0.4)",
   },
   transactionIconExpense: {
-    backgroundColor: "#3a1a1a",
-    borderColor: "#ff4d6d40",
+    backgroundColor: "rgba(255,0,138,0.12)",
+    borderColor: "rgba(255,0,138,0.4)",
   },
   transactionContent: {
     flex: 1,
@@ -2737,13 +3109,11 @@ const styles = StyleSheet.create({
   transactionDescription: {
     flex: 1,
     fontSize: 15,
-    fontWeight: "600",
-    color: "#fff",
+    fontWeight: "700",
+    color: premium.text,
     letterSpacing: 0.1,
     marginRight: 8,
     lineHeight: 18,
-    marginBottom: 0,
-    paddingBottom: 0,
   },
   transactionFooter: {
     flexDirection: "row",
@@ -2762,33 +3132,32 @@ const styles = StyleSheet.create({
   },
   transactionDate: {
     fontSize: 11,
-    color: "#999",
-    fontWeight: "700",
+    color: premium.textSecondary,
+    fontWeight: "600",
   },
   transactionActions: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 6,
     marginLeft: 8,
   },
   actionButton: {
-    padding: 10,
+    padding: 8,
     borderRadius: 10,
-    backgroundColor: "#2a2a2a",
-    marginLeft: 6,
+    backgroundColor: premium.surfaceElevated,
     borderWidth: 1,
-    borderColor: "#333",
+    borderColor: premium.border,
   },
   transactionValueIncome: {
-    fontSize: 17,
-    fontWeight: "700",
-    color: "#8c52ff",
+    fontSize: 16,
+    fontWeight: "800",
+    color: premium.purple,
     letterSpacing: 0.2,
   },
   transactionValueExpense: {
-    fontSize: 17,
-    fontWeight: "700",
-    color: "#ff4d6d",
+    fontSize: 16,
+    fontWeight: "800",
+    color: premium.magenta,
     letterSpacing: 0.2,
   },
   transactionTagsRow: {
@@ -2814,16 +3183,27 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   chartCard: {
-    backgroundColor: "#1a1a1a",
-    borderRadius: 12,
-    padding: 16,
+    backgroundColor: premium.surface,
+    borderRadius: 14,
+    padding: 10,
     borderWidth: 1,
-    borderColor: "#333",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 3,
+    borderColor: "rgba(185,0,255,0.42)",
+    shadowColor: premium.purple,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.22,
+    shadowRadius: 16,
+    elevation: 4,
+  },
+  chartEmptyState: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 28,
+    gap: 8,
+  },
+  chartEmptyText: {
+    color: premium.textSecondary,
+    fontSize: 14,
+    textAlign: "center",
   },
   chartHeader: {
     flexDirection: "row",
@@ -2834,7 +3214,7 @@ const styles = StyleSheet.create({
   chartTitle: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#fff",
+    color: premium.text,
   },
   trackedFollowUpOverlay: {
     flex: 1,
@@ -2846,10 +3226,10 @@ const styles = StyleSheet.create({
   trackedFollowUpCard: {
     width: "100%",
     maxWidth: 420,
-    backgroundColor: "#1a1528",
+    backgroundColor: "#21172D",
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#2a2040",
+    borderColor: "#21172D",
     padding: 20,
     gap: 14,
   },
@@ -2874,7 +3254,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     borderRadius: 12,
     justifyContent: "center",
-    backgroundColor: "#2a2040",
+    backgroundColor: "#21172D",
   },
   trackedFollowUpSecondaryText: {
     color: "#ddd",
@@ -2887,7 +3267,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#8c52ff",
+    backgroundColor: "#B900FF",
   },
   trackedFollowUpPrimaryText: {
     color: "#fff",

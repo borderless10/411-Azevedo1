@@ -51,7 +51,7 @@ const mapDefinition = (id: string, data: any): BadgeDefinition => ({
   meaning: String(data.meaning || ""),
   description: String(data.description || ""),
   icon: data.icon,
-  primaryColor: String(data.primaryColor || "#8c52ff"),
+  primaryColor: String(data.primaryColor || "#B900FF"),
   secondaryColor: String(data.secondaryColor || "#c0c6d4"),
   borderPreset: data.borderPreset,
   isOfficial: data.isOfficial === true,

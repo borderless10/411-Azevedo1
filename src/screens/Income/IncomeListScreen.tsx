@@ -151,7 +151,7 @@ export const IncomeListScreen = () => {
         showSidebar={!isSpectator}
       >
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#8c52ff" />
+          <ActivityIndicator size="large" color="#B900FF" />
           <Text style={styles.loadingText}>Carregando rendas...</Text>
         </View>
       </Layout>
@@ -175,7 +175,7 @@ export const IncomeListScreen = () => {
           ]}
         >
           <View style={styles.header}>
-            <Ionicons name="analytics-outline" size={64} color="#8c52ff" />
+            <Ionicons name="analytics-outline" size={64} color="#B900FF" />
             <Text style={styles.title}>Rendas Acompanhadas</Text>
             <Text style={styles.subtitle}>
               Selecione uma renda para registrar e acompanhar dia a dia
@@ -213,7 +213,7 @@ export const IncomeListScreen = () => {
                 >
                   <View style={styles.cardLeft}>
                     <View style={styles.iconWrap}>
-                      <Ionicons name="cash-outline" size={22} color="#8c52ff" />
+                      <Ionicons name="cash-outline" size={22} color="#B900FF" />
                     </View>
                     <View style={styles.cardTextWrap}>
                       <Text style={styles.cardTitle}>{item.title}</Text>
@@ -223,7 +223,7 @@ export const IncomeListScreen = () => {
                       </Text>
                     </View>
                   </View>
-                  <Ionicons name="chevron-forward" size={22} color="#8c52ff" />
+                  <Ionicons name="chevron-forward" size={22} color="#B900FF" />
                 </TouchableOpacity>
               ))}
             </View>
@@ -237,11 +237,11 @@ export const IncomeListScreen = () => {
               }
               activeOpacity={0.85}
             >
-              <Ionicons name="list-outline" size={20} color="#8c52ff" />
+              <Ionicons name="list-outline" size={20} color="#B900FF" />
               <Text style={styles.generalIncomesLinkText}>
                 Ver todas as rendas (incluindo salário)
               </Text>
-              <Ionicons name="chevron-forward" size={18} color="#8c52ff" />
+              <Ionicons name="chevron-forward" size={18} color="#B900FF" />
             </TouchableOpacity>
           ) : null}
         </Animated.View>
@@ -253,7 +253,7 @@ export const IncomeListScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0a0a0a",
+    backgroundColor: "#07050D",
   },
   content: {
     padding: 16,
@@ -263,7 +263,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#0a0a0a",
+    backgroundColor: "#07050D",
   },
   loadingText: {
     color: "#999",
@@ -296,7 +296,7 @@ const styles = StyleSheet.create({
   cycleLabel: {
     marginTop: 8,
     fontSize: 13,
-    color: "#8c52ff",
+    color: "#B900FF",
   },
   list: {
     gap: 12,
@@ -308,7 +308,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#141414",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#2a2a2a",
+    borderColor: "#21172D",
     padding: 16,
   },
   cardLeft: {
@@ -345,7 +345,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#141414",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#2a2a2a",
+    borderColor: "#21172D",
   },
   emptyTitle: {
     color: "#fff",
@@ -362,7 +362,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#141414",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#8c52ff",
+    borderColor: "#B900FF",
     padding: 14,
   },
   generalIncomesLinkText: {

@@ -1,10 +1,19 @@
 /**
- * Gráfico de Pizza Simples - Distribuição por Categoria
+ * Donut de gastos por categoria — dados reais, total e legendas.
  */
 
-import React, { useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, Animated } from 'react-native';
-import { formatCurrency } from '../../utils/currencyUtils';
+import React, { useEffect, useMemo, useRef } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  Animated,
+  useWindowDimensions,
+} from "react-native";
+import Svg, { Circle, G, Path } from "react-native-svg";
+import { formatCurrency } from "../../utils/currencyUtils";
+import { premium } from "../../theme/visaoPremium";
+import { useShowValues } from "../../contexts/ShowValuesContext";
 
 export interface PieChartData {
   category: string;
@@ -19,191 +28,254 @@ interface PieChartProps {
   showLegend?: boolean;
 }
 
-const DEFAULT_SIZE = 200;
+const polar = (cx: number, cy: number, r: number, angleDeg: number) => {
+  const rad = ((angleDeg - 90) * Math.PI) / 180;
+  return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
+};
+
+const arcPath = (
+  cx: number,
+  cy: number,
+  r: number,
+  startAngle: number,
+  endAngle: number,
+) => {
+  const start = polar(cx, cy, r, endAngle);
+  const end = polar(cx, cy, r, startAngle);
+  const large = endAngle - startAngle <= 180 ? "0" : "1";
+  return `M ${start.x} ${start.y} A ${r} ${r} 0 ${large} 0 ${end.x} ${end.y}`;
+};
 
 export const PieChart: React.FC<PieChartProps> = ({
   data,
-  size = DEFAULT_SIZE,
+  size,
   showLegend = true,
 }) => {
-  const scaleAnim = useRef(new Animated.Value(0)).current;
+  const { width } = useWindowDimensions();
+  const { showValues } = useShowValues();
   const opacityAnim = useRef(new Animated.Value(0)).current;
+  const chartSize = size ?? Math.min(148, Math.max(118, width * 0.34));
+  const stroke = Math.max(18, chartSize * 0.16);
+  const radius = (chartSize - stroke) / 2;
+  const cx = chartSize / 2;
+  const cy = chartSize / 2;
 
   useEffect(() => {
-    Animated.parallel([
-      Animated.spring(scaleAnim, {
-        toValue: 1,
-        friction: 6,
-        tension: 40,
-        useNativeDriver: true,
-      }),
-      Animated.timing(opacityAnim, {
-        toValue: 1,
-        duration: 400,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, []);
+    Animated.timing(opacityAnim, {
+      toValue: 1,
+      duration: 220,
+      useNativeDriver: true,
+    }).start();
+  }, [opacityAnim]);
 
-  if (!data || data.length === 0) {
+  const segments = useMemo(() => {
+    const cleaned = (data || [])
+      .filter((item) => item.value > 0)
+      .map((item, index) => ({
+        ...item,
+        color: item.color || premium.chart[index % premium.chart.length],
+      }));
+    const total = cleaned.reduce((sum, item) => sum + item.value, 0);
+    if (total <= 0) return { slices: [] as Array<PieChartData & { start: number; end: number }>, total: 0 };
+
+    let cursor = 0;
+    const slices = cleaned.map((item) => {
+      const pct = (item.value / total) * 100;
+      const sweep = (item.value / total) * 360;
+      const start = cursor;
+      const end = cursor + sweep;
+      cursor = end;
+      return {
+        ...item,
+        percentage: pct,
+        start,
+        end: Math.min(end, 359.999),
+      };
+    });
+    return { slices, total };
+  }, [data]);
+
+  if (!segments.slices.length) {
     return (
-      <View style={[styles.emptyContainer, { width: size, height: size }]}>
-        <Text style={styles.emptyText}>Nenhum dado disponível</Text>
+      <View
+        style={[styles.emptyContainer, { width: chartSize, height: chartSize }]}
+        accessibilityLabel="Sem gastos no período para o gráfico"
+      >
+        <Text style={styles.emptyText}>Sem gastos no período</Text>
       </View>
     );
   }
 
-  // Para React Native, vamos usar uma visualização simplificada
-  // Mostrar apenas a legenda com barras de progresso circulares
-  const total = data.reduce((sum, item) => sum + item.value, 0);
+  const narrow = width < 340;
 
   return (
     <Animated.View
       style={[
         styles.container,
-        {
-          opacity: opacityAnim,
-          transform: [{ scale: scaleAnim }],
-        },
+        narrow && styles.containerStacked,
+        { opacity: opacityAnim },
       ]}
     >
-      <View style={[styles.chartContainer, { width: size, height: size }]}>
-        {/* Círculo central com total */}
-        <View style={[styles.centerCircle, { width: size * 0.7, height: size * 0.7, borderRadius: (size * 0.7) / 2 }]}>
-          <View style={styles.centerLabel}>
-            <Text style={styles.centerLabelText}>
-              {total > 0 ? formatCurrency(total) : 'R$ 0'}
-            </Text>
-            <Text style={styles.centerLabelSubtext}>Total</Text>
-          </View>
+      <View
+        style={[styles.chartWrap, { width: chartSize, height: chartSize }]}
+        accessibilityRole="image"
+        accessibilityLabel={`Total de gastos ${showValues ? formatCurrency(segments.total) : "oculto"}`}
+      >
+        <Svg width={chartSize} height={chartSize}>
+          <Circle
+            cx={cx}
+            cy={cy}
+            r={radius}
+            stroke="rgba(190,130,255,0.12)"
+            strokeWidth={stroke}
+            fill="none"
+          />
+          <G>
+            {segments.slices.map((slice) => {
+              const gap = segments.slices.length > 1 ? 2.2 : 0;
+              const start = slice.start + gap / 2;
+              const end = Math.max(start + 0.5, slice.end - gap / 2);
+              if (end - start >= 359.5) {
+                return (
+                  <Circle
+                    key={slice.category}
+                    cx={cx}
+                    cy={cy}
+                    r={radius}
+                    stroke={slice.color}
+                    strokeWidth={stroke}
+                    fill="none"
+                  />
+                );
+              }
+              return (
+                <Path
+                  key={slice.category}
+                  d={arcPath(cx, cy, radius, start, end)}
+                  stroke={slice.color}
+                  strokeWidth={stroke}
+                  strokeLinecap="butt"
+                  fill="none"
+                />
+              );
+            })}
+          </G>
+          <Circle
+            cx={cx}
+            cy={cy}
+            r={radius - stroke * 0.55}
+            fill={premium.bg}
+          />
+        </Svg>
+        <View style={styles.centerLabel} pointerEvents="none">
+          <Text style={styles.centerValue} numberOfLines={1}>
+            {showValues ? formatCurrency(segments.total) : "R$ •••"}
+          </Text>
+          <Text style={styles.centerSub}>Total</Text>
         </View>
-        
-        {/* Anéis de progresso ao redor (simplificado) */}
-        {data.slice(0, 3).map((item, index) => {
-          const ringSize = size * (0.85 - index * 0.15);
-          const ringThickness = size * 0.08;
-          return (
-            <View
-              key={`ring-${item.category}-${index}`}
-              style={[
-                styles.ring,
-                {
-                  width: ringSize,
-                  height: ringSize,
-                  borderRadius: ringSize / 2,
-                  borderWidth: ringThickness,
-                  borderColor: item.color,
-                  borderTopColor: 'transparent',
-                  borderRightColor: index === 0 ? item.color : 'transparent',
-                  opacity: item.percentage / 100,
-                },
-              ]}
-            />
-          );
-        })}
       </View>
 
-      {/* Legenda */}
-      {showLegend && (
-        <View style={styles.legend}>
-          {data.map((item, index) => (
+      {showLegend ? (
+        <View style={[styles.legend, narrow && styles.legendFull]}>
+          {segments.slices.map((item) => (
             <View key={item.category} style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: item.color }]} />
+              <View
+                style={[styles.legendDot, { backgroundColor: item.color }]}
+              />
               <View style={styles.legendTextContainer}>
                 <Text style={styles.legendCategory} numberOfLines={1}>
                   {item.category}
                 </Text>
                 <Text style={styles.legendValue}>
-                  {formatCurrency(item.value)} ({item.percentage.toFixed(1)}%)
+                  {showValues ? formatCurrency(item.value) : "R$ •••"} (
+                  {item.percentage.toFixed(1)}%)
                 </Text>
               </View>
             </View>
           ))}
         </View>
-      )}
+      ) : null}
     </Animated.View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 16,
   },
-  chartContainer: {
-    position: 'relative',
-    marginBottom: 20,
+  containerStacked: {
+    flexDirection: "column",
   },
-  centerCircle: {
-    position: 'absolute',
-    top: '50%',
-    left: '50%',
-    transform: [{ translateX: -1 * (DEFAULT_SIZE * 0.7) / 2 }, { translateY: -1 * (DEFAULT_SIZE * 0.7) / 2 }],
-    backgroundColor: '#0e0c14',
-    borderWidth: 2,
-    borderColor: '#2a2040',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  ring: {
-    position: 'absolute',
-    top: '50%',
-    left: '50%',
-    transform: [{ translateX: -1 * (DEFAULT_SIZE * 0.85) / 2 }, { translateY: -1 * (DEFAULT_SIZE * 0.85) / 2 }],
+  chartWrap: {
+    position: "relative",
+    alignItems: "center",
+    justifyContent: "center",
   },
   centerLabel: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    ...StyleSheet.absoluteFill,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 18,
   },
-  centerLabelText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#fff',
-    textAlign: 'center',
+  centerValue: {
+    color: premium.text,
+    fontSize: 15,
+    fontWeight: "800",
+    textAlign: "center",
   },
-  centerLabelSubtext: {
+  centerSub: {
+    color: premium.textSecondary,
     fontSize: 12,
-    color: '#a89fc0',
-    textAlign: 'center',
+    marginTop: 2,
+    fontWeight: "600",
   },
   legend: {
-    width: '100%',
-    gap: 12,
+    flex: 1,
+    gap: 10,
+    minWidth: 140,
+  },
+  legendFull: {
+    width: "100%",
   },
   legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 4,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
   },
   legendDot: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
   },
   legendTextContainer: {
     flex: 1,
   },
   legendCategory: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#fff',
-    marginBottom: 2,
+    color: premium.text,
+    fontSize: 13,
+    fontWeight: "700",
   },
   legendValue: {
+    color: premium.textSecondary,
     fontSize: 12,
-    color: '#a89fc0',
+    marginTop: 1,
   },
   emptyContainer: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#0e0c14',
-    borderRadius: DEFAULT_SIZE / 2,
+    alignSelf: "center",
+    borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#2a2040',
+    borderColor: premium.border,
+    backgroundColor: premium.surface,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 16,
   },
   emptyText: {
-    fontSize: 14,
-    color: '#a89fc0',
+    color: premium.textSecondary,
+    fontSize: 13,
+    textAlign: "center",
   },
 });
 

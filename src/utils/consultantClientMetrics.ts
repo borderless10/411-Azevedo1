@@ -338,8 +338,8 @@ export const buildVarianceIndicator = (
 };
 
 export const getVarianceColor = (status: VarianceIndicator["status"]): string => {
-  if (status === "above") return "#ff4d6d";
-  if (status === "below") return "#8c52ff";
+  if (status === "above") return "#FF008A";
+  if (status === "below") return "#B900FF";
   if (status === "equal") return "#4caf50";
   return "#999";
 };

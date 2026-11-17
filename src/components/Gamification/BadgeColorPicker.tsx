@@ -24,7 +24,7 @@ import {
 } from "../../utils/badgeColor";
 
 const QUICK = [
-  "#8C52FF",
+  "#B900FF",
   "#C084FC",
   "#4F8FF7",
   "#16B8A6",
@@ -445,7 +445,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: "#8C52FF",
+    backgroundColor: "#B900FF",
     alignItems: "center",
     justifyContent: "center",
   },

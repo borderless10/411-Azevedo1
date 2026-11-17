@@ -380,7 +380,7 @@ export const AddIncomeScreen = () => {
             {/* Header visual */}
             <View style={styles.header}>
               <View style={styles.iconContainer}>
-                <Ionicons name="add-circle" size={64} color="#8c52ff" />
+                <Ionicons name="add-circle" size={64} color="#B900FF" />
               </View>
               <Text style={styles.subtitle}>
                 {isLockedTrackedFlow
@@ -392,7 +392,7 @@ export const AddIncomeScreen = () => {
             {/* Erro geral */}
             {errors.general ? (
               <View style={styles.errorContainer}>
-                <Ionicons name="alert-circle" size={20} color="#ff4d6d" />
+                <Ionicons name="alert-circle" size={20} color="#FF008A" />
                 <Text style={styles.errorText}>{errors.general}</Text>
               </View>
             ) : null}
@@ -412,7 +412,7 @@ export const AddIncomeScreen = () => {
                     <Ionicons
                       name="analytics"
                       size={18}
-                      color={incomeType === "tracked" ? "#8c52ff" : "#999"}
+                      color={incomeType === "tracked" ? "#B900FF" : "#999"}
                     />
                     <Text
                       style={[
@@ -435,7 +435,7 @@ export const AddIncomeScreen = () => {
                     <Ionicons
                       name="cash"
                       size={18}
-                      color={incomeType === "general" ? "#8c52ff" : "#999"}
+                      color={incomeType === "general" ? "#B900FF" : "#999"}
                     />
                     <Text
                       style={[
@@ -454,7 +454,7 @@ export const AddIncomeScreen = () => {
                   {isLockedTrackedFlow ? (
                     <>
                       <Text style={styles.label}>
-                        <Ionicons name="analytics" size={16} color="#8c52ff" />{" "}
+                        <Ionicons name="analytics" size={16} color="#B900FF" />{" "}
                         Renda acompanhada
                       </Text>
                       <View style={styles.lockedTrackedBox}>
@@ -466,7 +466,7 @@ export const AddIncomeScreen = () => {
                   ) : (
                     <>
                       <Text style={styles.label}>
-                        <Ionicons name="analytics" size={16} color="#8c52ff" />{" "}
+                        <Ionicons name="analytics" size={16} color="#B900FF" />{" "}
                         Qual renda acompanhada?
                       </Text>
 
@@ -645,7 +645,7 @@ export const AddIncomeScreen = () => {
                           name="create-outline"
                           size={20}
                           color={
-                            errors.customIncomeTitle ? "#ff4d6d" : "#999"
+                            errors.customIncomeTitle ? "#FF008A" : "#999"
                           }
                           style={styles.inputIcon}
                         />
@@ -814,7 +814,7 @@ const styles = StyleSheet.create({
   },
   errorText: {
     flex: 1,
-    color: "#ff4d6d",
+    color: "#FF008A",
     fontSize: 14,
     fontWeight: "500",
   },
@@ -839,7 +839,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#2b2b2b",
   },
   typeTabActive: {
-    borderColor: "#8c52ff",
+    borderColor: "#B900FF",
     backgroundColor: "#2b174d",
   },
   typeTabText: {
@@ -869,7 +869,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   inputWrapperError: {
-    borderColor: "#ff4d6d",
+    borderColor: "#FF008A",
     borderWidth: 2,
   },
   inputIcon: {
@@ -885,7 +885,7 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   errorTextSmall: {
-    color: "#ff4d6d",
+    color: "#FF008A",
     fontSize: 12,
     marginTop: 4,
     marginLeft: 4,
@@ -919,7 +919,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#2b2b2b",
   },
   trackedOptionActive: {
-    borderColor: "#8c52ff",
+    borderColor: "#B900FF",
     backgroundColor: "#2b174d",
   },
   trackedOptionText: {
@@ -932,7 +932,7 @@ const styles = StyleSheet.create({
   },
   lockedTrackedBox: {
     borderWidth: 1,
-    borderColor: "#8c52ff",
+    borderColor: "#B900FF",
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 12,
@@ -957,8 +957,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#2b2b2b",
   },
   sourceModeChipActive: {
-    backgroundColor: "#8c52ff",
-    borderColor: "#8c52ff",
+    backgroundColor: "#B900FF",
+    borderColor: "#B900FF",
   },
   sourceModeChipText: {
     color: "#bbb",
@@ -1004,7 +1004,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   plannedIncomeAmountActive: {
-    color: "#8c52ff",
+    color: "#B900FF",
   },
   buttonContainer: {
     flexDirection: "row",

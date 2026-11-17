@@ -283,7 +283,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
-  cardChipActive: { backgroundColor: "#8c52ff", borderColor: "#8c52ff" },
+  cardChipActive: { backgroundColor: "#B900FF", borderColor: "#B900FF" },
   modalActions: {
     flexDirection: "row",
     justifyContent: "space-between",

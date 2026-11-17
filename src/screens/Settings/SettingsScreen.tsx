@@ -455,7 +455,7 @@ export const SettingsScreen = () => {
             >
               <SettingItem
                 icon="notifications"
-                iconColor="#8c52ff"
+                iconColor="#B900FF"
                 title="Notificações"
                 subtitle="Receber alertas e lembretes"
                 rightComponent={
@@ -463,7 +463,7 @@ export const SettingsScreen = () => {
                     value={notificationsEnabled}
                     onValueChange={handleNotificationsToggle}
                     disabled={isTogglingNotifications}
-                    trackColor={{ false: colors.border, true: "#8c52ff" }}
+                    trackColor={{ false: colors.border, true: "#B900FF" }}
                     thumbColor="#fff"
                   />
                 }
@@ -473,7 +473,7 @@ export const SettingsScreen = () => {
               />
               <SettingItem
                 icon="notifications-outline"
-                iconColor="#8c52ff"
+                iconColor="#B900FF"
                 title="Testar notificação"
                 subtitle="Agenda alerta em 8s — saia do app para validar"
                 onPress={handleTestNotification}
@@ -483,7 +483,7 @@ export const SettingsScreen = () => {
               />
               <SettingItem
                 icon="wallet-outline"
-                iconColor="#8c52ff"
+                iconColor="#B900FF"
                 title="Lembrete para registrar gastos"
                 subtitle={
                   expenseReminderEnabled
@@ -501,7 +501,7 @@ export const SettingsScreen = () => {
                       })
                     }
                     disabled={isSavingReminder}
-                    trackColor={{ false: colors.border, true: "#8c52ff" }}
+                    trackColor={{ false: colors.border, true: "#B900FF" }}
                     thumbColor="#fff"
                   />
                 }
@@ -513,7 +513,7 @@ export const SettingsScreen = () => {
                   />
                   <SettingItem
                     icon="time-outline"
-                    iconColor="#8c52ff"
+                    iconColor="#B900FF"
                     title="Horário"
                     subtitle={formatReminderTime(
                       expenseReminderHour,
@@ -530,7 +530,7 @@ export const SettingsScreen = () => {
                   />
                   <SettingItem
                     icon="flash-outline"
-                    iconColor="#8c52ff"
+                    iconColor="#B900FF"
                     title="Registrar zero automaticamente nos gastos acompanhados"
                     subtitle={
                       autoZeroTrackedExpensesEnabled
@@ -542,7 +542,7 @@ export const SettingsScreen = () => {
                         value={autoZeroTrackedExpensesEnabled}
                         onValueChange={persistAutoZeroTrackedExpenses}
                         disabled={isSavingAutoZeroTracked}
-                        trackColor={{ false: colors.border, true: "#8c52ff" }}
+                        trackColor={{ false: colors.border, true: "#B900FF" }}
                         thumbColor="#fff"
                       />
                     }
@@ -554,14 +554,14 @@ export const SettingsScreen = () => {
               />
               <SettingItem
                 icon={isDark ? "moon" : "sunny"}
-                iconColor={isDark ? "#8c52ff" : "#c084fc"}
+                iconColor={isDark ? "#B900FF" : "#c084fc"}
                 title={isDark ? "Tema Escuro" : "Tema Claro"}
                 subtitle={isDark ? "Ativar modo claro" : "Ativar modo escuro"}
                 rightComponent={
                   <Switch
                     value={isDark}
                     onValueChange={handleThemeChange}
-                    trackColor={{ false: colors.border, true: "#8c52ff" }}
+                    trackColor={{ false: colors.border, true: "#B900FF" }}
                     thumbColor="#fff"
                   />
                 }
@@ -573,7 +573,7 @@ export const SettingsScreen = () => {
                   />
                   <SettingItem
                     icon="list"
-                    iconColor="#8c52ff"
+                    iconColor="#B900FF"
                     title="Preferências do Ranking"
                     subtitle="Escolher como utilizar o ranking"
                     onPress={() => setIsRankingModalVisible(true)}
@@ -598,7 +598,7 @@ export const SettingsScreen = () => {
             >
               <SettingItem
                 icon="person"
-                iconColor="#8c52ff"
+                iconColor="#B900FF"
                 title="Meu Perfil"
                 subtitle="Ver informações da conta"
                 onPress={() => navigate("Profile")}
@@ -643,7 +643,7 @@ export const SettingsScreen = () => {
               />
               <SettingItem
                 icon="document-text"
-                iconColor="#8c52ff"
+                iconColor="#B900FF"
                 title="Termos e Privacidade"
                 subtitle="Privacidade, termos e exclusão de conta"
                 onPress={() =>
@@ -699,7 +699,7 @@ export const SettingsScreen = () => {
                 onPress={handleLogout}
                 activeOpacity={0.7}
               >
-                <Ionicons name="log-out-outline" size={24} color="#ff4d6d" />
+                <Ionicons name="log-out-outline" size={24} color="#FF008A" />
                 <Text style={styles.logoutText}>Sair da Conta</Text>
               </TouchableOpacity>
             </View>
@@ -723,7 +723,7 @@ export const SettingsScreen = () => {
                 onPress={openDeleteAccountFlow}
                 activeOpacity={0.7}
               >
-                <Ionicons name="trash-outline" size={22} color="#ff4d6d" />
+                <Ionicons name="trash-outline" size={22} color="#FF008A" />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.deleteAccountText}>Excluir conta</Text>
                   <Text
@@ -1418,7 +1418,7 @@ const styles = StyleSheet.create({
   logoutText: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#ff4d6d",
+    color: "#FF008A",
   },
   deleteAccountButton: {
     flexDirection: "row",
@@ -1429,7 +1429,7 @@ const styles = StyleSheet.create({
   deleteAccountText: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#ff4d6d",
+    color: "#FF008A",
     marginBottom: 2,
   },
   deleteAccountHint: {
@@ -1441,7 +1441,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   deleteConfirmButton: {
-    backgroundColor: "#ff4d6d",
+    backgroundColor: "#FF008A",
   },
   modalOverlay: {
     flex: 1,
@@ -1523,7 +1523,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   confirmButton: {
-    backgroundColor: "#8c52ff",
+    backgroundColor: "#B900FF",
   },
   confirmButtonText: {
     fontSize: 16,
@@ -1539,7 +1539,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   optionSelectedSmall: {
-    borderColor: "#8c52ff",
+    borderColor: "#B900FF",
     backgroundColor: "rgba(140,82,255,0.06)",
   },
   optionTitleSmall: {
@@ -1555,7 +1555,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
     paddingVertical: 12,
     borderRadius: 12,
-    backgroundColor: "#8c52ff",
+    backgroundColor: "#B900FF",
     alignItems: "center",
     justifyContent: "center",
     minHeight: 44,

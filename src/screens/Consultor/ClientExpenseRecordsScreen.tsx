@@ -767,7 +767,7 @@ export const ClientExpenseRecordsScreen: React.FC = () => {
                 style={[
                   styles.dayCard,
                   {
-                    borderColor: isEmpty ? "#ff4d6d" : colors.border,
+                    borderColor: isEmpty ? "#FF008A" : colors.border,
                     backgroundColor: colors.card,
                   },
                 ]}
@@ -785,7 +785,7 @@ export const ClientExpenseRecordsScreen: React.FC = () => {
                       styles.dayTotal,
                       {
                         color: isEmpty
-                          ? "#ff4d6d"
+                          ? "#FF008A"
                           : zeros.length > 0 && dayExpenses.length === 0
                             ? colors.primary
                             : getBalanceColor(-dayTotal),
@@ -807,7 +807,7 @@ export const ClientExpenseRecordsScreen: React.FC = () => {
                       <Ionicons
                         name="alert-circle"
                         size={16}
-                        color="#ff4d6d"
+                        color="#FF008A"
                       />
                       <Text
                         style={[

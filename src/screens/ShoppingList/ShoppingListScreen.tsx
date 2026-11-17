@@ -95,7 +95,7 @@ export const ShoppingListScreen: React.FC = () => {
                 <Ionicons
                   name={item.done ? "checkbox" : "square-outline"}
                   size={22}
-                  color={item.done ? "#2a9d4b" : "#8c52ff"}
+                  color={item.done ? "#2a9d4b" : "#B900FF"}
                 />
               </TouchableOpacity>
               <Text
@@ -113,7 +113,7 @@ export const ShoppingListScreen: React.FC = () => {
                   await load();
                 }}
               >
-                <Ionicons name="trash-outline" size={18} color="#ff4d6d" />
+                <Ionicons name="trash-outline" size={18} color="#FF008A" />
               </TouchableOpacity>
             </View>
           )}
@@ -129,14 +129,14 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     borderWidth: 1,
-    borderColor: "#2a2040",
+    borderColor: "#21172D",
     borderRadius: 8,
     color: "#fff",
     paddingHorizontal: 10,
     paddingVertical: 10,
   },
   addBtn: {
-    backgroundColor: "#8c52ff",
+    backgroundColor: "#B900FF",
     borderRadius: 8,
     width: 44,
     alignItems: "center",
@@ -149,7 +149,7 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: "#2a2040",
+    borderBottomColor: "#21172D",
   },
   check: { padding: 4 },
   label: { flex: 1, color: "#fff" },

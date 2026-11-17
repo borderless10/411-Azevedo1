@@ -201,7 +201,7 @@ export const BudgetScreen = () => {
       return {
         label: "Acima da meta",
         detail: `${formatCurrency(Math.abs(difference))} acima da meta diária.`,
-        color: "#ff4d6d",
+        color: "#FF008A",
         icon: "trending-up" as const,
       };
     }
@@ -210,7 +210,7 @@ export const BudgetScreen = () => {
       return {
         label: "Abaixo da meta",
         detail: `${formatCurrency(Math.abs(difference))} abaixo da meta diária.`,
-        color: "#8c52ff",
+        color: "#B900FF",
         icon: "trending-down" as const,
       };
     }
@@ -800,7 +800,7 @@ export const BudgetScreen = () => {
         showSidebar={!isSpectator}
       >
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#8c52ff" />
+          <ActivityIndicator size="large" color="#B900FF" />
           <Text style={styles.loadingText}>Carregando orçamento...</Text>
         </View>
       </Layout>
@@ -830,7 +830,7 @@ export const BudgetScreen = () => {
         >
           {/* Header */}
           <View style={styles.header}>
-            <Ionicons name="wallet-outline" size={64} color="#8c52ff" />
+            <Ionicons name="wallet-outline" size={64} color="#B900FF" />
             <Text style={styles.title}>
               {isCoupleAccount(coupleOwner) && coupleMember
                 ? `Planilha — ${getCoupleMemberLabel(coupleOwner, coupleMember)}`
@@ -871,7 +871,7 @@ export const BudgetScreen = () => {
             ) : null}
             {saving && (
               <View style={styles.savingIndicator}>
-                <ActivityIndicator size="small" color="#8c52ff" />
+                <ActivityIndicator size="small" color="#B900FF" />
                 <Text style={styles.savingText}>Salvando...</Text>
               </View>
             )}
@@ -923,14 +923,14 @@ export const BudgetScreen = () => {
                 </Text>
                 <View style={styles.plannedSplitRow}>
                   <View style={styles.plannedSplitItem}>
-                    <Ionicons name="cash-outline" size={18} color="#8c52ff" />
+                    <Ionicons name="cash-outline" size={18} color="#B900FF" />
                     <Text style={styles.plannedSplitLabel}>Dinheiro</Text>
                     <Text style={styles.plannedSplitValue}>
                       {formatCurrency(planningTotals.consumoModeradoCash || 0)}
                     </Text>
                   </View>
                   <View style={styles.plannedSplitItem}>
-                    <Ionicons name="card-outline" size={18} color="#8c52ff" />
+                    <Ionicons name="card-outline" size={18} color="#B900FF" />
                     <Text style={styles.plannedSplitLabel}>Cartão</Text>
                     <Text style={styles.plannedSplitValue}>
                       {formatCurrency(planningTotals.consumoModeradoCard || 0)}
@@ -946,13 +946,13 @@ export const BudgetScreen = () => {
             <View>
               <View style={styles.statsContainer}>
                 <View style={styles.statCard}>
-                  <Ionicons name="calendar-outline" size={24} color="#8c52ff" />
+                  <Ionicons name="calendar-outline" size={24} color="#B900FF" />
                   <Text style={styles.statLabel}>Dias no ciclo</Text>
                   <Text style={styles.statValue}>{daysInCycle}</Text>
                 </View>
 
                 <View style={styles.statCard}>
-                  <Ionicons name="cash-outline" size={24} color="#8c52ff" />
+                  <Ionicons name="cash-outline" size={24} color="#B900FF" />
                   <Text style={styles.statLabel}>Total gasto</Text>
                   <Text style={styles.statValue}>
                     {formatCurrency(totalSpent)}
@@ -968,7 +968,7 @@ export const BudgetScreen = () => {
                   <Ionicons
                     name={isOverBudget ? "trending-up" : "trending-down"}
                     size={24}
-                    color={isOverBudget ? "#ff4d6d" : "#8c52ff"}
+                    color={isOverBudget ? "#FF008A" : "#B900FF"}
                   />
                   <Text style={styles.statLabel}>Média real/dia</Text>
                   <Text
@@ -1064,7 +1064,7 @@ export const BudgetScreen = () => {
                             <Ionicons
                               name="checkmark-circle"
                               size={14}
-                              color="#8c52ff"
+                              color="#B900FF"
                             />
                             <Text style={styles.zeroConfirmedText}>
                               Zero confirmado
@@ -1095,7 +1095,7 @@ export const BudgetScreen = () => {
                               <Ionicons
                                 name="pencil"
                                 size={16}
-                                color="#8c52ff"
+                                color="#B900FF"
                               />
                             </TouchableOpacity>
                           ))}
@@ -1115,7 +1115,7 @@ export const BudgetScreen = () => {
                             <Ionicons
                               name="checkmark-circle-outline"
                               size={16}
-                              color="#8c52ff"
+                              color="#B900FF"
                             />
                             <Text style={styles.correctZeroButtonText}>
                               Corrigir: marcar como zero
@@ -1136,7 +1136,7 @@ export const BudgetScreen = () => {
                           <Ionicons
                             name="alert-circle"
                             size={24}
-                            color="#ff4d6d"
+                            color="#FF008A"
                           />
                         </TouchableOpacity>
                       ) : (
@@ -1144,7 +1144,7 @@ export const BudgetScreen = () => {
                           style={styles.editIconButton}
                           onPress={() => handleEditDay(date)}
                         >
-                          <Ionicons name="pencil" size={18} color="#8c52ff" />
+                          <Ionicons name="pencil" size={18} color="#B900FF" />
                         </TouchableOpacity>
                       )}
                     </View>
@@ -1279,7 +1279,7 @@ const styles = StyleSheet.create({
   },
   topTotalsWrapper: { gap: 12, marginBottom: 8 },
   topTotalCardFull: {
-    backgroundColor: "#121212",
+    backgroundColor: "#171321",
     padding: 14,
     borderRadius: 10,
     alignItems: "center",
@@ -1338,13 +1338,13 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 10,
-    backgroundColor: "#1a1a1a",
+    backgroundColor: "#171321",
     borderWidth: 1,
     borderColor: "#333",
   },
   memberToggleActive: {
-    backgroundColor: "#8c52ff",
-    borderColor: "#8c52ff",
+    backgroundColor: "#B900FF",
+    borderColor: "#B900FF",
   },
   memberToggleText: {
     color: "#fff",
@@ -1366,10 +1366,10 @@ const styles = StyleSheet.create({
   },
   savingText: {
     fontSize: 12,
-    color: "#8c52ff",
+    color: "#B900FF",
   },
   card: {
-    backgroundColor: "#1a1a1a",
+    backgroundColor: "#171321",
     borderRadius: 12,
     padding: 16,
     borderWidth: 1,
@@ -1389,7 +1389,7 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#0a0a0a",
+    backgroundColor: "#07050D",
     borderRadius: 8,
     borderWidth: 1,
     borderColor: "#333",
@@ -1399,7 +1399,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#0a0a0a",
+    backgroundColor: "#07050D",
     borderRadius: 8,
     borderWidth: 1,
     borderColor: "#333",
@@ -1419,7 +1419,7 @@ const styles = StyleSheet.create({
   },
   overPlannedText: {
     marginTop: 10,
-    color: "#ff4d6d",
+    color: "#FF008A",
     fontSize: 15,
     fontWeight: "700",
     lineHeight: 20,
@@ -1462,7 +1462,7 @@ const styles = StyleSheet.create({
   infoValue: {
     fontSize: 16,
     fontWeight: "bold",
-    color: "#8c52ff",
+    color: "#B900FF",
   },
   plannedSplitSection: {
     marginTop: 14,
@@ -1484,7 +1484,7 @@ const styles = StyleSheet.create({
   },
   plannedSplitItem: {
     flex: 1,
-    backgroundColor: "#121212",
+    backgroundColor: "#171321",
     borderRadius: 10,
     paddingVertical: 10,
     paddingHorizontal: 8,
@@ -1507,7 +1507,7 @@ const styles = StyleSheet.create({
   },
   statCard: {
     flex: 1,
-    backgroundColor: "#1a1a1a",
+    backgroundColor: "#171321",
     borderRadius: 12,
     padding: 12,
     borderWidth: 1,
@@ -1515,7 +1515,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   statCardWarning: {
-    borderColor: "#ff4d6d",
+    borderColor: "#FF008A",
     backgroundColor: "#2a1a1a",
   },
   statLabel: {
@@ -1531,10 +1531,10 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   statValueWarning: {
-    color: "#ff4d6d",
+    color: "#FF008A",
   },
   performanceCard: {
-    backgroundColor: "#1a1a1a",
+    backgroundColor: "#171321",
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
@@ -1571,7 +1571,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   daysCard: {
-    backgroundColor: "#1a1a1a",
+    backgroundColor: "#171321",
     borderRadius: 12,
     padding: 16,
     borderWidth: 1,
@@ -1584,7 +1584,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    backgroundColor: "#0a0a0a",
+    backgroundColor: "#07050D",
     padding: 12,
     borderRadius: 8,
     borderWidth: 1,
@@ -1624,7 +1624,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   editItemAmount: {
-    color: "#8c52ff",
+    color: "#B900FF",
     fontWeight: "700",
     marginRight: 8,
   },
@@ -1632,7 +1632,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#8c52ff",
+    backgroundColor: "#B900FF",
     borderRadius: 8,
     paddingVertical: 8,
     marginBottom: 6,
@@ -1653,11 +1653,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#8c52ff",
+    borderColor: "#B900FF",
     backgroundColor: "rgba(140, 82, 255, 0.08)",
   },
   correctZeroButtonText: {
-    color: "#8c52ff",
+    color: "#B900FF",
     fontSize: 13,
     fontWeight: "600",
   },
@@ -1671,7 +1671,7 @@ const styles = StyleSheet.create({
   },
   dayExpense: {
     fontSize: 12,
-    color: "#8c52ff",
+    color: "#B900FF",
     marginTop: 2,
   },
   dayEmpty: {
@@ -1706,7 +1706,7 @@ const styles = StyleSheet.create({
     color: "#fff",
     backgroundColor: "#000",
     borderWidth: 1,
-    borderColor: "#8c52ff",
+    borderColor: "#B900FF",
     borderRadius: 6,
     paddingHorizontal: 8,
     paddingVertical: 6,
@@ -1720,7 +1720,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   saveButton: {
-    backgroundColor: "#8c52ff",
+    backgroundColor: "#B900FF",
     width: 32,
     height: 32,
     borderRadius: 16,
@@ -1728,7 +1728,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   cancelButton: {
-    backgroundColor: "#ff4d6d",
+    backgroundColor: "#FF008A",
     width: 32,
     height: 32,
     borderRadius: 16,
@@ -1762,7 +1762,7 @@ const styles = StyleSheet.create({
   emptyState: {
     alignItems: "center",
     padding: 40,
-    backgroundColor: "#1a1a1a",
+    backgroundColor: "#171321",
     borderRadius: 12,
     borderWidth: 1,
     borderColor: "#333",
@@ -1790,7 +1790,7 @@ const modalStyles = StyleSheet.create({
     borderRadius: 12,
     padding: 18,
     borderWidth: 1,
-    borderColor: "#2a2040",
+    borderColor: "#21172D",
   },
   title: {
     color: "#fff",
@@ -1810,7 +1810,7 @@ const modalStyles = StyleSheet.create({
   },
   buttonPurple: {
     flex: 1,
-    backgroundColor: "#8c52ff",
+    backgroundColor: "#B900FF",
     borderRadius: 10,
     minHeight: 44,
     alignItems: "center",
@@ -1818,7 +1818,7 @@ const modalStyles = StyleSheet.create({
   },
   buttonPink: {
     flex: 1,
-    backgroundColor: "#ff4d6d",
+    backgroundColor: "#FF008A",
     borderRadius: 10,
     minHeight: 44,
     alignItems: "center",

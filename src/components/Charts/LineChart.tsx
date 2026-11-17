@@ -53,11 +53,11 @@ export const LineChart: React.FC<LineChartProps> = ({
       {showLabels && (
         <View style={styles.legend}>
           <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: '#8c52ff' }]} />
+            <View style={[styles.legendDot, { backgroundColor: '#B900FF' }]} />
             <Text style={styles.legendText}>Rendas</Text>
           </View>
           <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: '#ff4d6d' }]} />
+            <View style={[styles.legendDot, { backgroundColor: '#FF008A' }]} />
             <Text style={styles.legendText}>Gastos</Text>
           </View>
         </View>
@@ -171,10 +171,10 @@ const styles = StyleSheet.create({
     minWidth: 2,
   },
   incomeBar: {
-    backgroundColor: '#8c52ff',
+    backgroundColor: '#B900FF',
   },
   expenseBar: {
-    backgroundColor: '#ff4d6d',
+    backgroundColor: '#FF008A',
   },
   valueText: {
     fontSize: 10,
@@ -188,7 +188,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#0e0c14',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#2a2040',
+    borderColor: '#21172D',
   },
   emptyText: {
     fontSize: 14,

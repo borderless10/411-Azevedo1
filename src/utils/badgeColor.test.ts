@@ -34,7 +34,7 @@ test("hex de insígnia sobrevive à ida e volta", () => {
   for (const hex of [
     "#374EA8",
     "#6E2930",
-    "#8C52FF",
+    "#B900FF",
     "#C0C6D4",
     "#000000",
     "#FFFFFF",
