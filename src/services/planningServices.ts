@@ -1241,7 +1241,9 @@ export const planningServices = {
       const now = Timestamp.now();
       const data = snap.data() as any;
       const bills: BillFirestore[] = data.bills || [];
-      const filtered = bills.filter((b) => b.id !== billId);
+      const filtered = bills
+        .filter((b) => b.id !== billId)
+        .map((billItem) => removeUndefinedFields(billItem as any));
 
       await updateDoc(docRef, { bills: filtered, updatedAt: now });
     } catch (error) {
@@ -1260,7 +1262,9 @@ export const planningServices = {
       const now = Timestamp.now();
       const data = snap.data() as any;
       const bills: BillFirestore[] = data.bills || [];
-      const filtered = bills.filter((b) => b.id !== billId);
+      const filtered = bills
+        .filter((b) => b.id !== billId)
+        .map((billItem) => removeUndefinedFields(billItem as any));
 
       if (filtered.length === bills.length) {
         throw new Error("Conta não encontrada no planejamento");
@@ -1424,7 +1428,9 @@ export const planningServices = {
       const now = Timestamp.now();
       const data = snap.data() as any;
       const arr: ExpectedItemFirestore[] = data.expectedIncomes || [];
-      const filtered = arr.filter((a) => a.id !== itemId);
+      const filtered = arr
+        .filter((a) => a.id !== itemId)
+        .map((incomeItem) => removeUndefinedFields(incomeItem as any));
 
       await updateDoc(docRef, { expectedIncomes: filtered, updatedAt: now });
     } catch (error) {
@@ -1549,9 +1555,25 @@ export const planningServices = {
         ...changes,
         updatedAt: now,
       } as ExpectedItemFirestore;
-      arr[idx] = updated;
+      // Mesmo padrão do updateExpectedIncome: Firestore rejeita undefined.
+      // No edit com acompanhamento diário o expectedMonth vem undefined.
+      if ("expectedMonth" in changes && changes.expectedMonth == null) {
+        delete (updated as any).expectedMonth;
+      }
+      if ("categoryId" in changes && changes.categoryId == null) {
+        delete (updated as any).categoryId;
+      }
+      if ("notes" in changes && changes.notes == null) {
+        delete (updated as any).notes;
+      }
+      arr[idx] = removeUndefinedFields(updated as any);
 
-      await updateDoc(docRef, { expectedExpenses: arr, updatedAt: now });
+      await updateDoc(docRef, {
+        expectedExpenses: arr.map((expenseItem) =>
+          removeUndefinedFields(expenseItem as any),
+        ),
+        updatedAt: now,
+      });
 
       return {
         id: updated.id,
@@ -1563,6 +1585,7 @@ export const planningServices = {
         expectedMonth: updated.expectedMonth,
         categoryId: updated.categoryId,
         notes: updated.notes,
+        paymentMethod: updated.paymentMethod,
         createdAt: updated.createdAt.toDate(),
         updatedAt: updated.updatedAt.toDate(),
       } as ExpectedItem;
@@ -1596,7 +1619,9 @@ export const planningServices = {
       const now = Timestamp.now();
       const data = snap.data() as any;
       const arr: ExpectedItemFirestore[] = data.expectedExpenses || [];
-      const filtered = arr.filter((a) => a.id !== itemId);
+      const filtered = arr
+        .filter((a) => a.id !== itemId)
+        .map((expenseItem) => removeUndefinedFields(expenseItem as any));
 
       await updateDoc(docRef, { expectedExpenses: filtered, updatedAt: now });
     } catch (error) {

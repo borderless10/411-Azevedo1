@@ -2,7 +2,7 @@
  * Componente de Header/Cabeçalho
  */
 
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -18,9 +18,12 @@ import { useAuth } from "../../hooks/useAuth";
 import { useNavigation } from "../../routes/NavigationContext";
 import { useTheme } from "../../contexts/ThemeContext";
 import {
-  profileInitial,
+  profileDisplayName,
   resolveProfilePhotoUri,
 } from "../../utils/chatDisplayNames";
+import { BadgedAvatar } from "../Gamification/BadgedAvatar";
+import { rankingGamificationService } from "../../services/rankingGamificationService";
+import type { BadgeDefinition } from "../../types/rankingGamification";
 
 interface HeaderProps {
   title?: string;
@@ -38,11 +41,32 @@ export const Header: React.FC<HeaderProps> = ({
   style,
 }) => {
   const { user } = useAuth();
-  const { navigate, currentScreen, params } = useNavigation();
+  const { navigate, currentScreen, params, goBack, canGoBack } =
+    useNavigation();
   const { colors } = useTheme();
   const { showValues, toggleShowValues } = useShowValues();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(-20)).current;
+  const [badgeDefinitions, setBadgeDefinitions] = useState<BadgeDefinition[]>(
+    [],
+  );
+
+  // Catálogo de insígnias para o selo da própria foto no topo. Um listener
+  // pequeno, com limpeza ao desmontar, igual ao das outras telas.
+  useEffect(
+    () =>
+      rankingGamificationService.subscribeBadgeDefinitions(
+        setBadgeDefinitions,
+        () => {},
+      ),
+    [],
+  );
+
+  const ownBadgeDefinition = user?.activeBadgeBorderId
+    ? badgeDefinitions.find(
+        (definition) => definition.id === user.activeBadgeBorderId,
+      ) || null
+    : null;
 
   useEffect(() => {
     Animated.parallel([
@@ -60,6 +84,14 @@ export const Header: React.FC<HeaderProps> = ({
   }, [fadeAnim, slideAnim]);
 
   const handleBack = () => {
+    // Histórico real primeiro: volta à tela anterior com os params dela.
+    if (canGoBack) {
+      goBack();
+      return;
+    }
+
+    // Sem histórico (entrada direta, notificação ou estado recriado),
+    // valem os destinos explícitos abaixo e, por fim, a Home.
     if (params?.returnTo) {
       navigate(
         params.returnTo,
@@ -162,28 +194,16 @@ export const Header: React.FC<HeaderProps> = ({
                 style={styles.profileButton}
               >
                 <View style={styles.profileWrapper}>
-                  {resolveProfilePhotoUri(user) ? (
-                    <Image
-                      source={{
-                        uri: resolveProfilePhotoUri(user) as string,
-                      }}
-                      style={styles.avatar}
-                    />
-                  ) : (
-                    <View
-                      style={[
-                        styles.avatar,
-                        {
-                          backgroundColor: colors.card,
-                          borderColor: colors.border,
-                        },
-                      ]}
-                    >
-                      <Text style={[styles.avatarText, { color: colors.text }]}>
-                        {profileInitial(user, user?.email?.[0] || "U")}
-                      </Text>
-                    </View>
-                  )}
+                  <BadgedAvatar
+                    photoUri={resolveProfilePhotoUri(user)}
+                    displayName={profileDisplayName(
+                      user,
+                      user?.email || "Usuário",
+                    )}
+                    size={34}
+                    ringDefinition={ownBadgeDefinition}
+                    badgeDefinition={ownBadgeDefinition}
+                  />
 
                   {user?.role === "cliente_premium" && (
                     <View style={styles.crownContainer} pointerEvents="none">

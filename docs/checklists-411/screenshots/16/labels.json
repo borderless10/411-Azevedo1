@@ -1,0 +1,18 @@
+[
+  {
+    "file": "01-page-full.png",
+    "label": "Imagem 1 — Ranking individual, com nomes, fotos e pontos"
+  },
+  {
+    "file": "02-detalhe-ranking.png",
+    "label": "Imagem 2 — Detalhe — Primeiros colocados e a pontuação"
+  },
+  {
+    "file": "03-detalhe-consumo.png",
+    "label": "Imagem 3 — Detalhe — Média diária ideal e planejado no ciclo"
+  },
+  {
+    "file": "04-detalhe-busca.png",
+    "label": "Imagem 4 — Detalhe — Busca de cliente no painel do consultor"
+  }
+]

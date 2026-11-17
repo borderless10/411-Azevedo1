@@ -20,7 +20,9 @@ import {
   isPlanningCycleInRenewalWindow,
 } from "../utils/planningCycle";
 import {
+  canConfirmConsultationBooking,
   formatConsultationPreferredDay,
+  getConsultationSchedulingState,
   isConsultationBookedForCycle,
 } from "../utils/consultationScheduling";
 
@@ -45,11 +47,15 @@ const applySchedulingProfile = (
     consultationPreferredDate?: string;
     consultationBookedDay?: string;
     consultationBookedCycleStartedAt?: string;
+    consultationSchedulingOpenedCycleStartedAt?: string;
+    consultationSchedulingOpenedAt?: Date | { toDate: () => Date };
   } | null | undefined,
   setSchedulingUrl: (value: string | null) => void,
   setPreferredDate: (value: string | null) => void,
   setBookedDay: (value: string | null) => void,
   setBookedCycleStartedAt: (value: string | null) => void,
+  setOpenedCycleStartedAt: (value: string | null) => void,
+  setOpenedAt: (value: Date | null) => void,
 ) => {
   const url = String(profile?.consultationSchedulingUrl || "").trim();
   setSchedulingUrl(url ? toLinkHref(url) : null);
@@ -62,6 +68,20 @@ const applySchedulingProfile = (
 
   const bookedCycle = String(profile?.consultationBookedCycleStartedAt || "").trim();
   setBookedCycleStartedAt(bookedCycle || null);
+
+  const openedCycle = String(
+    profile?.consultationSchedulingOpenedCycleStartedAt || "",
+  ).trim();
+  setOpenedCycleStartedAt(openedCycle || null);
+
+  const openedAt = profile?.consultationSchedulingOpenedAt;
+  setOpenedAt(
+    openedAt instanceof Date
+      ? openedAt
+      : typeof openedAt?.toDate === "function"
+        ? openedAt.toDate()
+        : null,
+  );
 };
 
 function useConsultationSchedulingState() {
@@ -74,6 +94,10 @@ function useConsultationSchedulingState() {
   const [bookedCycleStartedAt, setBookedCycleStartedAt] = useState<string | null>(
     null,
   );
+  const [openedCycleStartedAt, setOpenedCycleStartedAt] = useState<string | null>(
+    null,
+  );
+  const [openedAt, setOpenedAt] = useState<Date | null>(null);
   const [planning, setPlanning] = useState<Planning | null>(null);
 
   useEffect(() => {
@@ -82,6 +106,8 @@ function useConsultationSchedulingState() {
       setPreferredDate(null);
       setBookedDay(null);
       setBookedCycleStartedAt(null);
+      setOpenedCycleStartedAt(null);
+      setOpenedAt(null);
       return;
     }
 
@@ -91,6 +117,8 @@ function useConsultationSchedulingState() {
       setPreferredDate,
       setBookedDay,
       setBookedCycleStartedAt,
+      setOpenedCycleStartedAt,
+      setOpenedAt,
     );
 
     const userRef = doc(db, "users", user.id);
@@ -102,6 +130,8 @@ function useConsultationSchedulingState() {
           setPreferredDate(null);
           setBookedDay(null);
           setBookedCycleStartedAt(null);
+          setOpenedCycleStartedAt(null);
+          setOpenedAt(null);
           return;
         }
         applySchedulingProfile(
@@ -110,6 +140,8 @@ function useConsultationSchedulingState() {
           setPreferredDate,
           setBookedDay,
           setBookedCycleStartedAt,
+          setOpenedCycleStartedAt,
+          setOpenedAt,
         );
       },
       () => {
@@ -119,6 +151,8 @@ function useConsultationSchedulingState() {
           setPreferredDate,
           setBookedDay,
           setBookedCycleStartedAt,
+          setOpenedCycleStartedAt,
+          setOpenedAt,
         );
       },
     );
@@ -129,6 +163,8 @@ function useConsultationSchedulingState() {
     user?.consultationBookedCycleStartedAt,
     user?.consultationBookedDay,
     user?.consultationPreferredDate,
+    user?.consultationSchedulingOpenedAt?.getTime(),
+    user?.consultationSchedulingOpenedCycleStartedAt,
     user?.consultationSchedulingUrl,
     user?.id,
   ]);
@@ -178,6 +214,28 @@ function useConsultationSchedulingState() {
     [bookedCycleStartedAt, bookedDay, cycleStartKey],
   );
 
+  const schedulingState = useMemo(
+    () =>
+      getConsultationSchedulingState({
+        hasSchedulingUrl: !!schedulingUrl,
+        openedCycleStartedAt,
+        bookedDay,
+        bookedCycleStartedAt,
+        cycleStartKey,
+      }),
+    [
+      bookedCycleStartedAt,
+      bookedDay,
+      cycleStartKey,
+      openedCycleStartedAt,
+      schedulingUrl,
+    ],
+  );
+
+  const hasOpenedSchedulingCurrentCycle =
+    schedulingState === "awaitingConfirmation" ||
+    schedulingState === "booked";
+
   const preferredDayLabel = useMemo(
     () => formatConsultationPreferredDay(preferredDate),
     [preferredDate],
@@ -189,9 +247,31 @@ function useConsultationSchedulingState() {
   );
 
   const openScheduling = useCallback(async () => {
-    if (!schedulingUrl) return;
+    if (!user?.id) {
+      throw new Error("Não foi possível identificar sua conta.");
+    }
+    if (!schedulingUrl) {
+      throw new Error("O link de agendamento ainda não está disponível.");
+    }
+    if (!cycleStartKey) {
+      throw new Error("O ciclo atual ainda não está disponível.");
+    }
+    if (schedulingState !== "available") {
+      throw new Error("O agendamento já foi aberto neste ciclo.");
+    }
+    await userService.markConsultationSchedulingOpened(
+      user.id,
+      cycleStartKey,
+    );
+    setOpenedCycleStartedAt(cycleStartKey);
+    setOpenedAt(new Date());
     await openChatLink(schedulingUrl);
-  }, [schedulingUrl]);
+  }, [
+    cycleStartKey,
+    schedulingState,
+    schedulingUrl,
+    user?.id,
+  ]);
 
   const confirmBooking = useCallback(
     async (day: number) => {
@@ -201,9 +281,20 @@ function useConsultationSchedulingState() {
       if (!cycleStartKey) {
         throw new Error("Não foi possível identificar o ciclo atual.");
       }
+      if (
+        !canConfirmConsultationBooking(
+          bookedDay,
+          bookedCycleStartedAt,
+          cycleStartKey,
+        )
+      ) {
+        throw new Error(
+          "O dia da consultoria já foi confirmado neste ciclo.",
+        );
+      }
       await userService.confirmConsultationBooking(user.id, day, cycleStartKey);
     },
-    [cycleStartKey, user?.id],
+    [bookedCycleStartedAt, bookedDay, cycleStartKey, user?.id],
   );
 
   return useMemo(
@@ -215,10 +306,15 @@ function useConsultationSchedulingState() {
       bookedDay,
       bookedDayLabel,
       hasBookedCurrentCycle,
+      hasOpenedSchedulingCurrentCycle,
+      openedAt,
+      schedulingState,
       planning,
       cycleEnded,
       cycleStartKey,
-      shouldPulse: inRenewalWindow && !hasBookedCurrentCycle,
+      shouldPulse:
+        schedulingState === "awaitingConfirmation" ||
+        (inRenewalWindow && schedulingState === "available"),
       openScheduling,
       confirmBooking,
     }),
@@ -230,11 +326,14 @@ function useConsultationSchedulingState() {
       cycleStartKey,
       enabled,
       hasBookedCurrentCycle,
+      hasOpenedSchedulingCurrentCycle,
       inRenewalWindow,
       openScheduling,
+      openedAt,
       planning,
       preferredDate,
       preferredDayLabel,
+      schedulingState,
       schedulingUrl,
     ],
   );

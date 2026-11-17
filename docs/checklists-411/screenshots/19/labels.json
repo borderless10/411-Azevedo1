@@ -1,0 +1,18 @@
+[
+  {
+    "file": "01-page-full.png",
+    "label": "Imagem 1 — Registros de Rendas do cliente, com os filtros Todas, Acompanhadas e Gerais / salário"
+  },
+  {
+    "file": "02-detalhe-filtros-renda.png",
+    "label": "Imagem 2 — Detalhe — Filtros de renda e o valor que falta no ciclo"
+  },
+  {
+    "file": "03-detalhe-ranking.png",
+    "label": "Imagem 3 — Detalhe — Ranking com foto de perfil carregada por URL do Storage"
+  },
+  {
+    "file": "04-detalhe-chat.png",
+    "label": "Imagem 4 — Detalhe — Lista de conversas, com Bate-Papo e chats diretos"
+  }
+]

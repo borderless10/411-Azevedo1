@@ -2,13 +2,15 @@
  * Serviço para gerenciar notificações
  */
 
-import * as Notifications from "expo-notifications";
 import * as Device from "expo-device";
 import { AppState, Platform } from "react-native";
+import type { NotificationContentInput } from "expo-notifications";
+import {
+  Notifications,
+  canUseNativeNotifications,
+} from "../lib/expoNotifications";
 import { getActiveChatId } from "../utils/chatActivity";
 import { resolveDueDateFromDay } from "../utils/dueDateFromDay";
-
-const canUseNativeNotifications = Platform.OS !== "web";
 
 /** Canal padrão Android — obrigatório para aparecer na bandeja fora do app. */
 export const NOTIFICATION_CHANNEL_DEFAULT = "default";
@@ -149,11 +151,11 @@ export const requestNotificationPermissions = async (): Promise<boolean> => {
 };
 
 const withChannel = (
-  content: Notifications.NotificationContentInput,
+  content: NotificationContentInput,
   channelId: string,
-): Notifications.NotificationContentInput => {
+): NotificationContentInput => {
   if (Platform.OS !== "android") return content;
-  return { ...content, channelId };
+  return { ...content, channelId } as NotificationContentInput;
 };
 
 /**

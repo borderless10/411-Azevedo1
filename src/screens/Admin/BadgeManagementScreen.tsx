@@ -49,6 +49,10 @@ export const BadgeManagementScreen = () => {
   const [userQuery, setUserQuery] = useState("");
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [tab, setTab] = useState<"manage" | "grant">("manage");
+  const [openColor, setOpenColor] = useState<"primary" | "secondary" | null>(
+    null,
+  );
+  const [colorDragging, setColorDragging] = useState(false);
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -169,7 +173,11 @@ export const BadgeManagementScreen = () => {
 
   return (
     <Layout title="Gerenciar Insígnias" showBackButton showSidebar>
-      <ScrollView style={styles.container}>
+      <ScrollView
+        style={styles.container}
+        keyboardShouldPersistTaps="handled"
+        scrollEnabled={!colorDragging}
+      >
         <View style={styles.tabs}>
           <TouchableOpacity
             style={[styles.tab, tab === "manage" && styles.tabActive]}
@@ -250,14 +258,28 @@ export const BadgeManagementScreen = () => {
           ))}
         </View>
         <BadgeColorPicker
-          label="Cor principal"
+          label="Cor primária"
           value={form.primaryColor}
-          onChange={(primaryColor) => setForm({ ...form, primaryColor })}
+          expanded={openColor === "primary"}
+          onExpandedChange={(expanded) =>
+            setOpenColor(expanded ? "primary" : null)
+          }
+          onChange={(primaryColor) =>
+            setForm((current) => ({ ...current, primaryColor }))
+          }
+          onDragChange={setColorDragging}
         />
         <BadgeColorPicker
           label="Cor secundária"
           value={form.secondaryColor}
-          onChange={(secondaryColor) => setForm({ ...form, secondaryColor })}
+          expanded={openColor === "secondary"}
+          onExpandedChange={(expanded) =>
+            setOpenColor(expanded ? "secondary" : null)
+          }
+          onChange={(secondaryColor) =>
+            setForm((current) => ({ ...current, secondaryColor }))
+          }
+          onDragChange={setColorDragging}
         />
         <Text style={styles.label}>Borda</Text>
         <View style={styles.wrap}>

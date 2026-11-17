@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   ScrollView,
+  Animated,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Layout } from "../../components/Layout/Layout";
@@ -18,7 +19,15 @@ import { getCoupleDisplayName, isCoupleAccount } from "../../utils/coupleAccount
 import { profileDisplayName } from "../../utils/chatDisplayNames";
 import CustomModal from "../../components/ui/CustomModal";
 import { ConsultationBookingCalendar } from "../../components/Consultation/ConsultationBookingCalendar";
-import { parseConsultationPreferredDay } from "../../utils/consultationScheduling";
+import {
+  findConsultationSupportChatId,
+  parseConsultationPreferredDay,
+  shouldShowConsultationSupportHelp,
+} from "../../utils/consultationScheduling";
+import { useNavigation } from "../../routes/NavigationContext";
+import { useUserChats } from "../../hooks/useUserChats";
+import chatService from "../../services/chatService";
+import { userService } from "../../services/userServices";
 
 type FeedbackModal = {
   visible: boolean;
@@ -30,6 +39,8 @@ type FeedbackModal = {
 export const ConsultationSchedulingScreen: React.FC = () => {
   const { user } = useAuth();
   const { colors } = useTheme();
+  const { navigate } = useNavigation();
+  const { chats } = useUserChats(user?.id || null, user?.role || null);
   const {
     schedulingUrl,
     preferredDate,
@@ -37,6 +48,7 @@ export const ConsultationSchedulingScreen: React.FC = () => {
     bookedDay,
     bookedDayLabel,
     hasBookedCurrentCycle,
+    schedulingState,
     shouldPulse,
     cycleEnded,
     cycleStartKey,
@@ -45,7 +57,11 @@ export const ConsultationSchedulingScreen: React.FC = () => {
   } = useConsultationScheduling();
   const request = useUserConsultationRequest(user?.id || null);
   const [submitting, setSubmitting] = useState(false);
+  const [openingVisaoChat, setOpeningVisaoChat] = useState(false);
+  const [opening, setOpening] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [isCalendarVisible, setIsCalendarVisible] = useState(false);
+  const confirmationPulse = useRef(new Animated.Value(1)).current;
   const suggestedDay = parseConsultationPreferredDay(
     hasBookedCurrentCycle ? bookedDay : preferredDate,
   );
@@ -72,6 +88,38 @@ export const ConsultationSchedulingScreen: React.FC = () => {
     if (dayTouchedRef.current) return;
     setSelectedDay(suggestedDay);
   }, [suggestedDay]);
+
+  useEffect(() => {
+    setIsCalendarVisible(false);
+    dayTouchedRef.current = false;
+  }, [schedulingState]);
+
+  useEffect(() => {
+    if (
+      schedulingState !== "awaitingConfirmation" ||
+      isCalendarVisible
+    ) {
+      confirmationPulse.setValue(1);
+      return;
+    }
+
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(confirmationPulse, {
+          toValue: 0.35,
+          duration: 650,
+          useNativeDriver: true,
+        }),
+        Animated.timing(confirmationPulse, {
+          toValue: 1,
+          duration: 650,
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [confirmationPulse, isCalendarVisible, schedulingState]);
 
   const showFeedback = (
     tone: "success" | "error",
@@ -140,28 +188,104 @@ export const ConsultationSchedulingScreen: React.FC = () => {
     }
   };
 
+  const handleOpenScheduling = async () => {
+    try {
+      setOpening(true);
+      await openScheduling();
+    } catch (error: any) {
+      console.error("Erro ao abrir agendamento:", error);
+      showFeedback(
+        "error",
+        "Não foi possível abrir",
+        error?.message || "Tente novamente em instantes.",
+      );
+    } finally {
+      setOpening(false);
+    }
+  };
+
+  // Abre a conversa direta com a equipe Visão (a mesma que o ChatScreen
+  // cria para todo cliente: chat direto com o admin, exibido como "Visão").
+  // Só navega: não reabre o agendamento nem desfaz abertura/confirmação.
+  const handleContactVisao = async () => {
+    if (!user?.id || openingVisaoChat) return;
+    setOpeningVisaoChat(true);
+    try {
+      const existingChatId = findConsultationSupportChatId(
+        chats,
+        user.id,
+        user.consultantId || null,
+      );
+      if (existingChatId) {
+        navigate("Chat", { chatId: existingChatId });
+        return;
+      }
+      // Chat ainda não criado (usuário nunca abriu o Chat): cria do mesmo
+      // jeito que o ChatScreen e navega direto para ele.
+      const admins = await userService.getUsersByRole("admin");
+      const targetAdmin = admins.find((admin) => admin.id !== user.id) || null;
+      if (!targetAdmin?.id) {
+        // Sem admin localizado, a lista de chats é o destino mais direto.
+        navigate("Chat");
+        return;
+      }
+      const chat = await chatService.createChatIfNotExists(
+        user.id,
+        targetAdmin.id,
+        "direct",
+      );
+      navigate("Chat", { chatId: chat.id });
+    } catch (error) {
+      console.error("Erro ao abrir chat com a Visão:", error);
+      // O ChatScreen cria essa conversa ao abrir; a lista é o fallback.
+      navigate("Chat");
+    } finally {
+      setOpeningVisaoChat(false);
+    }
+  };
+
+  const supportHelpSection = shouldShowConsultationSupportHelp(
+    schedulingState,
+  ) ? (
+    <View style={styles.supportHelpBox}>
+      <Text style={styles.supportHelpText}>
+        Você clicou de maneira equivocada? Entre em contato com o time Visão.
+      </Text>
+      <TouchableOpacity
+        style={[
+          styles.supportHelpButton,
+          openingVisaoChat && styles.buttonDisabled,
+        ]}
+        onPress={handleContactVisao}
+        disabled={openingVisaoChat}
+        accessibilityRole="button"
+        accessibilityLabel="Falar com a Visão"
+      >
+        {openingVisaoChat ? (
+          <ActivityIndicator color="#ff4d6d" />
+        ) : (
+          <>
+            <Ionicons name="chatbubbles-outline" size={20} color="#ff4d6d" />
+            <Text style={styles.supportHelpButtonText}>Falar com a Visão</Text>
+          </>
+        )}
+      </TouchableOpacity>
+    </View>
+  ) : null;
+
   const bookingSection = (
     <View
       style={[
         styles.bookingBox,
-        { borderColor: hasBookedCurrentCycle ? "#8c52ff" : colors.border },
+        { borderColor: colors.border },
       ]}
     >
       <Text style={[styles.bookingTitle, { color: colors.text }]}>
-        {hasBookedCurrentCycle
-          ? "Consultoria agendada"
-          : "Já agendei a consultoria"}
+        Informe o dia da consultoria
       </Text>
       <Text style={[styles.bookingBody, { color: colors.textSecondary }]}>
-        {hasBookedCurrentCycle
-          ? "Se o horário mudar, escolha outro dia e atualize."
-          : "Escolha no calendário o dia em que a consultoria ficou marcada."}
+        Escolha no calendário o dia em que a consultoria ficou marcada.
       </Text>
-      {hasBookedCurrentCycle && bookedDayLabel ? (
-        <Text style={styles.bookedLabel}>
-          Dia da consultoria: {bookedDayLabel}
-        </Text>
-      ) : null}
       <ConsultationBookingCalendar
         day={selectedDay}
         onChangeDay={(day) => {
@@ -183,7 +307,7 @@ export const ConsultationSchedulingScreen: React.FC = () => {
           <>
             <Ionicons name="checkmark-circle-outline" size={20} color="#fff" />
             <Text style={styles.primaryButtonText}>
-              {hasBookedCurrentCycle ? "Atualizar dia" : "Confirmar que agendei"}
+              Confirmar dia da consultoria
             </Text>
           </>
         )}
@@ -213,13 +337,22 @@ export const ConsultationSchedulingScreen: React.FC = () => {
               <Ionicons name="calendar" size={32} color="#8c52ff" />
             </View>
             <Text style={[styles.title, { color: colors.text }]}>
-              Sua consultoria está disponível
+              {schedulingState === "booked"
+                ? "Consultoria agendada"
+                : schedulingState === "awaitingConfirmation"
+                  ? "Confirme sua consultoria"
+                  : "Sua consultoria está disponível"}
             </Text>
             <Text style={[styles.body, { color: colors.textSecondary }]}>
-              Toque no botão abaixo para abrir o calendário e escolher o melhor
-              horário.
+              {schedulingState === "booked"
+                ? bookedDayLabel
+                  ? `Dia da consultoria: ${bookedDayLabel}`
+                  : "Sua consultoria foi confirmada."
+                : schedulingState === "awaitingConfirmation"
+                  ? "O link já foi aberto neste ciclo. Confirme abaixo o dia que ficou agendado."
+                  : "Toque no botão abaixo para abrir o calendário e escolher o melhor horário."}
             </Text>
-            {!hasBookedCurrentCycle && preferredDayLabel ? (
+            {schedulingState === "available" && preferredDayLabel ? (
               <View
                 style={[
                   styles.dayBadge,
@@ -232,26 +365,79 @@ export const ConsultationSchedulingScreen: React.FC = () => {
                 </Text>
               </View>
             ) : null}
-            {shouldPulse ? (
+            {schedulingState === "available" && shouldPulse ? (
               <Text style={styles.pulseHint}>
                 {cycleEnded
                   ? "Seu ciclo de Consumo Moderado terminou. Agende sua consultoria."
                   : "Seu ciclo de Consumo Moderado acaba em breve. Agende sua consultoria."}
               </Text>
             ) : null}
-            <TouchableOpacity
-              style={[styles.primaryButton, { backgroundColor: colors.primary }]}
-              onPress={() => {
-                openScheduling().catch(() => {
-                  // openChatLink já trata erro
-                });
-              }}
-            >
-              <Ionicons name="open-outline" size={20} color="#fff" />
-              <Text style={styles.primaryButtonText}>Abrir agendamento</Text>
-            </TouchableOpacity>
-            {bookingSection}
+            {schedulingState === "available" ? (
+              <>
+                <TouchableOpacity
+                  style={[
+                    styles.primaryButton,
+                    { backgroundColor: colors.primary },
+                    (!cycleStartKey || opening) && styles.buttonDisabled,
+                  ]}
+                  onPress={handleOpenScheduling}
+                  disabled={!cycleStartKey || opening}
+                >
+                  {opening ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <>
+                      <Ionicons name="open-outline" size={20} color="#fff" />
+                      <Text style={styles.primaryButtonText}>
+                        Abrir agendamento
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+                {!cycleStartKey ? (
+                  <Text
+                    style={[
+                      styles.bookingBody,
+                      { color: colors.textSecondary },
+                    ]}
+                  >
+                    O ciclo atual ainda não está disponível. Não é possível
+                    abrir o agendamento agora.
+                  </Text>
+                ) : null}
+              </>
+            ) : null}
+            {schedulingState === "awaitingConfirmation" ? (
+              <>
+                {!isCalendarVisible ? (
+                  <Animated.View style={{ opacity: confirmationPulse }}>
+                    <TouchableOpacity
+                      style={styles.confirmationCta}
+                      onPress={() => setIsCalendarVisible(true)}
+                    >
+                      <Ionicons
+                        name="calendar-outline"
+                        size={20}
+                        color="#fff"
+                      />
+                      <Text style={styles.primaryButtonText}>
+                        Sua consultoria já foi agendada? Clique aqui!
+                      </Text>
+                    </TouchableOpacity>
+                  </Animated.View>
+                ) : (
+                  bookingSection
+                )}
+              </>
+            ) : null}
+            {schedulingState === "booked" ? (
+              <Text style={styles.bookedMessage}>
+                Para mudar o dia da consultoria, entre em contato com a equipe
+                Visão.
+              </Text>
+            ) : null}
           </View>
+          {supportHelpSection}
         </ScrollView>
         <CustomModal
           visible={feedback.visible}
@@ -280,15 +466,24 @@ export const ConsultationSchedulingScreen: React.FC = () => {
             <Ionicons name="calendar-outline" size={32} color="#a89fc0" />
           </View>
           <Text style={[styles.title, { color: colors.text }]}>
-            Agendamento ainda não liberado
+            {hasBookedCurrentCycle
+              ? "Consultoria agendada"
+              : "Agendamento ainda não liberado"}
           </Text>
           <Text style={[styles.body, { color: colors.textSecondary }]}>
-            Seu link de consultoria ainda não foi configurado pela equipe Visão.
-            Toque no botão abaixo para avisarmos — liberaremos o agendamento para
-            você o quanto antes.
+            {hasBookedCurrentCycle && bookedDayLabel
+              ? `Dia da consultoria: ${bookedDayLabel}`
+              : "Seu link de consultoria ainda não foi configurado pela equipe Visão. Toque no botão abaixo para avisarmos. Liberaremos o agendamento para você o quanto antes."}
           </Text>
 
-          {hasPendingRequest ? (
+          {hasBookedCurrentCycle ? (
+            <Text style={styles.bookedMessage}>
+              Para mudar o dia da consultoria, entre em contato com a equipe
+              Visão.
+            </Text>
+          ) : null}
+
+          {!hasBookedCurrentCycle && hasPendingRequest ? (
             <View
               style={[
                 styles.statusBox,
@@ -305,30 +500,36 @@ export const ConsultationSchedulingScreen: React.FC = () => {
             </View>
           ) : null}
 
-          <TouchableOpacity
-            style={[
-              styles.primaryButton,
-              { backgroundColor: colors.primary },
-              submitting && styles.buttonDisabled,
-            ]}
-            onPress={handleRequestAccess}
-            disabled={submitting}
-          >
-            {submitting ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <>
-                <Ionicons name="notifications-outline" size={20} color="#fff" />
-                <Text style={styles.primaryButtonText}>
-                  {hasPendingRequest && requestSentRecently
-                    ? "Reenviar solicitação"
-                    : "Solicitar liberação do agendamento"}
-                </Text>
-              </>
-            )}
-          </TouchableOpacity>
-          {bookingSection}
+          {!hasBookedCurrentCycle ? (
+            <TouchableOpacity
+              style={[
+                styles.primaryButton,
+                { backgroundColor: colors.primary },
+                submitting && styles.buttonDisabled,
+              ]}
+              onPress={handleRequestAccess}
+              disabled={submitting}
+            >
+              {submitting ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <>
+                  <Ionicons
+                    name="notifications-outline"
+                    size={20}
+                    color="#fff"
+                  />
+                  <Text style={styles.primaryButtonText}>
+                    {hasPendingRequest && requestSentRecently
+                      ? "Reenviar solicitação"
+                      : "Solicitar liberação do agendamento"}
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+          ) : null}
         </View>
+        {supportHelpSection}
       </ScrollView>
 
       <CustomModal
@@ -462,6 +663,53 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 12,
     backgroundColor: "#8c52ff",
+  },
+  confirmationCta: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: "#8c52ff",
+  },
+  bookedMessage: {
+    color: "#c4b5fd",
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: "600",
+    textAlign: "center",
+  },
+  supportHelpBox: {
+    marginTop: 20,
+    gap: 12,
+    alignItems: "center",
+  },
+  supportHelpText: {
+    color: "#ff4d6d",
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: "600",
+    textAlign: "center",
+  },
+  supportHelpButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: "#ff4d6d",
+    backgroundColor: "rgba(255, 77, 109, 0.12)",
+    alignSelf: "stretch",
+  },
+  supportHelpButtonText: {
+    color: "#ff4d6d",
+    fontSize: 15,
+    fontWeight: "700",
   },
 });
 

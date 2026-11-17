@@ -1,6 +1,7 @@
 import {
   BADGE_BORDER_PRESETS,
   BADGE_ICONS,
+  type BadgeDefinition,
   type BadgeDefinitionInput,
 } from "../types/rankingGamification.ts";
 
@@ -9,6 +10,25 @@ const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 export const grantDocId = (userId: string, badgeId: string): string =>
   `${userId}_${badgeId}`;
+
+/**
+ * Anel em volta da foto: só a borda ativa escolhida pelo usuário.
+ * Borda padrão (sem borda ativa) significa anel padrão, mesmo que o
+ * usuário tenha insígnias concedidas.
+ */
+export const resolveAvatarRingDefinition = (
+  activeBorderDefinition: BadgeDefinition | null | undefined,
+): BadgeDefinition | null => activeBorderDefinition || null;
+
+/**
+ * Selo no canto inferior direito da foto: prefere a insígnia da borda
+ * ativa e, sem borda ativa, usa a primeira da lista de concedidas.
+ */
+export const resolveAvatarBadgeDefinition = (
+  activeBorderDefinition: BadgeDefinition | null | undefined,
+  grantedBadges: readonly BadgeDefinition[] | null | undefined,
+): BadgeDefinition | null =>
+  activeBorderDefinition || grantedBadges?.[0] || null;
 
 export const resolveActiveBorderAfterRevoke = (
   activeBadgeBorderId: string | null | undefined,

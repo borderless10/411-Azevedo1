@@ -8,7 +8,6 @@ import {
   ActivityIndicator,
   Alert,
   TextInput,
-  Image,
 } from "react-native";
 
 import { Layout } from "../../components/Layout/Layout";
@@ -16,12 +15,12 @@ import { userService } from "../../services/userServices";
 import { useAuth } from "../../hooks/useAuth";
 import { useNavigation } from "../../routes/NavigationContext";
 import { Ionicons } from "@expo/vector-icons";
-import {
-  profileInitial,
-  resolveProfilePhotoUri,
-} from "../../utils/chatDisplayNames";
+import { resolveProfilePhotoUri } from "../../utils/chatDisplayNames";
 import { isCoupleAccount } from "../../utils/coupleAccount";
 import { ConsultationRequestsBanner } from "../../components/Consultation/ConsultationRequestsBanner";
+import { BadgedAvatar } from "../../components/Gamification/BadgedAvatar";
+import { rankingGamificationService } from "../../services/rankingGamificationService";
+import type { BadgeDefinition } from "../../types/rankingGamification";
 
 export const AdminUsersScreen: React.FC = () => {
   const { user } = useAuth();
@@ -36,6 +35,26 @@ export const AdminUsersScreen: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<
     "all" | "active" | "inactive"
   >("all");
+  const [badgeDefinitions, setBadgeDefinitions] = useState<BadgeDefinition[]>(
+    [],
+  );
+
+  useEffect(
+    () =>
+      rankingGamificationService.subscribeBadgeDefinitions(
+        setBadgeDefinitions,
+        () => {},
+      ),
+    [],
+  );
+
+  const badgeDefinitionFor = (item: any): BadgeDefinition | null => {
+    const badgeId = item?.activeBadgeBorderId;
+    return badgeId
+      ? badgeDefinitions.find((definition) => definition.id === badgeId) ||
+          null
+      : null;
+  };
 
   useEffect(() => {
     if (
@@ -80,14 +99,13 @@ export const AdminUsersScreen: React.FC = () => {
     return (
       <View style={styles.item}>
         <View style={styles.avatar}>
-          {resolveProfilePhotoUri(item) ? (
-            <Image
-              source={{ uri: resolveProfilePhotoUri(item) as string }}
-              style={styles.avatarImage}
-            />
-          ) : (
-            <Text style={styles.avatarInitial}>{profileInitial(item)}</Text>
-          )}
+          <BadgedAvatar
+            photoUri={resolveProfilePhotoUri(item)}
+            displayName={displayUser}
+            size={36}
+            ringDefinition={badgeDefinitionFor(item)}
+            badgeDefinition={badgeDefinitionFor(item)}
+          />
         </View>
         <View style={styles.info}>
           <Text style={styles.name}>{displayUser}</Text>
@@ -368,7 +386,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginRight: 12,
-    overflow: "hidden",
   },
   avatarImage: {
     width: 44,

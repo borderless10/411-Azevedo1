@@ -39,7 +39,10 @@ import {
   scheduleDailyExpenseReminder,
   sendImmediateNotification,
 } from "../../services/notificationServices";
-import * as Notifications from "expo-notifications";
+import {
+  Notifications,
+  canUseNativeNotifications,
+} from "../../lib/expoNotifications";
 import { Picker } from "@react-native-picker/picker";
 
 export const SettingsScreen = () => {
@@ -112,6 +115,7 @@ export const SettingsScreen = () => {
   }, [user]);
 
   useEffect(() => {
+    if (!canUseNativeNotifications) return;
     let cancelled = false;
     (async () => {
       try {

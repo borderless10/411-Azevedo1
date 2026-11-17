@@ -41,6 +41,10 @@ export interface User {
   consultationBookedDay?: string;
   /** Início do ciclo ao qual a confirmação de agendamento pertence */
   consultationBookedCycleStartedAt?: string;
+  /** Início do ciclo em que o link de agendamento foi aberto */
+  consultationSchedulingOpenedCycleStartedAt?: string;
+  /** Momento em que o link foi aberto no ciclo atual */
+  consultationSchedulingOpenedAt?: Date;
   consultationSchedulingRequestPending?: boolean;
   consultationSchedulingRequestedAt?: Date;
   consultationPreviousBookedDay?: string;

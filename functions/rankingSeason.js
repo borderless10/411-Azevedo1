@@ -32,11 +32,19 @@ export const isStaffUserData = (data) =>
     data.role === "consultor" ||
     data.role === "supervisor");
 
-export const userParticipates = (data) =>
-  Boolean(data) &&
-  data.isActive !== false &&
-  !isStaffUserData(data) &&
-  data.rankingPreference === "participate";
+export const userParticipates = (data) => {
+  if (!data || data.isActive === false || isStaffUserData(data)) return false;
+  if (data.rankingPreference === "participate") return true;
+  if (
+    data.rankingPreference === "view_only" ||
+    data.rankingPreference === "hidden" ||
+    data.rankingPreference === "unset"
+  ) {
+    return false;
+  }
+  // Legado: antes de rankingPreference, showInRanking=true era participar.
+  return data.showInRanking === true;
+};
 
 export const displayNameForUser = (userId, data) => {
   if (data?.accountType === "couple") {

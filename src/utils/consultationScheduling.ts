@@ -69,6 +69,96 @@ export const isConsultationBookedForCycle = (
   return parseConsultationPreferredDay(bookedDay) !== null;
 };
 
+export type ConsultationSchedulingState =
+  | "available"
+  | "awaitingConfirmation"
+  | "booked";
+
+interface ConsultationSchedulingStateInput {
+  hasSchedulingUrl: boolean;
+  openedCycleStartedAt?: string | null;
+  bookedDay?: string | null;
+  bookedCycleStartedAt?: string | null;
+  cycleStartKey: string | null;
+}
+
+export const getConsultationSchedulingState = ({
+  hasSchedulingUrl,
+  openedCycleStartedAt,
+  bookedDay,
+  bookedCycleStartedAt,
+  cycleStartKey,
+}: ConsultationSchedulingStateInput): ConsultationSchedulingState => {
+  if (
+    isConsultationBookedForCycle(
+      bookedDay,
+      bookedCycleStartedAt,
+      cycleStartKey,
+    )
+  ) {
+    return "booked";
+  }
+
+  if (
+    hasSchedulingUrl &&
+    cycleStartKey &&
+    String(openedCycleStartedAt || "") === cycleStartKey
+  ) {
+    return "awaitingConfirmation";
+  }
+
+  return "available";
+};
+
+/**
+ * Ajuda pós-clique (clique equivocado): só depois que o link foi aberto
+ * neste ciclo. No estado inicial ela não aparece, porque ainda não houve
+ * clique para desfazer.
+ */
+export const shouldShowConsultationSupportHelp = (
+  state: ConsultationSchedulingState,
+): boolean => state === "awaitingConfirmation" || state === "booked";
+
+interface ConsultationSupportChatCandidate {
+  id: string;
+  type?: string | null;
+  participants?: string[] | null;
+}
+
+/**
+ * Localiza, entre os chats já carregados, a conversa direta exibida como
+ * "Visão" para o cliente: chat direto cujo outro participante não é o
+ * consultor dele (mesma regra de título do ChatScreen).
+ */
+export const findConsultationSupportChatId = (
+  chats: ConsultationSupportChatCandidate[] | null | undefined,
+  userId: string | null | undefined,
+  consultantId?: string | null,
+): string | null => {
+  if (!userId) return null;
+  const consultant = String(consultantId || "").trim();
+  for (const chat of chats || []) {
+    if (chat?.type !== "direct") continue;
+    const participants = chat.participants || [];
+    if (!participants.includes(userId)) continue;
+    const otherId = participants.find((id) => id !== userId);
+    if (!otherId || otherId === consultant) continue;
+    return chat.id;
+  }
+  return null;
+};
+
+export const canConfirmConsultationBooking = (
+  bookedDay: string | null | undefined,
+  bookedCycleStartedAt: string | null | undefined,
+  cycleStartKey: string | null,
+): boolean =>
+  !isConsultationBookedForCycle(
+    bookedDay,
+    bookedCycleStartedAt,
+    cycleStartKey,
+  );
+
 export const hasConsultationBookingLock = (
   bookedDay: string | null | undefined,
   bookedCycleStartedAt: string | null | undefined,
@@ -79,6 +169,8 @@ export const hasConsultationBookingLock = (
 export interface ConsultationBookingReleaseUpdate {
   consultationBookedDay: "";
   consultationBookedCycleStartedAt: "";
+  consultationSchedulingOpenedCycleStartedAt: "";
+  consultationSchedulingOpenedAt: null;
   consultationPreviousBookedDay: string;
   consultationPreviousBookedCycleStartedAt: string;
 }
@@ -89,6 +181,8 @@ export const getConsultationBookingReleaseUpdate = (
 ): ConsultationBookingReleaseUpdate => ({
   consultationBookedDay: "",
   consultationBookedCycleStartedAt: "",
+  consultationSchedulingOpenedCycleStartedAt: "",
+  consultationSchedulingOpenedAt: null,
   consultationPreviousBookedDay: String(bookedDay || "").trim(),
   consultationPreviousBookedCycleStartedAt: String(
     bookedCycleStartedAt || "",

@@ -12,6 +12,17 @@ import {
   resolveActiveBorderAfterRevoke,
   validateBadgeDefinitionInput,
 } from "./badgeRules.js";
+import {
+  remainingSeasonCounter,
+  resolvePurgeTargets,
+  seasonPeriodLabel,
+} from "./rankingPurge.js";
+import {
+  backfillPublicGamificationProfiles as runPublicProfileBackfill,
+  ensurePublicGamificationProfile as runEnsurePublicProfile,
+  recordClosedSeason,
+  syncPublicGamificationProfile,
+} from "./publicGamificationProfileSync.js";
 
 const todayKey = () => {
   const now = new Date();
@@ -40,13 +51,17 @@ export const createGamificationHandlers = (db) => ({
       "",
     );
 
-    return db.runTransaction(async (tx) => {
+    const result = await db.runTransaction(async (tx) => {
       if (idempotencyKey) {
         const existing = await tx.get(
           db.doc(`rankingSeasons/by-key-${idempotencyKey}`),
         );
         if (existing.exists) {
-          return { seasonNumber: existing.data().seasonNumber, duplicated: true };
+          return {
+            seasonNumber: existing.data().seasonNumber,
+            duplicated: true,
+            profileCandidates: [],
+          };
         }
       }
 
@@ -118,8 +133,155 @@ export const createGamificationHandlers = (db) => ({
           updatedAt: FieldValue.serverTimestamp(),
         });
       });
-      return { seasonNumber, duplicated: false, podiums };
+      return {
+        seasonNumber,
+        duplicated: false,
+        podiums,
+        profileCandidates: [...byUser.values()],
+      };
     });
+    if (!result.duplicated) {
+      await Promise.all(
+        result.profileCandidates.map(async (candidate) => {
+          await syncPublicGamificationProfile(db, candidate.userId);
+          await recordClosedSeason(
+            db,
+            candidate,
+            result.seasonNumber,
+            result.podiums,
+          );
+        }),
+      );
+    }
+    const { profileCandidates, ...response } = result;
+    return response;
+  },
+
+  /**
+   * Apaga edições encerradas (pódios/histórico) e, opcionalmente, zera
+   * o ranking atual. Não mexe em insígnias nem concessões.
+   */
+  async purgeRankingHistory(request) {
+    const adminUid = requireAuth(request);
+    await requireAdmin(db, adminUid);
+
+    const deleteAll = request.data?.deleteAll === true;
+    const wipeCurrent = request.data?.wipeCurrent === true;
+    const seasonNumbers = Array.isArray(request.data?.seasonNumbers)
+      ? request.data.seasonNumbers
+      : [];
+
+    if (!deleteAll && seasonNumbers.length === 0 && !wipeCurrent) {
+      throw new HttpsError(
+        "invalid-argument",
+        "Selecione edições para apagar ou marque zerar ranking atual.",
+      );
+    }
+
+    const seasonsSnap = await db.collection("rankingSeasons").get();
+    const seasonDocs = seasonsSnap.docs.filter(
+      (docSnap) => !docSnap.id.startsWith("by-key-"),
+    );
+    const seasons = seasonDocs.map((docSnap) => ({
+      id: docSnap.id,
+      ref: docSnap.ref,
+      ...(docSnap.data() || {}),
+    }));
+    const { targets, missing } = resolvePurgeTargets({
+      seasons,
+      seasonNumbers,
+      deleteAll,
+    });
+    if (missing.length) {
+      throw new HttpsError(
+        "not-found",
+        `Edição(ões) não encontrada(s): ${missing.join(", ")}`,
+      );
+    }
+    if (!targets.length && !wipeCurrent) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Nenhuma edição selecionada para apagar.",
+      );
+    }
+
+    const deletedNumbers = targets.map((season) => Number(season.seasonNumber));
+    const deletedSet = new Set(deletedNumbers);
+    const keyDocs = seasonsSnap.docs.filter((docSnap) => {
+      if (!docSnap.id.startsWith("by-key-")) return false;
+      const number = Number(docSnap.data()?.seasonNumber) || 0;
+      return deletedSet.has(number);
+    });
+
+    const refsToDelete = [
+      ...targets.map((season) => season.ref),
+      ...keyDocs.map((docSnap) => docSnap.ref),
+    ];
+
+    for (let index = 0; index < refsToDelete.length; index += 400) {
+      const batch = db.batch();
+      refsToDelete.slice(index, index + 400).forEach((ref) => batch.delete(ref));
+      await batch.commit();
+    }
+
+    const configRef = db.doc("appConfig/ranking");
+    const nextCounter = remainingSeasonCounter(seasons, deletedNumbers);
+    const configUpdate = {
+      seasonCounter: nextCounter,
+      updatedAt: FieldValue.serverTimestamp(),
+      lastPurgeAt: FieldValue.serverTimestamp(),
+      lastPurgeBy: adminUid,
+    };
+
+    if (wipeCurrent) {
+      const snapshotsSnap = await db.collection("rankingSnapshots").get();
+      for (let index = 0; index < snapshotsSnap.docs.length; index += 400) {
+        const batch = db.batch();
+        snapshotsSnap.docs.slice(index, index + 400).forEach((docSnap) => {
+          batch.update(docSnap.ref, {
+            rankingPoints: 0,
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+        });
+        await batch.commit();
+      }
+      configUpdate.cutoffDateKey = todayKey();
+      configUpdate.resetAt = FieldValue.serverTimestamp();
+      configUpdate.resetBy = adminUid;
+    }
+
+    await configRef.set(configUpdate, { merge: true });
+
+    // Reconstrói coroas/pódios públicos a partir das edições restantes.
+    // Insígnias continuam intactas (activeBadgeIds vem dos grants).
+    await runPublicProfileBackfill(db);
+
+    return {
+      deletedSeasonNumbers: deletedNumbers,
+      deletedLabels: targets.map((season) => seasonPeriodLabel(season)),
+      wipeCurrent,
+      seasonCounter: nextCounter,
+    };
+  },
+
+  async ensurePublicGamificationProfile(request) {
+    requireAuth(request);
+    const userId = String(request.data?.userId || request.auth.uid).trim();
+    if (!userId) {
+      throw new HttpsError("invalid-argument", "userId obrigatório");
+    }
+    // Admin SDK ignora rules: a garantia só materializa o perfil se o
+    // usuário alvo participa publicamente. hidden/view_only/unset/staff
+    // retornam unavailable e sync remove eventual doc obsoleto.
+    const profile = await runEnsurePublicProfile(db, userId);
+    if (!profile) return { status: "unavailable" };
+    return { status: "available", profile };
+  },
+
+  async backfillPublicGamificationProfiles(request) {
+    const adminUid = requireAuth(request);
+    await requireAdmin(db, adminUid);
+    return runPublicProfileBackfill(db);
   },
 
   async upsertBadgeDefinition(request) {
@@ -226,6 +388,7 @@ export const createGamificationHandlers = (db) => ({
       },
       { merge: true },
     );
+    await syncPublicGamificationProfile(db, userId);
     return { grantId: grantDocId(userId, badgeId) };
   },
 
@@ -253,6 +416,7 @@ export const createGamificationHandlers = (db) => ({
         tx.update(userRef, { activeBadgeBorderId: null });
       }
     });
+    await syncPublicGamificationProfile(db, userId);
     return { grantId: grantDocId(userId, badgeId) };
   },
 
@@ -269,6 +433,7 @@ export const createGamificationHandlers = (db) => ({
       }
     }
     await userRef.update({ activeBadgeBorderId: badgeId });
+    await syncPublicGamificationProfile(db, userId);
     return { userId, badgeId };
   },
 });

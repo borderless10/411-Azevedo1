@@ -10,6 +10,7 @@ import { AddExpenseScreen } from "../screens/Expense/AddExpenseScreen";
 import { EditExpenseScreen } from "../screens/Expense/EditExpenseScreen";
 import { ExpenseListScreen } from "../screens/Expense/ExpenseListScreen";
 import { ProfileScreen } from "../screens/Profile/ProfileScreen";
+import { PublicGamificationProfileScreen } from "../screens/Profile/PublicGamificationProfileScreen";
 import { SettingsScreen } from "../screens/Settings/SettingsScreen";
 import { ConsumoModeradoScreen } from "../screens/ConsumoModerado/ConsumoModeradoScreen";
 import { FeedScreen } from "../screens/Feed/FeedScreen";
@@ -187,6 +188,8 @@ export const Router = () => {
         return <BadgeManagementScreen />;
       case "Profile":
         return <ProfileScreen />;
+      case "PublicGamificationProfile":
+        return <PublicGamificationProfileScreen />;
       case "Settings":
         return <SettingsScreen />;
       case "Cartoes":

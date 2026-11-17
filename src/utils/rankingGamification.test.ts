@@ -4,6 +4,8 @@ import { buildLeaguePodium, buildSeasonPodiums } from "./rankingSeason.ts";
 import {
   grantDocId,
   resolveActiveBorderAfterRevoke,
+  resolveAvatarBadgeDefinition,
+  resolveAvatarRingDefinition,
   validateBadgeDefinitionInput,
 } from "./badgeRules.ts";
 
@@ -44,6 +46,85 @@ test("revogar a borda ativa volta ao padrão; outra borda permanece", () => {
     resolveActiveBorderAfterRevoke("guardiao-do-zero", "legado-visao"),
     "guardiao-do-zero",
   );
+});
+
+const grantedBadges = [
+  {
+    id: "primeira",
+    name: "Primeira",
+    meaning: "Significado",
+    description: "Descrição",
+    icon: "trophy" as const,
+    primaryColor: "#8c52ff",
+    secondaryColor: "#e7b958",
+    borderPreset: "solid-violet" as const,
+    isOfficial: true,
+    isActive: true,
+  },
+  {
+    id: "segunda",
+    name: "Segunda",
+    meaning: "Significado",
+    description: "Descrição",
+    icon: "medal" as const,
+    primaryColor: "#8c52ff",
+    secondaryColor: "#e7b958",
+    borderPreset: "solid-gold" as const,
+    isOfficial: true,
+    isActive: true,
+  },
+];
+
+test("foto usa a borda ativa quando ela existe", () => {
+  assert.equal(
+    resolveAvatarBadgeDefinition(grantedBadges[1], grantedBadges),
+    grantedBadges[1],
+  );
+  assert.equal(
+    resolveAvatarRingDefinition(grantedBadges[1]),
+    grantedBadges[1],
+  );
+});
+
+test("borda padrão com insígnias: anel vazio e selo da primeira concedida", () => {
+  assert.equal(resolveAvatarRingDefinition(null), null);
+  assert.equal(resolveAvatarRingDefinition(undefined), null);
+  assert.equal(
+    resolveAvatarBadgeDefinition(null, grantedBadges),
+    grantedBadges[0],
+  );
+});
+
+test("troca de borda reflete no anel e no selo", () => {
+  assert.equal(
+    resolveAvatarRingDefinition(grantedBadges[0]),
+    grantedBadges[0],
+  );
+  assert.equal(
+    resolveAvatarBadgeDefinition(grantedBadges[0], grantedBadges),
+    grantedBadges[0],
+  );
+  assert.equal(
+    resolveAvatarRingDefinition(grantedBadges[1]),
+    grantedBadges[1],
+  );
+  assert.equal(
+    resolveAvatarBadgeDefinition(grantedBadges[1], grantedBadges),
+    grantedBadges[1],
+  );
+  // Voltar para a borda padrão apaga o anel e mantém o selo.
+  assert.equal(resolveAvatarRingDefinition(null), null);
+  assert.equal(
+    resolveAvatarBadgeDefinition(null, grantedBadges),
+    grantedBadges[0],
+  );
+});
+
+test("sem insígnia nenhuma, anel e selo ficam vazios", () => {
+  assert.equal(resolveAvatarRingDefinition(null), null);
+  assert.equal(resolveAvatarBadgeDefinition(undefined, []), null);
+  assert.equal(resolveAvatarBadgeDefinition(null, null), null);
+  assert.equal(resolveAvatarBadgeDefinition(null, undefined), null);
 });
 
 test("valida definição de insígnia personalizada", () => {

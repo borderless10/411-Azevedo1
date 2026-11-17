@@ -15,8 +15,6 @@ import {
   Animated,
   TextInput,
   LayoutAnimation,
-  Platform,
-  UIManager,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "../../routes/NavigationContext";
@@ -127,19 +125,6 @@ export const HomeScreen = () => {
   const [deletingTransaction, setDeletingTransaction] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
   const [expanded, setExpanded] = useState<"income" | "expense" | null>(null);
-
-  useEffect(() => {
-    if (
-      Platform.OS === "android" &&
-      (UIManager as any).setLayoutAnimationEnabledExperimental
-    ) {
-      try {
-        (UIManager as any).setLayoutAnimationEnabledExperimental(true);
-      } catch (e) {
-        // ignore
-      }
-    }
-  }, []);
 
   // Função para obter cor de categoria
   const getCategoryColor = (categoryName: string): string => {

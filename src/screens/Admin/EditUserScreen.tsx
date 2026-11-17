@@ -13,6 +13,7 @@ import { useNavigation } from "../../routes/NavigationContext";
 import { useAuth } from "../../hooks/useAuth";
 import { useTheme } from "../../contexts/ThemeContext";
 import { userService, isAdminUser } from "../../services/userServices";
+import { adminUpdateUserCredentials } from "../../services/adminUserServices";
 import ConsultantPicker from "../../components/ui/ConsultantPicker";
 import { ConsultationPreferredDayPicker } from "../../components/Consultation/ConsultationPreferredDayPicker";
 import CustomModal from "../../components/ui/CustomModal";
@@ -63,6 +64,11 @@ export const EditUserScreen: React.FC = ({}: any) => {
   const [confirmingBookingRelease, setConfirmingBookingRelease] =
     useState(false);
   const [releasingBooking, setReleasingBooking] = useState(false);
+  const [email, setEmail] = useState("");
+  const [originalEmail, setOriginalEmail] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [savingCredentials, setSavingCredentials] = useState(false);
   const [feedback, setFeedback] = useState<{
     visible: boolean;
     title: string;
@@ -100,6 +106,8 @@ export const EditUserScreen: React.FC = ({}: any) => {
         setName(u.name || "");
         setNickname((u as any).nickname || "");
         setPhone(u.phone || "");
+        setEmail(u.email || "");
+        setOriginalEmail(u.email || "");
         setRole((u.role as any) || "user");
         setConsultantId((u as any).consultantId || null);
         setAccountType(isCoupleAccount(u) ? "couple" : "individual");
@@ -177,6 +185,77 @@ export const EditUserScreen: React.FC = ({}: any) => {
       });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSaveCredentials = async () => {
+    if (!userId) return;
+    const nextEmail = email.trim().toLowerCase();
+    const emailChanged = nextEmail !== originalEmail.trim().toLowerCase();
+    const passwordFilled = newPassword.length > 0;
+
+    if (!emailChanged && !passwordFilled) {
+      setFeedback({
+        visible: true,
+        title: "Acesso",
+        message: "Altere o e-mail ou informe uma nova senha para salvar.",
+      });
+      return;
+    }
+    if (emailChanged && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(nextEmail)) {
+      setFeedback({
+        visible: true,
+        title: "Acesso",
+        message: "Informe um e-mail válido.",
+      });
+      return;
+    }
+    if (passwordFilled && newPassword.length < 6) {
+      setFeedback({
+        visible: true,
+        title: "Acesso",
+        message: "A nova senha precisa de pelo menos 6 caracteres.",
+      });
+      return;
+    }
+    if (passwordFilled && newPassword !== confirmPassword) {
+      setFeedback({
+        visible: true,
+        title: "Acesso",
+        message: "A confirmação não bate com a nova senha.",
+      });
+      return;
+    }
+
+    setSavingCredentials(true);
+    try {
+      await adminUpdateUserCredentials(userId, {
+        ...(emailChanged ? { email: nextEmail } : {}),
+        ...(passwordFilled ? { newPassword } : {}),
+      });
+      if (emailChanged) {
+        setEmail(nextEmail);
+        setOriginalEmail(nextEmail);
+      }
+      setNewPassword("");
+      setConfirmPassword("");
+      setFeedback({
+        visible: true,
+        title: "Sucesso",
+        message: passwordFilled
+          ? "Acesso atualizado. O usuário precisará entrar de novo com a nova senha."
+          : "Acesso atualizado.",
+      });
+    } catch (error: any) {
+      console.error("Erro ao salvar credenciais do usuário", error);
+      setFeedback({
+        visible: true,
+        title: "Erro",
+        message:
+          error?.message || "Não foi possível atualizar o acesso agora.",
+      });
+    } finally {
+      setSavingCredentials(false);
     }
   };
 
@@ -314,6 +393,103 @@ export const EditUserScreen: React.FC = ({}: any) => {
                   ))}
                 </View>
               </>
+            ) : null}
+
+            {isAdminUser(user) && role !== "admin" ? (
+              <View
+                style={[
+                  styles.sectionCard,
+                  { backgroundColor: colors.card, borderColor: colors.border },
+                ]}
+              >
+                <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                  Acesso (e-mail e senha)
+                </Text>
+                <Text style={[styles.fieldHint, { color: colors.textSecondary }]}>
+                  Corrija o e-mail de login ou defina uma nova senha para
+                  esta pessoa. Ao trocar a senha, ela precisará entrar de
+                  novo no aparelho dela.
+                </Text>
+
+                <Text style={[styles.label, { color: colors.text }]}>E-mail</Text>
+                <TextInput
+                  style={[
+                    styles.input,
+                    {
+                      backgroundColor: colors.inputBackground,
+                      color: colors.text,
+                      borderColor: colors.border,
+                    },
+                  ]}
+                  value={email}
+                  onChangeText={setEmail}
+                  placeholder="email@exemplo.com"
+                  placeholderTextColor={colors.placeholder}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="email-address"
+                />
+
+                <Text style={[styles.label, { color: colors.text }]}>
+                  Nova senha
+                </Text>
+                <TextInput
+                  style={[
+                    styles.input,
+                    {
+                      backgroundColor: colors.inputBackground,
+                      color: colors.text,
+                      borderColor: colors.border,
+                    },
+                  ]}
+                  value={newPassword}
+                  onChangeText={setNewPassword}
+                  placeholder="Deixe vazio para manter a atual"
+                  placeholderTextColor={colors.placeholder}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  secureTextEntry
+                />
+
+                <Text style={[styles.label, { color: colors.text }]}>
+                  Confirmar nova senha
+                </Text>
+                <TextInput
+                  style={[
+                    styles.input,
+                    {
+                      backgroundColor: colors.inputBackground,
+                      color: colors.text,
+                      borderColor: colors.border,
+                    },
+                  ]}
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                  placeholder="Repita a nova senha"
+                  placeholderTextColor={colors.placeholder}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  secureTextEntry
+                />
+
+                <TouchableOpacity
+                  style={[
+                    styles.credentialsButton,
+                    { backgroundColor: colors.primary },
+                    savingCredentials && styles.saveDisabled,
+                  ]}
+                  onPress={handleSaveCredentials}
+                  disabled={savingCredentials}
+                >
+                  {savingCredentials ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.credentialsButtonText}>
+                      Salvar acesso
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </View>
             ) : null}
 
             {isClientRole && (
@@ -674,6 +850,18 @@ const styles = StyleSheet.create({
   },
   datePicker: {
     marginBottom: 0,
+  },
+  credentialsButton: {
+    marginTop: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  credentialsButtonText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 14,
   },
   badgeSection: { marginTop: 18, marginBottom: 8 },
   badgeHint: { color: "#999", fontSize: 12, marginBottom: 8 },

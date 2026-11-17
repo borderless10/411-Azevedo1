@@ -120,6 +120,23 @@ const markMissedDay = async (
   await persistEntries(userId, monthYear, budget, entries, coupleMember);
 };
 
+/**
+ * Pontos que o registro rende na temporada atual. Registro de um dia já
+ * encerrado pela virada de temporada (dateKey até o corte) fica gravado
+ * no histórico, mas rende 0 agora, e o retorno precisa dizer isso para a
+ * tela não comemorar ponto que o ranking não vai mostrar.
+ */
+const seasonPoints = async (
+  entry: RankingPlanilhaEntry,
+  points: number,
+): Promise<number> => {
+  const { rankingServices } = await import("./rankingServices");
+  const config = await rankingServices.getRankingConfig();
+  return isRankingEntryInCurrentPeriod(entry, config.cutoffDateKey)
+    ? points
+    : 0;
+};
+
 const isZeroRankingEntry = (entry: RankingPlanilhaEntry): boolean =>
   entry.type === "zero_same_day" ||
   entry.type === "zero_next_day" ||
@@ -196,7 +213,11 @@ export const rankingPlanilhaService = {
         entries = entries.filter((entry) => entry.dateKey !== dateKey);
         replacingExpenseWithZero = true;
       } else {
-        return { points: existing.points, applied: false, type: existing.type };
+        return {
+          points: await seasonPoints(existing, existing.points),
+          applied: false,
+          type: existing.type,
+        };
       }
     }
 
@@ -236,7 +257,11 @@ export const rankingPlanilhaService = {
     const { rankingServices } = await import("./rankingServices");
     await rankingServices.refreshUserSnapshot(userId);
 
-    return { points, applied: true, type };
+    return {
+      points: await seasonPoints(entry, points),
+      applied: true,
+      type,
+    };
   },
 
   getTotalPointsFromBudgets(

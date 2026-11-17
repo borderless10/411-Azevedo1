@@ -1,0 +1,18 @@
+[
+  {
+    "file": "01-page-full.png",
+    "label": "Imagem 1 — Contas do cliente, com o total vencido e a conta Academia"
+  },
+  {
+    "file": "02-detalhe-vencimento.png",
+    "label": "Imagem 2 — Detalhe — Vencimento, marca Já vencida e Desativar"
+  },
+  {
+    "file": "03-detalhe-inativa.png",
+    "label": "Imagem 3 — Detalhe — Conta inativa com a ação Reativar"
+  },
+  {
+    "file": "04-detalhe-senha.png",
+    "label": "Imagem 4 — Detalhe — Senha atual, nova senha e confirmação"
+  }
+]

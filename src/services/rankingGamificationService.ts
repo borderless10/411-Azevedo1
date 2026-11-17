@@ -81,6 +81,32 @@ export const rankingGamificationService = {
     return result.data;
   },
 
+  async purgeRankingHistory(input: {
+    seasonNumbers?: number[];
+    deleteAll?: boolean;
+    wipeCurrent?: boolean;
+  }): Promise<{
+    deletedSeasonNumbers: number[];
+    deletedLabels: string[];
+    wipeCurrent: boolean;
+    seasonCounter: number;
+  }> {
+    const result = await call<
+      {
+        seasonNumbers?: number[];
+        deleteAll?: boolean;
+        wipeCurrent?: boolean;
+      },
+      {
+        deletedSeasonNumbers: number[];
+        deletedLabels: string[];
+        wipeCurrent: boolean;
+        seasonCounter: number;
+      }
+    >("purgeRankingHistory")(input);
+    return result.data;
+  },
+
   async upsertBadgeDefinition(definition: BadgeDefinitionInput): Promise<void> {
     await call("upsertBadgeDefinition")({ definition });
   },

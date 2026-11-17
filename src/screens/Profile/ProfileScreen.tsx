@@ -18,44 +18,58 @@ import { Ionicons } from "@expo/vector-icons";
 import ProfilePhotoModal from "../../components/ui/ProfilePhotoModal";
 import { useAuth } from "../../hooks/useAuth";
 import { userService } from "../../services/userServices";
-import {
-  isProfilePhotoStorageEnabled,
-  uploadProfilePhoto,
-} from "../../services/profilePhotoStorage";
 import { canRegisterClient } from "../../utils/staffAccess";
 import { useNavigation } from "../../routes/NavigationContext";
 import { Layout } from "../../components/Layout/Layout";
 import {
   profileDisplayName,
-  profileInitial,
   profilePhotoUri,
   resolveProfilePhotoUri,
 } from "../../utils/chatDisplayNames";
 import { rankingGamificationService } from "../../services/rankingGamificationService";
 import { BadgedAvatar } from "../../components/Gamification/BadgedAvatar";
+import { resolveAvatarBadgeDefinition } from "../../utils/badgeRules";
 import type {
   BadgeDefinition,
   UserBadgeGrant,
 } from "../../types/rankingGamification";
 
 const persistProfilePhoto = async (userId: string, base64: string | null) => {
-  if (isProfilePhotoStorageEnabled() && base64) {
-    const uploaded = await uploadProfilePhoto(userId, base64);
+  // Caminho principal: Firebase Storage. Só a URL fica no documento do
+  // usuário, e é ela que Ranking, Chat e demais telas leves leem para
+  // mostrar a foto de todo mundo (photoBase64 fica retido nas listas).
+  // Se o Storage estiver desligado ou falhar, cai para o base64 no
+  // Firestore, que resolve a foto nas telas com o documento completo.
+  let savedToStorage = false;
+  if (base64) {
+    try {
+      const { isProfilePhotoStorageEnabled, uploadProfilePhoto } =
+        await import("../../services/profilePhotoStorage");
+      if (isProfilePhotoStorageEnabled()) {
+        const { url, path } = await uploadProfilePhoto(userId, base64);
+        await userService.updateUser(userId, {
+          photoBase64: null,
+          photoUrl: url,
+          photoStoragePath: path,
+          photoUpdatedAt: Date.now(),
+        });
+        savedToStorage = true;
+      }
+    } catch (error) {
+      console.warn("Foto de perfil: Storage indisponível, usando base64.", error);
+    }
+  }
+  if (!savedToStorage) {
     await userService.updateUser(userId, {
-      photoUrl: uploaded.url,
-      photoStoragePath: uploaded.path,
-      photoBase64: null,
+      photoBase64: base64 || null,
+      photoUrl: null,
+      photoStoragePath: null,
       photoUpdatedAt: Date.now(),
     });
-    void import("../../services/rankingServices").then(({ rankingServices }) =>
-      rankingServices.refreshUserSnapshot(userId),
-    );
-    return;
   }
-  await userService.updateUser(userId, {
-    photoBase64: base64 || null,
-    photoUpdatedAt: Date.now(),
-  });
+  void import("../../services/rankingServices").then(({ rankingServices }) =>
+    rankingServices.refreshUserSnapshot(userId),
+  );
 };
 
 export const ProfileScreen = () => {
@@ -125,6 +139,12 @@ export const ProfileScreen = () => {
     .filter((definition): definition is BadgeDefinition => Boolean(definition));
   const activeBorderDefinition =
     definitionsById.get((user as any)?.activeBadgeBorderId) || null;
+  // Selo da própria foto: insígnia da borda ativa ou primeira concedida.
+  // O anel continua sendo só activeBorderDefinition.
+  const ownBadgeDefinition = resolveAvatarBadgeDefinition(
+    activeBorderDefinition,
+    myBadges,
+  );
 
   const handleSelectBorder = async (badgeId: string | null) => {
     if (selectingBorder) return;
@@ -220,20 +240,17 @@ export const ProfileScreen = () => {
               onPress={() => setShowPhotoModal(true)}
               style={styles.avatarContainer}
             >
-              {profilePhotoUri(editingPhotoBase64) ? (
-                <Image
-                  source={{
-                    uri: profilePhotoUri(editingPhotoBase64) as string,
-                  }}
-                  style={styles.avatarImage}
-                />
-              ) : (
-                <View style={styles.avatar}>
-                  <Text style={styles.avatarText}>
-                    {profileInitial(user, user?.email?.[0] || "A")}
-                  </Text>
-                </View>
-              )}
+              <BadgedAvatar
+                photoUri={
+                  profilePhotoUri(editingPhotoBase64) ||
+                  resolveProfilePhotoUri(user as any)
+                }
+                displayName={profileDisplayName(user, "Usuário")}
+                size={88}
+                ringDefinition={activeBorderDefinition}
+                badgeDefinition={ownBadgeDefinition}
+                onPhotoPress={() => setShowPhotoModal(true)}
+              />
               {isAdmin && (
                 <View style={styles.badgeContainer}>
                   <View style={styles.adminBadge}>
@@ -252,6 +269,21 @@ export const ProfileScreen = () => {
               {profileDisplayName(user, "Usuário")}
             </Text>
             <Text style={styles.userEmail}>{user?.email || ""}</Text>
+            {user?.id && user.rankingPreference === "participate" ? (
+              <TouchableOpacity
+                style={styles.achievementsButton}
+                onPress={() =>
+                  navigate("PublicGamificationProfile", { userId: user.id })
+                }
+                accessibilityRole="button"
+                accessibilityLabel="Ver minhas conquistas"
+              >
+                <Ionicons name="trophy-outline" size={17} color="#fff" />
+                <Text style={styles.achievementsButtonText}>
+                  Ver minhas conquistas
+                </Text>
+              </TouchableOpacity>
+            ) : null}
           </View>
 
           {/* Dados de Perfil (exibição, habilitar edição via botão) */}
@@ -449,7 +481,8 @@ export const ProfileScreen = () => {
                 photoUri={resolveProfilePhotoUri(user as any)}
                 displayName={profileDisplayName(user as any)}
                 size={72}
-                definition={activeBorderDefinition}
+                ringDefinition={activeBorderDefinition}
+                badgeDefinition={ownBadgeDefinition}
               />
               <Text style={styles.infoValue}>
                 {activeBorderDefinition
@@ -652,7 +685,7 @@ const styles = StyleSheet.create({
   badgeContainer: {
     position: "absolute",
     bottom: 0,
-    right: 0,
+    left: 0,
   },
   adminBadge: {
     flexDirection: "row",
@@ -678,6 +711,22 @@ const styles = StyleSheet.create({
   userEmail: {
     fontSize: 16,
     color: "#999",
+  },
+  achievementsButton: {
+    minHeight: 44,
+    marginTop: 14,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: "#8c52ff",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  achievementsButtonText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "700",
   },
   roleCard: {
     backgroundColor: "#1a1a1a",

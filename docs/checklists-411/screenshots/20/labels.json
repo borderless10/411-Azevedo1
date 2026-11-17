@@ -1,0 +1,18 @@
+[
+  {
+    "file": "01-page-full.png",
+    "label": "Imagem 1 — Ranking completo, com todos os participantes e foto de perfil"
+  },
+  {
+    "file": "02-detalhe-ranking-ligas.png",
+    "label": "Imagem 2 — Detalhe — Troca de liga entre Individuais e Casais"
+  },
+  {
+    "file": "03-detalhe-rendas.png",
+    "label": "Imagem 3 — Detalhe — Registros de Rendas com filtros Todas, Acompanhadas e Gerais / salário"
+  },
+  {
+    "file": "04-detalhe-chat.png",
+    "label": "Imagem 4 — Detalhe — Lista de conversas do chat"
+  }
+]

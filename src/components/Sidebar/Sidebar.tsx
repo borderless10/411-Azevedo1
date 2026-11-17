@@ -23,6 +23,11 @@ import { isChatUnreadForUser } from "../../utils/chatUtils";
 import { useConsultationScheduling } from "../../hooks/useConsultationScheduling";
 import { isAppClientUser } from "../../services/userServices";
 import { perfMeasure } from "../../utils/perfMarks";
+import { rankingServices } from "../../services/rankingServices";
+import {
+  rankingPositionFontSize,
+  rankingPositionLabel,
+} from "../../utils/rankingPosition";
 
 interface SidebarProps {
   visible: boolean;
@@ -62,11 +67,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
   );
   const [trackedIncomeTitles, setTrackedIncomeTitles] = useState<string[]>([]);
   const [trackedExpensesExpanded, setTrackedExpensesExpanded] = useState(false);
+  const [rankingPosition, setRankingPosition] = useState<number | null>(null);
   const consultationPulseAnim = useRef(new Animated.Value(1)).current;
   const {
     preferredDayLabel,
     bookedDayLabel,
     hasBookedCurrentCycle,
+    schedulingState,
     shouldPulse: shouldPulseConsultation,
   } = useConsultationScheduling();
 
@@ -215,6 +222,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
       cancelled = true;
     };
   }, [user?.id, isCommonUser, isAuthenticated]);
+
+  // Posição própria no ranking: uma leitura pontual por usuário/sessão.
+  // Erro ou ausência no ranking deixam o troféu sem número.
+  useEffect(() => {
+    setRankingPosition(null);
+    if (!user?.id || !isAuthenticated || shouldHideRankingItem) return;
+    let cancelled = false;
+    rankingServices
+      .getOwnRankingPosition(user.id)
+      .then((position) => {
+        if (!cancelled) setRankingPosition(position);
+      })
+      .catch(() => {
+        if (!cancelled) setRankingPosition(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, isAuthenticated, shouldHideRankingItem]);
 
   const activeTrackedExpenseTitle = String(
     params?.trackedTitle || params?.categoryName || "",
@@ -449,6 +475,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
             >
               {hasBookedCurrentCycle
                 ? "Consultoria agendada"
+                : schedulingState === "awaitingConfirmation"
+                  ? "Confirme sua consultoria"
                 : "Agende sua consultoria"}
             </Text>
             {hasBookedCurrentCycle && bookedDayLabel ? (
@@ -457,6 +485,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 numberOfLines={2}
               >
                 Dia da consultoria: {bookedDayLabel}
+              </Text>
+            ) : schedulingState === "awaitingConfirmation" ? (
+              <Text
+                style={[
+                  styles.consultationDayHint,
+                  { color: "#ff8fab" },
+                ]}
+                numberOfLines={2}
+              >
+                Informe o dia que ficou agendado
               </Text>
             ) : preferredDayLabel ? (
               <Text
@@ -513,15 +551,47 @@ export const Sidebar: React.FC<SidebarProps> = ({
         activeOpacity={0.7}
         delayPressIn={0}
         onPress={() => handleNavigate(item.id)}
+        accessibilityLabel={
+          item.id === "Ranking" && rankingPositionLabel(rankingPosition)
+            ? `Ranking, sua posição: ${rankingPosition}`
+            : item.label
+        }
       >
         <View style={styles.menuItemLeft}>
-          <Ionicons
-            name={item.icon}
-            size={24}
-            color={
-              isActive ? item.color || "#8c52ff" : colors.textSecondary
-            }
-          />
+          {item.id === "Ranking" ? (
+            <View style={styles.rankingIconWrap}>
+              <Ionicons
+                name={item.icon}
+                size={24}
+                color={
+                  isActive ? item.color || "#8c52ff" : colors.textSecondary
+                }
+              />
+              {rankingPositionLabel(rankingPosition) ? (
+                <View style={styles.rankingPositionOverlay} pointerEvents="none">
+                  <Text
+                    style={[
+                      styles.rankingPositionText,
+                      {
+                        color: colors.card,
+                        fontSize: rankingPositionFontSize(rankingPosition),
+                      },
+                    ]}
+                  >
+                    {rankingPositionLabel(rankingPosition)}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+          ) : (
+            <Ionicons
+              name={item.icon}
+              size={24}
+              color={
+                isActive ? item.color || "#8c52ff" : colors.textSecondary
+              }
+            />
+          )}
           <Text
             style={[
               styles.menuItemText,
@@ -935,6 +1005,27 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 16,
     flex: 1,
+  },
+  rankingIconWrap: {
+    width: 24,
+    height: 24,
+    position: "relative",
+    flexShrink: 0,
+  },
+  rankingPositionOverlay: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: 0,
+    height: 24,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingBottom: 7,
+  },
+  rankingPositionText: {
+    fontWeight: "800",
+    textAlign: "center",
+    includeFontPadding: false,
   },
   menuItemText: {
     fontSize: 16,

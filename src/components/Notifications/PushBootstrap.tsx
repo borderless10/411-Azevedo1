@@ -1,7 +1,11 @@
 import React, { useEffect, useRef } from "react";
 import { AppState, AppStateStatus, Platform } from "react-native";
-import * as Notifications from "expo-notifications";
+import type { NotificationResponse } from "expo-notifications";
 import * as Device from "expo-device";
+import {
+  Notifications,
+  canUseNativeNotifications,
+} from "../../lib/expoNotifications";
 import { useAuth } from "../../hooks/useAuth";
 import { useNavigation } from "../../routes/NavigationContext";
 import { userService } from "../../services/userServices";
@@ -35,6 +39,7 @@ export const PushBootstrap: React.FC = () => {
   const lastSavedTokenRef = useRef("");
 
   useEffect(() => {
+    if (!canUseNativeNotifications) return;
     if (!user?.id || Platform.OS === "web") return;
 
     let cancelled = false;
@@ -133,9 +138,10 @@ export const PushBootstrap: React.FC = () => {
   }, [user?.id]);
 
   useEffect(() => {
+    if (!canUseNativeNotifications) return;
     if (Platform.OS === "web") return;
 
-    const handleResponse = (response: Notifications.NotificationResponse | null) => {
+    const handleResponse = (response: NotificationResponse | null) => {
       const data = response?.notification.request.content.data as
         | Record<string, unknown>
         | undefined;

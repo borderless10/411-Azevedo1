@@ -21,6 +21,10 @@ import { userService } from "../../services/userServices";
 import type { User } from "../../types/auth";
 import type { BadgeDefinition } from "../../types/rankingGamification";
 import { resolveProfilePhotoUri } from "../../utils/chatDisplayNames";
+import {
+  resolveAvatarBadgeDefinition,
+  resolveAvatarRingDefinition,
+} from "../../utils/badgeRules";
 
 export const BadgeHoldersScreen = () => {
   const gamification = useRankingGamification();
@@ -78,10 +82,17 @@ export const BadgeHoldersScreen = () => {
           userId,
           displayName: lite?.name || "Participante",
           photoUri: resolveProfilePhotoUri(lite as any),
-          borderDefinition:
+          ringDefinition: resolveAvatarRingDefinition(
             gamification.definitionsById.get(
               (lite as any)?.activeBadgeBorderId,
-            ) || null,
+            ),
+          ),
+          badgeDefinition: resolveAvatarBadgeDefinition(
+            gamification.definitionsById.get(
+              (lite as any)?.activeBadgeBorderId,
+            ),
+            badges,
+          ),
           badges,
         };
       })
@@ -196,7 +207,8 @@ export const BadgeHoldersScreen = () => {
               photoUri={holder.photoUri}
               displayName={holder.displayName}
               size={56}
-              definition={holder.borderDefinition}
+              ringDefinition={holder.ringDefinition}
+              badgeDefinition={holder.badgeDefinition}
             />
             <Text style={styles.cardName} numberOfLines={1}>
               {holder.displayName}

@@ -221,6 +221,19 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    function rankingParticipates(userId) {
+      let data = userDoc(userId);
+      return ('rankingPreference' in data && data.rankingPreference == 'participate')
+        || (!('rankingPreference' in data) && data.showInRanking == true);
+    }
+
+    match /publicGamificationProfiles/{userId} {
+      allow get: if isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(userId))
+        && rankingParticipates(userId);
+      allow list, create, update, delete: if false;
+    }
+
     match /badgeDefinitions/{badgeId} {
       allow read: if isSignedIn();
       allow write: if false;

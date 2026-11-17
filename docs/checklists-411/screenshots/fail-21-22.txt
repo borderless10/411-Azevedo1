@@ -1,0 +1,59 @@
+
+Perfil
+C
+C
+Consultor
+consultor@gmail.com
+
+Dados de Perfil
+Nome
+Usuário
+Telefone
+Editar Perfil
+
+Informações da Conta
+ID do Usuário
+xhkc0ulprYf3UvCRhFRKCARv9Gb2
+Status
+Ativo
+
+Preferências
+Moeda
+BRL
+USD
+EUR
+Ranking
+Preferências de ranking agora ficam em Configurações
+Salvar Preferências
+
+Minha borda
+C
+Borda padrão
+Você ainda não possui insígnias. Conquiste uma para liberar bordas personalizadas.
+
+Cadastrar cliente
+O novo cliente entra na sua operação.
+
+Informações da Conta
+
+Configurações
+Básico
+
+Permissões
+Padrão
+
+
+Início
+
+Linha do Tempo
+
+Chats
+
+Ranking
+
+Perfil
+
+
+Configurações
+
+Sair

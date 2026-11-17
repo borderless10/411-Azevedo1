@@ -1,9 +1,12 @@
 import React, { useMemo, useRef } from "react";
-import { View, Text, Image, StyleSheet, TouchableOpacity } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { profilePhotoUri } from "../../utils/chatDisplayNames";
 import { ChatMessageText } from "./ChatMessageText";
 import { ChatMention } from "../../utils/chatMentions";
 import { ChatReplyTo, Message } from "../../services/chatService";
+import { BadgedAvatar } from "../Gamification/BadgedAvatar";
+import type { CrownPosition } from "../../utils/crowns";
+import type { BadgeDefinition } from "../../types/rankingGamification";
 
 export interface ChatMessageBubbleProps {
   msg: Message;
@@ -12,8 +15,13 @@ export interface ChatMessageBubbleProps {
   showSenderName?: boolean;
   senderLabel: string;
   senderPhotoBase64?: string;
+  senderBadgeDefinition?: BadgeDefinition | null;
+  senderRingDefinition?: BadgeDefinition | null;
+  senderCrownPosition?: CrownPosition | null;
   highlighted?: boolean;
   replySenderLabel?: string;
+  onPhotoPress?: () => void;
+  onBadgePress?: (definition: BadgeDefinition) => void;
   onLongPress?: () => void;
   onReactionPress?: (
     emoji: string,
@@ -37,12 +45,16 @@ export const MessageBubble = React.memo(function MessageBubble({
   showSenderName = false,
   senderLabel,
   senderPhotoBase64,
+  senderBadgeDefinition,
+  senderRingDefinition,
+  senderCrownPosition,
   highlighted = false,
   replySenderLabel,
+  onPhotoPress,
+  onBadgePress,
   onLongPress,
   onReactionPress,
 }: ChatMessageBubbleProps) {
-  const initial = (senderLabel || "U").charAt(0).toUpperCase();
   const reactionChips = useMemo(
     () => groupReactions(msg.reactions),
     [msg.reactions],
@@ -65,22 +77,26 @@ export const MessageBubble = React.memo(function MessageBubble({
         }}
       >
         {showAvatar && !isOwn && (
-          <View style={styles.msgAvatarContainer}>
+          <View style={styles.msgAvatarWrap}>
             {(() => {
               const photoUri = profilePhotoUri(senderPhotoBase64);
               const safeUri =
                 photoUri && !photoUri.startsWith("data:") ? photoUri : null;
-              return safeUri ? (
-              <Image
-                source={{ uri: safeUri }}
-                style={styles.msgAvatar}
-              />
-              ) : null;
-            })() || (
-              <View style={styles.msgAvatarFallback}>
-                <Text style={styles.msgAvatarInitial}>{initial}</Text>
-              </View>
-            )}
+              return (
+                <BadgedAvatar
+                  photoUri={safeUri}
+                  displayName={senderLabel}
+                  size={32}
+                  ringDefinition={senderRingDefinition}
+                  badgeDefinition={senderBadgeDefinition}
+                  crownPosition={senderCrownPosition}
+                  onPhotoPress={safeUri ? onPhotoPress : undefined}
+                  onBadgePress={
+                    senderBadgeDefinition ? onBadgePress : undefined
+                  }
+                />
+              );
+            })()}
           </View>
         )}
 
@@ -307,25 +323,7 @@ const styles = StyleSheet.create({
   reactionEmoji: {
     fontSize: 12,
   },
-  msgAvatarContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    overflow: "hidden",
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 8,
-  },
-  msgAvatar: { width: 40, height: 40 },
-  msgAvatarFallback: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#e9e5f8",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  msgAvatarInitial: { fontSize: 14, fontWeight: "700", color: "#5a4b7a" },
+  msgAvatarWrap: { marginRight: 8 },
 });
 
 export default MessageBubble;

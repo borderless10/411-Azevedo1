@@ -1,16 +1,22 @@
-﻿import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Animated,
+  Easing,
   View,
   Text,
   StyleSheet,
   FlatList,
   ActivityIndicator,
   Modal,
+  Platform,
   TouchableOpacity,
   Alert,
   Image,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import Svg, { Rect } from "react-native-svg";
+
+const AnimatedRect = Animated.createAnimatedComponent(Rect);
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Layout } from "../../components/Layout/Layout";
 import { rankingServices, RankingEntry, RankingLeague } from "../../services/rankingServices";
@@ -21,12 +27,11 @@ import { RankingPreference } from "../../types/auth";
 import { resolveProfilePhotoUri } from "../../utils/chatDisplayNames";
 import { isCoupleAccount } from "../../utils/coupleAccount";
 import { useRankingGamification } from "../../hooks/useRankingGamification";
+import { buildCrownByUser } from "../../utils/crowns";
 import { BadgedAvatar } from "../../components/Gamification/BadgedAvatar";
-import {
-  BadgeDetailModal,
-  BadgeEmblemRow,
-} from "../../components/Gamification/BadgeEmblem";
+import { BadgeDetailModal } from "../../components/Gamification/BadgeEmblem";
 import { PodiumView } from "../../components/Gamification/PodiumView";
+import { PhotoPreviewModal } from "../../components/Gamification/PhotoPreviewModal";
 import type { BadgeDefinition } from "../../types/rankingGamification";
 import {
   acceptRankingCache,
@@ -34,6 +39,13 @@ import {
   rankingCacheKey,
   rankingRowsChanged,
 } from "../../utils/rankingCache";
+import { rankingListConfig } from "../../utils/rankingListConfig";
+import {
+  resolveAvatarBadgeDefinition,
+  resolveAvatarRingDefinition,
+} from "../../utils/badgeRules";
+import { rankingGamificationService } from "../../services/rankingGamificationService";
+import { rankingSeasonPeriodLabel } from "../../utils/rankingSeasonLabel";
 
 type Row = {
   position: number;
@@ -60,6 +72,11 @@ export const RankingScreen = () => {
   const [leagueTab, setLeagueTab] = useState<RankingLeague>("individual");
   const leagueTabInitialized = useRef(false);
   const [resetting, setResetting] = useState(false);
+  const [purging, setPurging] = useState(false);
+  const [selectedPurgeSeasons, setSelectedPurgeSeasons] = useState<number[]>(
+    [],
+  );
+  const [wipeCurrentOnPurge, setWipeCurrentOnPurge] = useState(false);
   const [staleNotice, setStaleNotice] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [cutoffDateKey, setCutoffDateKey] = useState<string | null>(null);
@@ -69,13 +86,47 @@ export const RankingScreen = () => {
   const [selectedBadge, setSelectedBadge] = useState<BadgeDefinition | null>(
     null,
   );
+  const [photoPreview, setPhotoPreview] = useState<{
+    uri: string;
+    name: string;
+    userId: string;
+  } | null>(null);
   const [expandedSeason, setExpandedSeason] = useState<number | null>(null);
   const [borderByUser, setBorderByUser] = useState<Map<string, string | null>>(
     new Map(),
   );
   const borderLoadingRef = useRef<Set<string>>(new Set());
   const touchStartXRef = useRef<number | null>(null);
+  const holdersBeam = useRef(new Animated.Value(0)).current;
+  const [holdersSize, setHoldersSize] = useState({ width: 0, height: 0 });
+
+  // Feixe de luz percorrendo a borda do botão de detentores, em ciclo
+  // contínuo. JS driver porque anima a propriedade do traço do SVG.
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.timing(holdersBeam, {
+        toValue: 1,
+        duration: 2600,
+        easing: Easing.linear,
+        useNativeDriver: false,
+      }),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [holdersBeam]);
+
+  const holdersPerimeter = 2 * (holdersSize.width + holdersSize.height);
+  const holdersBeamLength = Math.max(28, holdersPerimeter * 0.22);
+  const holdersBeamOffset = holdersBeam.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, -Math.max(holdersPerimeter, 1)],
+  });
   const gamification = useRankingGamification();
+  // Coroas: pódio da última temporada encerrada, até o próximo reset.
+  const crownByUser = useMemo(
+    () => buildCrownByUser(gamification.seasons),
+    [gamification.seasons],
+  );
   const leagueRowsCacheRef = useRef<
     Partial<Record<RankingLeague, { rows: Row[]; cutoff: string | null }>>
   >({});
@@ -83,12 +134,14 @@ export const RankingScreen = () => {
   const lastReloadKeyRef = useRef(reloadKey);
 
   const isAdminUser = user?.isAdmin === true || user?.role === "admin";
+  const canPurgeRankingHistory = isAdminUser && Platform.OS === "web";
   const isCommonUser =
     !user?.isAdmin &&
     user?.role !== "consultor" &&
     user?.role !== "supervisor" &&
     user?.role !== "admin";
   const activeLeague: RankingLeague = leagueTab;
+  const listConfig = rankingListConfig(Platform.OS, rows.length);
 
   const getEffectiveRankingPreference = (): RankingPreference => {
     if (!user) return "unset";
@@ -216,10 +269,14 @@ export const RankingScreen = () => {
         const withPhotos = await Promise.all(
           missingPhoto.map(async (row) => {
             try {
-              const profile = await userService.getUserLiteById(row.userId);
+              // Documento completo de propósito: o perfil leve descarta
+              // photoBase64, e é ele que guarda a foto de quem ainda não
+              // tem photoUrl do Storage. Sem isso a foto salva não
+              // aparece para os outros no Ranking.
+              const profile = await userService.getUserById(row.userId);
               return {
                 userId: row.userId,
-                photoUrl: profile?.photoUrl ?? null,
+                photoUrl: resolveProfilePhotoUri(profile),
               };
             } catch {
               return { userId: row.userId, photoUrl: null };
@@ -288,6 +345,149 @@ export const RankingScreen = () => {
     );
   };
 
+  const togglePurgeSeason = (seasonNumber: number) => {
+    setSelectedPurgeSeasons((current) =>
+      current.includes(seasonNumber)
+        ? current.filter((value) => value !== seasonNumber)
+        : [...current, seasonNumber].sort((a, b) => a - b),
+    );
+  };
+
+  const runPurgeRankingHistory = async (mode: "selected" | "all") => {
+    if (!canPurgeRankingHistory || purging) return;
+    try {
+      setPurging(true);
+      const result = await rankingGamificationService.purgeRankingHistory(
+        mode === "all"
+          ? { deleteAll: true, wipeCurrent: wipeCurrentOnPurge }
+          : {
+              seasonNumbers: selectedPurgeSeasons,
+              wipeCurrent: wipeCurrentOnPurge,
+            },
+      );
+      setSelectedPurgeSeasons([]);
+      setReloadKey((key) => key + 1);
+      const deleted =
+        result.deletedLabels.length > 0
+          ? result.deletedLabels.join("\n")
+          : "Nenhuma edição histórica.";
+      Alert.alert(
+        "Histórico apagado",
+        `${deleted}${
+          result.wipeCurrent ? "\n\nRanking atual também foi zerado." : ""
+        }\n\nInsígnias não foram alteradas.`,
+      );
+    } catch (error) {
+      console.error("❌ [RANKING SCREEN] Erro ao apagar histórico:", error);
+      Alert.alert("Erro", "Não foi possível apagar o histórico do ranking.");
+    } finally {
+      setPurging(false);
+    }
+  };
+
+  const confirmPurgeWithRisks = (
+    title: string,
+    detail: string,
+    confirmLabel: string,
+    onConfirm: () => void,
+  ) => {
+    const wipeLine = wipeCurrentOnPurge
+      ? "\n• Os pontos do ranking atual também serão zerados."
+      : "";
+    Alert.alert(
+      title,
+      `${detail}
+
+Riscos:
+• Ação permanente. Não tem como desfazer.
+• Pódios, posições e histórico dessas edições somem do app.
+• Coroas ligadas a essas edições deixam de aparecer.
+• Insígnias NÃO são apagadas.${wipeLine}
+
+Tem certeza de que deseja continuar?`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Continuar",
+          style: "destructive",
+          onPress: () => {
+            Alert.alert(
+              "Confirmação final",
+              "Última chance: isso apaga dados de ranking de forma definitiva. Confirma?",
+              [
+                { text: "Cancelar", style: "cancel" },
+                {
+                  text: confirmLabel,
+                  style: "destructive",
+                  onPress: onConfirm,
+                },
+              ],
+            );
+          },
+        },
+      ],
+    );
+  };
+
+  const handlePurgeSelected = () => {
+    if (!canPurgeRankingHistory) return;
+    if (selectedPurgeSeasons.length === 0 && !wipeCurrentOnPurge) {
+      Alert.alert(
+        "Nada selecionado",
+        "Marque ao menos uma edição ou a opção de zerar o ranking atual.",
+      );
+      return;
+    }
+    const labels = gamification.seasons
+      .filter((season) => selectedPurgeSeasons.includes(season.seasonNumber))
+      .map((season) => rankingSeasonPeriodLabel(season));
+    const detail =
+      labels.length > 0
+        ? `Você vai apagar:\n${labels.map((label) => `• ${label}`).join("\n")}`
+        : "Nenhuma edição histórica marcada. Só a opção de zerar o ranking atual está ativa.";
+    confirmPurgeWithRisks(
+      "Tem certeza?",
+      detail,
+      "Sim, apagar",
+      () => {
+        void runPurgeRankingHistory("selected");
+      },
+    );
+  };
+
+  const handlePurgeAll = () => {
+    if (!canPurgeRankingHistory) return;
+    if (gamification.seasons.length === 0 && !wipeCurrentOnPurge) {
+      Alert.alert(
+        "Nada para apagar",
+        "Não há edições encerradas. Marque zerar ranking atual se quiser limpar os pontos de agora.",
+      );
+      return;
+    }
+    confirmPurgeWithRisks(
+      "Tem certeza?",
+      "Você vai apagar TODAS as edições encerradas do ranking (pódios e histórico completo).",
+      "Sim, apagar tudo",
+      () => {
+        void runPurgeRankingHistory("all");
+      },
+    );
+  };
+
+  // A borda do próprio usuário vem do auth (recarregado no Perfil após
+  // salvar), sem nova consulta: mantém o mapa alinhado à escolha atual
+  // em vez da leitura congelada feita na primeira carga da lista.
+  useEffect(() => {
+    if (!user?.id) return;
+    const currentBorder = (user as any)?.activeBadgeBorderId || null;
+    setBorderByUser((current) => {
+      if (current.get(user.id) === currentBorder) return current;
+      const next = new Map(current);
+      next.set(user.id, currentBorder);
+      return next;
+    });
+  }, [user?.id, (user as any)?.activeBadgeBorderId]);
+
   useEffect(() => {
     const ids = new Set<string>();
     rows.slice(0, 20).forEach((row) => ids.add(row.userId));
@@ -326,15 +526,31 @@ export const RankingScreen = () => {
     };
   }, [rows, gamification.seasons, borderByUser]);
 
-  const borderDefinitionByUser = (userId: string) => {
-    const badgeId = borderByUser.get(userId);
-    return badgeId ? gamification.definitionsById.get(badgeId) || null : null;
+  // Borda ativa do usuário. Para o próprio usuário vale o auth atual,
+  // que o Perfil recarrega ao salvar a borda, e não o mapa congelado.
+  const activeBorderDefinitionByUser = (userId: string) => {
+    const badgeId =
+      userId === user?.id
+        ? (user as any)?.activeBadgeBorderId || null
+        : borderByUser.get(userId);
+    return badgeId
+      ? gamification.definitionsById.get(badgeId) || null
+      : null;
   };
+
+  // Anel: só a borda ativa. Selo: borda ativa ou primeira concedida.
+  const ringDefinitionByUser = (userId: string) =>
+    resolveAvatarRingDefinition(activeBorderDefinitionByUser(userId));
+  const badgeDefinitionByUser = (userId: string) =>
+    resolveAvatarBadgeDefinition(
+      activeBorderDefinitionByUser(userId),
+      gamification.badgesByUser.get(userId),
+    );
 
   const podiumBorderMap = (entries: { userId: string }[]) => {
     const map = new Map<string, BadgeDefinition | null>();
     entries.forEach((entry) =>
-      map.set(entry.userId, borderDefinitionByUser(entry.userId)),
+      map.set(entry.userId, ringDefinitionByUser(entry.userId)),
     );
     return map;
   };
@@ -375,11 +591,15 @@ export const RankingScreen = () => {
         contentContainerStyle={styles.content}
         data={mainTab === "current" && !loading ? rows : []}
         keyExtractor={(item) => item.userId}
-        initialNumToRender={12}
+        initialNumToRender={listConfig.initialNumToRender}
         maxToRenderPerBatch={8}
         windowSize={7}
-        removeClippedSubviews
-        renderItem={({ item: r }) => (
+        removeClippedSubviews={listConfig.removeClippedSubviews}
+        renderItem={({ item: r }) => {
+          const photoUri = resolveProfilePhotoUri(r);
+          const ringDef = ringDefinitionByUser(r.userId);
+          const badgeDef = badgeDefinitionByUser(r.userId);
+          return (
           <View style={[styles.row, r.position <= 3 ? styles.rowTop : null]}>
             <View style={styles.posWrapper}>
               <Text style={[styles.pos, r.position <= 3 ? styles.posTop : null]}>
@@ -388,10 +608,23 @@ export const RankingScreen = () => {
             </View>
             <View style={styles.avatarWrapper}>
               <BadgedAvatar
-                photoUri={resolveProfilePhotoUri(r)}
+                photoUri={photoUri}
                 displayName={r.displayName}
                 size={r.position <= 3 ? 56 : 48}
-                definition={borderDefinitionByUser(r.userId)}
+                ringDefinition={ringDef}
+                badgeDefinition={badgeDef}
+                crownPosition={crownByUser.get(r.userId) ?? null}
+                onPhotoPress={
+                  photoUri
+                    ? () =>
+                        setPhotoPreview({
+                          uri: photoUri,
+                          name: r.displayName,
+                          userId: r.userId,
+                        })
+                    : undefined
+                }
+                onBadgePress={badgeDef ? setSelectedBadge : undefined}
               />
             </View>
             <View style={styles.info}>
@@ -401,13 +634,10 @@ export const RankingScreen = () => {
               <Text style={styles.detail}>
                 {r.zeroDays} pts{r.isCouple ? " · Casal" : ""}
               </Text>
-              <BadgeEmblemRow
-                definitions={gamification.badgesByUser.get(r.userId) || []}
-                onPress={setSelectedBadge}
-              />
             </View>
           </View>
-        )}
+          );
+        }}
         ListHeaderComponent={
         <>
         <View style={styles.headerRow}>
@@ -453,15 +683,52 @@ export const RankingScreen = () => {
           ))}
         </View>
 
-        <TouchableOpacity
-          style={styles.holdersButton}
-          onPress={() => navigate("BadgeHolders")}
+        <View
+          style={styles.holdersButtonWrap}
+          onLayout={(event) => {
+            const { width, height } = event.nativeEvent.layout;
+            setHoldersSize((current) =>
+              current.width === width && current.height === height
+                ? current
+                : { width, height },
+            );
+          }}
         >
-          <Ionicons name="medal" size={14} color="#e7b958" />
-          <Text style={styles.holdersButtonText} numberOfLines={1}>
-            Ver Detentores de Insígnias
-          </Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Ver Detentores de Insígnias"
+            style={styles.holdersButton}
+            onPress={() => navigate("BadgeHolders")}
+          >
+            <Ionicons name="medal" size={14} color="#e7b958" />
+            <Text style={styles.holdersButtonText} numberOfLines={1}>
+              Ver Detentores de Insígnias
+            </Text>
+          </TouchableOpacity>
+          {holdersSize.width > 0 ? (
+            <View pointerEvents="none" style={styles.holdersBeamLayer}>
+              <Svg
+                width={holdersSize.width}
+                height={holdersSize.height}
+                viewBox={`0 0 ${holdersSize.width} ${holdersSize.height}`}
+              >
+                <AnimatedRect
+                  x={1}
+                  y={1}
+                  width={Math.max(holdersSize.width - 2, 0)}
+                  height={Math.max(holdersSize.height - 2, 0)}
+                  rx={7}
+                  fill="none"
+                  stroke="#f3c96b"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeDasharray={`${holdersBeamLength} ${Math.max(holdersPerimeter - holdersBeamLength, 0)}`}
+                  strokeDashoffset={holdersBeamOffset}
+                />
+              </Svg>
+            </View>
+          ) : null}
+        </View>
 
         <View
           onTouchStart={(event) => {
@@ -537,6 +804,89 @@ export const RankingScreen = () => {
               </>
             )}
           </TouchableOpacity>
+        ) : null}
+
+        {canPurgeRankingHistory ? (
+          <View style={styles.purgeCard}>
+            <Text style={styles.purgeTitle}>Apagar histórico do ranking</Text>
+            <Text style={styles.purgeText}>
+              Remove edições encerradas (pódios, posições e histórico). Não
+              altera insígnias. Disponível só na versão web para admin.
+            </Text>
+            {gamification.seasons.length === 0 ? (
+              <Text style={styles.purgeEmpty}>
+                Nenhuma edição encerrada para apagar.
+              </Text>
+            ) : (
+              gamification.seasons.map((season) => {
+                const selected = selectedPurgeSeasons.includes(
+                  season.seasonNumber,
+                );
+                return (
+                  <TouchableOpacity
+                    key={season.seasonNumber}
+                    style={[
+                      styles.purgeSeasonRow,
+                      selected && styles.purgeSeasonRowSelected,
+                    ]}
+                    onPress={() => togglePurgeSeason(season.seasonNumber)}
+                    disabled={purging}
+                  >
+                    <Ionicons
+                      name={selected ? "checkbox" : "square-outline"}
+                      size={20}
+                      color={selected ? "#ff4d6d" : "#aaa"}
+                    />
+                    <Text style={styles.purgeSeasonText}>
+                      {rankingSeasonPeriodLabel(season)}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })
+            )}
+            <TouchableOpacity
+              style={styles.purgeOptionRow}
+              onPress={() => setWipeCurrentOnPurge((current) => !current)}
+              disabled={purging}
+            >
+              <Ionicons
+                name={wipeCurrentOnPurge ? "checkbox" : "square-outline"}
+                size={20}
+                color={wipeCurrentOnPurge ? "#ff4d6d" : "#aaa"}
+              />
+              <Text style={styles.purgeSeasonText}>
+                Também zerar ranking atual (pontos)
+              </Text>
+            </TouchableOpacity>
+            <View style={styles.purgeActions}>
+              <TouchableOpacity
+                style={[
+                  styles.purgeButton,
+                  purging && styles.resetButtonDisabled,
+                ]}
+                onPress={handlePurgeSelected}
+                disabled={purging}
+              >
+                {purging ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.resetButtonText}>Apagar selecionadas</Text>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.purgeButtonOutline,
+                  purging && styles.resetButtonDisabled,
+                ]}
+                onPress={handlePurgeAll}
+                disabled={purging}
+              >
+                <Text style={styles.purgeButtonOutlineText}>
+                  Apagar todas as edições
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         ) : null}
 
         {showRules ? (
@@ -635,7 +985,6 @@ export const RankingScreen = () => {
                 activeBorderDefinitionByUser={podiumBorderMap(
                   gamification.latestSeason.podiums[activeLeague],
                 )}
-                onBadgePress={setSelectedBadge}
               />
             </>
           )
@@ -685,7 +1034,6 @@ export const RankingScreen = () => {
                   activeBorderDefinitionByUser={podiumBorderMap(
                     season.podiums[activeLeague],
                   )}
-                  onBadgePress={setSelectedBadge}
                 />
               ) : null}
             </View>
@@ -699,6 +1047,19 @@ export const RankingScreen = () => {
       <BadgeDetailModal
         definition={selectedBadge}
         onClose={() => setSelectedBadge(null)}
+      />
+
+      <PhotoPreviewModal
+        visible={Boolean(photoPreview)}
+        uri={photoPreview?.uri}
+        name={photoPreview?.name}
+        userId={photoPreview?.userId}
+        rankingPreference="participate"
+        onViewProfile={(userId) => {
+          setPhotoPreview(null);
+          navigate("PublicGamificationProfile", { userId });
+        }}
+        onClose={() => setPhotoPreview(null)}
       />
 
       <Modal
@@ -814,6 +1175,77 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     fontSize: 15,
   },
+  purgeCard: {
+    backgroundColor: "#1a1214",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#5a2430",
+    padding: 14,
+    marginBottom: 16,
+    gap: 10,
+  },
+  purgeTitle: {
+    color: "#ff8fa3",
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  purgeText: {
+    color: "#ccc",
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  purgeEmpty: {
+    color: "#888",
+    fontSize: 13,
+  },
+  purgeSeasonRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    backgroundColor: "#22181a",
+  },
+  purgeSeasonRowSelected: {
+    borderWidth: 1,
+    borderColor: "#ff4d6d",
+  },
+  purgeOptionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 4,
+  },
+  purgeSeasonText: {
+    color: "#eee",
+    fontSize: 13,
+    flex: 1,
+  },
+  purgeActions: {
+    gap: 8,
+    marginTop: 4,
+  },
+  purgeButton: {
+    backgroundColor: "#b91c1c",
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  purgeButtonOutline: {
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#ff4d6d",
+  },
+  purgeButtonOutlineText: {
+    color: "#ff8fa3",
+    fontWeight: "700",
+    fontSize: 14,
+  },
   infoCard: {
     backgroundColor: "#1a1a1a",
     borderRadius: 12,
@@ -891,16 +1323,28 @@ const styles = StyleSheet.create({
   info: { flex: 1 },
   name: { color: "#fff", fontSize: 16, fontWeight: "600" },
   detail: { color: "#999", fontSize: 13 },
+  holdersButtonWrap: {
+    alignSelf: "flex-end",
+    marginBottom: 12,
+    borderRadius: 8,
+    backgroundColor: "#241541",
+  },
   holdersButton: {
-    alignSelf: "flex-start",
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
-    backgroundColor: "#241541",
+    borderWidth: 1,
+    borderColor: "rgba(231, 185, 88, 0.35)",
     borderRadius: 8,
     paddingHorizontal: 9,
     paddingVertical: 5,
-    marginBottom: 12,
+  },
+  holdersBeamLayer: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
   holdersButtonText: { color: "#c084fc", fontSize: 12, fontWeight: "700" },
   seasonCard: {

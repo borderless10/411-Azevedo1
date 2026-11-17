@@ -6,7 +6,10 @@ import type {
   HistoricalPodiumEntry,
 } from "../../types/rankingGamification";
 import { BadgedAvatar } from "./BadgedAvatar";
-import { BadgeEmblemRow } from "./BadgeEmblem";
+import {
+  resolveAvatarBadgeDefinition,
+  resolveAvatarRingDefinition,
+} from "../../utils/badgeRules";
 
 const MEDAL = ["#e7b958", "#c0c6d4", "#cd7f32"];
 
@@ -14,12 +17,10 @@ export const PodiumView = ({
   entries,
   activeBadgesByUser,
   activeBorderDefinitionByUser,
-  onBadgePress,
 }: {
   entries: HistoricalPodiumEntry[];
   activeBadgesByUser: Map<string, BadgeDefinition[]>;
   activeBorderDefinitionByUser: Map<string, BadgeDefinition | null>;
-  onBadgePress?: (definition: BadgeDefinition) => void;
 }) => {
   const fade = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -50,7 +51,10 @@ export const PodiumView = ({
     <Animated.View style={[styles.row, { opacity: fade }]}>
       {display.map((entry) => {
         const badges = activeBadgesByUser.get(entry.userId) || [];
-        const border = activeBorderDefinitionByUser.get(entry.userId) || null;
+        const activeBorder =
+          activeBorderDefinitionByUser.get(entry.userId);
+        const ring = resolveAvatarRingDefinition(activeBorder);
+        const badge = resolveAvatarBadgeDefinition(activeBorder, badges);
         const isFirst = entry.position === 1;
         return (
           <View key={entry.userId} style={styles.place}>
@@ -58,18 +62,18 @@ export const PodiumView = ({
               photoUri={entry.photoUrl}
               displayName={entry.displayName}
               size={isFirst ? 76 : 58}
-              definition={border}
+              ringDefinition={ring}
+              badgeDefinition={badge}
+              crownPosition={
+                entry.position === 1 || entry.position === 2 || entry.position === 3
+                  ? entry.position
+                  : null
+              }
             />
             <Text style={styles.name} numberOfLines={2}>
               {entry.displayName}
             </Text>
             <Text style={styles.points}>{entry.rankingPoints} pts</Text>
-            <BadgeEmblemRow
-              definitions={badges}
-              max={3}
-              size={19}
-              onPress={onBadgePress}
-            />
             <View
               style={[
                 styles.base,

@@ -1,9 +1,15 @@
 import { initializeApp } from "firebase-admin/app";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
-import { onDocumentCreated } from "firebase-functions/v2/firestore";
+import {
+  onDocumentCreated,
+  onDocumentWritten,
+} from "firebase-functions/v2/firestore";
 import { onCall } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions";
 import { createGamificationHandlers } from "./gamification.js";
+import { createAdminUserHandlers } from "./adminUsers.js";
+import { getAuth } from "firebase-admin/auth";
+import { syncPublicGamificationProfile } from "./publicGamificationProfileSync.js";
 import { Expo } from "expo-server-sdk";
 import {
   buildChatPushMessages,
@@ -146,6 +152,9 @@ const callOpts = { region: "southamerica-east1" };
 export const closeRankingSeason = onCall(callOpts, (request) =>
   gamification.closeRankingSeason(request),
 );
+export const purgeRankingHistory = onCall(callOpts, (request) =>
+  gamification.purgeRankingHistory(request),
+);
 export const upsertBadgeDefinition = onCall(callOpts, (request) =>
   gamification.upsertBadgeDefinition(request),
 );
@@ -163,4 +172,48 @@ export const revokeBadge = onCall(callOpts, (request) =>
 );
 export const selectBadgeBorder = onCall(callOpts, (request) =>
   gamification.selectBadgeBorder(request),
+);
+export const backfillPublicGamificationProfiles = onCall(callOpts, (request) =>
+  gamification.backfillPublicGamificationProfiles(request),
+);
+export const ensurePublicGamificationProfile = onCall(callOpts, (request) =>
+  gamification.ensurePublicGamificationProfile(request),
+);
+
+const syncPublicProfile = async (event) => {
+  await syncPublicGamificationProfile(db, String(event.params.userId || ""));
+};
+
+export const syncPublicProfileFromUser = onDocumentWritten(
+  {
+    document: "users/{userId}",
+    region: "southamerica-east1",
+  },
+  syncPublicProfile,
+);
+
+export const syncPublicProfileFromRanking = onDocumentWritten(
+  {
+    document: "rankingSnapshots/{userId}",
+    region: "southamerica-east1",
+  },
+  syncPublicProfile,
+);
+
+export const syncPublicProfileFromBadgeGrant = onDocumentWritten(
+  {
+    document: "userBadgeGrants/{grantId}",
+    region: "southamerica-east1",
+  },
+  async (event) => {
+    const grant = event.data?.after.data() || event.data?.before.data();
+    const userId = String(grant?.userId || "");
+    if (userId) await syncPublicGamificationProfile(db, userId);
+  },
+);
+
+const adminUsers = createAdminUserHandlers(db, getAuth());
+
+export const adminUpdateUserCredentials = onCall(callOpts, (request) =>
+  adminUsers.adminUpdateUserCredentials(request),
 );

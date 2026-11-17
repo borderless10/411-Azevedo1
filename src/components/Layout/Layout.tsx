@@ -60,6 +60,10 @@ export const Layout: React.FC<LayoutProps> = ({
   const showCoupleBar =
     isCoupleAccount(user) &&
     (activeCoupleMember === 1 || activeCoupleMember === 2);
+  // Regra central e mutuamente exclusiva: tela interna com voltar nunca
+  // mostra o acesso à sidebar, mesmo se a tela pedir os dois controles.
+  // Sem voltar, a sidebar segue o pedido da tela (raiz ou fluxo sem sidebar).
+  const effectiveShowSidebar = showSidebar && !showBackButton;
 
   if (desktop) {
     const limit = desktopWidth === "full" ? null : desktopWidth;
@@ -69,7 +73,9 @@ export const Layout: React.FC<LayoutProps> = ({
         style={[styles.container, { backgroundColor: colors.background }, style]}
       >
         <View style={styles.desktopRow}>
-          <Sidebar visible docked onClose={() => undefined} />
+          {effectiveShowSidebar ? (
+            <Sidebar visible docked onClose={() => undefined} />
+          ) : null}
           <View style={styles.desktopMain}>
             {showHeader && (
               <View
@@ -137,7 +143,7 @@ export const Layout: React.FC<LayoutProps> = ({
             ]}
           >
             <View style={styles.headerWrapper}>
-              {showSidebar && (
+              {effectiveShowSidebar && (
                 <TouchableOpacity
                   onPress={() => {
                     perfMark("sidebar.open.press");
@@ -196,7 +202,7 @@ export const Layout: React.FC<LayoutProps> = ({
           {children}
         </View>
 
-        {showSidebar ? (
+        {effectiveShowSidebar ? (
           <Sidebar
             visible={sidebarVisible}
             onClose={() => setSidebarVisible(false)}

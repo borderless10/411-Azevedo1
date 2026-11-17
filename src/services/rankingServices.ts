@@ -27,6 +27,7 @@ import rankingPlanilhaService from "./rankingPlanilhaService";
 import { getCoupleDisplayName, isCoupleAccount } from "../utils/coupleAccount";
 import { formatDateToString } from "../utils/dateUtils";
 import { User } from "../types/auth";
+import { resolveRankingPosition } from "../utils/rankingPosition";
 
 const RANKING_CONFIG_ID = "ranking";
 
@@ -318,6 +319,51 @@ export const rankingServices = {
         );
       });
       await batch.commit();
+    }
+  },
+
+  /**
+   * Posição do próprio usuário: lê o snapshot dele e os resumos da mesma
+   * liga, ordenando em memória. A consulta usa só igualdade em `league`
+   * (índice simples) porque misturar liga, pontos e id do documento numa
+   * contagem exigia um índice composto inexistente no Firestore.
+   * A liga tem poucos resumos, então ordenar aqui é barato e segue o mesmo
+   * critério da tela de Ranking: pontos em ordem decrescente e, no empate,
+   * id do documento em ordem crescente (ordem implícita do Firestore).
+   * Sem snapshot, o usuário não está no ranking: retorna null.
+   */
+  async getOwnRankingPosition(userId: string): Promise<number | null> {
+    if (!userId) return null;
+    try {
+      const snap = await getDoc(getRankingSnapshotDoc(userId));
+      if (!snap.exists()) return null;
+      const data = snap.data() as Record<string, unknown>;
+      const league: RankingLeague =
+        data.league === "couple" || data.isCouple === true
+          ? "couple"
+          : "individual";
+      const leagueSnap = await getDocs(
+        query(getRankingSnapshotsCollection(), where("league", "==", league)),
+      );
+      const orderedIds = leagueSnap.docs
+        .map((docSnap) =>
+          entryFromSnapshot(
+            docSnap.id,
+            docSnap.data() as Record<string, unknown>,
+          ),
+        )
+        .sort(
+          (a, b) =>
+            b.rankingPoints - a.rankingPoints ||
+            (a.userId < b.userId ? -1 : a.userId > b.userId ? 1 : 0),
+        )
+        .map((entry) => entry.userId);
+      return resolveRankingPosition(orderedIds, userId);
+    } catch (error) {
+      // Posição no troféu é só visual: falha aqui não pode virar erro
+      // vermelho no console nem quebrar a sidebar.
+      console.warn("⚠️ [RANKING SERVICE] Posição própria indisponível:", error);
+      return null;
     }
   },
 

@@ -13,6 +13,7 @@ import {
   TouchableOpacity,
   View,
   Modal,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   useWindowDimensions,
@@ -993,6 +994,7 @@ export const ClientPlanningScreen = () => {
     if (planningReadOnly) return;
     if (!user || !selectedClient || !expenseSource) return;
     try {
+      Keyboard.dismiss();
       setSavingExpense(true);
       const amountCard = Number(expenseAmountCard) || 0;
       const amountCash = Number(expenseAmountCash) || 0;
@@ -1003,6 +1005,8 @@ export const ClientPlanningScreen = () => {
           : amountCard > 0
             ? "card"
             : "cash";
+      const expectedMonthValue =
+        expenseDailyTracking || !expenseDate ? null : expenseDate;
 
       if (expenseIsRecurring) {
         let dayNum: number | undefined;
@@ -1066,9 +1070,7 @@ export const ClientPlanningScreen = () => {
               amount,
               amountCard,
               amountCash,
-              expectedMonth: expenseDailyTracking
-                ? undefined
-                : expenseDate || undefined,
+              expectedMonth: expectedMonthValue,
               paymentMethod,
               dailyTracking: expenseDailyTracking,
             } as any,
@@ -1088,12 +1090,11 @@ export const ClientPlanningScreen = () => {
               amount,
               amountCard,
               amountCash,
-              expectedMonth: expenseDailyTracking
-                ? undefined
-                : expenseDate || undefined,
+              ...(expectedMonthValue
+                ? { expectedMonth: expectedMonthValue }
+                : {}),
               paymentMethod,
               dailyTracking: expenseDailyTracking,
-              notes: undefined,
             } as any,
           );
           setExpectedExpenses((c) => [...c, created]);

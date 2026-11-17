@@ -44,6 +44,7 @@ export const COLLECTIONS = {
   APP_CONFIG: "appConfig",
   RANKING_SNAPSHOTS: "rankingSnapshots",
   RANKING_SEASONS: "rankingSeasons",
+  PUBLIC_GAMIFICATION_PROFILES: "publicGamificationProfiles",
   BADGE_DEFINITIONS: "badgeDefinitions",
   USER_BADGE_GRANTS: "userBadgeGrants",
 } as const;
@@ -109,6 +110,12 @@ export const getRankingSnapshotDoc = (userId: string): DocumentReference => {
 
 export const getRankingSeasonsCollection = (): CollectionReference => {
   return collection(db, COLLECTIONS.RANKING_SEASONS);
+};
+
+export const getPublicGamificationProfileDoc = (
+  userId: string,
+): DocumentReference => {
+  return doc(db, COLLECTIONS.PUBLIC_GAMIFICATION_PROFILES, userId);
 };
 
 export const getBadgeDefinitionsCollection = (): CollectionReference => {

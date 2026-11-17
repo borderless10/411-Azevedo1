@@ -8,12 +8,13 @@ import {
   StyleSheet,
   TextInput,
   Platform,
+  Dimensions,
   Image,
   Modal,
   Alert,
   AppState,
-  InteractionManager,
   Keyboard,
+  type KeyboardEvent,
   ScrollView,
   useWindowDimensions,
 } from "react-native";
@@ -32,6 +33,7 @@ import { userService } from "../../services/userServices";
 import consultantServices from "../../services/consultantServices";
 import { setActiveChatId } from "../../utils/chatActivity";
 import { mapWithConcurrency } from "../../utils/asyncPool";
+import { keyboardOverlap } from "../../utils/keyboardOverlap";
 import { useNavigation } from "../../routes/NavigationContext";
 import { MessageBubble } from "../../components/Chat/MessageBubble";
 import { EmojiPickerPanel } from "../../components/Chat/EmojiPickerPanel";
@@ -68,11 +70,26 @@ import {
 import moderationService, {
   ReportReason,
 } from "../../services/moderationService";
+import { BadgedAvatar } from "../../components/Gamification/BadgedAvatar";
+import { BadgeDetailModal } from "../../components/Gamification/BadgeEmblem";
+import { PhotoPreviewModal } from "../../components/Gamification/PhotoPreviewModal";
+import { rankingGamificationService } from "../../services/rankingGamificationService";
+import {
+  resolveAvatarBadgeDefinition,
+  resolveAvatarRingDefinition,
+} from "../../utils/badgeRules";
+import { buildCrownByUser } from "../../utils/crowns";
+import type {
+  BadgeDefinition,
+  RankingSeason,
+  UserBadgeGrant,
+} from "../../types/rankingGamification";
+import type { RankingPreference } from "../../types/auth";
 import { perfMark, perfMeasure } from "../../utils/perfMarks";
 
 export const ChatScreen: React.FC = () => {
   const { user, activeCoupleMember } = useAuth();
-  const { params } = useNavigation();
+  const { params, navigate } = useNavigation();
   const insets = useSafeAreaInsets();
   const desktop = useDesktopWeb();
   const { chats, isLoading } = useUserChats(
@@ -103,6 +120,73 @@ export const ChatScreen: React.FC = () => {
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(
     null,
   );
+  const [badgeDefinitions, setBadgeDefinitions] = useState<BadgeDefinition[]>(
+    [],
+  );
+  const [badgeGrants, setBadgeGrants] = useState<UserBadgeGrant[]>([]);
+  const [selectedChatBadge, setSelectedChatBadge] =
+    useState<BadgeDefinition | null>(null);
+  const [chatPhotoPreview, setChatPhotoPreview] = useState<{
+    uri: string;
+    name: string;
+    userId: string;
+    rankingPreference?: RankingPreference | null;
+  } | null>(null);
+
+  // Catálogo de insígnias: um listener só, para resolver a borda ativa de
+  // cada usuário (activeBadgeBorderId já vem nos perfis leves do chat).
+  useEffect(
+    () =>
+      rankingGamificationService.subscribeBadgeDefinitions(
+        setBadgeDefinitions,
+        () => {},
+      ),
+    [],
+  );
+
+  // Concessões ativas: um listener só enquanto a tela está montada, igual
+  // ao do catálogo. Sem isso, quem tem insígnia concedida e nenhuma borda
+  // ativa ficava sem selo sobre a foto aqui no chat.
+  useEffect(
+    () =>
+      rankingGamificationService.subscribeActiveGrants(setBadgeGrants, () => {}),
+    [],
+  );
+
+  // Temporadas: um listener só, para as coroas do último pódio valerem
+  // também aqui no chat, até o próximo reset trocar os donos.
+  const [rankingSeasons, setRankingSeasons] = useState<RankingSeason[]>([]);
+  useEffect(
+    () =>
+      rankingGamificationService.subscribeSeasons(setRankingSeasons, () => {}),
+    [],
+  );
+  const crownByUser = useMemo(
+    () => buildCrownByUser(rankingSeasons),
+    [rankingSeasons],
+  );
+  const crownForPerson = (person: any) =>
+    person?.id ? (crownByUser.get(person.id) ?? null) : null;
+
+  const badgeDefinitionsById = useMemo(() => {
+    const map = new Map<string, BadgeDefinition>();
+    badgeDefinitions.forEach((definition) => map.set(definition.id, definition));
+    return map;
+  }, [badgeDefinitions]);
+
+  // Mesma montagem do useRankingGamification: concessões agrupadas por
+  // usuário, na ordem em que chegam (a da fileira de insígnias).
+  const badgesByUser = useMemo(() => {
+    const map = new Map<string, BadgeDefinition[]>();
+    badgeGrants.forEach((grant) => {
+      const definition = badgeDefinitionsById.get(grant.badgeId);
+      if (!definition) return;
+      const list = map.get(grant.userId) || [];
+      list.push(definition);
+      map.set(grant.userId, list);
+    });
+    return map;
+  }, [badgeGrants, badgeDefinitionsById]);
 
   const isAdminUser =
     String(user?.role || "").toLowerCase() === "admin" || user?.isAdmin === true;
@@ -137,39 +221,62 @@ export const ChatScreen: React.FC = () => {
   );
 
   useEffect(() => {
-    const showEvent =
-      Platform.OS === "ios" ? "keyboardWillChangeFrame" : "keyboardDidShow";
-    const hideEvent =
-      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
-
     const applyFrame = (height: number) => {
       perfMark("keyboard.willShow");
       setKeyboardInset(Math.max(0, Math.round(height)));
       perfMeasure("keyboard.insetApplied", "keyboard.willShow");
     };
 
-    const changeSub = Keyboard.addListener(showEvent, (e) => {
-      const frame = e.endCoordinates;
-      const height =
-        Platform.OS === "ios"
-          ? windowSize.height - frame.screenY
-          : frame.height;
-      applyFrame(height);
+    if (Platform.OS === "ios") {
+      const changeSub = Keyboard.addListener("keyboardWillChangeFrame", (event) => {
+        applyFrame(windowSize.height - event.endCoordinates.screenY);
+      });
+      const hideSub = Keyboard.addListener("keyboardWillHide", () => {
+        setKeyboardInset(0);
+      });
+      // WillHide pode não disparar ao fechar a conversa ou trocar de tela.
+      const didHideSub = Keyboard.addListener("keyboardDidHide", () => {
+        setKeyboardInset(0);
+      });
+      return () => {
+        changeSub.remove();
+        hideSub.remove();
+        didHideSub.remove();
+      };
+    }
+
+    // Android (edge-to-edge): height do evento costuma vir 0 e a janela
+    // não encolhe. A baseline é a altura com o teclado fechado.
+    let baseline = Dimensions.get("window").height;
+    let open = false;
+    const dimSub = Dimensions.addEventListener("change", ({ window }) => {
+      if (!open) baseline = window.height;
     });
-    const hideSub = Keyboard.addListener(hideEvent, () => {
+    const applyAndroid = (event: KeyboardEvent) => {
+      open = true;
+      const frame = event.endCoordinates;
+      applyFrame(
+        keyboardOverlap({
+          frameHeight: frame.height,
+          frameScreenY: frame.screenY,
+          screenHeight: Dimensions.get("screen").height,
+          windowHeightBefore: baseline,
+          windowHeightNow: Dimensions.get("window").height,
+        }),
+      );
+    };
+    const showSub = Keyboard.addListener("keyboardDidShow", applyAndroid);
+    const changeSub = Keyboard.addListener("keyboardDidChangeFrame", applyAndroid);
+    const hideSub = Keyboard.addListener("keyboardDidHide", () => {
+      open = false;
+      baseline = Dimensions.get("window").height;
       setKeyboardInset(0);
     });
-    // iOS: WillHide pode não disparar ao fechar a conversa ou trocar de tela;
-    // o DidHide garante o reset para o campo não ficar flutuando.
-    const didHideSub =
-      Platform.OS === "ios"
-        ? Keyboard.addListener("keyboardDidHide", () => setKeyboardInset(0))
-        : null;
-
     return () => {
+      dimSub.remove();
+      showSub.remove();
       changeSub.remove();
       hideSub.remove();
-      didHideSub?.remove();
     };
   }, [windowSize.height]);
 
@@ -260,10 +367,36 @@ export const ChatScreen: React.FC = () => {
       perfMeasure("chats.init", "chats.init.start");
     };
 
-    const task = InteractionManager.runAfterInteractions(() => {
-      void initChats();
-    });
-    return () => task.cancel();
+    // Adia a inicialização (pesada) para depois das interações atuais:
+    // requestIdleCallback quando disponível, com fallbacks seguros.
+    let cancelled = false;
+    let cancelScheduled: (() => void) | null = null;
+    const run = () => {
+      if (!cancelled) void initChats();
+    };
+    const idleHost = globalThis as typeof globalThis & {
+      requestIdleCallback?: (
+        callback: () => void,
+        options?: { timeout: number },
+      ) => number;
+      cancelIdleCallback?: (handle: number) => void;
+      requestAnimationFrame?: (callback: () => void) => number;
+      cancelAnimationFrame?: (handle: number) => void;
+    };
+    if (typeof idleHost.requestIdleCallback === "function") {
+      const handle = idleHost.requestIdleCallback(run, { timeout: 1500 });
+      cancelScheduled = () => idleHost.cancelIdleCallback?.(handle);
+    } else if (typeof idleHost.requestAnimationFrame === "function") {
+      const handle = idleHost.requestAnimationFrame(run);
+      cancelScheduled = () => idleHost.cancelAnimationFrame?.(handle);
+    } else {
+      const handle = setTimeout(run, 0);
+      cancelScheduled = () => clearTimeout(handle);
+    }
+    return () => {
+      cancelled = true;
+      cancelScheduled?.();
+    };
   }, [user?.id, user?.role, (user as any)?.consultantId]);
 
   useEffect(() => {
@@ -761,13 +894,20 @@ export const ChatScreen: React.FC = () => {
       .map(([userId, emoji]) => {
         const isOwn = userId === user?.id;
         const profile = isOwn ? user : userMap[userId];
+        const badgeId = (profile as any)?.activeBadgeBorderId;
         return {
           userId,
           emoji,
           isOwn,
           name: isOwn ? "Você" : getParticipantDisplayName(userId),
           photoUri: resolveProfilePhotoUri(profile),
-          initial: profileInitial(profile, "U"),
+          ring: resolveAvatarRingDefinition(
+            badgeId ? badgeDefinitionsById.get(badgeId) || null : null,
+          ),
+          badge: resolveAvatarBadgeDefinition(
+            badgeId ? badgeDefinitionsById.get(badgeId) || null : null,
+            badgesByUser.get(userId),
+          ),
         };
       })
       .sort((a, b) => Number(b.isOwn) - Number(a.isOwn));
@@ -779,6 +919,8 @@ export const ChatScreen: React.FC = () => {
       people,
     };
   }, [
+    badgeDefinitionsById,
+    badgesByUser,
     getParticipantDisplayName,
     messages,
     reactionFocus,
@@ -1178,6 +1320,26 @@ export const ChatScreen: React.FC = () => {
   const getStartChatLabel = (person: any): string =>
     profileDisplayName(person, person?.email || "Usuário");
 
+  // Selo sobre a foto, igual ao Ranking: borda ativa primeiro e, sem ela,
+  // a primeira insígnia concedida do usuário. Sem nenhuma, sem selo.
+  // Anel separado: só a borda ativa escolhida, sem fallback.
+  const ringDefinitionForPerson = (person: any): BadgeDefinition | null => {
+    const badgeId = person?.activeBadgeBorderId;
+    return resolveAvatarRingDefinition(
+      badgeId ? badgeDefinitionsById.get(badgeId) || null : null,
+    );
+  };
+  const badgeDefinitionForPerson = (person: any): BadgeDefinition | null => {
+    const badgeId = person?.activeBadgeBorderId;
+    const activeBorder = badgeId
+      ? badgeDefinitionsById.get(badgeId) || null
+      : null;
+    return resolveAvatarBadgeDefinition(
+      activeBorder,
+      person?.id ? badgesByUser.get(person.id) : undefined,
+    );
+  };
+
   const renderUserAvatar = (
     person: any,
     size: number,
@@ -1314,25 +1476,53 @@ export const ChatScreen: React.FC = () => {
               style={{ flex: 1 }}
               data={visibleChats}
               keyExtractor={(item) => item.id}
-              renderItem={({ item: chat }) => (
+              renderItem={({ item: chat }) => {
+                const group = isGroupChat(chat);
+                const otherId = group
+                  ? null
+                  : (chat.participants || []).find(
+                      (id: string) => id !== user?.id,
+                    );
+                const otherPerson = otherId ? userMap[otherId] : null;
+                const otherPhoto = resolveProfilePhotoUri(otherPerson);
+                const otherBadge = badgeDefinitionForPerson(otherPerson);
+                return (
                 <TouchableOpacity
                   style={styles.chatRow}
                   onPress={() => setSelectedChatId(chat.id)}
                   activeOpacity={0.7}
                 >
-                  <View style={styles.avatarContainer}>
-                    {isGroupChat(chat)
-                      ? renderUserAvatar(null, 48, "people")
-                      : renderUserAvatar(
-                          userMap[
-                            (chat.participants || []).find(
-                              (id: string) => id !== user?.id,
-                            )
-                          ],
-                          48,
-                          "person",
-                        )}
-                  </View>
+                  {group ? (
+                    <View style={styles.avatarContainer}>
+                      {renderUserAvatar(null, 48, "people")}
+                    </View>
+                  ) : (
+                    <View style={styles.avatarBadgeWrap}>
+                      <BadgedAvatar
+                        photoUri={otherPhoto}
+                        displayName={getStartChatLabel(otherPerson)}
+                        size={44}
+                        ringDefinition={ringDefinitionForPerson(otherPerson)}
+                        badgeDefinition={otherBadge}
+                        crownPosition={crownForPerson(otherPerson)}
+                        onPhotoPress={
+                          otherPhoto && otherId
+                            ? () =>
+                                setChatPhotoPreview({
+                                  uri: otherPhoto,
+                                  name: getStartChatLabel(otherPerson),
+                                  userId: otherId,
+                                  rankingPreference:
+                                    otherPerson?.rankingPreference,
+                                })
+                            : undefined
+                        }
+                        onBadgePress={
+                          otherBadge ? setSelectedChatBadge : undefined
+                        }
+                      />
+                    </View>
+                  )}
                   <View style={styles.chatInfo}>
                     <Text style={styles.chatTitle} numberOfLines={1}>
                       {getChatTitle(chat) || "Chat"}
@@ -1346,7 +1536,8 @@ export const ChatScreen: React.FC = () => {
                     <Text style={styles.timestampText}>{getTimestamp(chat)}</Text>
                   </View>
                 </TouchableOpacity>
-              )}
+                );
+              }}
               scrollEnabled={true}
             />
           )}
@@ -1463,8 +1654,34 @@ export const ChatScreen: React.FC = () => {
         </View>
   );
 
+  const chatOverlays = (
+    <>
+      <BadgeDetailModal
+        definition={selectedChatBadge}
+        onClose={() => setSelectedChatBadge(null)}
+      />
+      <PhotoPreviewModal
+        visible={Boolean(chatPhotoPreview)}
+        uri={chatPhotoPreview?.uri}
+        name={chatPhotoPreview?.name}
+        userId={chatPhotoPreview?.userId}
+        rankingPreference={chatPhotoPreview?.rankingPreference}
+        onViewProfile={(userId) => {
+          setChatPhotoPreview(null);
+          navigate("PublicGamificationProfile", { userId });
+        }}
+        onClose={() => setChatPhotoPreview(null)}
+      />
+    </>
+  );
+
   if (selectedChatId === null && !desktop) {
-    return <Layout>{chatListPane}</Layout>;
+    return (
+      <Layout>
+        {chatListPane}
+        {chatOverlays}
+      </Layout>
+    );
   }
 
   if (selectedChatId === null && desktop) {
@@ -1477,9 +1694,16 @@ export const ChatScreen: React.FC = () => {
             <Text style={styles.emptyText}>Selecione uma conversa</Text>
           </View>
         </View>
+        {chatOverlays}
       </Layout>
     );
   }
+
+  const headerPerson = otherParticipantId
+    ? userMap[otherParticipantId]
+    : null;
+  const headerPhoto = resolveProfilePhotoUri(headerPerson);
+  const headerBadge = badgeDefinitionForPerson(headerPerson);
 
   const threadBody = (
       <>
@@ -1498,24 +1722,32 @@ export const ChatScreen: React.FC = () => {
             <View
               style={{ flexDirection: "row", alignItems: "center", flex: 1 }}
             >
-              <View style={styles.msgAvatarContainer}>
-                {resolveProfilePhotoUri(userMap[otherParticipantId]) ? (
-                  <Image
-                    source={{
-                      uri: resolveProfilePhotoUri(
-                        userMap[otherParticipantId],
-                      ) as string,
-                    }}
-                    style={styles.msgAvatar}
-                  />
-                ) : (
-                  <View style={styles.msgAvatarFallback}>
-                    <Text style={styles.msgAvatarInitial}>
-                      {profileInitial(userMap[otherParticipantId])}
-                    </Text>
-                  </View>
+              <BadgedAvatar
+                photoUri={headerPhoto}
+                displayName={profileDisplayName(
+                  headerPerson,
+                  getChatTitle(selectedChat),
                 )}
-              </View>
+                size={36}
+                ringDefinition={ringDefinitionForPerson(headerPerson)}
+                badgeDefinition={headerBadge}
+                crownPosition={crownForPerson(headerPerson)}
+                onPhotoPress={
+                  headerPhoto
+                    ? () =>
+                        setChatPhotoPreview({
+                          uri: headerPhoto,
+                          name: profileDisplayName(
+                            headerPerson,
+                            getChatTitle(selectedChat),
+                          ),
+                          userId: otherParticipantId,
+                          rankingPreference: headerPerson?.rankingPreference,
+                        })
+                    : undefined
+                }
+                onBadgePress={headerBadge ? setSelectedChatBadge : undefined}
+              />
               <Text style={styles.conversationTitle}>
                 {profileDisplayName(
                   userMap[otherParticipantId],
@@ -1595,6 +1827,21 @@ export const ChatScreen: React.FC = () => {
                   senderPhotoBase64={
                     sender?.photoBase64 || sender?.photoUrl || undefined
                   }
+                  senderBadgeDefinition={badgeDefinitionForPerson(sender)}
+                  senderRingDefinition={ringDefinitionForPerson(sender)}
+                  senderCrownPosition={crownForPerson(sender)}
+                  onPhotoPress={
+                    msg.senderId && resolveProfilePhotoUri(sender)
+                      ? () =>
+                          setChatPhotoPreview({
+                            uri: resolveProfilePhotoUri(sender) as string,
+                            name: senderLabel,
+                            userId: msg.senderId,
+                            rankingPreference: sender?.rankingPreference,
+                          })
+                      : undefined
+                  }
+                  onBadgePress={setSelectedChatBadge}
                   highlighted={highlightedMessageId === msg.id}
                   replySenderLabel={
                     msg.replyTo
@@ -1786,6 +2033,7 @@ export const ChatScreen: React.FC = () => {
         {desktop ? chatListPane : null}
         {thread}
       </View>
+      {chatOverlays}
       <MessageActionSheet
         visible={Boolean(actionMessage)}
         isOwn={Boolean(
@@ -1921,18 +2169,14 @@ export const ChatScreen: React.FC = () => {
                       handleToggleReaction(reactionSheet.message, person.emoji);
                     }}
                   >
-                    {person.photoUri ? (
-                      <Image
-                        source={{ uri: person.photoUri }}
-                        style={styles.reactionAvatar}
-                      />
-                    ) : (
-                      <View style={styles.reactionAvatarFallback}>
-                        <Text style={styles.reactionAvatarInitial}>
-                          {person.initial}
-                        </Text>
-                      </View>
-                    )}
+                    <BadgedAvatar
+                      photoUri={person.photoUri}
+                      displayName={person.name}
+                      size={30}
+                      ringDefinition={person.ring}
+                      badgeDefinition={person.badge}
+                      crownPosition={crownByUser.get(person.userId) ?? null}
+                    />
                     <View style={styles.reactionPersonText}>
                       <Text style={styles.reactionPersonName}>{person.name}</Text>
                       {person.isOwn ? (
@@ -2149,6 +2393,7 @@ const styles = StyleSheet.create({
     marginRight: 12,
     overflow: "hidden",
   },
+  avatarBadgeWrap: { marginRight: 12 },
   listAvatarInitial: {
     color: "#fff",
     fontWeight: "700",

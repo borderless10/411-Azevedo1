@@ -8,6 +8,7 @@ import {
   query,
   where,
   getDocs,
+  runTransaction,
 } from "firebase/firestore";
 import { db, auth } from "../lib/firebase";
 import { RankingPreference, User } from "../types/auth";
@@ -91,6 +92,11 @@ export const mapUserDocument = (id: string, data: any): User => ({
   consultationPreferredDate: data?.consultationPreferredDate || "",
   consultationBookedDay: data?.consultationBookedDay || "",
   consultationBookedCycleStartedAt: data?.consultationBookedCycleStartedAt || "",
+  consultationSchedulingOpenedCycleStartedAt:
+    data?.consultationSchedulingOpenedCycleStartedAt || "",
+  consultationSchedulingOpenedAt: data?.consultationSchedulingOpenedAt
+    ? toDateValue(data.consultationSchedulingOpenedAt)
+    : undefined,
   consultationSchedulingRequestPending:
     data?.consultationSchedulingRequestPending === true,
   consultationSchedulingRequestedAt: data?.consultationSchedulingRequestedAt
@@ -650,6 +656,45 @@ export const userService = {
     }
   },
 
+  async markConsultationSchedulingOpened(
+    userId: string,
+    cycleStartedAtKey: string,
+  ): Promise<void> {
+    if (!userId) {
+      throw new Error("Não foi possível identificar sua conta.");
+    }
+    if (!cycleStartedAtKey) {
+      throw new Error("Não foi possível identificar o ciclo atual.");
+    }
+
+    const userRef = doc(db, "users", userId);
+    await runTransaction(db, async (transaction) => {
+      const snapshot = await transaction.get(userRef);
+      if (!snapshot.exists()) {
+        throw new Error("Cliente não encontrado.");
+      }
+
+      const data = snapshot.data();
+      if (
+        data?.consultationSchedulingOpenedCycleStartedAt === cycleStartedAtKey
+      ) {
+        throw new Error("O agendamento já foi aberto neste ciclo.");
+      }
+      if (
+        data?.consultationBookedCycleStartedAt === cycleStartedAtKey &&
+        isValidConsultationPreferredDay(Number(data?.consultationBookedDay))
+      ) {
+        throw new Error("A consultoria já foi confirmada neste ciclo.");
+      }
+
+      transaction.update(userRef, {
+        consultationSchedulingOpenedCycleStartedAt: cycleStartedAtKey,
+        consultationSchedulingOpenedAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
+      });
+    });
+  },
+
   async confirmConsultationBooking(
     userId: string,
     day: number,
@@ -665,10 +710,35 @@ export const userService = {
       throw new Error("Não foi possível identificar o ciclo atual.");
     }
 
-    await updateDoc(doc(db, "users", userId), {
-      consultationBookedDay: String(day),
-      consultationBookedCycleStartedAt: cycleStartedAtKey,
-      updatedAt: Timestamp.now(),
+    const userRef = doc(db, "users", userId);
+    await runTransaction(db, async (transaction) => {
+      const snapshot = await transaction.get(userRef);
+      if (!snapshot.exists()) {
+        throw new Error("Cliente não encontrado.");
+      }
+
+      const data = snapshot.data();
+      if (
+        data?.consultationSchedulingOpenedCycleStartedAt !== cycleStartedAtKey
+      ) {
+        throw new Error("Abra o agendamento antes de confirmar o dia.");
+      }
+      if (
+        data?.consultationBookedCycleStartedAt === cycleStartedAtKey &&
+        isValidConsultationPreferredDay(
+          Number(data?.consultationBookedDay),
+        )
+      ) {
+        throw new Error(
+          "O dia da consultoria já foi confirmado neste ciclo.",
+        );
+      }
+
+      transaction.update(userRef, {
+        consultationBookedDay: String(day),
+        consultationBookedCycleStartedAt: cycleStartedAtKey,
+        updatedAt: Timestamp.now(),
+      });
     });
   },
 

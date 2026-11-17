@@ -1,0 +1,18 @@
+[
+  {
+    "file": "01-page-full.png",
+    "label": "Imagem 1 — Galeria de Detentores de Insígnias"
+  },
+  {
+    "file": "02-detalhe-busca-filtros.png",
+    "label": "Imagem 2 — Detalhe — Busca por nome e filtros por insígnia na galeria"
+  },
+  {
+    "file": "03-detalhe-minha-borda.png",
+    "label": "Imagem 3 — Detalhe — Minha borda no perfil, com prévia do avatar"
+  },
+  {
+    "file": "04-detalhe-ranking-insignias.png",
+    "label": "Imagem 4 — Detalhe — Ranking com foto emoldurada e espaço para as insígnias do participante"
+  }
+]

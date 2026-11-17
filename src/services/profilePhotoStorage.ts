@@ -1,12 +1,14 @@
 /**
  * Upload de foto de perfil no Firebase Storage.
  *
- * Flag off até o projeto estar no plano Blaze (segunda).
- * Checklist quando ligar EXPO_PUBLIC_PROFILE_PHOTO_STORAGE=1:
- * - Storage rules: write só do dono em users/{uid}/**; read autenticado
- * - Script de migração: photoBase64 → upload → photoUrl/photoStoragePath → apagar photoBase64
- * - Validar Profile, Chat, Ranking e Header
+ * No React Native, uploadString("base64") e uploadBytes com Uint8Array
+ * fazem o SDK montar um Blob nativo a partir de ArrayBuffer, o que gera
+ * "Creating blobs from 'ArrayBuffer' and 'ArrayBufferView' are not
+ * supported". O caminho compatível é gravar o base64 num arquivo
+ * temporário e subir o Blob obtido via fetch do arquivo local, que é o
+ * Blob suportado pelo React Native.
  */
+import * as FileSystem from "expo-file-system/legacy";
 import { firebaseConfig } from "../lib/firebase";
 
 export const profilePhotoStoragePath = (userId: string) =>
@@ -24,14 +26,27 @@ export async function uploadProfilePhoto(
     throw new Error("PROFILE_PHOTO_STORAGE_DISABLED");
   }
   const path = profilePhotoStoragePath(userId);
-  const { getApp } = await import("firebase/app");
-  const { getStorage, ref, uploadString, getDownloadURL } = await import(
-    "firebase/storage"
-  );
-  const storage = getStorage(getApp(), `gs://${firebaseConfig.storageBucket}`);
-  const fileRef = ref(storage, path);
   const payload = base64.includes(",") ? base64.split(",").pop() || "" : base64;
-  await uploadString(fileRef, payload, "base64", { contentType: "image/jpeg" });
-  const url = await getDownloadURL(fileRef);
-  return { url, path };
+  if (!payload) throw new Error("PROFILE_PHOTO_EMPTY");
+
+  const tempUri = `${FileSystem.cacheDirectory}profile-photo-${userId}.jpg`;
+  await FileSystem.writeAsStringAsync(tempUri, payload, {
+    encoding: FileSystem.EncodingType.Base64,
+  });
+  try {
+    const blob = await (await fetch(tempUri)).blob();
+    const { getApp } = await import("firebase/app");
+    const { getStorage, ref, uploadBytes, getDownloadURL } = await import(
+      "firebase/storage"
+    );
+    const storage = getStorage(getApp(), `gs://${firebaseConfig.storageBucket}`);
+    const fileRef = ref(storage, path);
+    await uploadBytes(fileRef, blob, { contentType: "image/jpeg" });
+    const url = await getDownloadURL(fileRef);
+    return { url, path };
+  } finally {
+    await FileSystem.deleteAsync(tempUri, { idempotent: true }).catch(
+      () => undefined,
+    );
+  }
 }

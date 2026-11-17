@@ -1,5 +1,19 @@
-import { initializeApp, FirebaseApp } from "firebase/app";
-import { getAuth, Auth } from "firebase/auth";
+import { Platform } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import {
+  getApp,
+  getApps,
+  initializeApp,
+  FirebaseApp,
+} from "firebase/app";
+import * as FirebaseAuth from "firebase/auth";
+import {
+  getAuth,
+  initializeAuth,
+  Auth,
+  Persistence,
+  ReactNativeAsyncStorage,
+} from "firebase/auth";
 import { getFirestore, Firestore } from "firebase/firestore";
 
 /**
@@ -28,14 +42,44 @@ export const firebaseConfig = {
     process.env.EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID || "G-8TCSX8GMPP",
 };
 
+// A entrada padrão de firebase/auth não declara este export nas
+// tipagens, embora o bundle React Native o exporte. Acesso tipado
+// via namespace, sem recorrer a any.
+const getReactNativePersistence = (
+  FirebaseAuth as unknown as {
+    getReactNativePersistence: (
+      storage: ReactNativeAsyncStorage,
+    ) => Persistence;
+  }
+).getReactNativePersistence;
+
 // Inicializar Firebase
 let app: FirebaseApp;
 let auth: Auth;
 let db: Firestore;
 
 try {
-  app = initializeApp(firebaseConfig);
-  auth = getAuth(app);
+  // Hot reload pode reavaliar o módulo com o app já registrado.
+  app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+  if (Platform.OS === "web") {
+    auth = getAuth(app);
+  } else {
+    try {
+      auth = initializeAuth(app, {
+        persistence: getReactNativePersistence(AsyncStorage),
+      });
+    } catch (authError) {
+      // initializeAuth lança se o Auth deste app já foi inicializado
+      // (hot reload). Nesse caso, reaproveita a instância existente.
+      if (
+        (authError as { code?: string } | null)?.code !==
+        "auth/already-initialized"
+      ) {
+        throw authError;
+      }
+      auth = getAuth(app);
+    }
+  }
   db = getFirestore(app);
 
   console.log("✅ Firebase inicializado com sucesso");
