@@ -614,15 +614,12 @@ Tem certeza de que deseja continuar?`,
                 ringDefinition={ringDef}
                 badgeDefinition={badgeDef}
                 crownPosition={crownByUser.get(r.userId) ?? null}
-                onPhotoPress={
-                  photoUri
-                    ? () =>
-                        setPhotoPreview({
-                          uri: photoUri,
-                          name: r.displayName,
-                          userId: r.userId,
-                        })
-                    : undefined
+                onPhotoPress={() =>
+                  setPhotoPreview({
+                    uri: photoUri || null,
+                    name: r.displayName,
+                    userId: r.userId,
+                  })
                 }
                 onBadgePress={badgeDef ? setSelectedBadge : undefined}
               />

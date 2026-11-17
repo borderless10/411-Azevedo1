@@ -370,6 +370,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
       icon: "trending-up",
       color: "#8c52ff",
     });
+    menuItems.push({
+      id: "UserNotes",
+      label: "Notas",
+      icon: "document-text",
+      color: "#a47aff",
+    });
+    menuItems.push({
+      id: "ShoppingList",
+      label: "Lista de compras",
+      icon: "cart",
+      color: "#8c52ff",
+    });
   }
 
   // Itens finais

@@ -43,6 +43,9 @@ import { CardsScreen } from "../screens/Cards";
 import CustomModal from "../components/ui/CustomModal";
 import { CoupleMemberPickerScreen } from "../screens/Auth/CoupleMemberPickerScreen";
 import { ConsultationSchedulingScreen } from "../screens/Consultation/ConsultationSchedulingScreen";
+import { ClientInstallmentsScreen } from "../screens/Consultor/ClientInstallmentsScreen";
+import { UserNotesScreen } from "../screens/Notes/UserNotesScreen";
+import { ShoppingListScreen } from "../screens/ShoppingList/ShoppingListScreen";
 
 export const Router = () => {
   const { currentScreen, navigate } = useNavigation();
@@ -202,6 +205,12 @@ export const Router = () => {
         return <EditUserScreen />;
       case "ConsultationScheduling":
         return <ConsultationSchedulingScreen />;
+      case "ClientInstallments":
+        return <ClientInstallmentsScreen />;
+      case "UserNotes":
+        return <UserNotesScreen />;
+      case "ShoppingList":
+        return <ShoppingListScreen />;
       default:
         return <HomeScreen />;
     }

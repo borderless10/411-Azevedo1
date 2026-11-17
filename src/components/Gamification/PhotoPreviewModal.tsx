@@ -35,9 +35,17 @@ export const PhotoPreviewModal = ({
   const canViewProfile =
     Boolean(onViewProfile) &&
     canOpenPublicGamificationProfile(userId, rankingPreference);
+  const initials = String(name || "?")
+    .split(" ")
+    .map((part) => part[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+
   return (
     <Modal
-      visible={visible && Boolean(uri)}
+      visible={visible}
       transparent
       animationType="fade"
       onRequestClose={onClose}
@@ -50,25 +58,27 @@ export const PhotoPreviewModal = ({
         onPress={onClose}
       >
         {uri ? (
-          <>
-            <Image source={{ uri }} style={styles.image} resizeMode="contain" />
-            {name ? <Text style={styles.name}>{name}</Text> : null}
-            {canViewProfile && userId ? (
-              <TouchableOpacity
-                accessibilityRole="button"
-                accessibilityLabel={`Ver perfil de conquistas de ${name || "usuário"}`}
-                style={styles.profileButton}
-                onPress={() => onViewProfile?.(userId)}
-              >
-                <Ionicons name="trophy-outline" size={18} color="#fff" />
-                <Text style={styles.profileButtonText}>Ver perfil</Text>
-              </TouchableOpacity>
-            ) : null}
-            <View style={styles.close}>
-              <Ionicons name="close" size={22} color="#fff" />
-            </View>
-          </>
+          <Image source={{ uri }} style={styles.image} resizeMode="contain" />
+        ) : (
+          <View style={styles.avatarFallback}>
+            <Text style={styles.avatarInitials}>{initials || "?"}</Text>
+          </View>
+        )}
+        {name ? <Text style={styles.name}>{name}</Text> : null}
+        {canViewProfile && userId ? (
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel={`Ver perfil de conquistas de ${name || "usuário"}`}
+            style={styles.profileButton}
+            onPress={() => onViewProfile?.(userId)}
+          >
+            <Ionicons name="trophy-outline" size={18} color="#fff" />
+            <Text style={styles.profileButtonText}>Ver perfil</Text>
+          </TouchableOpacity>
         ) : null}
+        <View style={styles.close}>
+          <Ionicons name="close" size={22} color="#fff" />
+        </View>
       </TouchableOpacity>
     </Modal>
   );
@@ -83,6 +93,19 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   image: { width: "100%", height: "75%", borderRadius: 16 },
+  avatarFallback: {
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    backgroundColor: "#2b2b2b",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarInitials: {
+    color: "#fff",
+    fontSize: 48,
+    fontWeight: "800",
+  },
   name: {
     color: "#fff",
     fontSize: 17,

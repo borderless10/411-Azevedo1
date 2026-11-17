@@ -614,6 +614,18 @@ export const ClientDetail: React.FC = () => {
                 styles.actionButtonFull,
                 { backgroundColor: colors.primary },
               ]}
+              onPress={() => navigate("ClientInstallments", { clientId })}
+            >
+              <Text style={styles.actionButtonText}>Compras parceladas</Text>
+            </TouchableOpacity>
+          )}
+
+          {clientDoc && (
+            <TouchableOpacity
+              style={[
+                styles.actionButtonFull,
+                { backgroundColor: colors.primary },
+              ]}
               onPress={() => navigate("ClientExpenseRecords", { clientId })}
             >
               <Text style={styles.actionButtonText}>Registros de Gastos</Text>

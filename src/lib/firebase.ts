@@ -13,6 +13,8 @@ import {
   Auth,
   Persistence,
   ReactNativeAsyncStorage,
+  browserSessionPersistence,
+  setPersistence,
 } from "firebase/auth";
 import { getFirestore, Firestore } from "firebase/firestore";
 
@@ -63,6 +65,9 @@ try {
   app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
   if (Platform.OS === "web") {
     auth = getAuth(app);
+    void setPersistence(auth, browserSessionPersistence).catch((error) => {
+      console.error("❌ Erro ao configurar persistência de sessão (web):", error);
+    });
   } else {
     try {
       auth = initializeAuth(app, {

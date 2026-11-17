@@ -13,3 +13,11 @@ export const markZeroPromptResolvedForSession = (key: string): void => {
 
 export const isZeroPromptResolvedForSession = (key: string): boolean =>
   resolvedKeys.has(key);
+
+export const clearZeroPromptSessionCache = (): void => {
+  resolvedKeys.clear();
+};
+
+export const clearZeroPromptSessionKey = (key: string): void => {
+  resolvedKeys.delete(key);
+};

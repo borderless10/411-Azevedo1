@@ -681,12 +681,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 9,
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     gap: 8,
+    width: "100%",
   },
   topicChipText: {
     fontSize: 15,
     fontWeight: "600",
+    flex: 1,
+    flexShrink: 1,
+    flexWrap: "wrap",
   },
   modalOverlay: {
     flex: 1,

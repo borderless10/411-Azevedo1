@@ -50,7 +50,10 @@ export type ScreenName =
   | "AdminUsers"
   | "EditUser"
   | "Cartoes"
-  | "ConsultationScheduling";
+  | "ConsultationScheduling"
+  | "ClientInstallments"
+  | "UserNotes"
+  | "ShoppingList";
 
 export interface NavigationEntry {
   screen: ScreenName;

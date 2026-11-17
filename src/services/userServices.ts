@@ -128,6 +128,9 @@ export const mapUserDocument = (id: string, data: any): User => ({
     typeof data?.expenseReminderMinute === "number"
       ? data.expenseReminderMinute
       : 0,
+  // Padrão ligado: só desliga se o campo existir e for false.
+  autoZeroTrackedExpensesEnabled:
+    data?.autoZeroTrackedExpensesEnabled !== false,
   createdAt: toDateValue(data?.createdAt),
   updatedAt: toDateValue(data?.updatedAt),
 });
@@ -472,6 +475,7 @@ export const userService = {
           isAdmin: false, // Garantir que não é admin
           isActive: true, // Conta ativa por padrão
           accountType: "individual",
+          autoZeroTrackedExpensesEnabled: true,
           createdAt: now,
           updatedAt: now,
         });
@@ -592,6 +596,7 @@ export const userService = {
       consultationSchedulingUrl?: string | null;
       consultationPreferredDate?: string | null;
       consultationSchedulingRequestPending?: boolean;
+      autoZeroTrackedExpensesEnabled?: boolean;
     },
   ): Promise<void> {
     try {
@@ -641,6 +646,10 @@ export const userService = {
       if (payload.consultationSchedulingRequestPending !== undefined) {
         updatePayload.consultationSchedulingRequestPending =
           payload.consultationSchedulingRequestPending;
+      }
+      if (payload.autoZeroTrackedExpensesEnabled !== undefined) {
+        updatePayload.autoZeroTrackedExpensesEnabled =
+          payload.autoZeroTrackedExpensesEnabled;
       }
       await updateDoc(userRef, updatePayload);
       if (

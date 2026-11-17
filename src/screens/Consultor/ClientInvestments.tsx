@@ -35,6 +35,7 @@ export const ClientInvestments: React.FC = () => {
   const [history, setHistory] = useState<Array<any>>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [modalVisible, setModalVisible] = useState<boolean>(false);
+  const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
 
   const loadHistory = async () => {
     try {
@@ -73,13 +74,23 @@ export const ClientInvestments: React.FC = () => {
         ipca: parseCurrency(ipca),
         outros: parseCurrency(outros),
       };
-      await planningServices.addInvestmentsEntry(user.id, clientId, totals);
+      if (editingEntryId) {
+        await planningServices.updateInvestmentsEntry(
+          user.id,
+          clientId,
+          editingEntryId,
+          totals,
+        );
+      } else {
+        await planningServices.addInvestmentsEntry(user.id, clientId, totals);
+      }
       setCaixa("");
       setIpca("");
       setOutros("");
       await loadHistory();
       Alert.alert("Sucesso", "Investimentos registrados");
       setModalVisible(false);
+      setEditingEntryId(null);
     } catch (e) {
       console.error("Erro ao salvar investimentos", e);
       Alert.alert("Erro", "Não foi possível salvar os investimentos");
@@ -90,9 +101,38 @@ export const ClientInvestments: React.FC = () => {
     const date = item.date ? new Date(item.date) : null;
     return (
       <View style={[styles.entryCard, { borderColor: colors.border }]}>
-        <Text style={[styles.entryDate, { color: colors.text }]}>
-          {date ? date.toLocaleString() : "-"}
-        </Text>
+        <View
+          style={{
+            flexDirection: "row",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
+          <Text style={[styles.entryDate, { color: colors.text }]}>
+            {date ? date.toLocaleString() : "-"}
+          </Text>
+          <TouchableOpacity
+            onPress={() => {
+              setEditingEntryId(item.id);
+              setCaixa(
+                applyCurrencyMask(String(Math.round((item.totals?.caixa || 0) * 100))),
+              );
+              setIpca(
+                applyCurrencyMask(String(Math.round((item.totals?.ipca || 0) * 100))),
+              );
+              setOutros(
+                applyCurrencyMask(
+                  String(Math.round((item.totals?.outros || 0) * 100)),
+                ),
+              );
+              setModalVisible(true);
+            }}
+          >
+            <Text style={{ color: colors.primary, fontWeight: "700" }}>
+              Editar
+            </Text>
+          </TouchableOpacity>
+        </View>
         <View style={styles.entryRow}>
           <Text style={{ color: colors.textSecondary }}>Caixa:</Text>
           <Text style={{ color: colors.text }}>
@@ -174,10 +214,11 @@ export const ClientInvestments: React.FC = () => {
                 String(Math.round((current.outros || 0) * 100)),
               ),
             );
+            setEditingEntryId(null);
             setModalVisible(true);
           }}
         >
-          <Text style={{ color: "#fff", fontWeight: "700" }}>Atualizar</Text>
+          <Text style={{ color: "#fff", fontWeight: "700" }}>Novo lançamento</Text>
         </TouchableOpacity>
 
         <Text
@@ -246,7 +287,7 @@ export const ClientInvestments: React.FC = () => {
               ]}
             >
               <Text style={[modalStyles.modalTitle, { color: colors.text }]}>
-                Atualizar Investimentos
+                {editingEntryId ? "Editar lançamento" : "Atualizar investimentos"}
               </Text>
 
               <View style={{ marginTop: 8 }}>

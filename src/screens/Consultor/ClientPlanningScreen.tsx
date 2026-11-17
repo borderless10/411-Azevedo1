@@ -48,6 +48,7 @@ import {
 } from "../../utils/dateUtils";
 import { CurrencyInput } from "../../components/CurrencyInput";
 import DatePicker from "../../components/DatePicker";
+import ExpenseChangeRequestPanel from "../../components/ExpenseChangeRequests/ExpenseChangeRequestPanel";
 import { CreditCardFormModal } from "../../components/Cards/CreditCardFormModal";
 import { profileDisplayName } from "../../utils/chatDisplayNames";
 import { isCoupleAccount } from "../../utils/coupleAccount";
@@ -196,6 +197,10 @@ export const ClientPlanningScreen = () => {
     setConsumoModeradoCycleDurationDays,
   ] = useState<number>(0);
   const [cycleDateStart, setCycleDateStart] = useState<Date>(new Date());
+  const [isCycleWindowModalVisible, setIsCycleWindowModalVisible] =
+    useState(false);
+  const [cycleWindowStart, setCycleWindowStart] = useState<Date>(new Date());
+  const [cycleWindowEnd, setCycleWindowEnd] = useState<Date>(new Date());
 
   useEffect(() => {
     async function init() {
@@ -295,6 +300,21 @@ export const ClientPlanningScreen = () => {
           setConsumoModeradoCycleDurationDays(
             planning.consumoModeradoCycleDurationDays || 0,
           );
+          if (planning.consumoModeradoCycleStartedAt) {
+            const start = new Date(planning.consumoModeradoCycleStartedAt);
+            setCycleWindowStart(start);
+            if (planning.consumoModeradoCycleEndedAt) {
+              setCycleWindowEnd(new Date(planning.consumoModeradoCycleEndedAt));
+            } else if (planning.consumoModeradoCycleDurationDays) {
+              const end = new Date(start);
+              end.setDate(
+                end.getDate() +
+                  Number(planning.consumoModeradoCycleDurationDays) -
+                  1,
+              );
+              setCycleWindowEnd(end);
+            }
+          }
           return;
         }
 
@@ -1256,6 +1276,33 @@ export const ClientPlanningScreen = () => {
     setIsCycleDurationModalVisible(true);
   };
 
+  const handleSaveCycleWindow = async () => {
+    if (planningReadOnly || !user || !selectedClient) return;
+    try {
+      setConsumptionCycleLoading(true);
+      const updated = await planningServices.setConsumptionCycleWindow(
+        user.id,
+        selectedClient.id,
+        cycleWindowStart,
+        cycleWindowEnd,
+      );
+      setConsumptionCycleLabel(getPlanningCycleLabel(updated) || "");
+      setConsumptionCycleStatus(updated?.consumoModeradoCycleStatus || "");
+      setConsumoModeradoCycleDurationDays(
+        updated?.consumoModeradoCycleDurationDays || 0,
+      );
+      setIsCycleWindowModalVisible(false);
+      Alert.alert("Sucesso", "Período do ciclo atualizado.");
+    } catch (error: any) {
+      Alert.alert(
+        "Erro",
+        error?.message || "Não foi possível salvar o período do ciclo.",
+      );
+    } finally {
+      setConsumptionCycleLoading(false);
+    }
+  };
+
   const handleSaveCycleDuration = async () => {
     if (planningReadOnly) return;
     if (!user || !selectedClient) return;
@@ -1436,9 +1483,24 @@ export const ClientPlanningScreen = () => {
                 <Text style={styles.cycleActionText}>Editar duração</Text>
               )}
             </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.cycleActionButton}
+              onPress={() => setIsCycleWindowModalVisible(true)}
+              disabled={consumptionCycleLoading}
+            >
+              <Text style={styles.cycleActionText}>Definir período</Text>
+            </TouchableOpacity>
           </View>
           ) : null}
         </View>
+
+        {selectedClient?.id && user?.id ? (
+          <ExpenseChangeRequestPanel
+            userId={selectedClient.id}
+            mode="staff"
+            reviewerId={user.id}
+          />
+        ) : null}
 
         <View style={styles.tabsContainer}>
           <TouchableOpacity
@@ -2633,23 +2695,20 @@ export const ClientPlanningScreen = () => {
           behavior={Platform.OS === "ios" ? "padding" : undefined}
           style={styles.expenseModalAvoidingView}
         >
-          <TouchableOpacity
-            style={styles.expenseModalOverlay}
-            activeOpacity={1}
-            onPress={() => setIsExpenseModalVisible(false)}
-          >
+          <View style={styles.expenseModalOverlay}>
             <TouchableOpacity
+              style={StyleSheet.absoluteFillObject}
               activeOpacity={1}
-              onPress={(e) => e.stopPropagation()}
+              onPress={() => setIsExpenseModalVisible(false)}
+            />
+            <View
+              style={[
+                styles.modalContent,
+                styles.expenseModalContent,
+                { maxHeight: expenseModalMaxHeight },
+                { backgroundColor: "#0a0a0a" },
+              ]}
             >
-              <View
-                style={[
-                  styles.modalContent,
-                  styles.expenseModalContent,
-                  { maxHeight: expenseModalMaxHeight },
-                  { backgroundColor: "#0a0a0a" },
-                ]}
-              >
                 <View style={styles.modalHeader}>
                   <Text style={[styles.modalTitle]}>
                     {editingExpenseId || editingBillId
@@ -2829,8 +2888,7 @@ export const ClientPlanningScreen = () => {
                   )}
                 </TouchableOpacity>
               </View>
-            </TouchableOpacity>
-          </TouchableOpacity>
+          </View>
         </KeyboardAvoidingView>
       </Modal>
 
@@ -2913,6 +2971,51 @@ export const ClientPlanningScreen = () => {
               </View>
             </TouchableOpacity>
           </TouchableOpacity>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      <Modal
+        visible={isCycleWindowModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsCycleWindowModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.modalOverlay}
+        >
+          <View style={[styles.modalContent, { backgroundColor: "#0a0a0a" }]}>
+            <Text style={styles.modalTitle}>Período do ciclo</Text>
+            <DatePicker
+              label="Início"
+              date={cycleWindowStart}
+              onChangeDate={setCycleWindowStart}
+              editable={!consumptionCycleLoading}
+            />
+            <DatePicker
+              label="Fim"
+              date={cycleWindowEnd}
+              onChangeDate={setCycleWindowEnd}
+              editable={!consumptionCycleLoading}
+            />
+            <TouchableOpacity
+              style={[styles.saveButton, { marginTop: 12 }]}
+              onPress={handleSaveCycleWindow}
+              disabled={consumptionCycleLoading}
+            >
+              {consumptionCycleLoading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.saveButtonText}>Salvar período</Text>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={{ marginTop: 10, alignItems: "center" }}
+              onPress={() => setIsCycleWindowModalVisible(false)}
+            >
+              <Text style={{ color: "#a89fc0" }}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
         </KeyboardAvoidingView>
       </Modal>
 

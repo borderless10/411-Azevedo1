@@ -73,6 +73,10 @@ export const InvestmentsScreen: React.FC = () => {
           Seus investimentos
         </Text>
 
+        <Text style={{ color: colors.textSecondary, marginTop: 8, fontSize: 13 }}>
+          Valores por categoria (Caixa, IPCA, Outros) atualizados pelo consultor.
+        </Text>
+
         <View style={styles.currentRow}>
           <View>
             <Text style={{ color: colors.textSecondary }}>Caixa</Text>

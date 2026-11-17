@@ -58,6 +58,11 @@ export interface User {
   expenseReminderEnabled?: boolean;
   expenseReminderHour?: number;
   expenseReminderMinute?: number;
+  /**
+   * Registra zero automaticamente nos gastos acompanhados ao responder Não
+   * no Consumo Moderado. Padrão: true (ausente no Firestore = ligado).
+   */
+  autoZeroTrackedExpensesEnabled?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }

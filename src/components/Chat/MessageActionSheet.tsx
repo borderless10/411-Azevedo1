@@ -13,20 +13,26 @@ import { CHAT_REACTION_EMOJIS } from "../../utils/chatMentions";
 type MessageActionSheetProps = {
   visible: boolean;
   isOwn: boolean;
+  canEditOrDelete?: boolean;
   currentReaction?: string | null;
   onClose: () => void;
   onReact: (emoji: string) => void;
   onReply: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
   onReport?: () => void;
 };
 
 export const MessageActionSheet: React.FC<MessageActionSheetProps> = ({
   visible,
   isOwn,
+  canEditOrDelete = false,
   currentReaction,
   onClose,
   onReact,
   onReply,
+  onEdit,
+  onDelete,
   onReport,
 }) => {
   return (
@@ -58,6 +64,20 @@ export const MessageActionSheet: React.FC<MessageActionSheetProps> = ({
             <Ionicons name="arrow-undo-outline" size={20} color="#f2f2f2" />
             <Text style={styles.actionText}>Responder</Text>
           </TouchableOpacity>
+
+          {isOwn && canEditOrDelete && onEdit ? (
+            <TouchableOpacity style={styles.action} onPress={onEdit}>
+              <Ionicons name="create-outline" size={20} color="#f2f2f2" />
+              <Text style={styles.actionText}>Editar</Text>
+            </TouchableOpacity>
+          ) : null}
+
+          {isOwn && canEditOrDelete && onDelete ? (
+            <TouchableOpacity style={styles.action} onPress={onDelete}>
+              <Ionicons name="trash-outline" size={20} color="#ff6b7a" />
+              <Text style={[styles.actionText, styles.dangerText]}>Apagar</Text>
+            </TouchableOpacity>
+          ) : null}
 
           {!isOwn && onReport ? (
             <TouchableOpacity style={styles.action} onPress={onReport}>

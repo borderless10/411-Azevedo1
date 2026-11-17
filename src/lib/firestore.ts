@@ -47,6 +47,10 @@ export const COLLECTIONS = {
   PUBLIC_GAMIFICATION_PROFILES: "publicGamificationProfiles",
   BADGE_DEFINITIONS: "badgeDefinitions",
   USER_BADGE_GRANTS: "userBadgeGrants",
+  EXPENSE_CHANGE_REQUESTS: "expenseChangeRequests",
+  INSTALLMENT_PURCHASES: "installmentPurchases",
+  USER_NOTES: "userNotes",
+  SHOPPING_LIST_ITEMS: "shoppingListItems",
 } as const;
 
 /**
@@ -95,6 +99,36 @@ export const getCreditCardsCollection = (): CollectionReference => {
 export const getRecommendationsCollection = (): CollectionReference => {
   return collection(db, COLLECTIONS.RECOMMENDATIONS);
 };
+
+export const getExpenseChangeRequestsCollection = (): CollectionReference => {
+  return collection(db, COLLECTIONS.EXPENSE_CHANGE_REQUESTS);
+};
+
+export const getExpenseChangeRequestDoc = (
+  id: string,
+): DocumentReference => doc(db, COLLECTIONS.EXPENSE_CHANGE_REQUESTS, id);
+
+export const getInstallmentPurchasesCollection = (): CollectionReference => {
+  return collection(db, COLLECTIONS.INSTALLMENT_PURCHASES);
+};
+
+export const getInstallmentPurchaseDoc = (
+  id: string,
+): DocumentReference => doc(db, COLLECTIONS.INSTALLMENT_PURCHASES, id);
+
+export const getUserNotesCollection = (): CollectionReference => {
+  return collection(db, COLLECTIONS.USER_NOTES);
+};
+
+export const getUserNoteDoc = (id: string): DocumentReference =>
+  doc(db, COLLECTIONS.USER_NOTES, id);
+
+export const getShoppingListItemsCollection = (): CollectionReference => {
+  return collection(db, COLLECTIONS.SHOPPING_LIST_ITEMS);
+};
+
+export const getShoppingListItemDoc = (id: string): DocumentReference =>
+  doc(db, COLLECTIONS.SHOPPING_LIST_ITEMS, id);
 
 export const getAppConfigDoc = (id: string): DocumentReference => {
   return doc(db, COLLECTIONS.APP_CONFIG, id);

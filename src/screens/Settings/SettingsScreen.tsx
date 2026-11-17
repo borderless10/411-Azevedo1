@@ -77,8 +77,15 @@ export const SettingsScreen = () => {
   const [expenseReminderMinute, setExpenseReminderMinute] = useState(0);
   const [isReminderTimeVisible, setIsReminderTimeVisible] = useState(false);
   const [isSavingReminder, setIsSavingReminder] = useState(false);
+  const [autoZeroTrackedExpensesEnabled, setAutoZeroTrackedExpensesEnabled] =
+    useState(true);
+  const [isSavingAutoZeroTracked, setIsSavingAutoZeroTracked] = useState(false);
 
-  const isCommonUser = !user?.isAdmin && user?.role !== "consultor";
+  const isCommonUser =
+    !user?.isAdmin &&
+    user?.role !== "consultor" &&
+    user?.role !== "supervisor" &&
+    user?.role !== "admin";
   const isRankingHidden = user?.rankingPreference === "hidden";
 
   const getEffectiveRankingPreference = (): RankingPreference => {
@@ -111,6 +118,9 @@ export const SettingsScreen = () => {
       typeof user.expenseReminderMinute === "number"
         ? user.expenseReminderMinute
         : 0,
+    );
+    setAutoZeroTrackedExpensesEnabled(
+      user.autoZeroTrackedExpensesEnabled !== false,
     );
   }, [user]);
 
@@ -315,6 +325,26 @@ export const SettingsScreen = () => {
     }
   };
 
+  const persistAutoZeroTrackedExpenses = async (enabled: boolean) => {
+    if (!user?.id) return;
+    setIsSavingAutoZeroTracked(true);
+    try {
+      await userService.updateUser(user.id, {
+        autoZeroTrackedExpensesEnabled: enabled,
+      });
+      setAutoZeroTrackedExpensesEnabled(enabled);
+      await refreshUser();
+    } catch (error) {
+      console.error("Erro ao salvar auto-zero de gastos acompanhados:", error);
+      Alert.alert(
+        "Erro",
+        "Não foi possível salvar essa preferência agora.",
+      );
+    } finally {
+      setIsSavingAutoZeroTracked(false);
+    }
+  };
+
   const persistExpenseReminder = async (payload: {
     enabled: boolean;
     hour: number;
@@ -490,6 +520,32 @@ export const SettingsScreen = () => {
                       expenseReminderMinute,
                     )}
                     onPress={() => setIsReminderTimeVisible(true)}
+                  />
+                </>
+              ) : null}
+              {isCommonUser ? (
+                <>
+                  <View
+                    style={[styles.divider, { backgroundColor: colors.border }]}
+                  />
+                  <SettingItem
+                    icon="flash-outline"
+                    iconColor="#8c52ff"
+                    title="Registrar zero automaticamente nos gastos acompanhados"
+                    subtitle={
+                      autoZeroTrackedExpensesEnabled
+                        ? "Ligado (padrão): ao responder Não no Consumo Moderado, registra zero nos gastos acompanhados sem perguntar."
+                        : "Desligado: ao responder Não no Consumo Moderado, pergunta se quer zerar os gastos acompanhados."
+                    }
+                    rightComponent={
+                      <Switch
+                        value={autoZeroTrackedExpensesEnabled}
+                        onValueChange={persistAutoZeroTrackedExpenses}
+                        disabled={isSavingAutoZeroTracked}
+                        trackColor={{ false: colors.border, true: "#8c52ff" }}
+                        thumbColor="#fff"
+                      />
+                    }
                   />
                 </>
               ) : null}

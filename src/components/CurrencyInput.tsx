@@ -3,7 +3,7 @@
  */
 
 import React, { useEffect, useState } from "react";
-import { View, Text, TextInput, StyleSheet, ViewStyle } from "react-native";
+import { View, Text, TextInput, StyleSheet, ViewStyle, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import {
   DECIMAL_INPUT_KEYBOARD,
@@ -70,6 +70,13 @@ export const CurrencyInput: React.FC<CurrencyInputProps> = ({
     onChangeValue(numericValue);
   };
 
+  const applyPastedText = (raw: string) => {
+    const sanitized = sanitizeDecimalInput(raw.replace(/[^\d.,]/g, ""));
+    const numericValue = parseCurrency(sanitized);
+    setDisplayValue(sanitized);
+    onChangeValue(numericValue);
+  };
+
   return (
     <View style={[styles.container, style]}>
       <Text style={styles.label}>
@@ -94,6 +101,17 @@ export const CurrencyInput: React.FC<CurrencyInputProps> = ({
           onBlur={handleBlur}
           keyboardType={DECIMAL_INPUT_KEYBOARD}
           editable={editable}
+          {...(Platform.OS === "web"
+            ? {
+                onPaste: (event: any) => {
+                  const text = event?.nativeEvent?.text || "";
+                  if (text) {
+                    applyPastedText(text);
+                    event.preventDefault?.();
+                  }
+                },
+              }
+            : {})}
         />
         {error ? (
           <Ionicons

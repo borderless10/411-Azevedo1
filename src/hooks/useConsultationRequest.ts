@@ -26,8 +26,11 @@ export const usePendingConsultationRequests = (options?: {
   const { user } = useAuth();
   const isAdmin = user?.isAdmin === true || user?.role === "admin";
   const isConsultor = user?.role === "consultor";
+  const isSupervisor = user?.role === "supervisor";
   const enabled =
-    options?.enabled !== false && !!user?.id && (isAdmin || isConsultor);
+    options?.enabled !== false &&
+    !!user?.id &&
+    (isAdmin || isConsultor || isSupervisor);
 
   const [requests, setRequests] = useState<ConsultationSchedulingRequest[]>(
     [],
@@ -41,12 +44,13 @@ export const usePendingConsultationRequests = (options?: {
 
     return consultationRequestService.subscribePendingRequests(
       {
-        adminView: isAdmin,
+        // Supervisor vê todas as solicitações (paridade ampla com consultor).
+        adminView: isAdmin || isSupervisor,
         consultantId: isConsultor ? user.id : null,
       },
       setRequests,
     );
-  }, [enabled, isAdmin, isConsultor, user?.id]);
+  }, [enabled, isAdmin, isConsultor, isSupervisor, user?.id]);
 
   return requests;
 };

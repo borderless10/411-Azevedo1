@@ -41,6 +41,7 @@ import {
   recordOwnerId,
   staffClientId,
 } from "../../utils/staffClientContext";
+import { useDesktopWeb } from "../../utils/desktopWeb";
 
 const parsePrefillDate = (value?: string): Date | null => {
   if (!value) return null;
@@ -67,6 +68,7 @@ const parsePrefillDate = (value?: string): Date | null => {
 export const AddExpenseScreen = () => {
   const { user, activeCoupleMember } = useAuth();
   const { navigate, params } = useNavigation() as any;
+  const isDesktop = useDesktopWeb();
   const actingClientId = staffClientId(
     user,
     params?.clientId || params?.returnParams?.clientId,
@@ -153,6 +155,34 @@ export const AddExpenseScreen = () => {
   >(null);
   const [lastSavedTrackedTitle, setLastSavedTrackedTitle] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [dayExpensesTotal, setDayExpensesTotal] = useState(0);
+
+  useEffect(() => {
+    if (!isDesktop || !ownerId || expenseType !== "consumption") {
+      setDayExpensesTotal(0);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const dayItems = await expenseServices.getExpensesByDate(
+          ownerId,
+          consumoDate,
+        );
+        if (cancelled) return;
+        const total = dayItems.reduce(
+          (sum, item) => sum + (Number(item.value) || 0),
+          0,
+        );
+        setDayExpensesTotal(total);
+      } catch {
+        if (!cancelled) setDayExpensesTotal(0);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [ownerId, consumoDate, expenseType, isDesktop]);
 
   // Carregar cards e dados de planejamento
   useEffect(() => {
@@ -813,6 +843,32 @@ export const AddExpenseScreen = () => {
                       icon="cash"
                       editable={!loading}
                     />
+
+                    {isDesktop ? (
+                      <>
+                        <View style={styles.quickAmountRow}>
+                          {[10, 15].map((chip) => (
+                            <TouchableOpacity
+                              key={chip}
+                              style={styles.quickAmountChip}
+                              onPress={() =>
+                                setConsumoValue((v) => Number(v || 0) + chip)
+                              }
+                            >
+                              <Text style={styles.quickAmountText}>
+                                +{formatCurrency(chip)}
+                              </Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                        <Text style={styles.desktopTotalHelper}>
+                          Já lançado neste dia: {formatCurrency(dayExpensesTotal)}
+                          {consumoValue > 0
+                            ? ` · Com este: ${formatCurrency(dayExpensesTotal + consumoValue)}`
+                            : ""}
+                        </Text>
+                      </>
+                    ) : null}
 
                     <View style={styles.inputGroup}>
                       <Text style={styles.label}>Forma de pagamento</Text>
@@ -1544,6 +1600,30 @@ const styles = StyleSheet.create({
   paymentChipActive: {
     backgroundColor: "#8c52ff",
     borderColor: "#8c52ff",
+  },
+  quickAmountRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  quickAmountChip: {
+    borderWidth: 1,
+    borderColor: "#2a2040",
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: "#14101f",
+  },
+  quickAmountText: {
+    color: "#8c52ff",
+    fontWeight: "700",
+    fontSize: 13,
+  },
+  desktopTotalHelper: {
+    color: "#a89fc0",
+    fontSize: 13,
+    marginBottom: 8,
   },
   paymentChipText: {
     color: "#bbb",

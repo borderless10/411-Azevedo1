@@ -132,13 +132,19 @@ export const BadgedAvatar = ({
   return (
     <>
       <View style={wrapperStyle}>
-        {photoUri ? (
+        {onPhotoPress || photoUri ? (
           <TouchableOpacity
             accessibilityRole="button"
-            accessibilityLabel={`Ampliar foto de ${displayName}`}
+            accessibilityLabel={
+              photoUri
+                ? `Ampliar foto de ${displayName}`
+                : `Abrir perfil de ${displayName}`
+            }
             activeOpacity={0.85}
             onPress={
-              onPhotoPress ? onPhotoPress : () => setPreviewOpen(true)
+              onPhotoPress
+                ? onPhotoPress
+                : () => setPreviewOpen(true)
             }
           >
             {photo}

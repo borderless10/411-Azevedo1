@@ -1,18 +1,18 @@
 [
   {
     "file": "01-page-full.png",
-    "label": "Imagem 1 — Registros de Rendas do cliente, com os filtros Todas, Acompanhadas e Gerais / salário"
+    "label": "Imagem 1 — Página inteira dia 19"
   },
   {
-    "file": "02-detalhe-filtros-renda.png",
-    "label": "Imagem 2 — Detalhe — Filtros de renda e o valor que falta no ciclo"
+    "file": "02-detalhe-a.png",
+    "label": "Imagem 2 — Detalhe — painel A dia 19"
   },
   {
-    "file": "03-detalhe-ranking.png",
-    "label": "Imagem 3 — Detalhe — Ranking com foto de perfil carregada por URL do Storage"
+    "file": "03-detalhe-b.png",
+    "label": "Imagem 3 — Detalhe — painel B dia 19"
   },
   {
-    "file": "04-detalhe-chat.png",
-    "label": "Imagem 4 — Detalhe — Lista de conversas, com Bate-Papo e chats diretos"
+    "file": "04-detalhe-c.png",
+    "label": "Imagem 4 — Detalhe — painel C dia 19"
   }
 ]

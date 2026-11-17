@@ -4,6 +4,11 @@ import { profilePhotoUri } from "../../utils/chatDisplayNames";
 import { ChatMessageText } from "./ChatMessageText";
 import { ChatMention } from "../../utils/chatMentions";
 import { ChatReplyTo, Message } from "../../services/chatService";
+import {
+  getChatMessageDisplayText,
+  isChatMessageDeleted,
+  isChatMessageEdited,
+} from "../../utils/chatMessageMutations";
 import { BadgedAvatar } from "../Gamification/BadgedAvatar";
 import type { CrownPosition } from "../../utils/crowns";
 import type { BadgeDefinition } from "../../types/rankingGamification";
@@ -62,6 +67,9 @@ export const MessageBubble = React.memo(function MessageBubble({
   const chipRefs = useRef<Record<string, any>>({});
   const replyTo = msg.replyTo as ChatReplyTo | null | undefined;
   const mentions = (msg.mentions || []) as ChatMention[];
+  const deleted = isChatMessageDeleted(msg);
+  const displayText = getChatMessageDisplayText(msg);
+  const edited = isChatMessageEdited(msg);
 
   return (
     <View style={styles.wrapper}>
@@ -140,25 +148,40 @@ export const MessageBubble = React.memo(function MessageBubble({
           ) : null}
 
           <ChatMessageText
-            text={msg.text}
+            text={displayText}
             isOwn={isOwn}
-            style={styles.messageText}
-            mentions={mentions}
+            style={[styles.messageText, deleted && styles.deletedMessageText]}
+            mentions={deleted ? [] : mentions}
           />
 
-          <Text
-            numberOfLines={1}
-            allowFontScaling={false}
-            style={[
-              styles.messageTime,
-              isOwn ? styles.ownMessageTime : styles.otherMessageTime,
-            ]}
-          >
-            {new Date(msg.createdAt).toLocaleTimeString("pt-BR", {
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
-          </Text>
+          <View style={styles.timeRow}>
+            {edited ? (
+              <Text
+                numberOfLines={1}
+                allowFontScaling={false}
+                style={[
+                  styles.editedLabel,
+                  isOwn ? styles.ownMessageTime : styles.otherMessageTime,
+                ]}
+              >
+                editada
+              </Text>
+            ) : null}
+            <Text
+              numberOfLines={1}
+              allowFontScaling={false}
+              style={[
+                styles.messageTime,
+                isOwn ? styles.ownMessageTime : styles.otherMessageTime,
+                deleted && styles.deletedMessageTime,
+              ]}
+            >
+              {new Date(msg.createdAt).toLocaleTimeString("pt-BR", {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </Text>
+          </View>
         </View>
       </TouchableOpacity>
 
@@ -246,16 +269,36 @@ const styles = StyleSheet.create({
     paddingRight: 6,
     flexShrink: 1,
   },
+  deletedMessageText: {
+    fontStyle: "italic",
+    opacity: 0.85,
+  },
+  timeRow: {
+    position: "absolute",
+    right: 8,
+    bottom: 6,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    maxWidth: "92%",
+    justifyContent: "flex-end",
+  },
+  editedLabel: {
+    fontSize: 9,
+    lineHeight: 10,
+    color: "#666",
+    includeFontPadding: false,
+  },
   messageTime: {
     fontSize: 10,
     lineHeight: 10,
     color: "#666",
-    position: "absolute",
-    right: 8,
-    bottom: 6,
     minWidth: 36,
     textAlign: "right",
     includeFontPadding: false,
+  },
+  deletedMessageTime: {
+    opacity: 0.85,
   },
   ownMessageTime: { color: "rgba(255,255,255,0.85)" },
   otherMessageTime: { color: "#666" },

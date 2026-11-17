@@ -433,6 +433,66 @@ export const planningServices = {
       throw error;
     }
   },
+
+  async updateInvestmentsEntry(
+    consultantId: string,
+    userId: string,
+    entryId: string,
+    totals: { caixa?: number; ipca?: number; outros?: number },
+  ): Promise<void> {
+    await planningServices.ensureOwnerOrAdmin(consultantId, userId);
+    const docRef = getUserPlanningDoc(userId);
+    const snap = await getDoc(docRef);
+    if (!snap.exists()) {
+      throw new Error("Planejamento não encontrado");
+    }
+    const data = snap.data() as any;
+    const existing = data.investments || [];
+    const idx = existing.findIndex((e: any) => e.id === entryId);
+    if (idx < 0) {
+      throw new Error("Lançamento de investimento não encontrado");
+    }
+    const now = Timestamp.now();
+    const current = existing[idx];
+    const updatedEntry = {
+      ...current,
+      totals: {
+        caixa: totals.caixa ?? current.totals?.caixa ?? 0,
+        ipca: totals.ipca ?? current.totals?.ipca ?? 0,
+        outros: totals.outros ?? current.totals?.outros ?? 0,
+      },
+      updatedAt: now,
+    };
+    const investments = [...existing];
+    investments[idx] = updatedEntry;
+    await updateDoc(docRef, { investments, updatedAt: now });
+  },
+
+  async setConsumptionCycleWindow(
+    consultantId: string,
+    userId: string,
+    startedAt: Date,
+    endedAt: Date,
+  ): Promise<Planning | null> {
+    const start = normalizeCycleStart(startedAt);
+    const end = normalizeCycleEnd(endedAt);
+    if (end.getTime() < start.getTime()) {
+      throw new Error("A data final deve ser igual ou posterior ao início");
+    }
+    const msPerDay = 24 * 60 * 60 * 1000;
+    const durationDays =
+      Math.floor((end.getTime() - start.getTime()) / msPerDay) + 1;
+    const status: "active" | "closed" =
+      end.getTime() < Date.now() ? "closed" : "active";
+
+    return planningServices.updatePlanning(consultantId, userId, {
+      consumoModeradoCycleStartedAt: start,
+      consumoModeradoCycleEndedAt: end,
+      consumoModeradoCycleDurationDays: durationDays,
+      consumoModeradoCycleStatus: status,
+    });
+  },
+
   async syncOverduePlanningBills(userId: string): Promise<void> {
     try {
       const docRef = getUserPlanningDoc(userId);
@@ -1448,13 +1508,7 @@ export const planningServices = {
     item: ExpectedItem,
   ): Promise<ExpectedItem> {
     try {
-      const consultant = await userService.getUserById(consultantId);
-      if (
-        !consultant ||
-        (consultant.role !== "consultor" && consultant.role !== "admin")
-      ) {
-        throw new Error("Usuário não autorizado a modificar planejamento");
-      }
+      await planningServices.ensureOwnerOrAdmin(consultantId, userId);
 
       const docRef = getUserPlanningDoc(userId);
       const snap = await getDoc(docRef);
@@ -1532,13 +1586,7 @@ export const planningServices = {
     changes: Partial<ExpectedItem>,
   ): Promise<ExpectedItem | null> {
     try {
-      const consultant = await userService.getUserById(consultantId);
-      if (
-        !consultant ||
-        (consultant.role !== "consultor" && consultant.role !== "admin")
-      ) {
-        throw new Error("Usuário não autorizado a modificar planejamento");
-      }
+      await planningServices.ensureOwnerOrAdmin(consultantId, userId);
 
       const docRef = getUserPlanningDoc(userId);
       const snap = await getDoc(docRef);
@@ -1604,13 +1652,7 @@ export const planningServices = {
     itemId: string,
   ): Promise<void> {
     try {
-      const consultant = await userService.getUserById(consultantId);
-      if (
-        !consultant ||
-        (consultant.role !== "consultor" && consultant.role !== "admin")
-      ) {
-        throw new Error("Usuário não autorizado a modificar planejamento");
-      }
+      await planningServices.ensureOwnerOrAdmin(consultantId, userId);
 
       const docRef = getUserPlanningDoc(userId);
       const snap = await getDoc(docRef);

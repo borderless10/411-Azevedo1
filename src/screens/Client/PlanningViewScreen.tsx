@@ -30,6 +30,7 @@ import { addMonths, formatExpectedMonthLabel } from "../../utils/dateUtils";
 import { CreditCard } from "../../types/creditCard";
 import { CreditCardInvoiceSummary } from "../../types/creditCard";
 import { useTheme } from "../../contexts/ThemeContext";
+import ExpenseChangeRequestPanel from "../../components/ExpenseChangeRequests/ExpenseChangeRequestPanel";
 
 export const PlanningViewScreen = () => {
   const { user } = useAuth();
@@ -493,6 +494,10 @@ export const PlanningViewScreen = () => {
                 </View>
               </View>
             )}
+
+            {user?.id && planning ? (
+              <ExpenseChangeRequestPanel userId={user.id} mode="client" />
+            ) : null}
           </View>
         )}
       </ScrollView>

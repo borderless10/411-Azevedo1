@@ -40,6 +40,8 @@ import {
 } from "../../utils/dateUtils";
 import { useNavigation } from "../../routes/NavigationContext";
 import ZeroPlanilhaConfirmModal from "../../components/ui/ZeroPlanilhaConfirmModal";
+import { OpeningExpenseEntry } from "../../types/openingExpense";
+import { registerOpeningExpenses } from "../../utils/openingExpenseRegistration";
 import ConfettiCelebration from "../../components/ui/ConfettiCelebration";
 import { Expense } from "../../types/expense";
 import { ActingForClientBanner } from "../../components/Staff/ActingForClientBanner";
@@ -420,7 +422,7 @@ export const CategoryBudgetScreen = () => {
     }
   };
 
-  const handleConfirmExpense = async (amount: number) => {
+  const handleConfirmEntries = async (entries: OpeningExpenseEntry[]) => {
     if (!ownerId || !zeroConfirmDate || !trackedTitle) {
       setZeroConfirmVisible(false);
       return;
@@ -428,13 +430,8 @@ export const CategoryBudgetScreen = () => {
 
     try {
       setConfirmingZero(true);
-      await expenseServices.createExpense(ownerId, {
-        value: amount,
-        description: trackedTitle,
-        date: zeroConfirmDate,
-        category: "Acompanhamento Diário",
-        paymentMethod: "other",
-        isTrackedDaily: true,
+      await registerOpeningExpenses(ownerId, zeroConfirmDate, entries, {
+        reconcileConsumo: false,
       });
 
       setZeroConfirmVisible(false);
@@ -769,7 +766,9 @@ export const CategoryBudgetScreen = () => {
         dayLabel={zeroConfirmDayLabel}
         loading={confirmingZero}
         onConfirmZero={handleConfirmZero}
-        onConfirmExpense={handleConfirmExpense}
+        fixedKind="tracked"
+        trackedOptions={trackedTitle ? [trackedTitle] : []}
+        onConfirmEntries={handleConfirmEntries}
         onCancel={() => {
           if (confirmingZero) return;
           setZeroConfirmVisible(false);

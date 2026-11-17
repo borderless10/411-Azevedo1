@@ -8,11 +8,13 @@ import {
   query,
   where,
   getDocs,
+  deleteDoc,
   Timestamp,
 } from "firebase/firestore";
 import {
   getBudgetsCollection,
   getBudgetDoc,
+  getExpenseDoc,
   convertBudgetFromFirestore,
   convertBudgetToFirestore,
   getDocData,
@@ -34,6 +36,7 @@ import rankingPlanilhaService, {
   type RankingRegistrationResult,
 } from "./rankingPlanilhaService";
 import {
+  filterTrackedExpensesForTitle,
   isConsumoModeradoExpense,
   isConsumoModeradoHistoryExpense,
   isTrackedDailyExpense,
@@ -81,6 +84,39 @@ export const normalizeTrackedTitleKey = (value?: string): string =>
     .trim()
     .replace(/\s+/g, " ")
     .toLocaleLowerCase("pt-BR");
+
+const CONSUMO_MODERADO_TITLE_KEY = normalizeTrackedTitleKey("Consumo Moderado");
+
+const isConsumoModeradoTrackedTitle = (title: string): boolean =>
+  normalizeTrackedTitleKey(title) === CONSUMO_MODERADO_TITLE_KEY;
+
+export const listTrackedDailyExpenseTitles = (
+  planning: Awaited<ReturnType<typeof planningServices.getPlanning>>,
+): string[] => {
+  if (!planning) return [];
+
+  const titlesByKey: Record<string, string> = {};
+
+  (planning.bills || []).forEach((bill: { inactive?: boolean; dailyTracking?: boolean; name?: string }) => {
+    if (bill?.inactive === true || !bill?.dailyTracking) return;
+    const label = String(bill.name || "").trim();
+    if (!label || isConsumoModeradoTrackedTitle(label)) return;
+    titlesByKey[normalizeTrackedTitleKey(label)] = label;
+  });
+
+  (planning.expectedExpenses || []).forEach(
+    (item: { inactive?: boolean; dailyTracking?: boolean; source?: string }) => {
+      if (item?.inactive === true || !item?.dailyTracking) return;
+      const label = String(item.source || "").trim();
+      if (!label || isConsumoModeradoTrackedTitle(label)) return;
+      titlesByKey[normalizeTrackedTitleKey(label)] = label;
+    },
+  );
+
+  return Object.values(titlesByKey).sort((a, b) =>
+    a.localeCompare(b, "pt-BR"),
+  );
+};
 
 export type ConsumoModeradoPerformanceIcon =
   | "trending-up"
@@ -724,6 +760,40 @@ export const budgetServices = {
     return this.confirmZeroExpenseDay(userId, date, coupleMember);
   },
 
+  async listMissingTrackedDailyRecordsForDay(
+    userId: string,
+    date: Date,
+    coupleMember?: CoupleMember | null,
+  ): Promise<string[]> {
+    const day = date.getDate();
+    const monthYear = getMonthYearFromDate(date);
+    const planning = await planningServices.getPlanning(userId);
+    const trackedTitles = listTrackedDailyExpenseTitles(planning);
+    if (trackedTitles.length === 0) return [];
+
+    const budget = await this.getBudget(userId, monthYear, coupleMember);
+    const zeroDaysByTitle = budget?.trackedZeroConfirmedDays || {};
+
+    const expenses = await expenseServices.getExpenses(userId, {
+      startDate: getStartOfDay(date),
+      endDate: getEndOfDay(date),
+      coupleMember: coupleMember || undefined,
+    });
+
+    const missing: string[] = [];
+    trackedTitles.forEach((title) => {
+      const titleKey = normalizeTrackedTitleKey(title);
+      if ((zeroDaysByTitle[titleKey] || []).includes(day)) return;
+
+      const hasLaunch = filterTrackedExpensesForTitle(expenses, title).length > 0;
+      if (hasLaunch) return;
+
+      missing.push(title);
+    });
+
+    return missing;
+  },
+
   async confirmZeroExpenseDayForTracked(
     userId: string,
     date: Date,
@@ -758,6 +828,80 @@ export const budgetServices = {
       },
       coupleMember,
     );
+  },
+
+  /**
+   * Dev/QA (só UID autorizado na UI): finge que o calendário do `date` nunca
+   * existiu. Apaga gastos do dia + flags de budget/ranking/zeros daquele dia.
+   * Não mexe em configs do usuário (notificações, zero automático, etc.).
+   */
+  async resetCalendarDayForDev(
+    userId: string,
+    date: Date,
+    coupleMember?: CoupleMember | null,
+  ): Promise<{ deletedExpenses: number }> {
+    const monthYear = getMonthYearFromDate(date);
+    const day = date.getDate();
+    const dateKey = formatDateToString(date);
+
+    // 1) Apaga TODOS os gastos do dia (CM, acompanhados, demais).
+    // deleteDoc direto: evita reconcile/atividade recriarem estado do dia.
+    const expenses = await expenseServices.getExpenses(userId, {
+      startDate: getStartOfDay(date),
+      endDate: getEndOfDay(date),
+      coupleMember: coupleMember || undefined,
+    });
+
+    for (const expense of expenses) {
+      await deleteDoc(getExpenseDoc(expense.id));
+    }
+
+    // 2) Limpa flags do budget só daquele dia (mantém teto e outros dias).
+    const budget = await this.getBudget(userId, monthYear, coupleMember);
+    if (budget) {
+      const stripDay = (days?: number[]) =>
+        (days || []).filter((item) => item !== day);
+
+      const trackedMap: Record<string, number[]> = {};
+      Object.entries(budget.trackedZeroConfirmedDays || {}).forEach(
+        ([title, days]) => {
+          const next = stripDay(days);
+          if (next.length > 0) trackedMap[title] = next;
+        },
+      );
+
+      await this.saveBudget(
+        userId,
+        monthYear,
+        {
+          monthlyBudget: budget.monthlyBudget,
+          dailyExpenses: (budget.dailyExpenses || []).filter(
+            (item) => item.day !== day,
+          ),
+          zeroConfirmedDays: stripDay(budget.zeroConfirmedDays),
+          zeroConfirmedDaysNoRanking: stripDay(
+            budget.zeroConfirmedDaysNoRanking,
+          ),
+          zeroPromptDismissedDays: stripDay(budget.zeroPromptDismissedDays),
+          trackedZeroConfirmedDays: trackedMap,
+          rankingPlanilhaEntries: (budget.rankingPlanilhaEntries || []).filter(
+            (entry) => entry?.dateKey !== dateKey,
+          ),
+        },
+        coupleMember,
+      );
+    }
+
+    return { deletedExpenses: expenses.length };
+  },
+
+  /** @deprecated use resetCalendarDayForDev */
+  async resetExpensePromptForDate(
+    userId: string,
+    date: Date,
+    coupleMember?: CoupleMember | null,
+  ): Promise<void> {
+    await this.resetCalendarDayForDev(userId, date, coupleMember);
   },
 
   async isDayExpensePromptResolved(

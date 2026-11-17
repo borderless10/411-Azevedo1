@@ -11,6 +11,7 @@ import { authServices } from "../services/authServices";
 import { perfMark, perfMeasure } from "../utils/perfMarks";
 import { userService } from "../services/userServices";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { AppState, Platform } from "react-native";
 import { setWatchdogUser } from "../services/sessionWatchdog";
 import { invalidateUserLiteCache } from "../services/userServices";
 import { rankingCacheKey } from "../utils/rankingCache";
@@ -46,6 +47,8 @@ interface AuthContextData {
 export const AuthContext = createContext<AuthContextData>(
   {} as AuthContextData,
 );
+
+const PENDING_REAUTH_KEY = "@visao/pending-reauth";
 
 /**
  * Props do Provider de autenticação
@@ -108,9 +111,27 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   }, [user?.id]);
 
   useEffect(() => {
-    // Observar mudanças no estado de autenticação
-    perfMark("auth.start");
-    const unsubscribe = authServices.onAuthStateChange(async (firebaseUser) => {
+    if (Platform.OS === "web") return;
+
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      if (nextState === "background" || nextState === "inactive") {
+        void AsyncStorage.setItem(PENDING_REAUTH_KEY, "1");
+        return;
+      }
+      if (nextState === "active") {
+        void AsyncStorage.setItem(PENDING_REAUTH_KEY, "0");
+      }
+    });
+
+    return () => subscription.remove();
+  }, []);
+
+  useEffect(() => {
+    let unsubscribe: (() => void) | undefined;
+
+    const startAuthListener = () => {
+      perfMark("auth.start");
+      unsubscribe = authServices.onAuthStateChange(async (firebaseUser) => {
       let resolvedUser = firebaseUser;
       if (firebaseUser) {
         try {
@@ -229,10 +250,38 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       setLoading(false);
       perfMeasure("auth.ready", "auth.start");
-    });
+      });
+    };
 
-    // Cleanup da subscrição
-    return () => unsubscribe();
+    const bootstrapAuth = async () => {
+      if (Platform.OS !== "web") {
+        try {
+          const pendingReauth = await AsyncStorage.getItem(PENDING_REAUTH_KEY);
+          if (pendingReauth === "1") {
+            await AsyncStorage.setItem(PENDING_REAUTH_KEY, "0");
+            try {
+              await authServices.logout();
+            } catch (error) {
+              if (__DEV__) {
+                console.log("Erro ao encerrar sessão pendente:", error);
+              }
+            }
+          }
+        } catch (error) {
+          if (__DEV__) {
+            console.log("Erro ao ler flag de reautenticação:", error);
+          }
+        }
+      }
+
+      startAuthListener();
+    };
+
+    void bootstrapAuth();
+
+  return () => {
+      unsubscribe?.();
+    };
   }, []);
 
   /**

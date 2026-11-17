@@ -127,6 +127,7 @@ export const ClientExpenseRecordsScreen: React.FC = () => {
         }
         setClientName(profileDisplayName(client, "Cliente"));
       } else {
+        // admin / supervisor: acesso amplo aos clientes
         const client = await userService.getUserById(clientId);
         setClientName(profileDisplayName(client, "Cliente"));
       }

@@ -226,6 +226,10 @@ export const CadastrarClienteScreen = () => {
             : {}),
           isAdmin: false,
           isActive: true,
+          // Clientes: zero automático nos acompanhados ligado por padrão
+          ...(role === "user" || role === "cliente_premium"
+            ? { autoZeroTrackedExpensesEnabled: true }
+            : {}),
           ...coupleFields,
           createdAt: now,
           updatedAt: now,

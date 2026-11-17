@@ -48,6 +48,10 @@ import {
   ChatMention,
 } from "../../utils/chatMentions";
 import {
+  canMutateOwnChatMessage,
+  isChatMessageDeleted,
+} from "../../utils/chatMessageMutations";
+import {
   listUnseenMentions,
   mergeSeenMentionIds,
 } from "../../utils/chatMentionSeen";
@@ -114,6 +118,7 @@ export const ChatScreen: React.FC = () => {
   const [blockedUserIds, setBlockedUserIds] = useState<string[]>([]);
   const [moderationBusy, setModerationBusy] = useState(false);
   const [actionMessage, setActionMessage] = useState<Message | null>(null);
+  const [editingMessage, setEditingMessage] = useState<Message | null>(null);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [pendingMentions, setPendingMentions] = useState<ChatMention[]>([]);
   const [inputSelection, setInputSelection] = useState({ start: 0, end: 0 });
@@ -406,6 +411,8 @@ export const ChatScreen: React.FC = () => {
 
   useEffect(() => {
     allowOlderLoadRef.current = false;
+    setEditingMessage(null);
+    setActionMessage(null);
   }, [selectedChatId]);
 
   useEffect(
@@ -595,6 +602,33 @@ export const ChatScreen: React.FC = () => {
       );
     },
     [previewSenderMap, user?.id, userMap],
+  );
+
+  const isOwnMessage = useCallback(
+    (msg: Message) => {
+      if (!user?.id || msg.senderId !== user.id) return false;
+      const sender = userMap[msg.senderId];
+      const senderIsCouple = isCoupleAccount(sender);
+      const senderMember = parseCoupleMember(msg.senderCoupleMember);
+      const ownMember = parseCoupleMember(activeCoupleMember);
+      return (
+        !senderIsCouple ||
+        senderMember == null ||
+        ownMember == null ||
+        senderMember === ownMember
+      );
+    },
+    [activeCoupleMember, user?.id, userMap],
+  );
+
+  const actionMessageIsOwn = actionMessage
+    ? isOwnMessage(actionMessage)
+    : false;
+  const actionMessageCanMutate = Boolean(
+    actionMessage &&
+      actionMessageIsOwn &&
+      canMutateOwnChatMessage(actionMessage) &&
+      !isChatMessageDeleted(actionMessage),
   );
 
   const getParticipantRole = (id?: string | null): string => {
@@ -1102,21 +1136,35 @@ export const ChatScreen: React.FC = () => {
     const mentions = mentionsStillInText(inputText, pendingMentions).filter(
       (mention) => mention.userId && mention.userId !== user.id,
     );
-    const replyPayload = replyTo
-      ? {
-          messageId: replyTo.id,
-          senderId: replyTo.senderId,
-          text: String(replyTo.text || "").slice(0, 180),
-        }
-      : null;
+    const editingTarget = editingMessage;
+    const replyPayload =
+      editingTarget || !replyTo
+        ? null
+        : {
+            messageId: replyTo.id,
+            senderId: replyTo.senderId,
+            text: String(replyTo.text || "").slice(0, 180),
+          };
 
     sendingRef.current = true;
     setInputText("");
     setPendingMentions([]);
     setReplyTo(null);
+    setEditingMessage(null);
     setShowEmojiPicker(false);
 
     try {
+      if (editingTarget?.id) {
+        await chatService.editMessage(
+          selectedChatId,
+          editingTarget.id,
+          user.id,
+          text,
+          mentions,
+        );
+        return;
+      }
+
       await sendMessage(text, {
         mentions,
         replyTo: replyPayload,
@@ -1124,7 +1172,13 @@ export const ChatScreen: React.FC = () => {
     } catch (error) {
       console.error("Error sending message:", error);
       setInputText(text);
-      Alert.alert("Erro", "Não foi possível enviar a mensagem. Tente de novo.");
+      if (editingTarget?.id) {
+        setEditingMessage(editingTarget);
+      }
+      const errorLabel = editingTarget?.id
+        ? "Não foi possível editar a mensagem. Tente de novo."
+        : "Não foi possível enviar a mensagem. Tente de novo.";
+      Alert.alert("Erro", errorLabel);
     } finally {
       sendingRef.current = false;
     }
@@ -1144,6 +1198,45 @@ export const ChatScreen: React.FC = () => {
       const without = current.filter((item) => item.userId !== mention.userId);
       return [...without, mention];
     });
+  };
+
+  const handleStartEditMessage = () => {
+    if (!actionMessage || !actionMessageCanMutate) return;
+    setEditingMessage(actionMessage);
+    setInputText(actionMessage.text);
+    setPendingMentions(actionMessage.mentions || []);
+    setReplyTo(null);
+    setActionMessage(null);
+    setShowEmojiPicker(false);
+  };
+
+  const handleDeleteMessage = () => {
+    if (!actionMessage || !selectedChatId || !user?.id || !actionMessageCanMutate) {
+      return;
+    }
+    const target = actionMessage;
+    setActionMessage(null);
+    Alert.alert("Apagar mensagem", "Todos verão que a mensagem foi apagada.", [
+      { text: "Cancelar", style: "cancel" },
+      {
+        text: "Apagar",
+        style: "destructive",
+        onPress: () => {
+          void (async () => {
+            try {
+              await chatService.softDeleteMessage(
+                selectedChatId,
+                target.id,
+                user.id,
+              );
+            } catch (error) {
+              console.error("Erro ao apagar mensagem:", error);
+              Alert.alert("Erro", "Não foi possível apagar a mensagem agora.");
+            }
+          })();
+        },
+      },
+    ]);
   };
 
   const handleToggleReaction = async (msg: Message, emoji: string) => {
@@ -1945,6 +2038,20 @@ export const ChatScreen: React.FC = () => {
             </View>
           ) : null}
 
+          {editingMessage ? (
+            <View style={styles.replyPreview}>
+              <View style={styles.replyPreviewBody}>
+                <Text style={styles.replyPreviewLabel}>Editando mensagem</Text>
+                <Text style={styles.replyPreviewText} numberOfLines={1}>
+                  {editingMessage.text}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setEditingMessage(null)}>
+                <Ionicons name="close" size={18} color="#888" />
+              </TouchableOpacity>
+            </View>
+          ) : null}
+
           {replyTo ? (
             <View style={styles.replyPreview}>
               <View style={styles.replyPreviewBody}>
@@ -2036,11 +2143,8 @@ export const ChatScreen: React.FC = () => {
       {chatOverlays}
       <MessageActionSheet
         visible={Boolean(actionMessage)}
-        isOwn={Boolean(
-          actionMessage &&
-            user?.id &&
-            actionMessage.senderId === user.id,
-        )}
+        isOwn={actionMessageIsOwn}
+        canEditOrDelete={actionMessageCanMutate}
         currentReaction={
           actionMessage && user?.id
             ? actionMessage.reactions?.[user.id]
@@ -2055,8 +2159,15 @@ export const ChatScreen: React.FC = () => {
         onReply={() => {
           if (!actionMessage) return;
           setReplyTo(actionMessage);
+          setEditingMessage(null);
           setActionMessage(null);
         }}
+        onEdit={
+          actionMessageCanMutate ? handleStartEditMessage : undefined
+        }
+        onDelete={
+          actionMessageCanMutate ? handleDeleteMessage : undefined
+        }
         onReport={
           actionMessage && user?.id && actionMessage.senderId !== user.id
             ? () => {

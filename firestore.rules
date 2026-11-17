@@ -43,14 +43,19 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
+    function isStaffOperator() {
+      return isConsultor() || isSupervisor();
+    }
+
     function isConsultantOf(userId) {
       return isConsultor()
         && exists(/databases/$(database)/documents/users/$(userId))
         && userDoc(userId).consultantId == request.auth.uid;
     }
 
+    // Supervisor tem paridade (e acesso amplo) com consultor nos dados de cliente.
     function canAccessUserData(userId) {
-      return isOwner(userId) || isConsultantOf(userId) || isAdmin();
+      return isOwner(userId) || isConsultantOf(userId) || isAdmin() || isSupervisor();
     }
 
     function ownsUserDocument() {
@@ -60,6 +65,7 @@ service cloud.firestore {
           || request.resource.data.userId == request.auth.uid
           || isConsultantOf(request.resource.data.userId)
           || isAdmin()
+          || isSupervisor()
         );
     }
 
@@ -104,6 +110,42 @@ service cloud.firestore {
         : {};
     }
 
+    function messageWithinEditWindow() {
+      return resource.data.createdAt is timestamp
+        && request.time <= resource.data.createdAt + duration.value(1, 'h');
+    }
+
+    function messageReactionsUnchanged() {
+      return reactionsMap(request.resource.data) == reactionsMap(resource.data);
+    }
+
+    function messageCoreFieldsUnchanged() {
+      return request.resource.data.senderId == resource.data.senderId
+        && request.resource.data.createdAt == resource.data.createdAt;
+    }
+
+    function isSenderSoftDeleteUpdate() {
+      return resource.data.senderId == request.auth.uid
+        && !('deletedAt' in resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['text', 'deletedAt', 'mentions'])
+        && request.resource.data.text == 'essa mensagem foi apagada'
+        && request.resource.data.deletedAt is timestamp
+        && request.resource.data.mentions is list;
+    }
+
+    function isSenderEditUpdate() {
+      return resource.data.senderId == request.auth.uid
+        && !('deletedAt' in resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['text', 'editedAt', 'mentions'])
+        && request.resource.data.text is string
+        && request.resource.data.text.size() > 0
+        && request.resource.data.text != 'essa mensagem foi apagada'
+        && request.resource.data.editedAt is timestamp
+        && request.resource.data.mentions is list;
+    }
+
     function canWriteUserDocument() {
       return isSignedIn()
         && (
@@ -130,12 +172,14 @@ service cloud.firestore {
         )
       );
       allow update: if isAdmin()
-        || ((isOwner(userId) || isConsultantOf(userId)) && staffRoleUnchanged() && badgeBorderUnchanged());
+        || ((isOwner(userId) || isConsultantOf(userId) || isSupervisor())
+          && staffRoleUnchanged()
+          && badgeBorderUnchanged());
       allow delete: if isAdmin();
 
       match /planning/{planningId} {
-        allow get, list: if canAccessUserData(userId) || isSupervisor();
-        allow write: if canAccessUserData(userId) || isSupervisor();
+        allow get, list: if canAccessUserData(userId);
+        allow write: if canAccessUserData(userId);
       }
 
       match /chatMentionSeen/{chatId} {
@@ -144,24 +188,24 @@ service cloud.firestore {
     }
 
     match /incomes/{docId} {
-      allow get: if canGetUserDocument() || isSupervisor();
-      allow list: if canReadUserDocument() || isSupervisor();
-      allow create: if ownsUserDocument() || isSupervisor();
-      allow update, delete: if canWriteUserDocument() || isSupervisor();
+      allow get: if canGetUserDocument();
+      allow list: if canReadUserDocument();
+      allow create: if ownsUserDocument();
+      allow update, delete: if canWriteUserDocument();
     }
 
     match /expenses/{docId} {
-      allow get: if canGetUserDocument() || isSupervisor();
-      allow list: if canReadUserDocument() || isSupervisor();
-      allow create: if ownsUserDocument() || isSupervisor();
-      allow update, delete: if canWriteUserDocument() || isSupervisor();
+      allow get: if canGetUserDocument();
+      allow list: if canReadUserDocument();
+      allow create: if ownsUserDocument();
+      allow update, delete: if canWriteUserDocument();
     }
 
     match /budgets/{docId} {
-      allow get: if canGetUserDocument() || isSupervisor();
-      allow list: if canReadUserDocument() || isSupervisor();
-      allow create: if ownsUserDocument() || isSupervisor();
-      allow update, delete: if canWriteUserDocument() || isSupervisor();
+      allow get: if canGetUserDocument();
+      allow list: if canReadUserDocument();
+      allow create: if ownsUserDocument();
+      allow update, delete: if canWriteUserDocument();
     }
 
     match /goals/{docId} {
@@ -179,13 +223,45 @@ service cloud.firestore {
     }
 
     match /bills/{docId} {
-      allow get: if canGetUserDocument() || isSupervisor();
-      allow list: if canReadUserDocument() || isSupervisor();
-      allow create: if ownsUserDocument() || isSupervisor();
-      allow update, delete: if canWriteUserDocument() || isSupervisor();
+      allow get: if canGetUserDocument();
+      allow list: if canReadUserDocument();
+      allow create: if ownsUserDocument();
+      allow update, delete: if canWriteUserDocument();
     }
 
     match /wishlists/{docId} {
+      allow get: if canGetUserDocument();
+      allow list: if canReadUserDocument();
+      allow create: if ownsUserDocument();
+      allow update, delete: if canWriteUserDocument();
+    }
+
+    match /expenseChangeRequests/{docId} {
+      allow get: if canGetUserDocument();
+      allow list: if canReadUserDocument();
+      allow create: if ownsUserDocument()
+        && request.resource.data.status == 'pending'
+        && request.resource.data.userId is string;
+      allow update: if canWriteUserDocument()
+        && (isStaffOperator() || isOwner(resource.data.userId));
+      allow delete: if canWriteUserDocument() && isStaffOperator();
+    }
+
+    match /installmentPurchases/{docId} {
+      allow get: if canGetUserDocument();
+      allow list: if canReadUserDocument();
+      allow create: if ownsUserDocument() && isStaffOperator();
+      allow update, delete: if canWriteUserDocument() && isStaffOperator();
+    }
+
+    match /userNotes/{docId} {
+      allow get: if canGetUserDocument();
+      allow list: if canReadUserDocument();
+      allow create: if ownsUserDocument();
+      allow update, delete: if canWriteUserDocument();
+    }
+
+    match /shoppingListItems/{docId} {
       allow get: if canGetUserDocument();
       allow list: if canReadUserDocument();
       allow create: if ownsUserDocument();
@@ -200,10 +276,10 @@ service cloud.firestore {
     }
 
     match /recommendations/{docId} {
-      allow get: if canGetUserDocument() || isSupervisor();
-      allow list: if canReadUserDocument() || isSupervisor();
-      allow create: if ownsUserDocument() || isSupervisor();
-      allow update, delete: if canWriteUserDocument() || isSupervisor();
+      allow get: if canGetUserDocument();
+      allow list: if canReadUserDocument();
+      allow create: if ownsUserDocument();
+      allow update, delete: if canWriteUserDocument();
     }
 
     match /categories/{docId} {
@@ -259,11 +335,11 @@ service cloud.firestore {
     }
 
     match /consultationSchedulingRequests/{userId} {
-      allow read: if isOwner(userId) || isAdmin() || isConsultantOf(userId);
+      allow read: if isOwner(userId) || isAdmin() || isConsultantOf(userId) || isSupervisor();
       allow create: if isOwner(userId)
         && request.resource.data.userId == userId
         && request.resource.data.status == 'pending';
-      allow update: if isOwner(userId) || isAdmin() || isConsultantOf(userId);
+      allow update: if isOwner(userId) || isAdmin() || isConsultantOf(userId) || isSupervisor();
       allow delete: if isAdmin();
     }
 
@@ -294,9 +370,22 @@ service cloud.firestore {
 
         allow update: if isSignedIn()
           && canAccessChat(chatId)
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions'])
-          && request.resource.data.reactions is map
-          && request.resource.data.reactions.diff(reactionsMap(resource.data)).affectedKeys().hasOnly([request.auth.uid]);
+          && (
+            (
+              request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions'])
+              && request.resource.data.reactions is map
+              && request.resource.data.reactions.diff(reactionsMap(resource.data)).affectedKeys().hasOnly([request.auth.uid])
+            )
+            || (
+              messageWithinEditWindow()
+              && messageCoreFieldsUnchanged()
+              && messageReactionsUnchanged()
+              && (
+                isSenderSoftDeleteUpdate()
+                || isSenderEditUpdate()
+              )
+            )
+          );
 
         allow delete: if false;
       }

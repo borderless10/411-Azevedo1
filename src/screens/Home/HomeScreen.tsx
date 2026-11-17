@@ -15,12 +15,14 @@ import {
   Animated,
   TextInput,
   LayoutAnimation,
+  Modal,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "../../routes/NavigationContext";
 import { Layout } from "../../components/Layout/Layout";
 import { useDesktopWeb } from "../../utils/desktopWeb";
 import { useAuth } from "../../hooks/useAuth";
+import { isStaffUser } from "../../services/userServices";
 import incomeServices from "../../services/incomeServices";
 import expenseServices from "../../services/expenseServices";
 import {
@@ -62,6 +64,8 @@ import {
 import { DEFAULT_EXPENSE_CATEGORIES } from "../../types/category";
 import ZeroPlanilhaConfirmModal from "../../components/ui/ZeroPlanilhaConfirmModal";
 import { getRankingRegistrationFeedback } from "../../services/rankingPlanilhaService";
+import { OpeningExpenseEntry } from "../../types/openingExpense";
+import { registerOpeningExpenses } from "../../utils/openingExpenseRegistration";
 import ConfirmDeleteModal from "../../components/ui/ConfirmDeleteModal";
 import ConfettiCelebration from "../../components/ui/ConfettiCelebration";
 import ExpectedDetails from "../../components/ui/ExpectedDetails";
@@ -115,7 +119,16 @@ export const HomeScreen = () => {
   const [zeroConfirmVisible, setZeroConfirmVisible] = useState(false);
   const [zeroConfirmDayLabel, setZeroConfirmDayLabel] = useState("");
   const [zeroConfirmDate, setZeroConfirmDate] = useState<Date | null>(null);
+  const [zeroTrackedOptions, setZeroTrackedOptions] = useState<string[]>([]);
   const [confirmingZero, setConfirmingZero] = useState(false);
+  const [trackedZerosFollowUp, setTrackedZerosFollowUp] = useState<{
+    day: Date;
+    dayLabel: string;
+    titles: string[];
+    pendingFeedback?: { title: string; message: string };
+  } | null>(null);
+  const [savingTrackedZerosFollowUp, setSavingTrackedZerosFollowUp] =
+    useState(false);
   const [transactionToDelete, setTransactionToDelete] = useState<{
     id: string;
     type: "income" | "expense";
@@ -208,7 +221,7 @@ export const HomeScreen = () => {
       // Load planning first to respect cycle start/end when present.
       let planning: any = null;
       try {
-        if (user.role !== "consultor" && !user.isAdmin) {
+        if (!isStaffUser(user)) {
           planning = await planningServices.getPlanning(user.id);
           perfMeasure("home.planning", "home.load.start");
 
@@ -389,7 +402,7 @@ export const HomeScreen = () => {
         return;
       }
 
-      if (user.role === "consultor" || user.isAdmin) {
+      if (isStaffUser(user)) {
         setConsumoModeradoPerformance(null);
       }
 
@@ -414,7 +427,7 @@ export const HomeScreen = () => {
       setHasLoaded(true);
       perfMeasure("home.ready", "home.load.start");
 
-      if (user.role !== "consultor" && !user.isAdmin) {
+      if (!isStaffUser(user)) {
         // Secundário: não segura a tela. O card atualiza quando chegar.
         void budgetServices
           .getConsumoModeradoPerformance(user.id, {
@@ -429,7 +442,7 @@ export const HomeScreen = () => {
           .catch(() => undefined);
       }
 
-      if (planning && user.role !== "consultor" && !user.isAdmin) {
+      if (planning && !isStaffUser(user)) {
         const expected = (planning.expectedIncomes || []).map((income: any) => ({
           id: String(income.id || ""),
           source: String(income.source || "Renda esperada"),
@@ -589,7 +602,7 @@ export const HomeScreen = () => {
   const checkZeroPlanilhaForYesterday = async () => {
     if (!user?.id) return;
 
-    if (user.role === "consultor" || user.isAdmin) {
+    if (isStaffUser(user)) {
       return;
     }
 
@@ -672,6 +685,20 @@ export const HomeScreen = () => {
       }
 
       const yesterdayLabel = formatDateForDisplay(yesterday);
+      try {
+        const planning = await planningServices.getPlanning(user.id);
+        const tracked = [
+          ...(planning?.bills || [])
+            .filter((b: any) => b.dailyTracking)
+            .map((b: any) => String(b.name || "")),
+          ...(planning?.expectedExpenses || [])
+            .filter((e: any) => e.dailyTracking)
+            .map((e: any) => String(e.source || "")),
+        ].filter((name) => name.trim().length > 0);
+        setZeroTrackedOptions(Array.from(new Set(tracked)));
+      } catch {
+        setZeroTrackedOptions([]);
+      }
       setZeroConfirmDayLabel(yesterdayLabel);
       setZeroConfirmDate(yesterday);
       setZeroConfirmVisible(true);
@@ -687,6 +714,109 @@ export const HomeScreen = () => {
     markZeroPromptResolvedForSession(
       getZeroPromptSessionKey(user.id, zeroConfirmDate),
     );
+  };
+
+  const registerTrackedZerosForDay = async (
+    day: Date,
+    titles: string[],
+  ): Promise<void> => {
+    if (!user?.id || titles.length === 0) return;
+
+    for (const title of titles) {
+      await budgetServices.confirmZeroExpenseDayForTracked(
+        user.id,
+        day,
+        title,
+        activeCoupleMember,
+      );
+    }
+  };
+
+  const showPendingFeedback = (feedback?: {
+    title: string;
+    message: string;
+  }) => {
+    if (!feedback) return;
+    Alert.alert(feedback.title, feedback.message);
+  };
+
+  const processTrackedZerosAfterConsumoModerado = async (
+    day: Date,
+    pendingFeedback?: { title: string; message: string },
+  ) => {
+    if (!user?.id) {
+      showPendingFeedback(pendingFeedback);
+      return;
+    }
+
+    try {
+      const missing =
+        await budgetServices.listMissingTrackedDailyRecordsForDay(
+          user.id,
+          day,
+          activeCoupleMember,
+        );
+      if (missing.length === 0) {
+        showPendingFeedback(pendingFeedback);
+        return;
+      }
+
+      const dayLabel = formatDateForDisplay(day);
+      // Padrão ligado: undefined/ausente conta como true.
+      const autoZero = user.autoZeroTrackedExpensesEnabled !== false;
+
+      if (autoZero) {
+        // Não: zero no CM + zeros nos acompanhados juntos, sem 2º popup.
+        await registerTrackedZerosForDay(day, missing);
+        showPendingFeedback(pendingFeedback);
+        return;
+      }
+
+      // Toggle desligado: 2º popup só dos gastos acompanhados.
+      setTrackedZerosFollowUp({
+        day,
+        dayLabel,
+        titles: missing,
+        pendingFeedback,
+      });
+    } catch (error) {
+      console.error(
+        "❌ [HOME] Erro ao verificar gastos acompanhados sem registro:",
+        error,
+      );
+      showPendingFeedback(pendingFeedback);
+    }
+  };
+
+  const dismissTrackedZerosFollowUp = () => {
+    const feedback = trackedZerosFollowUp?.pendingFeedback;
+    setTrackedZerosFollowUp(null);
+    showPendingFeedback(feedback);
+  };
+
+  const confirmTrackedZerosFollowUp = async () => {
+    if (!trackedZerosFollowUp) return;
+    const { day, titles, pendingFeedback } = trackedZerosFollowUp;
+    try {
+      setSavingTrackedZerosFollowUp(true);
+      await registerTrackedZerosForDay(day, titles);
+      setTrackedZerosFollowUp(null);
+      const successBody = pendingFeedback
+        ? `Zeros registrados nos gastos acompanhados.\n\n${pendingFeedback.message}`
+        : "Zeros registrados nos gastos acompanhados.";
+      Alert.alert(pendingFeedback?.title || "Sucesso", successBody);
+    } catch (error) {
+      console.error(
+        "❌ [HOME] Erro ao registrar zero nos acompanhados:",
+        error,
+      );
+      Alert.alert(
+        "Erro",
+        "Não foi possível registrar os zeros nos gastos acompanhados.",
+      );
+    } finally {
+      setSavingTrackedZerosFollowUp(false);
+    }
   };
 
   const handleConfirmZeroPlanilha = async () => {
@@ -710,13 +840,20 @@ export const HomeScreen = () => {
         description: `Parabéns! O dia ${zeroConfirmDayLabel} foi registrado com ${formatCurrency(0)}.`,
       });
 
+      const confirmedDay = zeroConfirmDate;
+
       setZeroConfirmVisible(false);
       setZeroConfirmDate(null);
       const feedback = getRankingRegistrationFeedback(ranking, "zero");
       if (feedback.celebrate) {
         setShowConfetti(true);
       }
-      Alert.alert(feedback.title, feedback.message);
+
+      // Pergunta dos acompanhados antes do Alert de ranking (web engolia o Alert anterior).
+      await processTrackedZerosAfterConsumoModerado(confirmedDay, {
+        title: feedback.title,
+        message: feedback.message,
+      });
     } catch (error) {
       console.error("❌ [HOME] Erro ao confirmar zero na planilha:", error);
       Alert.alert(
@@ -728,46 +865,40 @@ export const HomeScreen = () => {
     }
   };
 
-  const handleRegisterExpensePlanilha = async (amount: number) => {
+  const handleRegisterOpeningExpenses = async (
+    entries: OpeningExpenseEntry[],
+  ) => {
     if (!user?.id || !zeroConfirmDate) {
       setZeroConfirmVisible(false);
       return;
     }
 
+    const coupleMember =
+      activeCoupleMember === 1 || activeCoupleMember === 2
+        ? activeCoupleMember
+        : undefined;
+
     try {
       setConfirmingZero(true);
-      await expenseServices.createExpense(user.id, {
-        value: amount,
-        description: "Gasto do dia",
-        date: zeroConfirmDate,
-        category: "Consumo Moderado",
-        paymentMethod: "other",
-        isConsumoModerado: true,
-        ...(activeCoupleMember === 1 || activeCoupleMember === 2
-          ? { coupleMember: activeCoupleMember }
-          : {}),
+      await registerOpeningExpenses(user.id, zeroConfirmDate, entries, {
+        coupleMember,
       });
-
-      await budgetServices.reconcileConsumoModeradoDay(
-        user.id,
-        zeroConfirmDate,
-        activeCoupleMember,
-      );
       markYesterdayPromptResolved();
 
+      const total = entries.reduce((s, e) => s + (Number(e.amount) || 0), 0);
       await activityServices.logActivity(user.id, {
         type: "expense_created",
-        title: "Gasto registrado",
-        description: `Gasto de ${formatCurrency(amount)} no dia ${zeroConfirmDayLabel}.`,
+        title: "Gastos registrados",
+        description: `${entries.length} lançamento(s) · ${formatCurrency(total)} no dia ${zeroConfirmDayLabel}.`,
       });
 
       setZeroConfirmVisible(false);
       setZeroConfirmDate(null);
       await loadData();
-      Alert.alert("Sucesso", "Gasto registrado com sucesso.");
+      Alert.alert("Sucesso", "Gastos registrados com sucesso.");
     } catch (error) {
-      console.error("❌ [HOME] Erro ao registrar gasto do dia:", error);
-      Alert.alert("Erro", "Não foi possível registrar o gasto agora.");
+      console.error("❌ [HOME] Erro ao registrar gastos do dia:", error);
+      Alert.alert("Erro", "Não foi possível registrar os gastos agora.");
     } finally {
       setConfirmingZero(false);
     }
@@ -1283,7 +1414,7 @@ export const HomeScreen = () => {
               },
             ]}
           >
-            {user?.role !== "consultor" && !user?.isAdmin ? (
+            {!isStaffUser(user) ? (
               // Normal user: show planning-based expected cards
               <>
                 <View style={[styles.summaryRow, desktop && styles.summaryRowDesktop]}>
@@ -1781,7 +1912,7 @@ export const HomeScreen = () => {
                 onPress={() => navigate("ExpenseList")}
                 delay={300}
               />
-              {user?.role !== "consultor" && !user?.isAdmin && (
+              {!isStaffUser(user) && (
                 <ActionCard
                   icon="calendar"
                   label="Planejamento"
@@ -1962,8 +2093,56 @@ export const HomeScreen = () => {
         loading={confirmingZero}
         onCancel={handleCancelZeroPlanilha}
         onConfirmZero={handleConfirmZeroPlanilha}
-        onConfirmExpense={handleRegisterExpensePlanilha}
+        trackedOptions={zeroTrackedOptions}
+        onConfirmEntries={handleRegisterOpeningExpenses}
       />
+
+      <Modal
+        visible={!!trackedZerosFollowUp}
+        transparent
+        animationType="fade"
+        onRequestClose={dismissTrackedZerosFollowUp}
+      >
+        <View style={styles.trackedFollowUpOverlay}>
+          <View style={styles.trackedFollowUpCard}>
+            <Text style={styles.trackedFollowUpTitle}>
+              E para gasto acompanhado?
+            </Text>
+            <Text style={styles.trackedFollowUpBody}>
+              No dia {trackedZerosFollowUp?.dayLabel}, estes gastos acompanhados
+              ainda não têm registro:{" "}
+              {(trackedZerosFollowUp?.titles || []).join(", ")}. Deseja
+              registrar zero neles também?
+            </Text>
+            <View style={styles.trackedFollowUpActions}>
+              <TouchableOpacity
+                style={styles.trackedFollowUpSecondary}
+                onPress={dismissTrackedZerosFollowUp}
+                disabled={savingTrackedZerosFollowUp}
+              >
+                <Text style={styles.trackedFollowUpSecondaryText}>
+                  Agora não
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.trackedFollowUpPrimary}
+                onPress={() => {
+                  void confirmTrackedZerosFollowUp();
+                }}
+                disabled={savingTrackedZerosFollowUp}
+              >
+                {savingTrackedZerosFollowUp ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.trackedFollowUpPrimaryText}>
+                    Registrar zero
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       <ConfettiCelebration
         active={showConfetti}
@@ -2656,6 +2835,63 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
     color: "#fff",
+  },
+  trackedFollowUpOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.65)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
+  },
+  trackedFollowUpCard: {
+    width: "100%",
+    maxWidth: 420,
+    backgroundColor: "#1a1528",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#2a2040",
+    padding: 20,
+    gap: 14,
+  },
+  trackedFollowUpTitle: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "700",
+  },
+  trackedFollowUpBody: {
+    color: "#cfc6e0",
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  trackedFollowUpActions: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 10,
+    marginTop: 4,
+  },
+  trackedFollowUpSecondary: {
+    minHeight: 44,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    justifyContent: "center",
+    backgroundColor: "#2a2040",
+  },
+  trackedFollowUpSecondaryText: {
+    color: "#ddd",
+    fontWeight: "600",
+  },
+  trackedFollowUpPrimary: {
+    minHeight: 44,
+    minWidth: 140,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#8c52ff",
+  },
+  trackedFollowUpPrimaryText: {
+    color: "#fff",
+    fontWeight: "700",
   },
 });
 

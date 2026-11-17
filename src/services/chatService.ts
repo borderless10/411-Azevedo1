@@ -27,6 +27,12 @@ import {
   normalizeHeartEmojisInText,
   normalizeReactionEmoji,
 } from "../utils/chatMentions";
+import {
+  CHAT_DELETED_MESSAGE_TEXT,
+  CHAT_MESSAGE_EDIT_WINDOW_MS,
+  canMutateOwnChatMessage,
+  isChatMessageDeleted,
+} from "../utils/chatMessageMutations";
 
 export type ChatType = "direct" | "group" | "global";
 
@@ -57,6 +63,8 @@ export interface Message {
   senderId: string;
   senderCoupleMember?: CoupleMember | null;
   createdAt: Date;
+  editedAt?: Date | null;
+  deletedAt?: Date | null;
   mentions?: ChatMention[];
   replyTo?: ChatReplyTo | null;
   reactions?: Record<string, string>;
@@ -119,6 +127,8 @@ const mapMessage = (id: string, data: any): Message => ({
   senderId: data.senderId,
   senderCoupleMember: parseCoupleMember(data.senderCoupleMember),
   createdAt: data.createdAt ? timestampToDate(data.createdAt) : new Date(),
+  editedAt: data.editedAt ? timestampToDate(data.editedAt) : null,
+  deletedAt: data.deletedAt ? timestampToDate(data.deletedAt) : null,
   mentions: mapMentions(data.mentions),
   replyTo: mapReplyTo(data.replyTo),
   reactions: mapReactions(data.reactions),
@@ -258,6 +268,86 @@ export async function sendMessage(
   await batch.commit();
 
   return { id: msgRef.id };
+}
+
+const assertOwnMessageMutable = (
+  senderId: string,
+  userId: string,
+  message: Pick<Message, "createdAt" | "deletedAt">,
+) => {
+  if (senderId !== userId) {
+    throw new Error("Só o autor pode alterar esta mensagem.");
+  }
+  if (!canMutateOwnChatMessage(message)) {
+    throw new Error("O prazo de 1 hora para editar ou apagar expirou.");
+  }
+  if (isChatMessageDeleted(message)) {
+    throw new Error("Esta mensagem já foi apagada.");
+  }
+};
+
+export async function editMessage(
+  chatId: string,
+  messageId: string,
+  userId: string,
+  nextText: string,
+  mentions: ChatMention[] = [],
+): Promise<void> {
+  if (!chatId || !messageId || !userId) return;
+  const trimmed = normalizeHeartEmojisInText(String(nextText || "").trim());
+  if (!trimmed) {
+    throw new Error("Mensagem vazia");
+  }
+
+  const msgRef = doc(db, CHATS_COL, chatId, MESSAGES_SUBCOL, messageId);
+  const snap = await getDoc(msgRef);
+  if (!snap.exists()) {
+    throw new Error("Mensagem não encontrada.");
+  }
+  const data = snap.data() as any;
+  const current: Pick<Message, "createdAt" | "deletedAt" | "senderId"> = {
+    senderId: String(data.senderId || ""),
+    createdAt: data.createdAt ? timestampToDate(data.createdAt) : new Date(0),
+    deletedAt: data.deletedAt ? timestampToDate(data.deletedAt) : null,
+  };
+  assertOwnMessageMutable(current.senderId, userId, current);
+
+  const sanitizedMentions = mentions.filter(
+    (mention) => mention.userId && mention.userId !== userId,
+  );
+
+  await updateDoc(msgRef, {
+    text: trimmed,
+    editedAt: serverTimestamp(),
+    mentions: sanitizedMentions,
+  });
+}
+
+export async function softDeleteMessage(
+  chatId: string,
+  messageId: string,
+  userId: string,
+): Promise<void> {
+  if (!chatId || !messageId || !userId) return;
+
+  const msgRef = doc(db, CHATS_COL, chatId, MESSAGES_SUBCOL, messageId);
+  const snap = await getDoc(msgRef);
+  if (!snap.exists()) {
+    throw new Error("Mensagem não encontrada.");
+  }
+  const data = snap.data() as any;
+  const current: Pick<Message, "createdAt" | "deletedAt" | "senderId"> = {
+    senderId: String(data.senderId || ""),
+    createdAt: data.createdAt ? timestampToDate(data.createdAt) : new Date(0),
+    deletedAt: data.deletedAt ? timestampToDate(data.deletedAt) : null,
+  };
+  assertOwnMessageMutable(current.senderId, userId, current);
+
+  await updateDoc(msgRef, {
+    text: CHAT_DELETED_MESSAGE_TEXT,
+    deletedAt: serverTimestamp(),
+    mentions: [],
+  });
 }
 
 export async function setMessageReaction(
@@ -483,12 +573,16 @@ export async function getChatsForUserNoOrder(userId: string, role: string): Prom
   return snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }) as Chat);
 }
 
+export { CHAT_MESSAGE_EDIT_WINDOW_MS, CHAT_DELETED_MESSAGE_TEXT };
+
 export default {
   getDirectChatId,
   createChatIfNotExists,
   getChatById,
   sendMessage,
   sendDirectMessage,
+  editMessage,
+  softDeleteMessage,
   setMessageReaction,
   markChatAsRead,
   listenToMessages,
