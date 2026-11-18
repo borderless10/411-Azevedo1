@@ -2,7 +2,14 @@
  * Tela Home - Dashboard Inicial
  */
 
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, {
+  useState,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useMemo,
+  useCallback,
+} from "react";
 import {
   View,
   Text,
@@ -41,7 +48,9 @@ import { incomeTransactionLabel } from "../../utils/incomeEntry";
 import { computePlanningTotals } from "../../utils/planningDisplayUtils";
 import { perfMark, perfMeasure } from "../../utils/perfMarks";
 import MaskedAmount from "../../components/ui/MaskedAmount";
-import CardWaveBg from "../../components/ui/CardWaveBg";
+import CardWaveBg, {
+  CardWaveWarmup,
+} from "../../components/ui/CardWaveBg";
 import {
   formatDateForDisplay,
   formatDateToString,
@@ -106,6 +115,9 @@ export const HomeScreen = () => {
   const [filterType, setFilterType] = useState<"all" | "income" | "expense">(
     "all",
   );
+  const transactionsListRef = useRef<FlatList>(null);
+  const homeScrollOffsetRef = useRef(0);
+  const restoreHomeScrollRef = useRef(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryChartData, setCategoryChartData] = useState<CategoryData[]>(
     [],
@@ -1059,7 +1071,13 @@ export const HomeScreen = () => {
     onPress: () => void;
     delay: number;
     fullWidth?: boolean;
-  }> = ({ icon, label, color, onPress, delay, fullWidth }) => {
+    waveVariant?:
+      | "actionIncome"
+      | "actionExpense"
+      | "actionIncomeList"
+      | "actionExpenseList"
+      | "actionPlanning";
+  }> = ({ icon, label, color, onPress, delay, fullWidth, waveVariant }) => {
     const scaleAnim = useRef(new Animated.Value(0)).current;
     const opacityAnim = useRef(new Animated.Value(0)).current;
 
@@ -1110,16 +1128,30 @@ export const HomeScreen = () => {
         <TouchableOpacity
           style={[
             styles.actionCard,
-            { borderColor: `${color}40`, ...premiumCardShadow },
+            waveVariant && styles.actionCardWithWave,
+            fullWidth && styles.actionCardContentCentered,
+            {
+              borderColor: waveVariant ? "transparent" : `${color}40`,
+              ...premiumCardShadow,
+            },
           ]}
           onPressIn={handlePressIn}
           onPressOut={handlePressOut}
           onPress={onPress}
           activeOpacity={0.9}
         >
+          {waveVariant ? (
+            <CardWaveBg
+              variant={waveVariant}
+              crop="action"
+              opacity={1}
+              borderRadius={12}
+            />
+          ) : null}
           <View
             style={[
               styles.actionIconContainer,
+              styles.actionForeground,
               {
                 backgroundColor: `${color}22`,
                 borderColor: `${color}35`,
@@ -1128,7 +1160,15 @@ export const HomeScreen = () => {
           >
             <Ionicons name={icon} size={18} color={color} />
           </View>
-          <Text style={styles.actionLabel}>{label}</Text>
+          <Text
+            style={[
+              styles.actionLabel,
+              styles.actionForeground,
+              fullWidth && styles.actionLabelCentered,
+            ]}
+          >
+            {label}
+          </Text>
         </TouchableOpacity>
       </Animated.View>
     );
@@ -1168,13 +1208,20 @@ export const HomeScreen = () => {
           key={expense.id}
           style={[
             styles.transactionItem,
+            styles.transactionItemExpense,
             {
               opacity: fadeAnim,
               transform: [{ translateX: slideAnim }],
             },
           ]}
         >
-          <View style={styles.transactionIcon}>
+          <CardWaveBg
+            variant="txExpense"
+            crop="fill"
+            opacity={1}
+            borderRadius={16}
+          />
+          <View style={[styles.transactionIcon, styles.transactionForeground]}>
             <View
               style={[
                 styles.transactionIconContainer,
@@ -1184,7 +1231,9 @@ export const HomeScreen = () => {
               <Ionicons name="remove-circle" size={22} color="#FF008A" />
             </View>
           </View>
-          <View style={styles.transactionContent}>
+          <View
+            style={[styles.transactionContent, styles.transactionForeground]}
+          >
             <View style={styles.transactionHeader}>
               <Text style={styles.transactionDescription} numberOfLines={3}>
                 {expense.description || "Sem descrição"}
@@ -1276,13 +1325,20 @@ export const HomeScreen = () => {
           key={income.id}
           style={[
             styles.transactionItem,
+            styles.transactionItemIncome,
             {
               opacity: fadeAnim,
               transform: [{ translateX: slideAnim }],
             },
           ]}
         >
-          <View style={styles.transactionIcon}>
+          <CardWaveBg
+            variant="txIncome"
+            crop="fill"
+            opacity={1}
+            borderRadius={16}
+          />
+          <View style={[styles.transactionIcon, styles.transactionForeground]}>
             <View
               style={[
                 styles.transactionIconContainer,
@@ -1292,7 +1348,9 @@ export const HomeScreen = () => {
               <Ionicons name="cash" size={22} color="#B900FF" />
             </View>
           </View>
-          <View style={styles.transactionContent}>
+          <View
+            style={[styles.transactionContent, styles.transactionForeground]}
+          >
             <View style={styles.transactionHeader}>
               <Text style={styles.transactionDescription} numberOfLines={3}>
                 {incomeTransactionLabel(income)}
@@ -1360,6 +1418,33 @@ export const HomeScreen = () => {
     return true;
   });
 
+  const handleFilterTypeChange = useCallback(
+    (next: "all" | "income" | "expense") => {
+      if (next === filterType) return;
+      // FlatList zera o scroll ao trocar `data` — restaura a posição atual.
+      restoreHomeScrollRef.current = true;
+      setFilterType(next);
+    },
+    [filterType],
+  );
+
+  useLayoutEffect(() => {
+    if (!restoreHomeScrollRef.current) return;
+    restoreHomeScrollRef.current = false;
+    const y = homeScrollOffsetRef.current;
+    const restore = () => {
+      transactionsListRef.current?.scrollToOffset({
+        offset: y,
+        animated: false,
+      });
+    };
+    requestAnimationFrame(() => {
+      restore();
+      setTimeout(restore, 16);
+      setTimeout(restore, 64);
+    });
+  }, [filterType, filteredTransactions.length]);
+
   const showExpectedSavingsHelp = () => {
     Alert.alert(
       "Poupança estimada",
@@ -1405,7 +1490,9 @@ export const HomeScreen = () => {
 
   return (
     <Layout showHeader={true} showSidebar={true} desktopWidth="full">
+      <CardWaveWarmup />
       <FlatList
+        ref={transactionsListRef}
         style={styles.container}
         data={filteredTransactions}
         keyExtractor={(item, index) =>
@@ -1414,9 +1501,13 @@ export const HomeScreen = () => {
         renderItem={({ item, index }) => renderTransactionItem(item, index)}
         initialNumToRender={12}
         maxToRenderPerBatch={8}
-        windowSize={7}
-        removeClippedSubviews
+        windowSize={9}
+        removeClippedSubviews={false}
         keyboardShouldPersistTaps="handled"
+        onScroll={(event) => {
+          homeScrollOffsetRef.current = event.nativeEvent.contentOffset.y;
+        }}
+        scrollEventThrottle={16}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -2059,6 +2150,7 @@ export const HomeScreen = () => {
                 color="#B900FF"
                 onPress={() => navigate("AddIncome")}
                 delay={0}
+                waveVariant="actionIncome"
               />
               <ActionCard
                 icon="remove-circle"
@@ -2066,6 +2158,7 @@ export const HomeScreen = () => {
                 color="#FF008A"
                 onPress={() => navigate("AddExpense")}
                 delay={100}
+                waveVariant="actionExpense"
               />
               <ActionCard
                 icon="cash-outline"
@@ -2073,6 +2166,7 @@ export const HomeScreen = () => {
                 color="#a47aff"
                 onPress={() => navigate("IncomeList")}
                 delay={200}
+                waveVariant="actionIncomeList"
               />
               <ActionCard
                 icon="receipt-outline"
@@ -2080,6 +2174,7 @@ export const HomeScreen = () => {
                 color="#ff6b8a"
                 onPress={() => navigate("ExpenseList")}
                 delay={300}
+                waveVariant="actionExpenseList"
               />
               {!isStaffUser(user) && (
                 <ActionCard
@@ -2089,6 +2184,7 @@ export const HomeScreen = () => {
                   onPress={() => navigate("PlanningView")}
                   delay={400}
                   fullWidth
+                  waveVariant="actionPlanning"
                 />
               )}
             </View>
@@ -2196,7 +2292,7 @@ export const HomeScreen = () => {
                   styles.filterButton,
                   filterType === "all" && styles.filterButtonActive,
                 ]}
-                onPress={() => setFilterType("all")}
+                onPress={() => handleFilterTypeChange("all")}
               >
                 <Ionicons
                   name="list"
@@ -2218,7 +2314,7 @@ export const HomeScreen = () => {
                   styles.filterButton,
                   filterType === "income" && styles.filterButtonActive,
                 ]}
-                onPress={() => setFilterType("income")}
+                onPress={() => handleFilterTypeChange("income")}
               >
                 <Ionicons
                   name="trending-up"
@@ -2241,7 +2337,7 @@ export const HomeScreen = () => {
                   styles.filterButton,
                   filterType === "expense" && styles.filterButtonActive,
                 ]}
-                onPress={() => setFilterType("expense")}
+                onPress={() => handleFilterTypeChange("expense")}
               >
                 <Ionicons
                   name="trending-down"
@@ -2927,6 +3023,20 @@ const styles = StyleSheet.create({
     gap: 6,
     borderWidth: 1,
     minHeight: 40,
+    overflow: "hidden",
+  },
+  actionCardWithWave: {
+    backgroundColor: "#07050D",
+    minHeight: 48,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+  },
+  actionCardContentCentered: {
+    justifyContent: "center",
+    alignSelf: "stretch",
+  },
+  actionForeground: {
+    zIndex: 1,
   },
   actionIconContainer: {
     width: 28,
@@ -2959,6 +3069,10 @@ const styles = StyleSheet.create({
     color: premium.text,
     textAlign: "left",
     letterSpacing: 0.1,
+  },
+  actionLabelCentered: {
+    flex: 0,
+    textAlign: "center",
   },
   filtersContainer: {
     marginBottom: 16,
@@ -3071,10 +3185,20 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     padding: 10,
     marginBottom: 6,
-    backgroundColor: premium.surface,
+    backgroundColor: "#07050D",
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: premium.border,
+    borderColor: "transparent",
+    overflow: "hidden",
+  },
+  transactionItemIncome: {
+    borderColor: "rgba(185, 0, 255, 0.28)",
+  },
+  transactionItemExpense: {
+    borderColor: "rgba(255, 0, 138, 0.28)",
+  },
+  transactionForeground: {
+    zIndex: 1,
   },
   transactionIcon: {
     marginRight: 12,

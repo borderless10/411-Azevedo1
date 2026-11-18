@@ -41,7 +41,11 @@ export async function uploadProfilePhoto(
     );
     const storage = getStorage(getApp(), `gs://${firebaseConfig.storageBucket}`);
     const fileRef = ref(storage, path);
-    await uploadBytes(fileRef, blob, { contentType: "image/jpeg" });
+    await uploadBytes(fileRef, blob, {
+      contentType: "image/jpeg",
+      // Ajuda cache HTTP no navegador e CDNs (1 ano; URL muda com token ao trocar foto).
+      cacheControl: "public,max-age=31536000,immutable",
+    });
     const url = await getDownloadURL(fileRef);
     return { url, path };
   } finally {

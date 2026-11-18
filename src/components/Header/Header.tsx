@@ -202,6 +202,7 @@ export const Header: React.FC<HeaderProps> = ({
                   size={34}
                   ringDefinition={ownBadgeDefinition}
                   badgeDefinition={ownBadgeDefinition}
+                  onPhotoPress={handleProfile}
                 />
 
                 {user?.role === "cliente_premium" && (

@@ -243,7 +243,9 @@ export const MessageBubble = React.memo(function MessageBubble({
             >
               <Text style={styles.reactionEmoji}>
                 {emoji}
-                {count > 1 ? ` ${count}` : ""}
+                {count > 1 ? (
+                  <Text style={styles.reactionCount}> {count}</Text>
+                ) : null}
               </Text>
             </TouchableOpacity>
           ))}
@@ -385,15 +387,20 @@ const styles = StyleSheet.create({
     paddingLeft: 56,
   },
   reactionChip: {
-    backgroundColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.14)",
     borderRadius: 12,
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.22)",
+    borderColor: "rgba(255,255,255,0.28)",
   },
   reactionEmoji: {
     fontSize: 12,
+  },
+  reactionCount: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#f3e8ff",
   },
   msgAvatarWrap: { marginRight: 8 },
 });

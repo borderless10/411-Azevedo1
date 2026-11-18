@@ -7,6 +7,7 @@ import {
   View,
   Text,
   TouchableOpacity,
+  Pressable,
   StyleSheet,
   ScrollView,
   ViewStyle,
@@ -384,13 +385,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     });
   }
 
-  // Itens finais
-  menuItems.push({
-    id: "Profile",
-    label: "Perfil",
-    icon: "person",
-    color: "#B900FF",
-  });
+  // Perfil fica na foto do header (canto superior direito).
   menuItems.push({
     id: "Settings",
     label: "Configurações",
@@ -874,10 +869,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
       pointerEvents={visible ? "auto" : "none"}
       style={[styles.overlay, { opacity: fadeAnim }]}
     >
-      <TouchableOpacity
-        style={StyleSheet.absoluteFillObject}
-        activeOpacity={1}
+      {/* Área escura à direita: toque fecha a sidebar */}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Fechar menu"
         onPress={onClose}
+        style={styles.overlayDismiss}
       />
       <Animated.View
         style={[
@@ -906,12 +903,12 @@ const styles = StyleSheet.create({
     borderRightWidth: 1,
   },
   logoDocked: {
-    paddingTop: 16,
-    paddingBottom: 12,
+    paddingTop: 8,
+    paddingBottom: 6,
   },
   logoImageDocked: {
-    width: 180,
-    height: 72,
+    width: 168,
+    height: 64,
   },
   overlay: {
     position: "absolute",
@@ -922,12 +919,21 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0, 0, 0, 0.7)",
     zIndex: 1000,
   },
+  overlayDismiss: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 0,
+  },
   container: {
     position: "absolute",
     top: 0,
     left: 0,
     bottom: 0,
     width: 280,
+    zIndex: 1,
     shadowColor: "#000",
     shadowOffset: { width: 2, height: 0 },
     shadowOpacity: 0.5,
@@ -938,20 +944,20 @@ const styles = StyleSheet.create({
   },
   logoContainer: {
     alignItems: "center",
-    paddingTop: 60,
-    paddingBottom: 20,
-    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 8,
+    paddingHorizontal: 16,
     borderBottomWidth: 1,
   },
   logo: {
-    width: 240,
-    height: 100,
+    width: 220,
+    height: 88,
     alignSelf: "center",
   },
   closeButton: {
     position: "absolute",
-    top: 8,
-    left: 8,
+    top: 4,
+    left: 4,
     zIndex: 1002,
     width: 44,
     height: 44,

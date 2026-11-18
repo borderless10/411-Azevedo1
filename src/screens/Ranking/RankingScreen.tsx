@@ -11,7 +11,6 @@ import {
   Platform,
   TouchableOpacity,
   Alert,
-  Image,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Svg, { Rect } from "react-native-svg";
@@ -46,6 +45,7 @@ import {
 } from "../../utils/badgeRules";
 import { rankingGamificationService } from "../../services/rankingGamificationService";
 import { rankingSeasonPeriodLabel } from "../../utils/rankingSeasonLabel";
+import { prefetchRemoteImages } from "../../utils/remoteImageCache";
 
 type Row = {
   position: number;
@@ -218,6 +218,7 @@ export const RankingScreen = () => {
         setCutoffDateKey(memory.cutoff);
         setRows(memory.rows);
         setLoading(false);
+        void prefetchRemoteImages(memory.rows.map((row) => row.photoUrl));
       } else {
         setLoading(true);
       }
@@ -235,6 +236,7 @@ export const RankingScreen = () => {
         setRows(stored.rows);
         setCutoffDateKey(stored.cutoffDateKey);
         setLoading(false);
+        void prefetchRemoteImages(stored.rows.map((row) => row.photoUrl));
       }
       try {
         const [ranking, config] = await networkPromise;
@@ -262,8 +264,10 @@ export const RankingScreen = () => {
           ),
         ).catch(() => undefined);
 
+        void prefetchRemoteImages(out.map((row) => row.photoUrl));
+
         const missingPhoto = out
-          .slice(0, 12)
+          .slice(0, 40)
           .filter((row) => !row.photoUrl && !photoCacheRef.current.has(row.userId));
         if (missingPhoto.length === 0) return;
         const withPhotos = await Promise.all(
@@ -290,6 +294,7 @@ export const RankingScreen = () => {
         const photos = new Map(
           withPhotos.map((item) => [item.userId, item.photoUrl]),
         );
+        void prefetchRemoteImages(withPhotos.map((item) => item.photoUrl));
         setRows((current) => {
           const next = current.map((row) =>
             photos.has(row.userId)
@@ -614,6 +619,7 @@ Tem certeza de que deseja continuar?`,
                 ringDefinition={ringDef}
                 badgeDefinition={badgeDef}
                 crownPosition={crownByUser.get(r.userId) ?? null}
+                recyclingKey={r.userId}
                 onPhotoPress={() =>
                   setPhotoPreview({
                     uri: photoUri || null,

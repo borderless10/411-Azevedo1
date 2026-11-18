@@ -1,6 +1,5 @@
 import React from "react";
 import {
-  Image,
   Modal,
   StyleSheet,
   Text,
@@ -10,6 +9,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import type { RankingPreference } from "../../types/auth";
 import { canOpenPublicGamificationProfile } from "../../utils/publicGamificationProfile";
+import { CachedRemoteImage } from "../ui/CachedRemoteImage";
 
 /**
  * Foto de usuário ampliada: fundo escuro, foto grande centralizada,
@@ -58,7 +58,13 @@ export const PhotoPreviewModal = ({
         onPress={onClose}
       >
         {uri ? (
-          <Image source={{ uri }} style={styles.image} resizeMode="contain" />
+          <CachedRemoteImage
+            uri={uri}
+            style={styles.image}
+            contentFit="contain"
+            recyclingKey={userId || uri}
+            transition={80}
+          />
         ) : (
           <View style={styles.avatarFallback}>
             <Text style={styles.avatarInitials}>{initials || "?"}</Text>

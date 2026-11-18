@@ -9,7 +9,6 @@ import {
   TextInput,
   Platform,
   Dimensions,
-  Image,
   ImageBackground,
   Modal,
   Alert,
@@ -17,6 +16,7 @@ import {
   Keyboard,
   type KeyboardEvent,
   ScrollView,
+  Pressable,
   useWindowDimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -64,7 +64,6 @@ import {
 import {
   profileDisplayName,
   profileInitial,
-  profilePhotoUri,
   resolveProfilePhotoUri,
   resolveChatDisplayName,
   resolveCoupleChatSenderLabel,
@@ -79,6 +78,7 @@ import moderationService, {
 import { BadgedAvatar } from "../../components/Gamification/BadgedAvatar";
 import { BadgeDetailModal } from "../../components/Gamification/BadgeEmblem";
 import { PhotoPreviewModal } from "../../components/Gamification/PhotoPreviewModal";
+import { CachedRemoteImage } from "../../components/ui/CachedRemoteImage";
 import { rankingGamificationService } from "../../services/rankingGamificationService";
 import {
   resolveAvatarBadgeDefinition,
@@ -92,6 +92,7 @@ import type {
 } from "../../types/rankingGamification";
 import type { RankingPreference } from "../../types/auth";
 import { perfMark, perfMeasure } from "../../utils/perfMarks";
+import { prefetchRemoteImages } from "../../utils/remoteImageCache";
 
 export const ChatScreen: React.FC = () => {
   const { user, activeCoupleMember } = useAuth();
@@ -220,11 +221,59 @@ export const ChatScreen: React.FC = () => {
   } | null>(null);
   const [reactionCardHeight, setReactionCardHeight] = useState(180);
   const [reactionPickerOpen, setReactionPickerOpen] = useState(false);
+  /** Posição travada na abertura — evita o card “pular” ao abrir o emoji. */
+  const [reactionCardPos, setReactionCardPos] = useState<{
+    top: number;
+    left: number;
+    width: number;
+  } | null>(null);
   const windowSize = useWindowDimensions();
   const [keyboardInset, setKeyboardInset] = useState(0);
   const reactionPickerHeight = Math.max(
-    160,
-    Math.min(280, windowSize.height - 220),
+    140,
+    Math.min(220, windowSize.height * 0.32),
+  );
+
+  const closeReactionSheet = useCallback(() => {
+    setReactionFocus(null);
+    setReactionCardPos(null);
+    setReactionPickerOpen(false);
+    setReactionCardHeight(180);
+  }, []);
+
+  const openReactionSheet = useCallback(
+    (
+      messageId: string,
+      emoji: string | null,
+      anchor: { x: number; y: number; width: number; height: number },
+    ) => {
+      const margin = 12;
+      const width = Math.min(340, windowSize.width - margin * 2);
+      const estimatedHeight = 180;
+      let top = anchor.y - estimatedHeight - 6;
+      if (top < margin) {
+        top = anchor.y + anchor.height + 6;
+      }
+      if (top + estimatedHeight > windowSize.height - margin) {
+        top = Math.max(
+          margin,
+          windowSize.height - estimatedHeight - margin,
+        );
+      }
+      let left = anchor.x;
+      if (left + width > windowSize.width - margin) {
+        left = anchor.x + anchor.width - width;
+      }
+      left = Math.max(
+        margin,
+        Math.min(left, windowSize.width - width - margin),
+      );
+      setReactionCardHeight(estimatedHeight);
+      setReactionPickerOpen(false);
+      setReactionCardPos({ top, left, width });
+      setReactionFocus({ messageId, emoji, anchor });
+    },
+    [windowSize.height, windowSize.width],
   );
 
   useEffect(() => {
@@ -527,6 +576,11 @@ export const ChatScreen: React.FC = () => {
 
       if (Object.keys(updates).length > 0) {
         setUserMap((prev) => ({ ...prev, ...updates }));
+        void prefetchRemoteImages(
+          Object.values(updates).map((profile) =>
+            resolveProfilePhotoUri(profile),
+          ),
+        );
       }
       if (Object.keys(nameUpdates).length > 0) {
         setPreviewSenderMap((prev) => ({ ...prev, ...nameUpdates }));
@@ -966,29 +1020,20 @@ export const ChatScreen: React.FC = () => {
   ]);
 
   const reactionCardFrame = useMemo(() => {
-    const anchor = reactionFocus?.anchor;
-    if (!anchor) return null;
+    if (!reactionCardPos) return null;
     const margin = 12;
-    const width = Math.min(340, windowSize.width - margin * 2);
-    let top = anchor.y - reactionCardHeight - 6;
-    if (top < margin) {
-      top = anchor.y + anchor.height + 6;
-    }
+    // Só ajusta pra caber na tela; não inverte acima/abaixo do chip.
+    let top = reactionCardPos.top;
     if (top + reactionCardHeight > windowSize.height - margin) {
       top = Math.max(margin, windowSize.height - reactionCardHeight - margin);
     }
-    let left = anchor.x;
-    if (left + width > windowSize.width - margin) {
-      left = anchor.x + anchor.width - width;
-    }
-    left = Math.max(margin, Math.min(left, windowSize.width - width - margin));
-    return { top, left, width };
-  }, [
-    reactionCardHeight,
-    reactionFocus?.anchor,
-    windowSize.height,
-    windowSize.width,
-  ]);
+    if (top < margin) top = margin;
+    return {
+      top,
+      left: reactionCardPos.left,
+      width: reactionCardPos.width,
+    };
+  }, [reactionCardHeight, reactionCardPos, windowSize.height]);
 
   // For private/direct chats show header avatar/name (fetch if missing)
   const isPrivateChat =
@@ -1453,9 +1498,11 @@ export const ChatScreen: React.FC = () => {
     const uri = resolveProfilePhotoUri(person);
     if (uri) {
       return (
-        <Image
-          source={{ uri }}
+        <CachedRemoteImage
+          uri={uri}
+          recyclingKey={person?.id || uri}
           style={{ width: size, height: size, borderRadius: size / 2 }}
+          contentFit="cover"
         />
       );
     }
@@ -1963,7 +2010,7 @@ export const ChatScreen: React.FC = () => {
                   showSenderName={isGroup || showCoupleSpeaker}
                   senderLabel={senderLabel}
                   senderPhotoBase64={
-                    sender?.photoBase64 || sender?.photoUrl || undefined
+                    resolveProfilePhotoUri(sender) || undefined
                   }
                   senderBadgeDefinition={badgeDefinitionForPerson(sender)}
                   senderRingDefinition={ringDefinitionForPerson(sender)}
@@ -1995,9 +2042,7 @@ export const ChatScreen: React.FC = () => {
                   onLongPress={() => setActionMessage(msg)}
                   onReactionPress={(emoji, anchor) => {
                     if (!msg.id) return;
-                    setReactionCardHeight(180);
-                    setReactionPickerOpen(false);
-                    setReactionFocus({ messageId: msg.id, emoji, anchor });
+                    openReactionSheet(msg.id, emoji, anchor);
                   }}
                 />
               );
@@ -2236,13 +2281,14 @@ export const ChatScreen: React.FC = () => {
         visible={Boolean(reactionSheet)}
         transparent
         animationType="fade"
-        onRequestClose={() => setReactionFocus(null)}
+        onRequestClose={closeReactionSheet}
       >
         <View style={styles.reactionBackdrop}>
-          <TouchableOpacity
-            style={StyleSheet.absoluteFill}
-            activeOpacity={1}
-            onPress={() => setReactionFocus(null)}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Fechar reações"
+            onPress={closeReactionSheet}
+            style={styles.reactionDismiss}
           />
           {reactionSheet && reactionCardFrame ? (
             <View
@@ -2254,6 +2300,7 @@ export const ChatScreen: React.FC = () => {
                   width: reactionCardFrame.width,
                 },
               ]}
+              onStartShouldSetResponder={() => true}
               onLayout={(event) => {
                 const nextHeight = Math.round(event.nativeEvent.layout.height);
                 if (nextHeight > 0 && nextHeight !== reactionCardHeight) {
@@ -2405,11 +2452,16 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   reactionBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "transparent",
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.35)",
+  },
+  reactionDismiss: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 0,
   },
   reactionCard: {
     position: "absolute",
+    zIndex: 1,
     backgroundColor: "#1c1f21",
     borderRadius: 16,
     paddingTop: 14,
@@ -2420,6 +2472,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.45,
     shadowRadius: 18,
     elevation: 16,
+    maxHeight: "92%",
   },
   reactionTitle: {
     color: "#f2f2f2",

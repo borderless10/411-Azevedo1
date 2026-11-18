@@ -64,6 +64,7 @@ export const PodiumView = ({
               size={isFirst ? 76 : 58}
               ringDefinition={ring}
               badgeDefinition={badge}
+              recyclingKey={entry.userId}
               crownPosition={
                 entry.position === 1 || entry.position === 2 || entry.position === 3
                   ? entry.position

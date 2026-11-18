@@ -691,7 +691,7 @@ export const AddExpenseScreen = () => {
                 >
                   <Ionicons
                     name="wallet"
-                    size={20}
+                    size={18}
                     color={expenseType === "consumption" ? "#B900FF" : "#999"}
                   />
                   <Text
@@ -699,6 +699,9 @@ export const AddExpenseScreen = () => {
                       styles.typeTabText,
                       expenseType === "consumption" && styles.typeTabTextActive,
                     ]}
+                    numberOfLines={2}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.85}
                   >
                     Consumo Moderado
                   </Text>
@@ -713,7 +716,7 @@ export const AddExpenseScreen = () => {
                 >
                   <Ionicons
                     name="analytics"
-                    size={20}
+                    size={18}
                     color={expenseType === "tracked" ? "#B900FF" : "#999"}
                   />
                   <Text
@@ -721,6 +724,9 @@ export const AddExpenseScreen = () => {
                       styles.typeTabText,
                       expenseType === "tracked" && styles.typeTabTextActive,
                     ]}
+                    numberOfLines={2}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.85}
                   >
                     Gasto Acompanhado
                   </Text>
@@ -735,7 +741,7 @@ export const AddExpenseScreen = () => {
                 >
                   <Ionicons
                     name="document-text"
-                    size={20}
+                    size={18}
                     color={expenseType === "bill" ? "#B900FF" : "#999"}
                   />
                   <Text
@@ -743,6 +749,9 @@ export const AddExpenseScreen = () => {
                       styles.typeTabText,
                       expenseType === "bill" && styles.typeTabTextActive,
                     ]}
+                    numberOfLines={2}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.85}
                   >
                     Conta
                   </Text>
@@ -1503,34 +1512,41 @@ const styles = StyleSheet.create({
   },
   typeSelector: {
     flexDirection: "row",
-    gap: 8,
-    marginBottom: 32,
+    alignItems: "stretch",
+    gap: 6,
+    marginBottom: 24,
     backgroundColor: "#171321",
     borderRadius: 16,
-    padding: 8,
+    padding: 6,
+    width: "100%",
   },
   typeTab: {
     flex: 1,
-    flexDirection: "row",
+    minWidth: 0,
+    flexDirection: "column",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 12,
-    paddingHorizontal: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 4,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: "#333",
     backgroundColor: "transparent",
-    gap: 6,
+    gap: 4,
+    overflow: "hidden",
   },
   typeTabActive: {
     backgroundColor: "rgba(140, 82, 255, 0.1)",
     borderColor: "#B900FF",
   },
   typeTabText: {
-    fontSize: 12,
+    fontSize: 11,
+    lineHeight: 13,
     fontWeight: "600",
     color: "#999",
     textAlign: "center",
+    width: "100%",
+    flexShrink: 1,
   },
   typeTabTextActive: {
     color: "#B900FF",

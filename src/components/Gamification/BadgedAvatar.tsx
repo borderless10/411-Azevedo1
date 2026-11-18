@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import {
-  Image,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -14,6 +13,7 @@ import {
   crownLabel,
   type CrownPosition,
 } from "../../utils/crowns";
+import { CachedRemoteImage } from "../ui/CachedRemoteImage";
 import { BadgeDetailModal } from "./BadgeEmblem";
 import { PhotoPreviewModal } from "./PhotoPreviewModal";
 
@@ -36,6 +36,7 @@ export const BadgedAvatar = ({
   ringDefinition,
   badgeDefinition,
   crownPosition,
+  recyclingKey,
   onPhotoPress,
   onBadgePress,
 }: {
@@ -49,6 +50,8 @@ export const BadgedAvatar = ({
    * Só Ranking e Chat passam isso: nas outras telas a foto não coroa.
    */
   crownPosition?: CrownPosition | null;
+  /** Chave estável em listas (ex.: userId) para evitar flash de foto errada. */
+  recyclingKey?: string;
   onPhotoPress?: () => void;
   onBadgePress?: (definition: BadgeDefinition) => void;
 }) => {
@@ -91,10 +94,11 @@ export const BadgedAvatar = ({
     .toUpperCase();
 
   const photo = photoUri ? (
-    <Image
-      source={{ uri: photoUri }}
-      key={photoUri}
+    <CachedRemoteImage
+      uri={photoUri}
+      recyclingKey={recyclingKey || displayName}
       style={{ width: size, height: size, borderRadius: size / 2 }}
+      contentFit="cover"
     />
   ) : (
     <View

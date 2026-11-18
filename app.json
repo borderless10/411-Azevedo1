@@ -68,7 +68,8 @@
           "resizeMode": "contain",
           "backgroundColor": "#000000"
         }
-      ]
+      ],
+      "expo-image"
     ],
     "owner": "visao",
     "runtimeVersion": "1.0.10-sdk58-b22",
