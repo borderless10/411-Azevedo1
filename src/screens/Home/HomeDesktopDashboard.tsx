@@ -300,34 +300,37 @@ export const HomeDesktopDashboard: React.FC<Props> = (props) => {
           </TouchableOpacity>
         ) : null}
 
-        {(props.pieData.length > 0 || props.lineData.length > 0) && (
-          <View style={styles.chartsCol}>
-            {props.pieData.length > 0 ? (
-              <DesktopGlowCard
-                variant="neutral"
-                contentStyle={{ alignItems: "center" }}
-              >
-                <Text
-                  style={[styles.sectionTitle, { alignSelf: "flex-start" }]}
-                >
-                  Gastos por categoria
-                </Text>
-                <PieChart data={props.pieData} size={160} />
-              </DesktopGlowCard>
-            ) : null}
-            {props.lineData.length > 0 ? (
-              <DesktopGlowCard variant="neutral" contentStyle={{ gap: 6 }}>
-                <Text style={styles.sectionTitle}>Evolução (7 dias)</Text>
-                <DesktopEvolutionChart
-                  data={props.lineData}
-                  showValues={props.showValues}
-                  height={180}
-                />
-              </DesktopGlowCard>
-            ) : null}
+        {props.pieData.length > 0 ? (
+          <View style={styles.pieCol}>
+            <DesktopGlowCard
+              variant="neutral"
+              contentStyle={{ alignItems: "center", flexGrow: 1 }}
+            >
+              <Text style={[styles.sectionTitle, { alignSelf: "flex-start" }]}>
+                Gastos por categoria
+              </Text>
+              <PieChart data={props.pieData} size={168} />
+            </DesktopGlowCard>
           </View>
-        )}
+        ) : null}
       </View>
+
+      {props.lineData.length > 0 ? (
+        <DesktopGlowCard
+          variant="neutral"
+          contentStyle={styles.evolutionCardContent}
+        >
+          <View style={styles.rowBetween}>
+            <Text style={styles.sectionTitle}>Evolução (7 dias)</Text>
+            <Text style={styles.evolutionHint}>Rendas × gastos por dia</Text>
+          </View>
+          <DesktopEvolutionChart
+            data={props.lineData}
+            showValues={props.showValues}
+            height={240}
+          />
+        </DesktopGlowCard>
+      ) : null}
 
       <View style={styles.txSection}>
         <View style={styles.txToolbar}>
@@ -541,14 +544,22 @@ const styles = StyleSheet.create({
     alignItems: "stretch",
   },
   analyticsMain: {
-    flex: 1.2,
+    flex: 1.35,
     minWidth: 280,
   },
-  chartsCol: {
-    flex: 1,
-    minWidth: 280,
-    maxWidth: 440,
-    gap: 16,
+  pieCol: {
+    flex: 0.9,
+    minWidth: 260,
+    maxWidth: 380,
+  },
+  evolutionCardContent: {
+    gap: 10,
+    width: "100%",
+  },
+  evolutionHint: {
+    color: desktop.textMuted,
+    fontSize: 12,
+    fontWeight: "600",
   },
   rowBetween: {
     flexDirection: "row",

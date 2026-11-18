@@ -6,6 +6,7 @@ import React, { useState, useRef, useEffect } from "react";
 import {
   View,
   Text,
+  TextInput,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
@@ -19,7 +20,13 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Layout } from "../../components/Layout/Layout";
-import { formatCurrency } from "../../utils/currencyUtils";
+import {
+  DECIMAL_INPUT_KEYBOARD,
+  formatCurrency,
+  formatCurrencyWithoutSymbol,
+  parseCurrency,
+  sanitizeDecimalInput,
+} from "../../utils/currencyUtils";
 import { useAuth } from "../../contexts/AuthContext";
 import { userService } from "../../services/userServices";
 import { User } from "../../types/auth";
@@ -36,6 +43,7 @@ import {
   ConsumoModeradoPerformance,
 } from "../../services/budgetServices";
 import expenseServices from "../../services/expenseServices";
+import { creditCardServices } from "../../services/creditCardServices";
 import {
   getPlanningCycleLabel,
   planningServices,
@@ -43,6 +51,7 @@ import {
 import { getStartOfDay, getEndOfDay, addDays, formatExpectedMonthLabel, formatDateToString } from "../../utils/dateUtils";
 import { DailyExpense } from "../../types/budget";
 import { Expense } from "../../types/expense";
+import { CreditCard } from "../../types/creditCard";
 import {
   requestNotificationPermissions,
   scheduleDailyExpenseReminder,
@@ -95,6 +104,15 @@ export const BudgetScreen = () => {
   );
   const [dailyExpenseDates, setDailyExpenseDates] = useState<Date[]>([]);
   const [editingDateKey, setEditingDateKey] = useState<string | null>(null);
+  const [inlineAddDateKey, setInlineAddDateKey] = useState<string | null>(null);
+  const [inlineDesc, setInlineDesc] = useState("");
+  const [inlineValue, setInlineValue] = useState(0);
+  const [inlineValueText, setInlineValueText] = useState("");
+  const [inlinePayment, setInlinePayment] = useState<"cash" | "card">("cash");
+  const [inlineCardId, setInlineCardId] = useState("");
+  const [inlineError, setInlineError] = useState("");
+  const [inlineSaving, setInlineSaving] = useState(false);
+  const [creditCards, setCreditCards] = useState<CreditCard[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [saving, setSaving] = useState<boolean>(false);
   const [zeroConfirmedDateKeys, setZeroConfirmedDateKeys] = useState<string[]>([]);
@@ -292,6 +310,26 @@ export const BudgetScreen = () => {
     }
     setOwnerProfile(user);
   }, [ownerId, isSpectator, user]);
+
+  useEffect(() => {
+    if (!ownerId || !desktopWeb) {
+      setCreditCards([]);
+      return;
+    }
+    let cancelled = false;
+    creditCardServices
+      .getCreditCards(ownerId)
+      .then((cards) => {
+        if (cancelled) return;
+        setCreditCards(cards.filter((card) => card.isActive !== false));
+      })
+      .catch(() => {
+        if (!cancelled) setCreditCards([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [ownerId, desktopWeb]);
 
   useEffect(() => {
     if (currentScreen === "Budget" && ownerId) {
@@ -657,6 +695,43 @@ export const BudgetScreen = () => {
     return "Outro";
   };
 
+  const resetInlineAddForm = (keepPayment = true) => {
+    setInlineDesc("");
+    setInlineValue(0);
+    setInlineValueText("");
+    if (!keepPayment) {
+      setInlinePayment("cash");
+      setInlineCardId("");
+    } else if (inlinePayment === "card" && creditCards.length === 1) {
+      setInlineCardId(creditCards[0].id);
+    }
+    setInlineError("");
+  };
+
+  const closeInlineAddForm = () => {
+    setInlineAddDateKey(null);
+    resetInlineAddForm(false);
+  };
+
+  const ensureDesktopInlineAdd = (dateKey: string) => {
+    setInlineAddDateKey(dateKey);
+    resetInlineAddForm(false);
+    if (creditCards.length === 1) {
+      setInlineCardId(creditCards[0].id);
+    }
+  };
+
+  const setInlineValueFromText = (text: string) => {
+    if (!text.trim()) {
+      setInlineValueText("");
+      setInlineValue(0);
+      return;
+    }
+    const sanitized = sanitizeDecimalInput(text);
+    setInlineValueText(sanitized);
+    setInlineValue(parseCurrency(sanitized));
+  };
+
   const openExpenseEditor = (expenseId: string) => {
     navigate("EditExpense", {
       id: expenseId,
@@ -669,6 +744,13 @@ export const BudgetScreen = () => {
   };
 
   const openAddExpenseForDay = (date: Date) => {
+    if (desktopWeb) {
+      const dateKey = formatDateToString(date);
+      setEditingDateKey(dateKey);
+      ensureDesktopInlineAdd(dateKey);
+      return;
+    }
+
     navigate("AddExpense", {
       prefillDate: formatDateToString(date),
       prefillExpenseType: "consumption",
@@ -680,11 +762,89 @@ export const BudgetScreen = () => {
     });
   };
 
+  const openDayInlineEditor = (date: Date) => {
+    const dateKey = formatDateToString(date);
+    setEditingDateKey(dateKey);
+    if (desktopWeb) {
+      ensureDesktopInlineAdd(dateKey);
+      return;
+    }
+    if (inlineAddDateKey && inlineAddDateKey !== dateKey) {
+      closeInlineAddForm();
+    }
+  };
+
+  const submitInlineConsumoAdd = async (date: Date) => {
+    if (!ownerId) return;
+    const description = inlineDesc.trim();
+    if (description.length < 3) {
+      setInlineError("Descrição deve ter pelo menos 3 caracteres");
+      return;
+    }
+    if (inlineValue <= 0) {
+      setInlineError("Valor deve ser maior que zero");
+      return;
+    }
+    if (inlinePayment === "card" && !inlineCardId) {
+      setInlineError("Selecione um cartão");
+      return;
+    }
+
+    try {
+      setInlineSaving(true);
+      setInlineError("");
+      const noon = new Date(date);
+      noon.setHours(12, 0, 0, 0);
+      await expenseServices.createExpense(ownerId, {
+        value: inlineValue,
+        description,
+        date: noon,
+        category: "Consumo Moderado",
+        paymentMethod:
+          inlinePayment === "card" ? "credit_card" : "cash",
+        ...(inlinePayment === "card" && inlineCardId
+          ? { cardId: inlineCardId }
+          : {}),
+        isConsumoModerado: true,
+        ...(coupleMember === 1 || coupleMember === 2
+          ? { coupleMember }
+          : {}),
+      });
+      const ranking = await budgetServices.reconcileConsumoModeradoDay(
+        ownerId,
+        noon,
+        coupleMember,
+      );
+      await loadBudgetData({ silent: true });
+      setEditingDateKey(formatDateToString(date));
+      setInlineAddDateKey(formatDateToString(date));
+      resetInlineAddForm(true);
+      if (ranking) {
+        const feedback = getRankingRegistrationFeedback(ranking, "expense");
+        if (feedback.celebrate) {
+          setShowConfetti(true);
+        }
+        Alert.alert(feedback.title, feedback.message);
+      }
+    } catch (err: any) {
+      console.error("❌ [BUDGET] Erro ao adicionar consumo inline:", err);
+      setInlineError(err?.message || "Não foi possível salvar o lançamento.");
+    } finally {
+      setInlineSaving(false);
+    }
+  };
+
   const handleEditDay = (date: Date) => {
     const dateKey = formatDateToString(date);
     const items = expensesByDate[dateKey] || [];
     const isZeroConfirmed =
       getDayExpense(date) === 0 && zeroConfirmedDateKeys.includes(dateKey);
+
+    // Desktop: sempre expande o painel inline (também sem lançamentos).
+    if (desktopWeb) {
+      openDayInlineEditor(date);
+      return;
+    }
 
     if (items.length === 0 || isZeroConfirmed) {
       openAddExpenseForDay(date);
@@ -696,11 +856,41 @@ export const BudgetScreen = () => {
 
   const handleOpenNoRecordActions = (date: Date) => {
     if (!user || !ownerId) return;
-    const label = formatDayMonthLabel(date);
 
+    // Desktop: sem modal — mesmo painel de edição, adaptado ao dia vazio.
+    if (desktopWeb) {
+      openDayInlineEditor(date);
+      return;
+    }
+
+    const label = formatDayMonthLabel(date);
     setChoiceModalDayLabel(label);
     setChoiceModalDate(date);
     setChoiceModalVisible(true);
+  };
+
+  const handleConfirmZeroFromInline = async (date: Date) => {
+    if (!ownerId) return;
+    try {
+      setSaving(true);
+      const { ranking } = await budgetServices.confirmZeroExpenseDay(
+        ownerId,
+        date,
+        coupleMember,
+      );
+      setEditingDateKey(null);
+      await loadBudgetData({ silent: true });
+      const feedback = getRankingRegistrationFeedback(ranking, "zero");
+      if (feedback.celebrate) {
+        setShowConfetti(true);
+      }
+      Alert.alert(feedback.title, feedback.message);
+    } catch (err) {
+      console.error("❌ [BUDGET] Erro ao confirmar zero:", err);
+      Alert.alert("Erro", "Não foi possível confirmar o zero agora.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleCloseChoiceModal = () => {
@@ -1036,12 +1226,41 @@ export const BudgetScreen = () => {
 
               <View style={styles.daysList}>
                 {dailyExpenseDates.map((date) => {
-                  const day = date.getDate();
                   const dateKey = formatDateToString(date);
                   const expense = getDayExpense(date);
+                  const dayItems = expensesByDate[dateKey] || [];
                   const isEditing = editingDateKey === dateKey;
                   const isZeroConfirmed =
                     expense === 0 && zeroConfirmedDateKeys.includes(dateKey);
+                  const isEmptyDay = dayItems.length === 0 && !isZeroConfirmed;
+
+                  const dayHeader = (
+                    <View style={styles.dayInfo}>
+                      <Text style={styles.dayNumber}>
+                        {formatDayMonthLabel(date)}
+                      </Text>
+                      {!isEditing && expense > 0 && (
+                        <Text style={styles.dayExpense}>
+                          {formatCurrency(expense)}
+                        </Text>
+                      )}
+                      {!isEditing && expense === 0 && !isZeroConfirmed && (
+                        <Text style={styles.dayEmpty}>Sem registro</Text>
+                      )}
+                      {!isEditing && isZeroConfirmed && (
+                        <View style={styles.zeroConfirmedBadge}>
+                          <Ionicons
+                            name="checkmark-circle"
+                            size={14}
+                            color="#B900FF"
+                          />
+                          <Text style={styles.zeroConfirmedText}>
+                            Zero confirmado
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  );
 
                   return (
                     <View
@@ -1050,107 +1269,319 @@ export const BudgetScreen = () => {
                         styles.dayRow,
                         isZeroConfirmed && styles.dayRowZeroConfirmed,
                         isEditing && styles.dayRowEditing,
+                        desktopWeb && !isEditing && styles.dayRowDesktopClickable,
                       ]}
                     >
-                      <View style={styles.dayInfo}>
-                        <Text style={styles.dayNumber}>
-                          {formatDayMonthLabel(date)}
-                        </Text>
-                        {!isEditing && expense > 0 && (
-                          <Text style={styles.dayExpense}>
-                            {formatCurrency(expense)}
-                          </Text>
-                        )}
-                        {!isEditing && expense === 0 && !isZeroConfirmed && (
-                          <Text style={styles.dayEmpty}>Sem registro</Text>
-                        )}
-                        {!isEditing && isZeroConfirmed && (
-                          <View style={styles.zeroConfirmedBadge}>
-                            <Ionicons
-                              name="checkmark-circle"
-                              size={14}
-                              color="#B900FF"
-                            />
-                            <Text style={styles.zeroConfirmedText}>
-                              Zero confirmado
-                            </Text>
-                          </View>
-                        )}
-                      </View>
-
                       {isEditing ? (
-                        <View style={styles.editItemsWrap}>
-                          {(expensesByDate[dateKey] || []).map((item) => (
-                            <TouchableOpacity
-                              key={item.id}
-                              style={styles.editItemRow}
-                              onPress={() => openExpenseEditor(item.id)}
-                            >
-                              <View style={{ flex: 1 }}>
-                                <Text style={styles.editItemTitle}>
-                                  {item.description || "Gasto"}
-                                </Text>
-                                <Text style={styles.editItemMeta}>
-                                  {getExpensePaymentLabel(item.paymentMethod)}
-                                </Text>
-                              </View>
-                              <Text style={styles.editItemAmount}>
-                                {formatCurrency(item.value)}
+                        <>
+                          {desktopWeb ? (
+                            <View style={styles.dayEditHeaderDesktop}>
+                              {dayHeader}
+                              <TouchableOpacity
+                                style={styles.cancelButtonDesktop}
+                                onPress={() => {
+                                  closeInlineAddForm();
+                                  setEditingDateKey(null);
+                                }}
+                                accessibilityLabel="Fechar"
+                              >
+                                <Ionicons name="close" size={18} color="#fff" />
+                              </TouchableOpacity>
+                            </View>
+                          ) : (
+                            dayHeader
+                          )}
+                          <View style={styles.editItemsWrap}>
+                            {!desktopWeb && dayItems.length === 0 ? (
+                              <Text style={styles.editEmptyHint}>
+                                {isZeroConfirmed
+                                  ? "Dia marcado como zero. Você pode adicionar um lançamento."
+                                  : "Nenhum gasto neste dia. Adicione um lançamento ou marque como zero."}
                               </Text>
+                            ) : null}
+                            {dayItems.map((item) => (
+                              <TouchableOpacity
+                                key={item.id}
+                                style={[
+                                  styles.editItemRow,
+                                  desktopWeb && styles.editItemRowDesktop,
+                                  desktopWeb && styles.webPointer,
+                                ]}
+                                onPress={() => openExpenseEditor(item.id)}
+                                activeOpacity={0.75}
+                              >
+                                <View style={{ flex: 1 }}>
+                                  <Text style={styles.editItemTitle}>
+                                    {item.description || "Gasto"}
+                                  </Text>
+                                  <Text style={styles.editItemMeta}>
+                                    {getExpensePaymentLabel(item.paymentMethod)}
+                                  </Text>
+                                </View>
+                                <Text style={styles.editItemAmount}>
+                                  {formatCurrency(item.value)}
+                                </Text>
+                                <Ionicons
+                                  name="pencil"
+                                  size={16}
+                                  color="#B900FF"
+                                />
+                              </TouchableOpacity>
+                            ))}
+                            {desktopWeb ? (
+                              <View style={styles.inlineQuickWrap}>
+                                <View style={styles.inlineQuickRow}>
+                                  <TextInput
+                                    style={styles.inlineQuickDesc}
+                                    value={inlineDesc}
+                                    onChangeText={setInlineDesc}
+                                    placeholder="Descrição"
+                                    placeholderTextColor="#666"
+                                    editable={!inlineSaving}
+                                    onSubmitEditing={() =>
+                                      submitInlineConsumoAdd(date)
+                                    }
+                                  />
+                                  <View style={styles.inlineQuickValueBox}>
+                                    <Text style={styles.inlineQuickRs}>R$</Text>
+                                    <TextInput
+                                      style={styles.inlineQuickValue}
+                                      value={inlineValueText}
+                                      onChangeText={setInlineValueFromText}
+                                      placeholder="0,00"
+                                      placeholderTextColor="#666"
+                                      keyboardType={DECIMAL_INPUT_KEYBOARD}
+                                      editable={!inlineSaving}
+                                      onBlur={() => {
+                                        if (inlineValue > 0) {
+                                          setInlineValueText(
+                                            formatCurrencyWithoutSymbol(
+                                              inlineValue,
+                                            ),
+                                          );
+                                        }
+                                      }}
+                                      onSubmitEditing={() =>
+                                        submitInlineConsumoAdd(date)
+                                      }
+                                    />
+                                  </View>
+                                  <TouchableOpacity
+                                    style={[
+                                      styles.inlineQuickPay,
+                                      inlinePayment === "cash" &&
+                                        styles.inlineQuickPayOn,
+                                    ]}
+                                    onPress={() => setInlinePayment("cash")}
+                                    disabled={inlineSaving}
+                                    accessibilityLabel="Dinheiro"
+                                  >
+                                    <Ionicons
+                                      name="wallet"
+                                      size={16}
+                                      color={
+                                        inlinePayment === "cash"
+                                          ? "#fff"
+                                          : "#999"
+                                      }
+                                    />
+                                  </TouchableOpacity>
+                                  <TouchableOpacity
+                                    style={[
+                                      styles.inlineQuickPay,
+                                      inlinePayment === "card" &&
+                                        styles.inlineQuickPayOn,
+                                    ]}
+                                    onPress={() => {
+                                      setInlinePayment("card");
+                                      if (creditCards.length > 0) {
+                                        const stillValid = creditCards.some(
+                                          (c) => c.id === inlineCardId,
+                                        );
+                                        if (!stillValid) {
+                                          setInlineCardId(creditCards[0].id);
+                                        }
+                                      }
+                                    }}
+                                    disabled={inlineSaving}
+                                    accessibilityLabel="Crédito"
+                                  >
+                                    <Ionicons
+                                      name="card"
+                                      size={16}
+                                      color={
+                                        inlinePayment === "card"
+                                          ? "#fff"
+                                          : "#999"
+                                      }
+                                    />
+                                  </TouchableOpacity>
+                                  <TouchableOpacity
+                                    style={styles.inlineQuickAdd}
+                                    onPress={() => submitInlineConsumoAdd(date)}
+                                    disabled={inlineSaving}
+                                    accessibilityLabel="Confirmar lançamento"
+                                  >
+                                    {inlineSaving ? (
+                                      <ActivityIndicator color="#fff" size="small" />
+                                    ) : (
+                                      <Ionicons name="add" size={22} color="#fff" />
+                                    )}
+                                  </TouchableOpacity>
+                                </View>
+                                {inlinePayment === "card" ? (
+                                  creditCards.length === 0 ? (
+                                    <Text style={styles.inlineAddError}>
+                                      Sem cartões cadastrados
+                                    </Text>
+                                  ) : (
+                                    <View style={styles.inlineQuickCards}>
+                                      {creditCards.map((card) => {
+                                        const active = inlineCardId === card.id;
+                                        return (
+                                          <TouchableOpacity
+                                            key={card.id}
+                                            style={[
+                                              styles.inlineQuickCardChip,
+                                              active &&
+                                                styles.inlineQuickCardChipOn,
+                                            ]}
+                                            onPress={() =>
+                                              setInlineCardId(card.id)
+                                            }
+                                            disabled={inlineSaving}
+                                          >
+                                            <Text
+                                              style={[
+                                                styles.inlineQuickCardText,
+                                                active &&
+                                                  styles.inlineQuickCardTextOn,
+                                              ]}
+                                            >
+                                              {card.bank} ••••{card.last4}
+                                            </Text>
+                                          </TouchableOpacity>
+                                        );
+                                      })}
+                                    </View>
+                                  )
+                                ) : null}
+                                {inlineError ? (
+                                  <Text style={styles.inlineAddError}>
+                                    {inlineError}
+                                  </Text>
+                                ) : null}
+                              </View>
+                            ) : (
+                              <TouchableOpacity
+                                style={styles.addItemButton}
+                                onPress={() => openAddExpenseForDay(date)}
+                              >
+                                <Ionicons name="add" size={16} color="#fff" />
+                                <Text style={styles.addItemButtonText}>
+                                  Adicionar lançamento
+                                </Text>
+                              </TouchableOpacity>
+                            )}
+                            {dayItems.length > 0 ? (
+                              <TouchableOpacity
+                                style={styles.correctZeroButton}
+                                onPress={() => handleCorrectDayToZero(date)}
+                              >
+                                <Ionicons
+                                  name="checkmark-circle-outline"
+                                  size={16}
+                                  color="#B900FF"
+                                />
+                                <Text style={styles.correctZeroButtonText}>
+                                  Corrigir: marcar como zero
+                                </Text>
+                              </TouchableOpacity>
+                            ) : !isZeroConfirmed ? (
+                              <TouchableOpacity
+                                style={styles.correctZeroButton}
+                                onPress={() => handleConfirmZeroFromInline(date)}
+                                disabled={saving}
+                              >
+                                <Ionicons
+                                  name="checkmark-circle-outline"
+                                  size={16}
+                                  color="#B900FF"
+                                />
+                                <Text style={styles.correctZeroButtonText}>
+                                  Marcar zero no app
+                                </Text>
+                              </TouchableOpacity>
+                            ) : null}
+                            {!desktopWeb ? (
+                              <TouchableOpacity
+                                style={styles.cancelButton}
+                                onPress={() => {
+                                  closeInlineAddForm();
+                                  setEditingDateKey(null);
+                                }}
+                              >
+                                <Ionicons name="close" size={20} color="#fff" />
+                              </TouchableOpacity>
+                            ) : null}
+                          </View>
+                        </>
+                      ) : desktopWeb ? (
+                        <TouchableOpacity
+                          style={[styles.dayRowPressable, styles.webPointer]}
+                          onPress={() =>
+                            isEmptyDay
+                              ? handleOpenNoRecordActions(date)
+                              : handleEditDay(date)
+                          }
+                          activeOpacity={0.85}
+                        >
+                          {dayHeader}
+                          {isEmptyDay ? (
+                            <View style={styles.alertIconButton}>
+                              <Ionicons
+                                name="alert-circle"
+                                size={24}
+                                color="#FF008A"
+                              />
+                            </View>
+                          ) : (
+                            <View style={styles.editIconButton}>
                               <Ionicons
                                 name="pencil"
-                                size={16}
+                                size={18}
+                                color="#B900FF"
+                              />
+                            </View>
+                          )}
+                        </TouchableOpacity>
+                      ) : (
+                        <>
+                          {dayHeader}
+                          {isEmptyDay ? (
+                            <TouchableOpacity
+                              style={styles.alertIconButton}
+                              onPress={() => handleOpenNoRecordActions(date)}
+                            >
+                              <Ionicons
+                                name="alert-circle"
+                                size={24}
+                                color="#FF008A"
+                              />
+                            </TouchableOpacity>
+                          ) : (
+                            <TouchableOpacity
+                              style={styles.editIconButton}
+                              onPress={() => handleEditDay(date)}
+                            >
+                              <Ionicons
+                                name="pencil"
+                                size={18}
                                 color="#B900FF"
                               />
                             </TouchableOpacity>
-                          ))}
-                          <TouchableOpacity
-                            style={styles.addItemButton}
-                            onPress={() => openAddExpenseForDay(date)}
-                          >
-                            <Ionicons name="add" size={16} color="#fff" />
-                            <Text style={styles.addItemButtonText}>
-                              Adicionar lançamento
-                            </Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            style={styles.correctZeroButton}
-                            onPress={() => handleCorrectDayToZero(date)}
-                          >
-                            <Ionicons
-                              name="checkmark-circle-outline"
-                              size={16}
-                              color="#B900FF"
-                            />
-                            <Text style={styles.correctZeroButtonText}>
-                              Corrigir: marcar como zero
-                            </Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            style={styles.cancelButton}
-                            onPress={() => setEditingDateKey(null)}
-                          >
-                            <Ionicons name="close" size={20} color="#fff" />
-                          </TouchableOpacity>
-                        </View>
-                      ) : expense === 0 && !isZeroConfirmed ? (
-                        <TouchableOpacity
-                          style={styles.alertIconButton}
-                          onPress={() => handleOpenNoRecordActions(date)}
-                        >
-                          <Ionicons
-                            name="alert-circle"
-                            size={24}
-                            color="#FF008A"
-                          />
-                        </TouchableOpacity>
-                      ) : (
-                        <TouchableOpacity
-                          style={styles.editIconButton}
-                          onPress={() => handleEditDay(date)}
-                        >
-                          <Ionicons name="pencil" size={18} color="#B900FF" />
-                        </TouchableOpacity>
+                          )}
+                        </>
                       )}
                     </View>
                   );
@@ -1604,9 +2035,26 @@ const styles = StyleSheet.create({
     flexDirection: "column",
     alignItems: "stretch",
   },
+  dayRowDesktopClickable: {
+    padding: 0,
+    overflow: "hidden",
+  },
+  dayRowPressable: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    width: "100%",
+    padding: 12,
+  },
   editItemsWrap: {
     width: "100%",
     marginTop: 8,
+  },
+  editEmptyHint: {
+    color: "#999",
+    fontSize: 12,
+    marginBottom: 10,
+    lineHeight: 17,
   },
   editItemRow: {
     flexDirection: "row",
@@ -1618,6 +2066,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 8,
     marginBottom: 6,
+  },
+  editItemRowDesktop: {
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+  },
+  webPointer: {
+    // @ts-ignore — cursor só no RN Web
+    cursor: "pointer",
   },
   editItemTitle: {
     color: "#fff",
@@ -1648,6 +2104,122 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginLeft: 6,
     fontSize: 13,
+  },
+  inlineQuickWrap: {
+    marginBottom: 8,
+    gap: 6,
+  },
+  inlineQuickRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  inlineQuickDesc: {
+    flex: 1.4,
+    minWidth: 120,
+    backgroundColor: "#07050D",
+    borderWidth: 1,
+    borderColor: "#333",
+    borderRadius: 8,
+    color: "#fff",
+    fontSize: 13,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+  },
+  inlineQuickValueBox: {
+    flex: 0.9,
+    minWidth: 96,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#07050D",
+    borderWidth: 1,
+    borderColor: "#333",
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 7,
+  },
+  inlineQuickRs: {
+    color: "#B900FF",
+    fontWeight: "800",
+    fontSize: 12,
+    marginRight: 4,
+  },
+  inlineQuickValue: {
+    flex: 1,
+    color: "#fff",
+    fontSize: 13,
+    fontWeight: "700",
+    paddingVertical: 0,
+    // @ts-ignore RN Web
+    outlineStyle: "none",
+  },
+  inlineQuickPay: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#333",
+    backgroundColor: "#07050D",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  inlineQuickPayOn: {
+    borderColor: "#B900FF",
+    backgroundColor: "#B900FF",
+  },
+  inlineQuickAdd: {
+    width: 40,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: "#B900FF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  inlineQuickCards: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    marginTop: 2,
+  },
+  inlineQuickCardChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#333",
+    backgroundColor: "#07050D",
+  },
+  inlineQuickCardChipOn: {
+    borderColor: "#B900FF",
+    backgroundColor: "rgba(185,0,255,0.25)",
+  },
+  inlineQuickCardText: {
+    color: "#999",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  inlineQuickCardTextOn: {
+    color: "#fff",
+  },
+  inlineAddError: {
+    color: "#FF008A",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  dayEditHeaderDesktop: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+    marginBottom: 2,
+  },
+  cancelButtonDesktop: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#FF008A",
+    alignItems: "center",
+    justifyContent: "center",
   },
   correctZeroButton: {
     flexDirection: "row",
