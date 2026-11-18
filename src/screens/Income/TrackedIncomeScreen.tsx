@@ -30,6 +30,15 @@ import { normalizeExpenseTitleKey } from "../../utils/expenseScopeUtils";
 import { ActingForClientBanner } from "../../components/Staff/ActingForClientBanner";
 import { useDesktopWeb } from "../../utils/desktopWeb";
 import { DesktopPageCanvas } from "../../components/Layout/DesktopPage";
+import {
+  DesktopDayQuickEntry,
+  DesktopDayQuickEntryPayload,
+} from "../../components/Desktop/DesktopDayQuickEntry";
+import {
+  DesktopDayLedgerItem,
+  DesktopDayDragPayload,
+  desktopDayDropHandlers,
+} from "../../components/Desktop/DesktopDayLedgerItem";
 
 type DaySummary = {
   date: Date;
@@ -64,6 +73,8 @@ export const TrackedIncomeScreen = () => {
   const [days, setDays] = useState<DaySummary[]>([]);
   const [incomeHistory, setIncomeHistory] = useState<Income[]>([]);
   const [editingDateKey, setEditingDateKey] = useState<string | null>(null);
+  const [inlineSaving, setInlineSaving] = useState(false);
+  const [inlineDraftActive, setInlineDraftActive] = useState(false);
   const [loading, setLoading] = useState<boolean>(true);
   const [saving, setSaving] = useState<boolean>(false);
   const [choiceModalVisible, setChoiceModalVisible] = useState(false);
@@ -330,10 +341,116 @@ export const TrackedIncomeScreen = () => {
   };
 
   const handleOpenNoRecordActions = (date: Date) => {
+    if (desktopWeb) {
+      setEditingDateKey(formatDateToString(date));
+      setInlineDraftActive(false);
+      return;
+    }
     const label = formatDayMonthLabel(date);
     setChoiceModalDayLabel(label);
     setChoiceModalDate(date);
     setChoiceModalVisible(true);
+  };
+
+  const toNoon = (date: Date) => {
+    const noon = new Date(date);
+    noon.setHours(12, 0, 0, 0);
+    return noon;
+  };
+
+  const submitInlineTrackedIncome = async (
+    date: Date,
+    payload: DesktopDayQuickEntryPayload,
+  ) => {
+    if (!ownerId || !trackedTitle) return;
+    try {
+      setInlineSaving(true);
+      await incomeServices.createIncome(ownerId, {
+        value: payload.value,
+        description: trackedTitle,
+        date: toNoon(date),
+        category: "Acompanhamento Diário",
+        dailyTracking: true,
+      });
+      await loadIncomeData();
+      setInlineDraftActive(false);
+    } catch (error: any) {
+      Alert.alert(
+        "Erro",
+        error?.message || "Não foi possível salvar o lançamento.",
+      );
+    } finally {
+      setInlineSaving(false);
+    }
+  };
+
+  const duplicateTrackedIncome = async (income: Income) => {
+    if (!ownerId) return;
+    try {
+      setInlineSaving(true);
+      await incomeServices.createIncome(ownerId, {
+        value: income.value,
+        description: income.description || trackedTitle,
+        date: toNoon(new Date(income.date)),
+        category: income.category || "Acompanhamento Diário",
+        dailyTracking: true,
+        ...(income.origin ? { origin: income.origin } : {}),
+      });
+      await loadIncomeData();
+    } catch (error: any) {
+      Alert.alert(
+        "Erro",
+        error?.message || "Não foi possível duplicar o lançamento.",
+      );
+    } finally {
+      setInlineSaving(false);
+    }
+  };
+
+  const moveTrackedIncomeToDay = async (
+    payload: DesktopDayDragPayload,
+    toDateKey: string,
+  ) => {
+    if (!ownerId || payload.kind !== "income") return;
+    if (payload.fromDateKey === toDateKey) return;
+    try {
+      setInlineSaving(true);
+      const [y, m, d] = toDateKey.split("-").map(Number);
+      await incomeServices.updateIncome(payload.entryId, {
+        date: toNoon(new Date(y, m - 1, d)),
+      });
+      setEditingDateKey(toDateKey);
+      await loadIncomeData();
+    } catch (error: any) {
+      Alert.alert(
+        "Erro",
+        error?.message || "Não foi possível mover o lançamento.",
+      );
+    } finally {
+      setInlineSaving(false);
+    }
+  };
+
+  const handleConfirmZeroFromInline = async (date: Date) => {
+    if (!ownerId || !trackedTitle) return;
+    try {
+      setSaving(true);
+      await incomeServices.createIncome(ownerId, {
+        value: 0,
+        description: trackedTitle,
+        date: toNoon(date),
+        category: "Acompanhamento Diário",
+        dailyTracking: true,
+      });
+      setEditingDateKey(null);
+      setInlineDraftActive(false);
+      await loadIncomeData();
+    } catch (error) {
+      console.error("Erro ao registrar renda zero:", error);
+      Alert.alert("Erro", "Não foi possível registrar o zero");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleChooseRegister = () => {
@@ -568,6 +685,37 @@ export const TrackedIncomeScreen = () => {
                 const isEditing = editingDateKey === dateKey;
                 const dayItems = getIncomesForDate(daySummary.date);
 
+                const dayHeader = (
+                  <View style={styles.dayInfo}>
+                    <Text style={styles.dayNumber}>
+                      {daySummary.date.toLocaleDateString("pt-BR", {
+                        weekday: "short",
+                        day: "2-digit",
+                        month: "2-digit",
+                      })}
+                    </Text>
+                    {!isEditing &&
+                    (daySummary.total > 0 || isZeroConfirmed) ? (
+                      <Text style={styles.dayExpense}>
+                        {formatCurrency(daySummary.total)}
+                      </Text>
+                    ) : !isEditing && !isZeroConfirmed ? (
+                      <Text style={styles.dayEmpty}>Sem renda registrada</Text>
+                    ) : !isEditing ? (
+                      <View style={styles.zeroConfirmedBadge}>
+                        <Ionicons
+                          name="checkmark-circle"
+                          size={14}
+                          color="#B900FF"
+                        />
+                        <Text style={styles.zeroConfirmedText}>
+                          Zero confirmado
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
+                );
+
                 return (
                   <View
                     key={dateKey}
@@ -575,116 +723,217 @@ export const TrackedIncomeScreen = () => {
                       styles.dayRow,
                       isZeroConfirmed && styles.dayRowZeroConfirmed,
                       isEditing && styles.dayRowEditing,
+                      desktopWeb && !isEditing && { padding: 0 },
                     ]}
+                    {...(desktopWeb && isEditing
+                      ? desktopDayDropHandlers(dateKey, moveTrackedIncomeToDay)
+                      : {})}
                   >
-                    <View style={styles.dayInfo}>
-                      <Text style={styles.dayNumber}>
-                        {daySummary.date.toLocaleDateString("pt-BR", {
-                          weekday: "short",
-                          day: "2-digit",
-                          month: "2-digit",
-                        })}
-                      </Text>
-                      {!isEditing && (daySummary.total > 0 || isZeroConfirmed) ? (
-                        <Text style={styles.dayExpense}>
-                          {formatCurrency(daySummary.total)}
-                        </Text>
-                      ) : !isEditing && !isZeroConfirmed ? (
-                        <Text style={styles.dayEmpty}>
-                          Sem renda registrada
-                        </Text>
-                      ) : !isEditing ? (
-                        <View style={styles.zeroConfirmedBadge}>
-                          <Ionicons
-                            name="checkmark-circle"
-                            size={14}
-                            color="#B900FF"
-                          />
-                          <Text style={styles.zeroConfirmedText}>
-                            Zero confirmado
-                          </Text>
-                        </View>
-                      ) : null}
-                    </View>
-
                     {isEditing ? (
-                        <View style={styles.editItemsWrap}>
-                          {dayItems.map((item) => (
-                            <TouchableOpacity
-                              key={item.id}
-                              style={styles.editItemRow}
-                              onPress={() => openIncomeEditor(item.id)}
-                            >
-                              <View style={{ flex: 1 }}>
-                                <Text style={styles.editItemTitle}>
-                                  {item.origin?.trim()
-                                    ? item.origin.trim()
-                                    : item.description || trackedTitle}
-                                </Text>
-                                {item.category ? (
-                                  <Text style={styles.editItemMeta}>
-                                    {item.category}
-                                  </Text>
-                                ) : null}
-                              </View>
-                              <Text style={styles.editItemAmount}>
-                                {formatCurrency(item.value)}
-                              </Text>
-                              <Ionicons
-                                name="pencil"
-                                size={16}
-                                color="#B900FF"
-                              />
-                            </TouchableOpacity>
-                          ))}
-                          <TouchableOpacity
-                            style={styles.addItemButton}
-                            onPress={() => {
-                              navigate("AddIncome", {
-                                prefillDate: daySummary.date.toISOString(),
-                                trackedMode: true,
-                                prefillDescription: trackedTitle,
-                                returnTo: "TrackedIncome",
-                                returnParams: {
-                                  trackedTitle,
-                                  clientId: clientId || undefined,
-                                },
-                              });
+                      <>
+                        {desktopWeb ? (
+                          <View
+                            style={{
+                              flexDirection: "row",
+                              justifyContent: "space-between",
+                              alignItems: "flex-start",
                             }}
                           >
-                            <Ionicons name="add" size={16} color="#fff" />
-                            <Text style={styles.addItemButtonText}>
-                              Adicionar lançamento
-                            </Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            style={styles.cancelEditButton}
-                            onPress={() => setEditingDateKey(null)}
-                          >
-                            <Ionicons name="close" size={18} color="#fff" />
-                          </TouchableOpacity>
+                            {dayHeader}
+                            <TouchableOpacity
+                              style={styles.cancelEditButton}
+                              onPress={() => {
+                                setEditingDateKey(null);
+                                setInlineDraftActive(false);
+                              }}
+                            >
+                              <Ionicons name="close" size={18} color="#fff" />
+                            </TouchableOpacity>
+                          </View>
+                        ) : (
+                          dayHeader
+                        )}
+                        <View style={styles.editItemsWrap}>
+                          {dayItems.map((item) =>
+                            desktopWeb ? (
+                              <DesktopDayLedgerItem
+                                key={item.id}
+                                entryId={item.id}
+                                dateKey={dateKey}
+                                kind="income"
+                                title={
+                                  item.origin?.trim()
+                                    ? item.origin.trim()
+                                    : item.description || trackedTitle
+                                }
+                                meta={item.category || undefined}
+                                value={item.value}
+                                onEdit={() => openIncomeEditor(item.id)}
+                                onDuplicate={() =>
+                                  duplicateTrackedIncome(item)
+                                }
+                              />
+                            ) : (
+                              <TouchableOpacity
+                                key={item.id}
+                                style={styles.editItemRow}
+                                onPress={() => openIncomeEditor(item.id)}
+                              >
+                                <View style={{ flex: 1 }}>
+                                  <Text style={styles.editItemTitle}>
+                                    {item.origin?.trim()
+                                      ? item.origin.trim()
+                                      : item.description || trackedTitle}
+                                  </Text>
+                                  {item.category ? (
+                                    <Text style={styles.editItemMeta}>
+                                      {item.category}
+                                    </Text>
+                                  ) : null}
+                                </View>
+                                <Text style={styles.editItemAmount}>
+                                  {formatCurrency(item.value)}
+                                </Text>
+                                <Ionicons
+                                  name="pencil"
+                                  size={16}
+                                  color="#B900FF"
+                                />
+                              </TouchableOpacity>
+                            ),
+                          )}
+                          {desktopWeb ? (
+                            <>
+                              <DesktopDayQuickEntry
+                                key={`tracked-inc-quick-${dateKey}`}
+                                lockedDescription={trackedTitle}
+                                showPayment={false}
+                                saving={inlineSaving}
+                                onDraftChange={setInlineDraftActive}
+                                onSubmit={(payload) =>
+                                  submitInlineTrackedIncome(
+                                    daySummary.date,
+                                    payload,
+                                  )
+                                }
+                              />
+                              {!isZeroConfirmed && dayItems.length === 0 ? (
+                                <TouchableOpacity
+                                  style={[
+                                    styles.addItemButton,
+                                    {
+                                      backgroundColor: "transparent",
+                                      borderWidth: 1,
+                                      borderColor: inlineDraftActive
+                                        ? "#555"
+                                        : "#B900FF",
+                                      opacity: inlineDraftActive ? 0.4 : 1,
+                                    },
+                                  ]}
+                                  disabled={inlineDraftActive || saving}
+                                  onPress={() =>
+                                    handleConfirmZeroFromInline(
+                                      daySummary.date,
+                                    )
+                                  }
+                                >
+                                  <Text
+                                    style={[
+                                      styles.addItemButtonText,
+                                      {
+                                        color: inlineDraftActive
+                                          ? "#777"
+                                          : "#B900FF",
+                                        marginLeft: 0,
+                                      },
+                                    ]}
+                                  >
+                                    Marcar zero no app
+                                  </Text>
+                                </TouchableOpacity>
+                              ) : null}
+                            </>
+                          ) : (
+                            <>
+                              <TouchableOpacity
+                                style={styles.addItemButton}
+                                onPress={() => {
+                                  navigate("AddIncome", {
+                                    prefillDate: daySummary.date.toISOString(),
+                                    trackedMode: true,
+                                    prefillDescription: trackedTitle,
+                                    returnTo: "TrackedIncome",
+                                    returnParams: {
+                                      trackedTitle,
+                                      clientId: clientId || undefined,
+                                    },
+                                  });
+                                }}
+                              >
+                                <Ionicons name="add" size={16} color="#fff" />
+                                <Text style={styles.addItemButtonText}>
+                                  Adicionar lançamento
+                                </Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                style={styles.cancelEditButton}
+                                onPress={() => setEditingDateKey(null)}
+                              >
+                                <Ionicons name="close" size={18} color="#fff" />
+                              </TouchableOpacity>
+                            </>
+                          )}
                         </View>
-                      ) : daySummary.total === 0 && !isZeroConfirmed ? (
-                        <TouchableOpacity
-                          style={styles.alertIconButton}
-                          onPress={() =>
-                            handleOpenNoRecordActions(daySummary.date)
-                          }
-                        >
+                      </>
+                    ) : desktopWeb ? (
+                      <TouchableOpacity
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          width: "100%",
+                          padding: 12,
+                          // @ts-ignore
+                          cursor: "pointer",
+                        }}
+                        onPress={() =>
+                          daySummary.total === 0 && !isZeroConfirmed
+                            ? handleOpenNoRecordActions(daySummary.date)
+                            : setEditingDateKey(dateKey)
+                        }
+                      >
+                        {dayHeader}
+                        {daySummary.total === 0 && !isZeroConfirmed ? (
                           <Ionicons
                             name="alert-circle"
                             size={24}
                             color="#FF008A"
                           />
-                        </TouchableOpacity>
-                      ) : (
-                        <TouchableOpacity
-                          style={styles.editIconButton}
-                          onPress={() => setEditingDateKey(dateKey)}
-                        >
+                        ) : (
                           <Ionicons name="pencil" size={18} color="#B900FF" />
-                        </TouchableOpacity>
-                      )}
+                        )}
+                      </TouchableOpacity>
+                    ) : daySummary.total === 0 && !isZeroConfirmed ? (
+                      <TouchableOpacity
+                        style={styles.alertIconButton}
+                        onPress={() =>
+                          handleOpenNoRecordActions(daySummary.date)
+                        }
+                      >
+                        <Ionicons
+                          name="alert-circle"
+                          size={24}
+                          color="#FF008A"
+                        />
+                      </TouchableOpacity>
+                    ) : (
+                      <TouchableOpacity
+                        style={styles.editIconButton}
+                        onPress={() => setEditingDateKey(dateKey)}
+                      >
+                        <Ionicons name="pencil" size={18} color="#B900FF" />
+                      </TouchableOpacity>
+                    )}
                   </View>
                 );
               })}

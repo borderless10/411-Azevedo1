@@ -66,6 +66,7 @@ export const isTrackedDailyExpense = (expense: {
 export const filterTrackedExpensesForTitle = <
   T extends {
     description?: string;
+    trackedTitle?: string;
     category?: string;
     isTrackedDaily?: boolean;
   },
@@ -78,7 +79,11 @@ export const filterTrackedExpensesForTitle = <
 
   return expenses.filter((expense) => {
     if (!isTrackedDailyExpense(expense)) return false;
-    return normalizeExpenseTitleKey(expense.description) === targetTitleKey;
+    // Prefer trackedTitle (descrição livre); fallback na description para dados antigos.
+    const linkKey = normalizeExpenseTitleKey(
+      expense.trackedTitle || expense.description,
+    );
+    return linkKey === targetTitleKey;
   });
 };
 

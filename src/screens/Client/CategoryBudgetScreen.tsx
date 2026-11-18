@@ -47,6 +47,17 @@ import { Expense } from "../../types/expense";
 import { ActingForClientBanner } from "../../components/Staff/ActingForClientBanner";
 import { useDesktopWeb } from "../../utils/desktopWeb";
 import { DesktopPageCanvas } from "../../components/Layout/DesktopPage";
+import {
+  DesktopDayQuickEntry,
+  DesktopDayQuickEntryPayload,
+} from "../../components/Desktop/DesktopDayQuickEntry";
+import {
+  DesktopDayLedgerItem,
+  DesktopDayDragPayload,
+  desktopDayDropHandlers,
+} from "../../components/Desktop/DesktopDayLedgerItem";
+import { creditCardServices } from "../../services/creditCardServices";
+import { CreditCard } from "../../types/creditCard";
 
 type DaySummary = {
   date: Date;
@@ -88,6 +99,9 @@ export const CategoryBudgetScreen = () => {
   const [cycleDateStart, setCycleDateStart] = useState<Date | null>(null);
   const [cycleDateEnd, setCycleDateEnd] = useState<Date | null>(null);
   const [editingDateKey, setEditingDateKey] = useState<string | null>(null);
+  const [inlineSaving, setInlineSaving] = useState(false);
+  const [inlineDraftActive, setInlineDraftActive] = useState(false);
+  const [creditCards, setCreditCards] = useState<CreditCard[]>([]);
 
   const normalizeTitle = normalizeExpenseTitleKey;
 
@@ -263,14 +277,132 @@ export const CategoryBudgetScreen = () => {
     loadData();
   }, [currentScreen, ownerId, trackedTitle]);
 
-  const handleAddTrackedExpense = () => {
+  useEffect(() => {
+    if (!ownerId || !desktopWeb) {
+      setCreditCards([]);
+      return;
+    }
+    let cancelled = false;
+    creditCardServices
+      .getCreditCards(ownerId)
+      .then((cards) => {
+        if (!cancelled) {
+          setCreditCards(cards.filter((card) => card.isActive !== false));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setCreditCards([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [ownerId, desktopWeb]);
+
+  const handleAddTrackedExpense = (date?: Date) => {
+    if (desktopWeb) {
+      if (date) {
+        setEditingDateKey(formatDateToString(date));
+        setInlineDraftActive(false);
+      }
+      return;
+    }
     navigate("AddExpense", {
       prefillExpenseType: "tracked",
       prefillTrackedTitle: trackedTitle,
       clientId: clientId || undefined,
       returnTo: "CategoryBudget",
       returnParams: { trackedTitle, clientId: clientId || undefined },
+      ...(date ? { prefillDate: formatDateToString(date) } : {}),
     });
+  };
+
+  const toNoon = (date: Date) => {
+    const noon = new Date(date);
+    noon.setHours(12, 0, 0, 0);
+    return noon;
+  };
+
+  const submitInlineTrackedExpense = async (
+    date: Date,
+    payload: DesktopDayQuickEntryPayload,
+  ) => {
+    if (!ownerId || !trackedTitle) return;
+    try {
+      setInlineSaving(true);
+      await expenseServices.createExpense(ownerId, {
+        value: payload.value,
+        description: payload.description,
+        date: toNoon(date),
+        category: "Acompanhamento Diário",
+        paymentMethod:
+          payload.payment === "card" ? "credit_card" : "cash",
+        ...(payload.payment === "card" && payload.cardId
+          ? { cardId: payload.cardId }
+          : {}),
+        isTrackedDaily: true,
+        trackedTitle,
+      });
+      await loadData();
+      setInlineDraftActive(false);
+    } catch (err: any) {
+      Alert.alert(
+        "Erro",
+        err?.message || "Não foi possível salvar o lançamento.",
+      );
+    } finally {
+      setInlineSaving(false);
+    }
+  };
+
+  const duplicateTrackedExpense = async (expense: Expense) => {
+    if (!ownerId) return;
+    try {
+      setInlineSaving(true);
+      await expenseServices.createExpense(ownerId, {
+        value: expense.value,
+        description: expense.description || trackedTitle,
+        date: toNoon(new Date(expense.date)),
+        category: expense.category || "Acompanhamento Diário",
+        paymentMethod: expense.paymentMethod || "cash",
+        ...(expense.paymentMethod === "credit_card" && expense.cardId
+          ? { cardId: expense.cardId }
+          : {}),
+        isTrackedDaily: true,
+        trackedTitle: expense.trackedTitle || trackedTitle,
+      });
+      await loadData();
+    } catch (err: any) {
+      Alert.alert(
+        "Erro",
+        err?.message || "Não foi possível duplicar o lançamento.",
+      );
+    } finally {
+      setInlineSaving(false);
+    }
+  };
+
+  const moveTrackedExpenseToDay = async (
+    payload: DesktopDayDragPayload,
+    toDateKey: string,
+  ) => {
+    if (!ownerId || payload.kind !== "expense") return;
+    if (payload.fromDateKey === toDateKey) return;
+    try {
+      setInlineSaving(true);
+      const [y, m, d] = toDateKey.split("-").map(Number);
+      await expenseServices.updateExpense(payload.entryId, {
+        date: toNoon(new Date(y, m - 1, d)),
+      });
+      setEditingDateKey(toDateKey);
+      await loadData();
+    } catch (err: any) {
+      Alert.alert(
+        "Erro",
+        err?.message || "Não foi possível mover o lançamento.",
+      );
+    } finally {
+      setInlineSaving(false);
+    }
   };
 
   const today = new Date();
@@ -386,6 +518,11 @@ export const CategoryBudgetScreen = () => {
   };
 
   const handleOpenNoRecordActions = (date: Date) => {
+    if (desktopWeb) {
+      setEditingDateKey(formatDateToString(date));
+      setInlineDraftActive(false);
+      return;
+    }
     const label = date.toLocaleDateString("pt-BR", {
       day: "2-digit",
       month: "2-digit",
@@ -394,6 +531,32 @@ export const CategoryBudgetScreen = () => {
     setZeroConfirmDayLabel(label);
     setZeroConfirmDate(date);
     setZeroConfirmVisible(true);
+  };
+
+  const handleConfirmZeroFromInline = async (date: Date) => {
+    if (!ownerId || !trackedTitle) return;
+    try {
+      setConfirmingZero(true);
+      await budgetServices.confirmZeroExpenseDayForTracked(
+        ownerId,
+        date,
+        trackedTitle,
+      );
+      const dateKey = formatDateToString(date);
+      setZeroConfirmedDateKeys((previous) =>
+        Array.from(new Set([...previous, dateKey])),
+      );
+      setEditingDateKey(null);
+      setInlineDraftActive(false);
+      setShowConfetti(true);
+      // Só celebra quando pontua — aqui o fluxo tracked confirma zero com confetti.
+      Alert.alert("Parabéns! 🎉", "Zero registrado com sucesso.");
+    } catch (error) {
+      console.error("❌ [CATEGORY BUDGET] Erro ao confirmar zero:", error);
+      Alert.alert("Erro", "Não foi possível confirmar o zero agora.");
+    } finally {
+      setConfirmingZero(false);
+    }
   };
 
   const handleConfirmZero = async () => {
@@ -613,6 +776,36 @@ export const CategoryBudgetScreen = () => {
                 const isEditing = editingDateKey === dateKey;
                 const dayItems = getExpensesForDate(daySummary.date);
 
+                const dayHeader = (
+                  <View style={styles.dayInfo}>
+                    <Text style={styles.dayNumber}>
+                      {daySummary.date.toLocaleDateString("pt-BR", {
+                        weekday: "short",
+                        day: "2-digit",
+                        month: "2-digit",
+                      })}
+                    </Text>
+                    {!isEditing && daySummary.total > 0 ? (
+                      <Text style={styles.dayExpense}>
+                        {formatCurrency(daySummary.total)}
+                      </Text>
+                    ) : !isEditing && !isZeroConfirmed ? (
+                      <Text style={styles.dayEmpty}>Sem gasto registrado</Text>
+                    ) : !isEditing ? (
+                      <View style={styles.zeroConfirmedBadge}>
+                        <Ionicons
+                          name="checkmark-circle"
+                          size={14}
+                          color="#B900FF"
+                        />
+                        <Text style={styles.zeroConfirmedText}>
+                          Zero confirmado
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
+                );
+
                 return (
                   <View
                     key={dateKey}
@@ -620,76 +813,194 @@ export const CategoryBudgetScreen = () => {
                       styles.dayRow,
                       isZeroConfirmed && styles.dayRowZeroConfirmed,
                       isEditing && styles.dayRowEditing,
+                      desktopWeb && !isEditing && { padding: 0 },
                     ]}
+                    {...(desktopWeb && isEditing
+                      ? desktopDayDropHandlers(
+                          dateKey,
+                          moveTrackedExpenseToDay,
+                        )
+                      : {})}
                   >
-                    <View style={styles.dayInfo}>
-                      <Text style={styles.dayNumber}>
-                        {daySummary.date.toLocaleDateString("pt-BR", {
-                          weekday: "short",
-                          day: "2-digit",
-                          month: "2-digit",
-                        })}
-                      </Text>
-                      {!isEditing && daySummary.total > 0 ? (
-                        <Text style={styles.dayExpense}>
-                          {formatCurrency(daySummary.total)}
-                        </Text>
-                      ) : !isEditing && !isZeroConfirmed ? (
-                        <Text style={styles.dayEmpty}>
-                          Sem gasto registrado
-                        </Text>
-                      ) : !isEditing ? (
-                        <View style={styles.zeroConfirmedBadge}>
-                          <Ionicons
-                            name="checkmark-circle"
-                            size={14}
-                            color="#B900FF"
-                          />
-                          <Text style={styles.zeroConfirmedText}>
-                            Zero confirmado
-                          </Text>
-                        </View>
-                      ) : null}
-                    </View>
-
                     {isEditing ? (
-                      <View style={styles.editItemsWrap}>
-                        {dayItems.map((item) => (
-                          <TouchableOpacity
-                            key={item.id}
-                            style={styles.editItemRow}
-                            onPress={() => openExpenseEditor(item.id)}
+                      <>
+                        {desktopWeb ? (
+                          <View
+                            style={{
+                              flexDirection: "row",
+                              justifyContent: "space-between",
+                              alignItems: "flex-start",
+                            }}
                           >
-                            <View style={{ flex: 1 }}>
-                              <Text style={styles.editItemTitle}>
-                                {item.description || trackedTitle}
-                              </Text>
-                              <Text style={styles.editItemMeta}>
-                                {getExpensePaymentLabel(item.paymentMethod)}
-                              </Text>
-                            </View>
-                            <Text style={styles.editItemAmount}>
-                              {formatCurrency(item.value)}
-                            </Text>
-                            <Ionicons name="pencil" size={16} color="#B900FF" />
-                          </TouchableOpacity>
-                        ))}
-                        <TouchableOpacity
-                          style={styles.addItemButton}
-                          onPress={handleAddTrackedExpense}
-                        >
-                          <Ionicons name="add" size={16} color="#fff" />
-                          <Text style={styles.addItemButtonText}>
-                            Adicionar lançamento
-                          </Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={styles.cancelEditButton}
-                          onPress={() => setEditingDateKey(null)}
-                        >
-                          <Ionicons name="close" size={18} color="#fff" />
-                        </TouchableOpacity>
-                      </View>
+                            {dayHeader}
+                            <TouchableOpacity
+                              style={styles.cancelEditButton}
+                              onPress={() => {
+                                setEditingDateKey(null);
+                                setInlineDraftActive(false);
+                              }}
+                            >
+                              <Ionicons name="close" size={18} color="#fff" />
+                            </TouchableOpacity>
+                          </View>
+                        ) : (
+                          dayHeader
+                        )}
+                        <View style={styles.editItemsWrap}>
+                          {dayItems.map((item) =>
+                            desktopWeb ? (
+                              <DesktopDayLedgerItem
+                                key={item.id}
+                                entryId={item.id}
+                                dateKey={dateKey}
+                                kind="expense"
+                                title={item.description || trackedTitle}
+                                meta={getExpensePaymentLabel(
+                                  item.paymentMethod,
+                                )}
+                                value={item.value}
+                                onEdit={() => openExpenseEditor(item.id)}
+                                onDuplicate={() =>
+                                  duplicateTrackedExpense(item)
+                                }
+                              />
+                            ) : (
+                              <TouchableOpacity
+                                key={item.id}
+                                style={styles.editItemRow}
+                                onPress={() => openExpenseEditor(item.id)}
+                              >
+                                <View style={{ flex: 1 }}>
+                                  <Text style={styles.editItemTitle}>
+                                    {item.description || trackedTitle}
+                                  </Text>
+                                  <Text style={styles.editItemMeta}>
+                                    {getExpensePaymentLabel(
+                                      item.paymentMethod,
+                                    )}
+                                  </Text>
+                                </View>
+                                <Text style={styles.editItemAmount}>
+                                  {formatCurrency(item.value)}
+                                </Text>
+                                <Ionicons
+                                  name="pencil"
+                                  size={16}
+                                  color="#B900FF"
+                                />
+                              </TouchableOpacity>
+                            ),
+                          )}
+                          {desktopWeb ? (
+                            <>
+                              <DesktopDayQuickEntry
+                                key={`tracked-exp-quick-${dateKey}`}
+                                descriptionPlaceholder={`Descrição (ex.: ${trackedTitle})`}
+                                cards={creditCards}
+                                saving={inlineSaving}
+                                onDraftChange={setInlineDraftActive}
+                                onSubmit={(payload) =>
+                                  submitInlineTrackedExpense(
+                                    daySummary.date,
+                                    payload,
+                                  )
+                                }
+                              />
+                              {!isZeroConfirmed ? (
+                                <TouchableOpacity
+                                  style={[
+                                    styles.addItemButton,
+                                    {
+                                      backgroundColor: "transparent",
+                                      borderWidth: 1,
+                                      borderColor: inlineDraftActive
+                                        ? "#555"
+                                        : "#B900FF",
+                                      opacity: inlineDraftActive ? 0.4 : 1,
+                                    },
+                                  ]}
+                                  disabled={
+                                    inlineDraftActive || confirmingZero
+                                  }
+                                  onPress={() =>
+                                    handleConfirmZeroFromInline(
+                                      daySummary.date,
+                                    )
+                                  }
+                                >
+                                  <Ionicons
+                                    name="checkmark-circle-outline"
+                                    size={16}
+                                    color={
+                                      inlineDraftActive ? "#666" : "#B900FF"
+                                    }
+                                  />
+                                  <Text
+                                    style={[
+                                      styles.addItemButtonText,
+                                      {
+                                        color: inlineDraftActive
+                                          ? "#777"
+                                          : "#B900FF",
+                                      },
+                                    ]}
+                                  >
+                                    Marcar zero no app
+                                  </Text>
+                                </TouchableOpacity>
+                              ) : null}
+                            </>
+                          ) : (
+                            <>
+                              <TouchableOpacity
+                                style={styles.addItemButton}
+                                onPress={() =>
+                                  handleAddTrackedExpense(daySummary.date)
+                                }
+                              >
+                                <Ionicons name="add" size={16} color="#fff" />
+                                <Text style={styles.addItemButtonText}>
+                                  Adicionar lançamento
+                                </Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                style={styles.cancelEditButton}
+                                onPress={() => setEditingDateKey(null)}
+                              >
+                                <Ionicons name="close" size={18} color="#fff" />
+                              </TouchableOpacity>
+                            </>
+                          )}
+                        </View>
+                      </>
+                    ) : desktopWeb ? (
+                      <TouchableOpacity
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          width: "100%",
+                          padding: 12,
+                          // @ts-ignore
+                          cursor: "pointer",
+                        }}
+                        onPress={() =>
+                          daySummary.total === 0 && !isZeroConfirmed
+                            ? handleOpenNoRecordActions(daySummary.date)
+                            : setEditingDateKey(dateKey)
+                        }
+                      >
+                        {dayHeader}
+                        {daySummary.total === 0 && !isZeroConfirmed ? (
+                          <Ionicons
+                            name="alert-circle"
+                            size={24}
+                            color="#FF008A"
+                          />
+                        ) : (
+                          <Ionicons name="pencil" size={18} color="#B900FF" />
+                        )}
+                      </TouchableOpacity>
                     ) : daySummary.total === 0 && !isZeroConfirmed ? (
                       <TouchableOpacity
                         style={styles.alertIconButton}
@@ -733,7 +1044,7 @@ export const CategoryBudgetScreen = () => {
               </View>
               <TouchableOpacity
                   style={styles.addExpenseButton}
-                  onPress={handleAddTrackedExpense}
+                  onPress={() => handleAddTrackedExpense()}
                 >
                   <Ionicons name="add-circle" size={18} color="#fff" />
                   <Text style={styles.addExpenseButtonText}>Adicionar</Text>

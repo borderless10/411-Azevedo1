@@ -35,7 +35,7 @@ import { isActivePlanningBill } from "../../types/planning";
 import { CreditCard } from "../../types/creditCard";
 import { Bill } from "../../types/planning";
 import { budgetServices } from "../../services/budgetServices";
-import { getRankingRegistrationFeedback } from "../../services/rankingPlanilhaService";
+import { presentRankingFeedbackIfScored } from "../../utils/rankingUiFeedback";
 import { ActingForClientBanner } from "../../components/Staff/ActingForClientBanner";
 import {
   recordOwnerId,
@@ -121,6 +121,7 @@ export const AddExpenseScreen = () => {
 
   // Gasto Acompanhado
   const [trackedTitle, setTrackedTitle] = useState("");
+  const [trackedDescription, setTrackedDescription] = useState("");
   const [trackedValue, setTrackedValue] = useState(0);
   const [trackedDate, setTrackedDate] = useState<Date>(
     initialPrefillDate || new Date(),
@@ -349,6 +350,7 @@ export const AddExpenseScreen = () => {
       return;
     }
     setTrackedTitle("");
+    setTrackedDescription("");
     setTrackedValue(0);
     setTrackedPayment("cash");
     setTrackedSelectedCardId("");
@@ -508,22 +510,22 @@ export const AddExpenseScreen = () => {
           consumoDate,
           coupleExpenseFields.coupleMember,
         );
-        if (ranking?.applied) {
-          const feedback = getRankingRegistrationFeedback(ranking, "expense");
-          Alert.alert(feedback.title, feedback.message);
-        }
+        presentRankingFeedbackIfScored(ranking, "expense");
         setSavedValueForModal(consumoValue);
         setLastSavedExpenseType("consumption");
         setLastSavedTrackedTitle("");
       } else if (expenseType === "tracked") {
-        // Criar expense comum mas com descrição do tracked e dailyTracking flag
+        // Descrição livre; trackedTitle liga ao acompanhamento do planejamento.
+        const freeDescription =
+          trackedDescription.trim() || trackedTitle.trim();
         const expenseData = {
           value: trackedValue,
-          description: trackedTitle,
+          description: freeDescription,
           date: trackedDate,
           category: "Acompanhamento Diário",
           paymentMethod: trackedPayment,
           isTrackedDaily: true,
+          trackedTitle: trackedTitle.trim(),
           ...coupleExpenseFields,
           ...(trackedPayment === "credit_card" && trackedSelectedCardId
             ? { cardId: trackedSelectedCardId }
@@ -1031,6 +1033,30 @@ export const AddExpenseScreen = () => {
                           })}
                         </View>
                       )}
+                    </View>
+
+                    <View style={styles.inputGroup}>
+                      <Text style={styles.label}>Descrição</Text>
+                      <View style={styles.inputWrapper}>
+                        <Ionicons
+                          name="document-text"
+                          size={20}
+                          color="#999"
+                          style={{ marginRight: 12 }}
+                        />
+                        <TextInput
+                          style={styles.input}
+                          value={trackedDescription}
+                          onChangeText={setTrackedDescription}
+                          placeholder={
+                            trackedTitle
+                              ? `Ex.: detalhe do gasto em ${trackedTitle}`
+                              : "Descrição do lançamento"
+                          }
+                          placeholderTextColor="#666"
+                          editable={!loading}
+                        />
+                      </View>
                     </View>
 
                     {errors.trackedValue ? (

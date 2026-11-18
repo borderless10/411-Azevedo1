@@ -76,7 +76,7 @@ import {
 import { premium, premiumCardShadow } from "../../theme/visaoPremium";
 import { DEFAULT_EXPENSE_CATEGORIES } from "../../types/category";
 import ZeroPlanilhaConfirmModal from "../../components/ui/ZeroPlanilhaConfirmModal";
-import { getRankingRegistrationFeedback } from "../../services/rankingPlanilhaService";
+import { presentRankingFeedbackIfScored } from "../../utils/rankingUiFeedback";
 import { OpeningExpenseEntry } from "../../types/openingExpense";
 import { registerOpeningExpenses } from "../../utils/openingExpenseRegistration";
 import ConfirmDeleteModal from "../../components/ui/ConfirmDeleteModal";
@@ -863,16 +863,12 @@ export const HomeScreen = () => {
 
       setZeroConfirmVisible(false);
       setZeroConfirmDate(null);
-      const feedback = getRankingRegistrationFeedback(ranking, "zero");
-      if (feedback.celebrate) {
-        setShowConfetti(true);
-      }
-
-      // Pergunta dos acompanhados antes do Alert de ranking (web engolia o Alert anterior).
-      await processTrackedZerosAfterConsumoModerado(confirmedDay, {
-        title: feedback.title,
-        message: feedback.message,
+      presentRankingFeedbackIfScored(ranking, "zero", {
+        onCelebrate: () => setShowConfetti(true),
       });
+
+      // Acompanhados em seguida — sem reenviar popup de "não pontuou".
+      await processTrackedZerosAfterConsumoModerado(confirmedDay);
     } catch (error) {
       console.error("❌ [HOME] Erro ao confirmar zero na planilha:", error);
       Alert.alert(

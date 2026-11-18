@@ -20,6 +20,8 @@ export interface Expense {
   invoiceYearMonth?: string;
   isConsumoModerado?: boolean; // Marcado quando cadastrado como Consumo Moderado
   isTrackedDaily?: boolean; // Marcado quando cadastrado como Gasto Acompanhado
+  /** Título do acompanhamento no planejamento (ex.: Uber). A description pode ser livre. */
+  trackedTitle?: string;
   sourceBillId?: string; // Vincula o gasto a uma conta paga
   coupleMember?: CoupleMember;
   createdAt: Date;
@@ -40,6 +42,7 @@ export interface CreateExpenseData {
   invoiceYearMonth?: string;
   isConsumoModerado?: boolean; // Marcado quando cadastrado como Consumo Moderado
   isTrackedDaily?: boolean; // Marcado quando cadastrado como Gasto Acompanhado
+  trackedTitle?: string;
   sourceBillId?: string;
   coupleMember?: CoupleMember;
 }
@@ -58,6 +61,7 @@ export interface UpdateExpenseData {
   invoiceYearMonth?: string;
   isConsumoModerado?: boolean;
   isTrackedDaily?: boolean;
+  trackedTitle?: string;
   sourceBillId?: string;
   coupleMember?: CoupleMember;
 }
@@ -97,6 +101,7 @@ export interface ExpenseFirestore {
   invoiceYearMonth?: string;
   isConsumoModerado?: boolean; // Marcado quando cadastrado como Consumo Moderado
   isTrackedDaily?: boolean; // Marcado quando cadastrado como Gasto Acompanhado
+  trackedTitle?: string;
   sourceBillId?: string;
   coupleMember?: CoupleMember;
   createdAt: any; // Timestamp do Firestore

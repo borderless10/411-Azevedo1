@@ -161,6 +161,11 @@ export const expenseServices = {
         expenseData.isTrackedDaily = true;
       }
 
+      const trackedTitle = String(data.trackedTitle || "").trim();
+      if (trackedTitle) {
+        expenseData.trackedTitle = trackedTitle;
+      }
+
       if (data.sourceBillId) {
         expenseData.sourceBillId = data.sourceBillId;
       }
@@ -205,6 +210,7 @@ export const expenseServices = {
           : {}),
         ...(data.isConsumoModerado ? { isConsumoModerado: true } : {}),
         ...(data.isTrackedDaily ? { isTrackedDaily: true } : {}),
+        ...(trackedTitle ? { trackedTitle } : {}),
         ...(data.sourceBillId ? { sourceBillId: data.sourceBillId } : {}),
         ...(data.coupleMember === 1 || data.coupleMember === 2
           ? { coupleMember: data.coupleMember }
@@ -221,6 +227,7 @@ export const expenseServices = {
         metadata: {
           amount: data.value,
           category: data.category,
+          ...(trackedTitle ? { trackedTitle } : {}),
         },
       });
 
