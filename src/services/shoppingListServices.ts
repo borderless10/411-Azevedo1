@@ -17,10 +17,19 @@ import {
   ShoppingListItem,
 } from "../types/shoppingListItem";
 
-const fromFirestore = (id: string, data: Record<string, any>): ShoppingListItem => ({
+const normalizeValue = (raw: unknown): number => {
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+};
+
+const fromFirestore = (
+  id: string,
+  data: Record<string, any>,
+): ShoppingListItem => ({
   id,
   userId: data.userId,
   label: data.label,
+  value: normalizeValue(data.value),
   done: Boolean(data.done),
   createdAt: data.createdAt?.toDate?.() ?? new Date(),
   updatedAt: data.updatedAt?.toDate?.() ?? new Date(),
@@ -43,10 +52,12 @@ export const shoppingListServices = {
   ): Promise<ShoppingListItem> {
     const label = input.label.trim();
     if (!label) throw new Error("Informe o item");
+    const value = normalizeValue(input.value);
     const now = Timestamp.now();
     const docRef = await addDoc(getShoppingListItemsCollection(), {
       userId,
       label,
+      value,
       done: false,
       createdAt: now,
       updatedAt: now,
@@ -54,6 +65,7 @@ export const shoppingListServices = {
     return fromFirestore(docRef.id, {
       userId,
       label,
+      value,
       done: false,
       createdAt: now,
       updatedAt: now,

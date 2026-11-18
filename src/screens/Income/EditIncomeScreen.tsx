@@ -2,7 +2,7 @@
  * Tela de Edição de Renda
  */
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -47,6 +47,13 @@ export const EditIncomeScreen = () => {
   const [category, setCategory] = useState<string>("Outros");
   const [origin, setOrigin] = useState("");
   const [trackedIncome, setTrackedIncome] = useState(false);
+  const scrollRef = useRef<ScrollView>(null);
+
+  const scrollFieldIntoView = () => {
+    setTimeout(() => {
+      scrollRef.current?.scrollToEnd({ animated: true });
+    }, 280);
+  };
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState({
@@ -242,13 +249,18 @@ export const EditIncomeScreen = () => {
     <Layout title="Editar Renda" showBackButton={true} showSidebar={false}>
       <DesktopPageCanvas maxWidth={680}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 88 : 0}
         style={styles.container}
       >
         <ScrollView
+          ref={scrollRef}
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
-         scrollEnabled={!desktopWeb}>
+          keyboardDismissMode="on-drag"
+          automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
+          scrollEnabled={!desktopWeb}
+        >
           <View style={styles.content}>
             <ActingForClientBanner clientId={actingClientId} />
             {/* Header visual */}
@@ -291,6 +303,7 @@ export const EditIncomeScreen = () => {
                       onChangeText={setOrigin}
                       editable={!saving}
                       maxLength={80}
+                      onFocus={scrollFieldIntoView}
                     />
                   </View>
                 </View>

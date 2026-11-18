@@ -70,7 +70,7 @@ const styles = StyleSheet.create({
     position: "relative",
     ...Platform.select({
       web: {
-        boxShadow: "0 0 24px rgba(185,0,255,0.12)",
+        boxShadow: "0 0 16px rgba(185,0,255,0.06)",
       } as object,
       default: {
         shadowOffset: { width: 0, height: 6 },
@@ -82,14 +82,15 @@ const styles = StyleSheet.create({
   },
   cornerGlow: {
     ...StyleSheet.absoluteFill,
-    opacity: 0.9,
+    opacity: 0.45,
   },
   bottomGlow: {
     position: "absolute",
     left: 0,
     right: 0,
     bottom: 0,
-    height: "55%",
+    height: "40%",
+    opacity: 0.55,
   },
   inner: {
     position: "relative",

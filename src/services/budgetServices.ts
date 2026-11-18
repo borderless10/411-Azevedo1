@@ -280,7 +280,7 @@ const buildConsumoModeradoPerformance = (
       totalSpent,
       label: "Acima da meta",
       detail: `${formatCurrency(Math.abs(difference))} acima da média diária ideal.`,
-      color: "#FF008A",
+      color: "#B900FF",
       icon: "trending-up",
     };
   }
@@ -293,7 +293,7 @@ const buildConsumoModeradoPerformance = (
       totalSpent,
       label: "Abaixo da meta",
       detail: `${formatCurrency(Math.abs(difference))} abaixo da média diária ideal.`,
-      color: "#B900FF",
+      color: "#FF008A",
       icon: "trending-down",
     };
   }

@@ -56,33 +56,33 @@ export const desktopGlowAccent: Record<
   { border: string; glow: string; soft: string }
 > = {
   income: {
-    border: "rgba(185,0,255,0.55)",
-    glow: desktop.glowPurple,
-    soft: "rgba(185,0,255,0.14)",
+    border: "rgba(185,0,255,0.28)",
+    glow: "rgba(185,0,255,0.1)",
+    soft: "rgba(185,0,255,0.07)",
   },
   expense: {
-    border: "rgba(255,0,138,0.55)",
-    glow: desktop.glowMagenta,
-    soft: "rgba(255,0,138,0.12)",
+    border: "rgba(255,0,138,0.28)",
+    glow: "rgba(255,0,138,0.09)",
+    soft: "rgba(255,0,138,0.06)",
   },
   savings: {
-    border: "rgba(164,122,255,0.5)",
-    glow: "rgba(164,122,255,0.2)",
-    soft: "rgba(164,122,255,0.1)",
+    border: "rgba(164,122,255,0.26)",
+    glow: "rgba(164,122,255,0.08)",
+    soft: "rgba(164,122,255,0.05)",
   },
   balance: {
-    border: "rgba(61,155,255,0.45)",
-    glow: desktop.glowCyan,
-    soft: "rgba(61,155,255,0.1)",
+    border: "rgba(61,155,255,0.26)",
+    glow: "rgba(61,155,255,0.08)",
+    soft: "rgba(61,155,255,0.05)",
   },
   neutral: {
     border: desktop.border,
-    glow: "rgba(255,255,255,0.04)",
-    soft: "rgba(255,255,255,0.03)",
+    glow: "rgba(255,255,255,0.03)",
+    soft: "rgba(255,255,255,0.02)",
   },
   magenta: {
-    border: "rgba(255,0,138,0.5)",
-    glow: desktop.glowMagenta,
-    soft: "rgba(255,0,138,0.1)",
+    border: "rgba(255,0,138,0.28)",
+    glow: "rgba(255,0,138,0.09)",
+    soft: "rgba(255,0,138,0.06)",
   },
 };

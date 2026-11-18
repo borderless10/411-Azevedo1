@@ -2,7 +2,7 @@
  * Tela de Cadastro de Renda
  */
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -61,6 +61,14 @@ export const AddIncomeScreen = () => {
   const [selectedPlannedIncomeId, setSelectedPlannedIncomeId] = useState("");
   const [customIncomeTitle, setCustomIncomeTitle] = useState("");
   const [origin, setOrigin] = useState("");
+  const scrollRef = useRef<ScrollView>(null);
+
+  const scrollFieldIntoView = () => {
+    // Dá tempo do teclado abrir antes de rolar até o campo (ex.: origem).
+    setTimeout(() => {
+      scrollRef.current?.scrollToEnd({ animated: true });
+    }, 280);
+  };
   const [date, setDate] = useState(new Date());
   const [category, setCategory] = useState<string>("Outros");
   const [loading, setLoading] = useState(false);
@@ -373,13 +381,18 @@ export const AddIncomeScreen = () => {
     >
       <DesktopPageCanvas maxWidth={680}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 88 : 0}
         style={styles.container}
       >
         <ScrollView
+          ref={scrollRef}
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
-         scrollEnabled={!desktopWeb}>
+          keyboardDismissMode="on-drag"
+          automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
+          scrollEnabled={!desktopWeb}
+        >
           <View style={styles.content}>
             <ActingForClientBanner clientId={actingClientId} />
             {/* Header visual */}
@@ -703,6 +716,7 @@ export const AddIncomeScreen = () => {
                       placeholderTextColor="#999"
                       maxLength={80}
                       editable={!loading}
+                      onFocus={scrollFieldIntoView}
                     />
                   </View>
                 </View>

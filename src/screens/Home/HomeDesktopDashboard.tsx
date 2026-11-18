@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { DesktopGlowCard } from "../../components/ui/DesktopGlowCard";
+import SoftCardAccent from "../../components/ui/SoftCardAccent";
 import MaskedAmount from "../../components/ui/MaskedAmount";
 import {
   PieChart,
@@ -238,7 +239,15 @@ export const HomeDesktopDashboard: React.FC<Props> = (props) => {
         ].map((a) => (
           <TouchableOpacity
             key={a.label}
-            style={styles.actionBtn}
+            style={[
+              styles.actionBtn,
+              {
+                borderColor:
+                  a.tone === "magenta"
+                    ? "rgba(255,0,138,0.26)"
+                    : "rgba(185,0,255,0.26)",
+              },
+            ]}
             onPress={a.onPress}
             activeOpacity={0.85}
             {...(Platform.OS === "web"
@@ -250,8 +259,21 @@ export const HomeDesktopDashboard: React.FC<Props> = (props) => {
                 } as object)
               : {})}
           >
-            <Ionicons name={a.icon} size={18} color={a.color} />
-            <Text style={styles.actionBtnText}>{a.label}</Text>
+            <SoftCardAccent
+              tone={a.tone}
+              strength="filled"
+              intensity={0.7}
+              borderRadius={12}
+            />
+            <Ionicons
+              name={a.icon}
+              size={18}
+              color={a.color}
+              style={styles.actionBtnFg}
+            />
+            <Text style={[styles.actionBtnText, styles.actionBtnFg]}>
+              {a.label}
+            </Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -263,36 +285,57 @@ export const HomeDesktopDashboard: React.FC<Props> = (props) => {
             onPress={props.onOpenBudget}
             activeOpacity={0.9}
           >
-            <DesktopGlowCard variant="magenta" contentStyle={{ gap: 10 }}>
+            <DesktopGlowCard
+              variant={
+                props.consumo.color === "#FF008A" ? "magenta" : "income"
+              }
+              contentStyle={{ gap: 12 }}
+            >
               <View style={styles.rowBetween}>
                 <Text style={styles.sectionTitle}>Consumo moderado</Text>
-                <Ionicons
-                  name={props.consumo.icon}
-                  size={20}
-                  color={props.consumo.color}
-                />
+                <View
+                  style={[
+                    styles.consumoStatusPill,
+                    {
+                      backgroundColor: `${props.consumo.color}16`,
+                      borderColor: `${props.consumo.color}40`,
+                    },
+                  ]}
+                >
+                  <Ionicons
+                    name={props.consumo.icon}
+                    size={14}
+                    color={props.consumo.color}
+                  />
+                  <Text
+                    style={[styles.consumoStatusText, { color: props.consumo.color }]}
+                  >
+                    {props.consumo.label}
+                  </Text>
+                </View>
               </View>
-              <Text style={[styles.status, { color: props.consumo.color }]}>
-                {props.consumo.label}
-              </Text>
               <Text style={styles.detail}>
                 {props.showValues
                   ? props.consumo.detail
                   : props.consumo.detail.replace(/R\$\s*[\d.,]+/g, "R$ •••")}
               </Text>
-              <View style={styles.metaBox}>
-                <View style={styles.metaRow}>
-                  <Text style={styles.metaLabel}>Média realizada</Text>
+              <View style={styles.consumoMetaGrid}>
+                <View style={styles.consumoMetaCell}>
+                  <Text style={styles.metaLabel}>Realizada</Text>
                   <MaskedAmount
                     value={props.consumo.actualDailyAverage}
-                    style={styles.metaValue}
+                    style={[
+                      styles.consumoMetaValue,
+                      { color: props.consumo.color },
+                    ]}
                   />
                 </View>
-                <View style={styles.metaRow}>
-                  <Text style={styles.metaLabel}>Média diária ideal</Text>
+                <View style={styles.consumoMetaSep} />
+                <View style={styles.consumoMetaCell}>
+                  <Text style={styles.metaLabel}>Ideal / dia</Text>
                   <MaskedAmount
                     value={props.consumo.idealDailyAverage}
-                    style={styles.metaValue}
+                    style={styles.consumoMetaValue}
                   />
                 </View>
               </View>
@@ -525,12 +568,16 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    paddingVertical: 10,
+    paddingVertical: 11,
     paddingHorizontal: 14,
     borderRadius: 12,
-    backgroundColor: desktop.surfaceElevated,
+    backgroundColor: "#0c0a12",
     borderWidth: 1,
     borderColor: desktop.border,
+    overflow: "hidden",
+  },
+  actionBtnFg: {
+    zIndex: 1,
   },
   actionBtnText: {
     color: desktop.text,
@@ -565,6 +612,43 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+  },
+  consumoStatusPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  consumoStatusText: {
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  consumoMetaGrid: {
+    flexDirection: "row",
+    alignItems: "stretch",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.06)",
+    backgroundColor: "rgba(0,0,0,0.28)",
+    overflow: "hidden",
+  },
+  consumoMetaCell: {
+    flex: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 4,
+  },
+  consumoMetaSep: {
+    width: 1,
+    backgroundColor: "rgba(255,255,255,0.08)",
+  },
+  consumoMetaValue: {
+    color: desktop.text,
+    fontSize: 16,
+    fontWeight: "800",
   },
   sectionTitle: {
     color: desktop.text,

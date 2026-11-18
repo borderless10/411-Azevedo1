@@ -48,9 +48,9 @@ import { incomeTransactionLabel } from "../../utils/incomeEntry";
 import { computePlanningTotals } from "../../utils/planningDisplayUtils";
 import { perfMark, perfMeasure } from "../../utils/perfMarks";
 import MaskedAmount from "../../components/ui/MaskedAmount";
-import CardWaveBg, {
-  CardWaveWarmup,
-} from "../../components/ui/CardWaveBg";
+import SoftCardAccent, {
+  softToneFromWaveVariant,
+} from "../../components/ui/SoftCardAccent";
 import {
   formatDateForDisplay,
   formatDateToString,
@@ -71,7 +71,6 @@ import {
   LineChart,
   LineChartData,
   PieChart,
-  ConsumoModeradoBg,
 } from "../../components/Charts";
 import { premium, premiumCardShadow } from "../../theme/visaoPremium";
 import { DEFAULT_EXPENSE_CATEGORIES } from "../../types/category";
@@ -125,7 +124,6 @@ export const HomeScreen = () => {
   );
   const [lineChartData, setLineChartData] = useState<LineChartData[]>([]);
   const [activePeriodLabel, setActivePeriodLabel] = useState("Este mês");
-  const [consumoCardSize, setConsumoCardSize] = useState({ w: 320, h: 168 });
   const [consumoModeradoPerformance, setConsumoModeradoPerformance] =
     useState<ConsumoModeradoPerformance | null>(null);
 
@@ -1129,7 +1127,8 @@ export const HomeScreen = () => {
             waveVariant && styles.actionCardWithWave,
             fullWidth && styles.actionCardContentCentered,
             {
-              borderColor: waveVariant ? "transparent" : `${color}40`,
+              borderColor: `${color}45`,
+              backgroundColor: "#0c0a12",
               ...premiumCardShadow,
             },
           ]}
@@ -1138,14 +1137,19 @@ export const HomeScreen = () => {
           onPress={onPress}
           activeOpacity={0.9}
         >
-          {waveVariant ? (
-            <CardWaveBg
-              variant={waveVariant}
-              crop="action"
-              opacity={1}
-              borderRadius={12}
-            />
-          ) : null}
+          <SoftCardAccent
+            tone={
+              waveVariant
+                ? softToneFromWaveVariant(waveVariant)
+                : color.toLowerCase().includes("ff00") ||
+                    color.toLowerCase().includes("ff6b")
+                  ? "magenta"
+                  : "purple"
+            }
+            strength="filled"
+            intensity={0.72}
+            borderRadius={12}
+          />
           <View
             style={[
               styles.actionIconContainer,
@@ -1214,12 +1218,7 @@ export const HomeScreen = () => {
             },
           ]}
         >
-          <CardWaveBg
-            variant="txExpense"
-            crop="fill"
-            opacity={1}
-            borderRadius={16}
-          />
+          <SoftCardAccent tone="magenta" intensity={0.45} borderRadius={16} />
           <View style={[styles.transactionIcon, styles.transactionForeground]}>
             <View
               style={[
@@ -1332,12 +1331,7 @@ export const HomeScreen = () => {
             },
           ]}
         >
-          <CardWaveBg
-            variant="txIncome"
-            crop="fill"
-            opacity={1}
-            borderRadius={16}
-          />
+          <SoftCardAccent tone="purple" intensity={0.45} borderRadius={16} />
           <View style={[styles.transactionIcon, styles.transactionForeground]}>
             <View
               style={[
@@ -1614,7 +1608,6 @@ export const HomeScreen = () => {
 
   return (
     <Layout showHeader={true} showSidebar={true}>
-      <CardWaveWarmup />
       <FlatList
         ref={transactionsListRef}
         style={styles.container}
@@ -1712,7 +1705,7 @@ export const HomeScreen = () => {
                           },
                         ]}
                       >
-                        <CardWaveBg variant="v2Purple" crop="fill" opacity={1} />
+                        <SoftCardAccent tone="purple" intensity={0.5} />
                         <View
                           style={[
                             styles.cardIconContainer,
@@ -1785,7 +1778,7 @@ export const HomeScreen = () => {
                           },
                         ]}
                       >
-                        <CardWaveBg variant="v2Magenta" crop="fill" opacity={1} />
+                        <SoftCardAccent tone="magenta" intensity={0.5} />
                         <View
                           style={[
                             styles.cardIconContainer,
@@ -1855,7 +1848,7 @@ export const HomeScreen = () => {
                     },
                   ]}
                 >
-                  <CardWaveBg variant="v2Wide" crop="band" opacity={1} />
+                  <SoftCardAccent tone="neutral" intensity={0.48} />
                   <View style={styles.premiumSavingsRow}>
                     <View style={styles.premiumSavingsIconCircle}>
                       <MaterialCommunityIcons
@@ -1904,42 +1897,39 @@ export const HomeScreen = () => {
                       style={[
                         styles.consumoModeradoCard,
                         desktop && styles.consumoModeradoCardDesktop,
+                        {
+                          borderColor: `${consumoModeradoPerformance.color}55`,
+                        },
                       ]}
                     >
-                      <View
-                        style={[
-                          styles.consumoModeradoBgLayer,
-                          desktop && styles.consumoModeradoBgLayerDesktop,
-                        ]}
-                        onLayout={(e) => {
-                          const { width, height } = e.nativeEvent.layout;
-                          if (
-                            width !== consumoCardSize.w ||
-                            height !== consumoCardSize.h
-                          ) {
-                            setConsumoCardSize({ w: width, h: height });
-                          }
-                        }}
-                      >
-                        <ConsumoModeradoBg
-                          width={Math.max(consumoCardSize.w, 160)}
-                          height={Math.max(consumoCardSize.h, 120)}
-                          color={premium.magenta}
-                        />
-                      </View>
+                      <SoftCardAccent
+                        tone={
+                          consumoModeradoPerformance.color === "#FF008A"
+                            ? "magenta"
+                            : consumoModeradoPerformance.color === "#B900FF"
+                              ? "purple"
+                              : "neutral"
+                        }
+                        intensity={0.42}
+                        borderRadius={16}
+                      />
 
-                      <View
-                        style={[
-                          styles.consumoModeradoForeground,
-                          desktop && styles.consumoModeradoForegroundDesktop,
-                        ]}
-                      >
+                      <View style={styles.consumoModeradoForeground}>
                         <View style={styles.consumoModeradoHeader}>
-                          <Ionicons
-                            name="wallet-outline"
-                            size={20}
-                            color={premium.purple}
-                          />
+                          <View
+                            style={[
+                              styles.consumoModeradoIconBadge,
+                              {
+                                backgroundColor: `${consumoModeradoPerformance.color}18`,
+                              },
+                            ]}
+                          >
+                            <Ionicons
+                              name="wallet-outline"
+                              size={18}
+                              color={consumoModeradoPerformance.color}
+                            />
+                          </View>
                           <Text style={styles.consumoModeradoTitle}>
                             Consumo Moderado
                           </Text>
@@ -1950,10 +1940,18 @@ export const HomeScreen = () => {
                           />
                         </View>
 
-                        <View style={styles.consumoModeradoStatusRow}>
+                        <View
+                          style={[
+                            styles.consumoModeradoStatusPill,
+                            {
+                              backgroundColor: `${consumoModeradoPerformance.color}16`,
+                              borderColor: `${consumoModeradoPerformance.color}40`,
+                            },
+                          ]}
+                        >
                           <Ionicons
                             name={consumoModeradoPerformance.icon}
-                            size={20}
+                            size={16}
                             color={consumoModeradoPerformance.color}
                           />
                           <Text
@@ -1975,27 +1973,25 @@ export const HomeScreen = () => {
                               )}
                         </Text>
 
-                        <View
-                          style={[
-                            styles.consumoModeradoMetaBlock,
-                            desktop && styles.consumoModeradoMetaBlockDesktop,
-                          ]}
-                        >
-                          <View style={styles.consumoModeradoMetaRow}>
+                        <View style={styles.consumoModeradoMetaGrid}>
+                          <View style={styles.consumoModeradoMetaCell}>
                             <Text style={styles.consumoModeradoMetaLabel}>
-                              Média realizada
+                              Realizada
                             </Text>
                             <MaskedAmount
                               value={
                                 consumoModeradoPerformance.actualDailyAverage
                               }
-                              style={styles.consumoModeradoMetaValue}
+                              style={[
+                                styles.consumoModeradoMetaValue,
+                                { color: consumoModeradoPerformance.color },
+                              ]}
                             />
                           </View>
-                          <View style={styles.consumoModeradoMetaDivider} />
-                          <View style={styles.consumoModeradoMetaRow}>
+                          <View style={styles.consumoModeradoMetaCellSep} />
+                          <View style={styles.consumoModeradoMetaCell}>
                             <Text style={styles.consumoModeradoMetaLabel}>
-                              Média diária ideal
+                              Ideal / dia
                             </Text>
                             <MaskedAmount
                               value={
@@ -2030,7 +2026,7 @@ export const HomeScreen = () => {
                           styles.premiumBalanceCardPurple,
                         ]}
                       >
-                        <CardWaveBg variant="v2Purple" crop="fill" opacity={0.95} />
+                        <SoftCardAccent tone="purple" intensity={0.48} />
                         <View style={styles.premiumBalanceTitleRow}>
                           <View style={styles.premiumBalanceIcon}>
                             <Ionicons
@@ -2071,7 +2067,7 @@ export const HomeScreen = () => {
                           styles.premiumBalanceCardMagenta,
                         ]}
                       >
-                        <CardWaveBg variant="v2Magenta" crop="fill" opacity={0.95} />
+                        <SoftCardAccent tone="magenta" intensity={0.48} />
                         <View style={styles.premiumBalanceTitleRow}>
                           <View
                             style={[
@@ -2120,7 +2116,7 @@ export const HomeScreen = () => {
                           styles.premiumBalanceCardPurpleGlow,
                         ]}
                       >
-                        <CardWaveBg variant="v2Square" crop="square" opacity={0.95} />
+                        <SoftCardAccent tone="neutral" intensity={0.45} />
                         <View style={styles.premiumBalanceTitleRow}>
                           <View style={styles.premiumBalanceIcon}>
                             <Ionicons
@@ -2225,7 +2221,7 @@ export const HomeScreen = () => {
                       },
                     ]}
                   >
-                    <CardWaveBg variant="v2Purple" crop="fill" opacity={1} />
+                    <SoftCardAccent tone="purple" intensity={0.5} />
                     <View style={styles.cardIconContainer}>
                       <Ionicons name="trending-up" size={18} color="#B900FF" />
                     </View>
@@ -2261,7 +2257,7 @@ export const HomeScreen = () => {
                       },
                     ]}
                   >
-                    <CardWaveBg variant="v2Magenta" crop="fill" opacity={1} />
+                    <SoftCardAccent tone="magenta" intensity={0.5} />
                     <View style={styles.cardIconContainer}>
                       <Ionicons
                         name="trending-down"
@@ -3108,52 +3104,35 @@ const styles = StyleSheet.create({
     letterSpacing: -0.2,
   },
   consumoModeradoCard: {
-    backgroundColor: "#120818",
-    borderRadius: 14,
-    padding: 10,
-    borderWidth: 1.5,
-    borderColor: "rgba(255,0,138,0.55)",
+    backgroundColor: "#12101A",
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "rgba(185,0,255,0.28)",
     marginBottom: 8,
     overflow: "hidden",
-    minHeight: 112,
-    shadowColor: premium.magenta,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.45,
-    shadowRadius: 18,
-    elevation: 6,
+    minHeight: 0,
   },
   consumoModeradoCardDesktop: {
-    padding: 16,
-    minHeight: 148,
+    padding: 18,
     marginBottom: 12,
-  },
-  consumoModeradoBgLayer: {
-    position: "absolute",
-    right: -8,
-    bottom: -6,
-    top: 22,
-    width: "58%",
-    opacity: 1,
-  },
-  consumoModeradoBgLayerDesktop: {
-    width: "48%",
-    top: 12,
-    right: 0,
   },
   consumoModeradoForeground: {
     position: "relative",
     zIndex: 2,
-    gap: 8,
-  },
-  consumoModeradoForegroundDesktop: {
-    maxWidth: "54%",
     gap: 10,
   },
   consumoModeradoHeader: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    marginBottom: 2,
+    gap: 10,
+  },
+  consumoModeradoIconBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
   },
   consumoModeradoTitle: {
     flex: 1,
@@ -3161,55 +3140,53 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "700",
   },
-  consumoModeradoStatusRow: {
+  consumoModeradoStatusPill: {
+    alignSelf: "flex-start",
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    maxWidth: "62%",
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
   },
   consumoModeradoStatusLabel: {
-    fontSize: 18,
+    fontSize: 14,
     fontWeight: "800",
   },
   consumoModeradoDetail: {
-    color: "#E6E1EE",
+    color: premium.textSecondary,
     fontSize: 13,
     lineHeight: 18,
-    marginBottom: 2,
-    maxWidth: "62%",
   },
-  consumoModeradoMetaBlock: {
-    marginTop: 4,
-    gap: 0,
-    maxWidth: "58%",
-    backgroundColor: "rgba(8, 3, 14, 0.82)",
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 2,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
-  },
-  consumoModeradoMetaBlockDesktop: {
-    maxWidth: "100%",
-  },
-  consumoModeradoMetaRow: {
+  consumoModeradoMetaGrid: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 4,
-    gap: 8,
+    alignItems: "stretch",
+    marginTop: 2,
+    backgroundColor: "rgba(0,0,0,0.28)",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.06)",
+    overflow: "hidden",
   },
-  consumoModeradoMetaDivider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: "rgba(255,255,255,0.16)",
+  consumoModeradoMetaCell: {
+    flex: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 4,
+  },
+  consumoModeradoMetaCellSep: {
+    width: 1,
+    backgroundColor: "rgba(255,255,255,0.08)",
   },
   consumoModeradoMetaLabel: {
     color: "#C9C3D4",
-    fontSize: 13,
+    fontSize: 12,
+    fontWeight: "600",
   },
   consumoModeradoMetaValue: {
     color: "#FFFFFF",
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: "800",
   },
   actionsGrid: {

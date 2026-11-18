@@ -64,6 +64,9 @@ type DaySummary = {
   total: number;
 };
 
+/** Quantos lançamentos mostrar no preview do dia (antes de editar). */
+const DAY_PREVIEW_LIMIT = 3;
+
 export const CategoryBudgetScreen = () => {
 
   const desktopWeb = useDesktopWeb();
@@ -813,6 +816,7 @@ export const CategoryBudgetScreen = () => {
                       styles.dayRow,
                       isZeroConfirmed && styles.dayRowZeroConfirmed,
                       isEditing && styles.dayRowEditing,
+                      !isEditing && styles.dayRowCollapsed,
                       desktopWeb && !isEditing && { padding: 0 },
                     ]}
                     {...(desktopWeb && isEditing
@@ -973,53 +977,66 @@ export const CategoryBudgetScreen = () => {
                           )}
                         </View>
                       </>
-                    ) : desktopWeb ? (
+                    ) : (
                       <TouchableOpacity
-                        style={{
-                          flexDirection: "row",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          width: "100%",
-                          padding: 12,
-                          // @ts-ignore
-                          cursor: "pointer",
-                        }}
+                        style={[
+                          styles.dayCollapsedPressable,
+                          desktopWeb && styles.dayCollapsedPressableDesktop,
+                        ]}
                         onPress={() =>
                           daySummary.total === 0 && !isZeroConfirmed
                             ? handleOpenNoRecordActions(daySummary.date)
                             : setEditingDateKey(dateKey)
                         }
+                        activeOpacity={0.85}
                       >
-                        {dayHeader}
-                        {daySummary.total === 0 && !isZeroConfirmed ? (
-                          <Ionicons
-                            name="alert-circle"
-                            size={24}
-                            color="#FF008A"
-                          />
-                        ) : (
-                          <Ionicons name="pencil" size={18} color="#B900FF" />
-                        )}
-                      </TouchableOpacity>
-                    ) : daySummary.total === 0 && !isZeroConfirmed ? (
-                      <TouchableOpacity
-                        style={styles.alertIconButton}
-                        onPress={() =>
-                          handleOpenNoRecordActions(daySummary.date)
-                        }
-                      >
-                        <Ionicons
-                          name="alert-circle"
-                          size={24}
-                          color="#FF008A"
-                        />
-                      </TouchableOpacity>
-                    ) : (
-                      <TouchableOpacity
-                        style={styles.editIconButton}
-                        onPress={() => setEditingDateKey(dateKey)}
-                      >
-                        <Ionicons name="pencil" size={18} color="#B900FF" />
+                        <View style={styles.dayCollapsedTop}>
+                          {dayHeader}
+                          {daySummary.total === 0 && !isZeroConfirmed ? (
+                            <View style={styles.alertIconButton}>
+                              <Ionicons
+                                name="alert-circle"
+                                size={24}
+                                color="#FF008A"
+                              />
+                            </View>
+                          ) : (
+                            <View style={styles.editIconButton}>
+                              <Ionicons
+                                name="pencil"
+                                size={18}
+                                color="#B900FF"
+                              />
+                            </View>
+                          )}
+                        </View>
+                        {dayItems.length > 0 ? (
+                          <View style={styles.dayPreviewList}>
+                            {dayItems
+                              .slice(0, DAY_PREVIEW_LIMIT)
+                              .map((item) => (
+                                <View
+                                  key={item.id}
+                                  style={styles.dayPreviewRow}
+                                >
+                                  <Text
+                                    style={styles.dayPreviewTitle}
+                                    numberOfLines={1}
+                                  >
+                                    {item.description || trackedTitle}
+                                  </Text>
+                                  <Text style={styles.dayPreviewAmount}>
+                                    {formatCurrency(item.value)}
+                                  </Text>
+                                </View>
+                              ))}
+                            {dayItems.length > DAY_PREVIEW_LIMIT ? (
+                              <Text style={styles.dayPreviewMore}>
+                                +{dayItems.length - DAY_PREVIEW_LIMIT} mais
+                              </Text>
+                            ) : null}
+                          </View>
+                        ) : null}
                       </TouchableOpacity>
                     )}
                   </View>
@@ -1320,6 +1337,54 @@ const styles = StyleSheet.create({
   dayRowEditing: {
     flexDirection: "column",
     alignItems: "stretch",
+  },
+  dayRowCollapsed: {
+    flexDirection: "column",
+    alignItems: "stretch",
+  },
+  dayCollapsedPressable: {
+    flex: 1,
+    width: "100%",
+  },
+  dayCollapsedPressableDesktop: {
+    padding: 12,
+    // @ts-ignore web cursor
+    cursor: "pointer",
+  },
+  dayCollapsedTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  dayPreviewList: {
+    marginTop: 8,
+    gap: 4,
+    paddingTop: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "#333",
+  },
+  dayPreviewRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  dayPreviewTitle: {
+    flex: 1,
+    color: "#ccc",
+    fontSize: 12,
+  },
+  dayPreviewAmount: {
+    color: "#B900FF",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  dayPreviewMore: {
+    color: "#888",
+    fontSize: 11,
+    marginTop: 2,
+    fontWeight: "600",
   },
   editItemsWrap: {
     width: "100%",

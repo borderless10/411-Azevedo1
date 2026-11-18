@@ -219,7 +219,7 @@ export const BudgetScreen = () => {
       return {
         label: "Acima da meta",
         detail: `${formatCurrency(Math.abs(difference))} acima da meta diária.`,
-        color: "#FF008A",
+        color: "#B900FF",
         icon: "trending-up" as const,
       };
     }
@@ -228,7 +228,7 @@ export const BudgetScreen = () => {
       return {
         label: "Abaixo da meta",
         detail: `${formatCurrency(Math.abs(difference))} abaixo da meta diária.`,
-        color: "#B900FF",
+        color: "#FF008A",
         icon: "trending-down" as const,
       };
     }
@@ -1180,7 +1180,7 @@ export const BudgetScreen = () => {
                   <Ionicons
                     name={isOverBudget ? "trending-up" : "trending-down"}
                     size={24}
-                    color={isOverBudget ? "#FF008A" : "#B900FF"}
+                    color={isOverBudget ? "#B900FF" : "#FF008A"}
                   />
                   <Text style={styles.statLabel}>Média real/dia</Text>
                   <Text
