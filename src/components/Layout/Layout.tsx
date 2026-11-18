@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   Text,
 } from "react-native";
+import Svg, { Path, Defs, LinearGradient, Stop } from "react-native-svg";
 import { useDesktopWeb } from "../../utils/desktopWeb";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -18,18 +19,51 @@ import { Sidebar } from "../Sidebar/Sidebar";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useUnreadChatCount } from "../../hooks/useUnreadChatCount";
 import { useAuth } from "../../hooks/useAuth";
+import { useNavigation } from "../../routes/NavigationContext";
 import {
   getCoupleMemberLabel,
   isCoupleAccount,
 } from "../../utils/coupleAccount";
+import { premium } from "../../theme/visaoPremium";
 import { perfMark } from "../../utils/perfMarks";
+
+const HeaderPurpleLine = () => (
+  <View style={styles.headerPurpleLine} pointerEvents="none">
+    <Svg
+      width="100%"
+      height={10}
+      viewBox="0 0 390 10"
+      preserveAspectRatio="none"
+    >
+      <Defs>
+        <LinearGradient id="layoutHeaderGlow" x1="0" y1="0" x2="1" y2="0">
+          <Stop offset="0%" stopColor={premium.purple} stopOpacity="0.75" />
+          <Stop offset="20%" stopColor={premium.purple} stopOpacity="0.98" />
+          <Stop offset="50%" stopColor={premium.purple} stopOpacity="1" />
+          <Stop offset="80%" stopColor={premium.magenta} stopOpacity="0.98" />
+          <Stop offset="100%" stopColor={premium.magenta} stopOpacity="0.75" />
+        </LinearGradient>
+      </Defs>
+      {/* Traço encostado na base: o scroll some exatamente nesta linha. */}
+      <Path
+        d="M0 8.2 C 55 4.2, 110 9.8, 170 6.8 S 280 4, 390 8.2"
+        stroke="url(#layoutHeaderGlow)"
+        strokeWidth={2.2}
+        strokeLinecap="butt"
+        fill="none"
+      />
+    </Svg>
+  </View>
+);
 
 type SafeAreaEdge = "top" | "right" | "bottom" | "left";
 
 interface LayoutProps {
   children: ReactNode;
   title?: string;
+  titleAccessory?: ReactNode;
   showBackButton?: boolean;
+  onBack?: () => void;
   showHeader?: boolean;
   showSidebar?: boolean;
   rightAction?: React.ReactNode;
@@ -43,7 +77,9 @@ interface LayoutProps {
 export const Layout: React.FC<LayoutProps> = ({
   children,
   title,
+  titleAccessory,
   showBackButton = false,
+  onBack,
   showHeader = true,
   showSidebar = true,
   rightAction,
@@ -55,11 +91,15 @@ export const Layout: React.FC<LayoutProps> = ({
   const desktop = useDesktopWeb();
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const { colors } = useTheme();
+  const { currentScreen } = useNavigation();
   const unreadChatCount = useUnreadChatCount();
   const { user, activeCoupleMember, clearActiveCoupleMember } = useAuth();
   const showCoupleBar =
     isCoupleAccount(user) &&
     (activeCoupleMember === 1 || activeCoupleMember === 2);
+  // Na Home a linha roxa do Header substitui a borda cinza.
+  const usePurpleHeaderLine = currentScreen === "Home" && !title;
+  const purpleHeaderGap = 10;
   // Regra central e mutuamente exclusiva: tela interna com voltar nunca
   // mostra o acesso à sidebar, mesmo se a tela pedir os dois controles.
   // Sem voltar, a sidebar segue o pedido da tela (raiz ou fluxo sem sidebar).
@@ -81,13 +121,22 @@ export const Layout: React.FC<LayoutProps> = ({
               <View
                 style={[
                   styles.headerBlock,
-                  { backgroundColor: colors.background, borderBottomColor: colors.border },
+                  {
+                    backgroundColor: colors.background,
+                    borderBottomColor: colors.border,
+                    borderBottomWidth: usePurpleHeaderLine ? 0 : 1,
+                  },
+                  usePurpleHeaderLine
+                    ? { paddingBottom: purpleHeaderGap }
+                    : null,
                 ]}
               >
                 <View style={styles.headerWrapper}>
                   <Header
                     title={title}
+                    titleAccessory={titleAccessory}
                     showBackButton={showBackButton}
+                    onBack={onBack}
                     showProfile={true}
                     rightAction={rightAction}
                     style={styles.header}
@@ -109,6 +158,7 @@ export const Layout: React.FC<LayoutProps> = ({
                     <Text style={styles.coupleBarAction}>Trocar integrante</Text>
                   </TouchableOpacity>
                 ) : null}
+                {usePurpleHeaderLine ? <HeaderPurpleLine /> : null}
               </View>
             )}
             <View
@@ -139,7 +189,12 @@ export const Layout: React.FC<LayoutProps> = ({
           <View
             style={[
               styles.headerBlock,
-              { backgroundColor: colors.background, borderBottomColor: colors.border },
+              {
+                backgroundColor: colors.background,
+                borderBottomColor: colors.border,
+                borderBottomWidth: usePurpleHeaderLine ? 0 : 1,
+              },
+              usePurpleHeaderLine ? { paddingBottom: purpleHeaderGap } : null,
             ]}
           >
             <View style={styles.headerWrapper}>
@@ -167,7 +222,9 @@ export const Layout: React.FC<LayoutProps> = ({
               )}
               <Header
                 title={title}
+                titleAccessory={titleAccessory}
                 showBackButton={showBackButton}
+                onBack={onBack}
                 showProfile={true}
                 rightAction={rightAction}
                 style={styles.header}
@@ -189,6 +246,7 @@ export const Layout: React.FC<LayoutProps> = ({
                 <Text style={styles.coupleBarAction}>Trocar integrante</Text>
               </TouchableOpacity>
             ) : null}
+            {usePurpleHeaderLine ? <HeaderPurpleLine /> : null}
           </View>
         )}
 
@@ -234,6 +292,16 @@ const styles = StyleSheet.create({
   },
   headerBlock: {
     borderBottomWidth: 1,
+    position: "relative",
+    overflow: "visible",
+  },
+  headerPurpleLine: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: -1,
+    height: 10,
+    zIndex: 5,
   },
   headerWrapper: {
     flexDirection: "row",

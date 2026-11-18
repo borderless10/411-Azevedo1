@@ -10,6 +10,7 @@ import {
   Platform,
   Dimensions,
   Image,
+  ImageBackground,
   Modal,
   Alert,
   AppState,
@@ -49,6 +50,7 @@ import {
 } from "../../utils/chatMentions";
 import {
   canMutateOwnChatMessage,
+  getChatMessageDisplayText,
   isChatMessageDeleted,
 } from "../../utils/chatMessageMutations";
 import {
@@ -605,7 +607,6 @@ export const ChatScreen: React.FC = () => {
     [previewSenderMap, user?.id, userMap],
   );
 
-  const getParticipantRole = (id?: string | null): string => {
   const isOwnMessage = useCallback(
     (msg: Message) => {
       if (!user?.id || msg.senderId !== user.id) return false;
@@ -633,6 +634,7 @@ export const ChatScreen: React.FC = () => {
       !isChatMessageDeleted(actionMessage),
   );
 
+  const getParticipantRole = (id?: string | null): string => {
     if (!id) return "";
     return String(userMap[id]?.role || "").toLowerCase();
   };
@@ -1070,6 +1072,27 @@ export const ChatScreen: React.FC = () => {
   };
 
   const getChatPreview = (chat: any): string => {
+    // Prefer live thread when this chat is open (covers apagar/editar da última msg)
+    if (chat?.id === selectedChatId && messages.length > 0) {
+      const lastMsg = messages[messages.length - 1];
+      const text = getChatMessageDisplayText(lastMsg).trim();
+      const liveSenderId = lastMsg?.senderId;
+      const liveSenderLabel = resolveCoupleChatSenderLabel(
+        liveSenderId,
+        user?.id,
+        liveSenderId ? userMap[liveSenderId] : null,
+        lastMsg?.senderCoupleMember,
+        liveSenderId
+          ? userMap[liveSenderId]
+            ? undefined
+            : previewSenderMap[liveSenderId]
+          : undefined,
+      );
+      if (text.length > 0) {
+        return `${liveSenderLabel}: ${text}`.substring(0, 70);
+      }
+    }
+
     const fromList = chat?.lastMessage?.text;
     const senderId = chat?.lastMessage?.senderId;
     const senderLabel = resolveCoupleChatSenderLabel(
@@ -1081,22 +1104,11 @@ export const ChatScreen: React.FC = () => {
     );
 
     if (typeof fromList === "string" && fromList.trim().length > 0) {
-      return `${senderLabel}: ${fromList.trim()}`.substring(0, 70);
-    }
-
-    // Fallback: when current conversation is open, use the live message list
-    if (chat?.id === selectedChatId && messages.length > 0) {
-      const lastMsg = messages[messages.length - 1];
-      const text = String(lastMsg?.text || "").trim();
-      const liveSenderId = lastMsg?.senderId;
-      const liveSenderLabel = resolveCoupleChatSenderLabel(
-        liveSenderId,
-        user?.id,
-        liveSenderId ? userMap[liveSenderId] : null,
-        lastMsg?.senderCoupleMember,
-        liveSenderId ? userMap[liveSenderId] ? undefined : previewSenderMap[liveSenderId] : undefined,
-      );
-      if (text.length > 0) return `${liveSenderLabel}: ${text}`.substring(0, 70);
+      const display = getChatMessageDisplayText({
+        text: fromList,
+        deletedAt: null,
+      }).trim();
+      return `${senderLabel}: ${display}`.substring(0, 70);
     }
 
     return "Sem mensagens";
@@ -1200,7 +1212,6 @@ export const ChatScreen: React.FC = () => {
     });
   };
 
-  const handleToggleReaction = async (msg: Message, emoji: string) => {
   const handleStartEditMessage = () => {
     if (!actionMessage || !actionMessageCanMutate) return;
     setEditingMessage(actionMessage);
@@ -1240,6 +1251,7 @@ export const ChatScreen: React.FC = () => {
     ]);
   };
 
+  const handleToggleReaction = async (msg: Message, emoji: string) => {
     if (!user?.id || !selectedChatId || !msg.id) return;
     const next = normalizeReactionEmoji(emoji);
     const current = normalizeReactionEmoji(msg.reactions?.[user.id] || "");
@@ -1798,30 +1810,64 @@ export const ChatScreen: React.FC = () => {
     : null;
   const headerPhoto = resolveProfilePhotoUri(headerPerson);
   const headerBadge = badgeDefinitionForPerson(headerPerson);
+  const conversationTitleText = isPrivateChat && otherParticipantId
+    ? profileDisplayName(
+        headerPerson,
+        getChatTitle(selectedChat),
+      )
+    : selectedChat
+      ? getChatTitle(selectedChat)
+      : "Chat";
+
+  const conversationTitleAccessory =
+    isPrivateChat && otherParticipantId ? (
+      <BadgedAvatar
+        photoUri={headerPhoto}
+        displayName={conversationTitleText}
+        size={32}
+        ringDefinition={ringDefinitionForPerson(headerPerson)}
+        badgeDefinition={headerBadge}
+        crownPosition={crownForPerson(headerPerson)}
+        onPhotoPress={
+          headerPhoto
+            ? () =>
+                setChatPhotoPreview({
+                  uri: headerPhoto,
+                  name: conversationTitleText,
+                  userId: otherParticipantId,
+                  rankingPreference: headerPerson?.rankingPreference,
+                })
+            : undefined
+        }
+        onBadgePress={headerBadge ? setSelectedChatBadge : undefined}
+      />
+    ) : null;
+
+  const conversationRightAction = otherParticipantId ? (
+    <TouchableOpacity
+      onPress={openChatSafetyMenu}
+      style={styles.headerRight}
+      accessibilityLabel="Opções de segurança"
+      disabled={moderationBusy}
+    >
+      <Ionicons name="ellipsis-vertical" size={22} color="#B900FF" />
+    </TouchableOpacity>
+  ) : undefined;
+
+  const COMPACT_MESSAGE_GAP_MS = 5 * 60 * 1000;
 
   const threadBody = (
       <>
-        {/* Header */}
+        {/* No mobile a header do Layout assume voltar/foto/menu. No desktop mantém barra local. */}
+        {desktop ? (
         <View style={styles.conversationHeader}>
-          {desktop ? null : (
-          <TouchableOpacity
-            onPress={() => setSelectedChatId(null)}
-            style={styles.backButton}
-          >
-            <Ionicons name="chevron-back" size={28} color="#B900FF" />
-          </TouchableOpacity>
-          )}
-
           {isPrivateChat && otherParticipantId ? (
             <View
               style={{ flexDirection: "row", alignItems: "center", flex: 1 }}
             >
               <BadgedAvatar
                 photoUri={headerPhoto}
-                displayName={profileDisplayName(
-                  headerPerson,
-                  getChatTitle(selectedChat),
-                )}
+                displayName={conversationTitleText}
                 size={36}
                 ringDefinition={ringDefinitionForPerson(headerPerson)}
                 badgeDefinition={headerBadge}
@@ -1831,10 +1877,7 @@ export const ChatScreen: React.FC = () => {
                     ? () =>
                         setChatPhotoPreview({
                           uri: headerPhoto,
-                          name: profileDisplayName(
-                            headerPerson,
-                            getChatTitle(selectedChat),
-                          ),
+                          name: conversationTitleText,
                           userId: otherParticipantId,
                           rankingPreference: headerPerson?.rankingPreference,
                         })
@@ -1843,34 +1886,26 @@ export const ChatScreen: React.FC = () => {
                 onBadgePress={headerBadge ? setSelectedChatBadge : undefined}
               />
               <Text style={styles.conversationTitle}>
-                {profileDisplayName(
-                  userMap[otherParticipantId],
-                  getChatTitle(selectedChat),
-                )}
+                {conversationTitleText}
               </Text>
             </View>
           ) : (
             <Text style={styles.conversationTitle}>
-              {selectedChat ? getChatTitle(selectedChat) : "Chat"}
+              {conversationTitleText}
             </Text>
           )}
 
-          {otherParticipantId ? (
-            <TouchableOpacity
-              onPress={openChatSafetyMenu}
-              style={styles.headerRight}
-              accessibilityLabel="Opções de segurança"
-              disabled={moderationBusy}
-            >
-              <Ionicons name="ellipsis-vertical" size={22} color="#B900FF" />
-            </TouchableOpacity>
-          ) : (
-            <View style={styles.headerRight} />
-          )}
+          {conversationRightAction || <View style={styles.headerRight} />}
         </View>
+        ) : null}
 
         {/* Messages List — precisa de flex:1 senão a barra sobe e o meio fica preto */}
-        <View style={styles.messagesPane}>
+        <ImageBackground
+          source={require("../../../assets/visao-emblem-neon.jpg")}
+          style={styles.messagesPane}
+          imageStyle={styles.chatWatermarkImage}
+          resizeMode="contain"
+        >
           {messagesLoading && orderedMessages.length === 0 ? (
             <View style={styles.centerContainer}>
               <ActivityIndicator size="large" color="#B900FF" />
@@ -1885,7 +1920,7 @@ export const ChatScreen: React.FC = () => {
             initialNumToRender={12}
             maxToRenderPerBatch={8}
             windowSize={7}
-            renderItem={({ item: msg }) => {
+            renderItem={({ item: msg, index }) => {
               const sender = userMap[msg.senderId];
               const senderIsCouple = isCoupleAccount(sender);
               const senderMember = parseCoupleMember(msg.senderCoupleMember);
@@ -1911,10 +1946,19 @@ export const ChatScreen: React.FC = () => {
                 msg.senderCoupleMember,
                 previewSenderMap[msg.senderId],
               );
+              const olderNeighbor = orderedMessages[index + 1];
+              const compact = Boolean(
+                olderNeighbor &&
+                  Math.abs(
+                    getMessageTimeMs(msg.createdAt) -
+                      getMessageTimeMs(olderNeighbor.createdAt),
+                  ) < COMPACT_MESSAGE_GAP_MS,
+              );
               return (
                 <MessageBubble
                   msg={msg}
                   isOwn={isOwn}
+                  compact={compact}
                   showAvatar={isGroup || showCoupleSpeaker}
                   showSenderName={isGroup || showCoupleSpeaker}
                   senderLabel={senderLabel}
@@ -2009,7 +2053,7 @@ export const ChatScreen: React.FC = () => {
               <Text style={styles.mentionJumpText}>@</Text>
             </TouchableOpacity>
           ) : null}
-        </View>
+        </ImageBackground>
 
         {/* Input */}
         <View
@@ -2136,6 +2180,15 @@ export const ChatScreen: React.FC = () => {
     <Layout
       desktopWidth={desktop ? "full" : undefined}
       safeAreaEdges={["top", "left", "right"]}
+      showBackButton={!desktop}
+      onBack={!desktop ? () => setSelectedChatId(null) : undefined}
+      title={!desktop ? conversationTitleText : undefined}
+      titleAccessory={!desktop ? conversationTitleAccessory : undefined}
+      rightAction={
+        !desktop
+          ? conversationRightAction || <View style={styles.headerRight} />
+          : undefined
+      }
     >
       <View style={desktop ? styles.desktopSplit : styles.container}>
         {desktop ? chatListPane : null}
@@ -2473,11 +2526,18 @@ const styles = StyleSheet.create({
   messagesPane: {
     flex: 1,
     minHeight: 0,
-    position: "relative",
     backgroundColor: "#000000",
+  },
+  chatWatermarkImage: {
+    opacity: 0.14,
+    width: "78%",
+    height: "46%",
+    left: "11%",
+    top: "27%",
   },
   messagesList: {
     flex: 1,
+    backgroundColor: "transparent",
   },
   messagesListContent: {
     paddingVertical: 8,

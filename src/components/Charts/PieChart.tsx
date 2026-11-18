@@ -167,8 +167,22 @@ export const PieChart: React.FC<PieChartProps> = ({
             fill={premium.bg}
           />
         </Svg>
-        <View style={styles.centerLabel} pointerEvents="none">
-          <Text style={styles.centerValue} numberOfLines={1}>
+        <View
+          style={[
+            styles.centerLabel,
+            { paddingHorizontal: Math.max(6, stroke * 0.35) },
+          ]}
+          pointerEvents="none"
+        >
+          <Text
+            style={[
+              styles.centerValue,
+              { fontSize: Math.max(11, Math.min(15, chartSize * 0.12)) },
+            ]}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.5}
+          >
             {showValues ? formatCurrency(segments.total) : "R$ •••"}
           </Text>
           <Text style={styles.centerSub}>Total</Text>
@@ -217,13 +231,13 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFill,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 18,
   },
   centerValue: {
     color: premium.text,
     fontSize: 15,
     fontWeight: "800",
     textAlign: "center",
+    width: "100%",
   },
   centerSub: {
     color: premium.textSecondary,

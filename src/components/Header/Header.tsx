@@ -12,9 +12,7 @@ import {
   Image,
   Animated,
 } from "react-native";
-import Svg, { Path, Defs, LinearGradient, Stop } from "react-native-svg";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import { premium } from "../../theme/visaoPremium";
 import { useAuth } from "../../hooks/useAuth";
 import { useNavigation } from "../../routes/NavigationContext";
 import { useTheme } from "../../contexts/ThemeContext";
@@ -28,7 +26,11 @@ import type { BadgeDefinition } from "../../types/rankingGamification";
 
 interface HeaderProps {
   title?: string;
+  /** Conteúdo à esquerda do título (ex.: avatar da conversa). */
+  titleAccessory?: React.ReactNode;
   showBackButton?: boolean;
+  /** Se definido, substitui a navegação padrão do botão voltar. */
+  onBack?: () => void;
   showProfile?: boolean;
   rightAction?: React.ReactNode;
   style?: ViewStyle;
@@ -36,7 +38,9 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({
   title,
+  titleAccessory,
   showBackButton = false,
+  onBack,
   showProfile = true,
   rightAction,
   style,
@@ -84,6 +88,11 @@ export const Header: React.FC<HeaderProps> = ({
   }, [fadeAnim, slideAnim]);
 
   const handleBack = () => {
+    if (onBack) {
+      onBack();
+      return;
+    }
+
     // Histórico real primeiro: volta à tela anterior com os params dela.
     if (canGoBack) {
       goBack();
@@ -152,6 +161,10 @@ export const Header: React.FC<HeaderProps> = ({
           </TouchableOpacity>
         )}
 
+        {titleAccessory ? (
+          <View style={styles.titleAccessory}>{titleAccessory}</View>
+        ) : null}
+
         {title ? (
           <Text
             style={[styles.title, { color: colors.text }]}
@@ -204,37 +217,11 @@ export const Header: React.FC<HeaderProps> = ({
             </TouchableOpacity>
           ) : null)}
       </View>
-      {currentScreen === "Home" && !title ? (
-        <View style={styles.glowLine} pointerEvents="none">
-          <Svg width="100%" height={10} viewBox="0 0 390 10" preserveAspectRatio="none">
-            <Defs>
-              <LinearGradient id="headerGlow" x1="0" y1="0" x2="1" y2="0">
-                <Stop offset="0%" stopColor={premium.purple} stopOpacity="0.05" />
-                <Stop offset="50%" stopColor={premium.purple} stopOpacity="0.95" />
-                <Stop offset="100%" stopColor={premium.magenta} stopOpacity="0.15" />
-              </LinearGradient>
-            </Defs>
-            <Path
-              d="M0 6 C 60 1, 120 10, 180 5 S 300 0, 390 6"
-              stroke="url(#headerGlow)"
-              strokeWidth={2.2}
-              fill="none"
-            />
-          </Svg>
-        </View>
-      ) : null}
     </Animated.View>
   );
 };
 
 const styles = StyleSheet.create({
-  glowLine: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: -1,
-    height: 10,
-  },
   container: {
     flexDirection: "row",
     alignItems: "center",
@@ -244,11 +231,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0,
     position: "relative",
     overflow: "visible",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 2,
+    // Sem sombra: a linha roxa do Layout é a borda inferior da header.
+    shadowOpacity: 0,
+    elevation: 0,
   },
   logo: {
     width: 180,
@@ -264,10 +249,13 @@ const styles = StyleSheet.create({
   backButton: {
     padding: 4,
   },
+  titleAccessory: {
+    marginRight: 2,
+  },
   title: {
     flex: 1,
-    fontSize: 20,
-    fontWeight: "bold",
+    fontSize: 18,
+    fontWeight: "700",
   },
   right: {
     flexDirection: "row",

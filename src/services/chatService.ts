@@ -321,7 +321,53 @@ export async function editMessage(
     editedAt: serverTimestamp(),
     mentions: sanitizedMentions,
   });
+
+  await syncChatLastMessagePreview(chatId, messageId, {
+    text: trimmed,
+    senderId: current.senderId,
+    senderCoupleMember: data.senderCoupleMember,
+    mentionUserIds: sanitizedMentions.map((mention) => mention.userId),
+  });
 }
+
+const syncChatLastMessagePreview = async (
+  chatId: string,
+  messageId: string,
+  nextLastMessage: {
+    text: string;
+    senderId: string;
+    senderCoupleMember?: CoupleMember | null;
+    mentionUserIds?: string[];
+  },
+): Promise<void> => {
+  try {
+    const chatRef = doc(db, CHATS_COL, chatId);
+    const latestSnap = await getDocs(
+      query(
+        collection(chatRef, MESSAGES_SUBCOL),
+        orderBy("createdAt", "desc"),
+        limit(1),
+      ),
+    );
+    const latest = latestSnap.docs[0];
+    if (!latest || latest.id !== messageId) return;
+
+    const coupleMember = parseCoupleMember(nextLastMessage.senderCoupleMember);
+    await updateDoc(chatRef, {
+      lastMessage: {
+        text: nextLastMessage.text,
+        senderId: nextLastMessage.senderId,
+        ...(coupleMember ? { senderCoupleMember: coupleMember } : {}),
+        mentionUserIds: nextLastMessage.mentionUserIds || [],
+      },
+    });
+  } catch (error) {
+    console.warn(
+      "Mensagem atualizada, mas a prévia da conversa não acompanhou:",
+      error,
+    );
+  }
+};
 
 export async function softDeleteMessage(
   chatId: string,
@@ -347,6 +393,13 @@ export async function softDeleteMessage(
     text: CHAT_DELETED_MESSAGE_TEXT,
     deletedAt: serverTimestamp(),
     mentions: [],
+  });
+
+  await syncChatLastMessagePreview(chatId, messageId, {
+    text: CHAT_DELETED_MESSAGE_TEXT,
+    senderId: current.senderId,
+    senderCoupleMember: data.senderCoupleMember,
+    mentionUserIds: [],
   });
 }
 

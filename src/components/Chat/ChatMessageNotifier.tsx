@@ -16,6 +16,7 @@ import { requestNotificationPermissions } from "../../services/notificationServi
 import { userService } from "../../services/userServices";
 import { getChatLastMessageTime } from "../../utils/chatUtils";
 import { getActiveChatId } from "../../utils/chatActivity";
+import { CHAT_DELETED_MESSAGE_TEXT } from "../../utils/chatMessageMutations";
 
 type BannerState = {
   chatId: string;
@@ -92,6 +93,15 @@ export const ChatMessageNotifier: React.FC = () => {
     const handleNewMessages = async () => {
       for (const chat of watched) {
         if (!chat.lastMessage?.text) continue;
+        if (
+          String(chat.lastMessage.text).trim() === CHAT_DELETED_MESSAGE_TEXT
+        ) {
+          lastMessageTimesRef.current.set(
+            chat.id,
+            getChatLastMessageTime(chat),
+          );
+          continue;
+        }
         if (chat.lastMessage.kind === "reaction") {
           lastMessageTimesRef.current.set(
             chat.id,

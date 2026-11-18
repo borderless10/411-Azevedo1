@@ -1,5 +1,11 @@
 import React, { useMemo, useRef } from "react";
-import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Platform,
+} from "react-native";
 import { profilePhotoUri } from "../../utils/chatDisplayNames";
 import { ChatMessageText } from "./ChatMessageText";
 import { ChatMention } from "../../utils/chatMentions";
@@ -18,6 +24,8 @@ export interface ChatMessageBubbleProps {
   isOwn: boolean;
   showAvatar?: boolean;
   showSenderName?: boolean;
+  /** Gap menor quando a mensagem vizinha está a menos de 5 min. */
+  compact?: boolean;
   senderLabel: string;
   senderPhotoBase64?: string;
   senderBadgeDefinition?: BadgeDefinition | null;
@@ -48,6 +56,7 @@ export const MessageBubble = React.memo(function MessageBubble({
   isOwn,
   showAvatar = false,
   showSenderName = false,
+  compact = false,
   senderLabel,
   senderPhotoBase64,
   senderBadgeDefinition,
@@ -111,6 +120,7 @@ export const MessageBubble = React.memo(function MessageBubble({
         <View
           style={[
             styles.messageBubble,
+            compact ? styles.messageBubbleCompact : null,
             isOwn ? styles.ownMessage : styles.otherMessage,
             showAvatar && { marginLeft: 4 },
             highlighted && styles.highlighted,
@@ -258,9 +268,28 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     maxWidth: "70%",
     position: "relative",
+    overflow: "hidden",
+    borderWidth: StyleSheet.hairlineWidth * 2,
+    ...(Platform.OS === "web"
+      ? ({
+          backdropFilter: "blur(18px)",
+          WebkitBackdropFilter: "blur(18px)",
+        } as object)
+      : {}),
   },
-  ownMessage: { alignSelf: "flex-end", backgroundColor: "#B900FF" },
-  otherMessage: { alignSelf: "flex-start", backgroundColor: "#f4eaff" },
+  messageBubbleCompact: {
+    marginVertical: 1,
+  },
+  ownMessage: {
+    alignSelf: "flex-end",
+    backgroundColor: "rgba(185, 0, 255, 0.45)",
+    borderColor: "rgba(255, 255, 255, 0.28)",
+  },
+  otherMessage: {
+    alignSelf: "flex-start",
+    backgroundColor: "rgba(255, 255, 255, 0.12)",
+    borderColor: "rgba(255, 255, 255, 0.22)",
+  },
   highlighted: {
     borderWidth: 2,
     borderColor: "#ffe56a",
@@ -301,10 +330,10 @@ const styles = StyleSheet.create({
     opacity: 0.85,
   },
   ownMessageTime: { color: "rgba(255,255,255,0.85)" },
-  otherMessageTime: { color: "#666" },
+  otherMessageTime: { color: "rgba(255,255,255,0.55)" },
   senderName: {
     fontSize: 12,
-    color: "#5a4b7a",
+    color: "rgba(230, 210, 255, 0.9)",
     fontWeight: "600",
     marginBottom: 4,
   },
@@ -323,20 +352,20 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.12)",
   },
   replyBoxOther: {
-    borderLeftColor: "#B900FF",
-    backgroundColor: "rgba(140,82,255,0.12)",
+    borderLeftColor: "rgba(201, 132, 255, 0.9)",
+    backgroundColor: "rgba(255,255,255,0.08)",
   },
   replyAuthor: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#5a4b7a",
+    color: "rgba(230, 210, 255, 0.95)",
   },
   replyAuthorOwn: {
     color: "#fff",
   },
   replyText: {
     fontSize: 12,
-    color: "#4b3d6b",
+    color: "rgba(235, 225, 255, 0.85)",
   },
   replyTextOwn: {
     color: "rgba(255,255,255,0.9)",
@@ -356,12 +385,12 @@ const styles = StyleSheet.create({
     paddingLeft: 56,
   },
   reactionChip: {
-    backgroundColor: "#fff",
+    backgroundColor: "rgba(255,255,255,0.12)",
     borderRadius: 12,
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderWidth: 1,
-    borderColor: "#e4d7ff",
+    borderColor: "rgba(255,255,255,0.22)",
   },
   reactionEmoji: {
     fontSize: 12,

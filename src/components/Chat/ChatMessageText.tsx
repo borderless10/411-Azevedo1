@@ -95,7 +95,7 @@ export const ChatMessageText = ({
 const styles = StyleSheet.create({
   text: {
     fontSize: 14,
-    color: "#000",
+    color: "rgba(245, 238, 255, 0.95)",
     lineHeight: 20,
   },
   textOwn: {
@@ -109,7 +109,7 @@ const styles = StyleSheet.create({
     color: "#fff",
   },
   linkOther: {
-    color: "#5a32c7",
+    color: "#d8b4ff",
   },
   mention: {
     fontWeight: "700",
@@ -118,7 +118,7 @@ const styles = StyleSheet.create({
     color: "#ffe56a",
   },
   mentionOther: {
-    color: "#5a32c7",
+    color: "#e9d5ff",
   },
 });
 

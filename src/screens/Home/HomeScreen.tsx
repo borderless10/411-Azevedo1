@@ -2120,7 +2120,7 @@ export const HomeScreen = () => {
                   <Text style={styles.chartTitle}>Gastos por Categoria</Text>
                 </View>
                 {pieChartVisualData.length > 0 ? (
-                  <PieChart data={pieChartVisualData} size={112} />
+                  <PieChart data={pieChartVisualData} size={128} />
                 ) : (
                   <View style={styles.chartEmptyState}>
                     <Ionicons
