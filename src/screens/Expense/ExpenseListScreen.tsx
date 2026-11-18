@@ -29,6 +29,17 @@ import {
   getExpenseScopeLabel,
   shouldShowExpenseCategoryTag,
 } from "../../utils/expenseScopeUtils";
+import { useDesktopWeb } from "../../utils/desktopWeb";
+import {
+  DesktopPageCanvas,
+  DesktopToolbar,
+  DesktopFilterChip,
+  DesktopPrimaryButton,
+  DesktopKpiStrip,
+  DesktopTable,
+  DesktopTableRow,
+} from "../../components/Layout/DesktopPage";
+import { desktop } from "../../theme/desktopTokens";
 
 // ─── helpers de tag ──────────────────────────────────────────────
 const PAYMENT_TAG: Record<
@@ -101,6 +112,7 @@ const tagStyles = StyleSheet.create({
 });
 
 export const ExpenseListScreen = () => {
+  const desktopWeb = useDesktopWeb();
   const { user } = useAuth();
   const { navigate } = useNavigation();
 
@@ -270,6 +282,118 @@ export const ExpenseListScreen = () => {
     );
   }
 
+  const paymentFilters = [
+    { id: "all", label: "Todos" },
+    { id: "credit_card", label: "Crédito" },
+    { id: "debit_card", label: "Débito" },
+    { id: "pix", label: "PIX" },
+    { id: "cash", label: "Dinheiro" },
+  ] as const;
+
+  if (desktopWeb) {
+    const colFlex = [2.4, 1.1, 1.1, 1, 0.9, 0.7];
+    return (
+      <Layout title="Meus Gastos" showBackButton showSidebar={false}>
+        <DesktopPageCanvas>
+          <DesktopToolbar
+            title="Gastos"
+            subtitle={`${expenses.length} lançamento(s)`}
+            actions={
+              <DesktopPrimaryButton
+                label="Adicionar gasto"
+                icon="add"
+                danger
+                onPress={() => navigate("AddExpense")}
+              />
+            }
+            filters={paymentFilters.map((item) => (
+              <DesktopFilterChip
+                key={item.id}
+                label={item.label}
+                active={paymentFilter === item.id}
+                onPress={() => setPaymentFilter(item.id)}
+              />
+            ))}
+          />
+          <DesktopKpiStrip
+            items={[
+              {
+                label: "Total gasto",
+                value: formatCurrency(total),
+                accent: desktop.magenta,
+              },
+              {
+                label: "Registros",
+                value: String(expenses.length),
+              },
+            ]}
+          />
+          <DesktopTable
+            headers={["Descrição", "Escopo", "Pagamento", "Data", "Valor", ""]}
+            columnFlex={colFlex}
+            isEmpty={expenses.length === 0}
+            emptyText="Nenhum gasto ainda"
+          >
+            {expenses.map((expense) => {
+              const pm = expense.paymentMethod ?? "other";
+              const pay = PAYMENT_TAG[pm] ?? PAYMENT_TAG.other;
+              return (
+                <DesktopTableRow
+                  key={expense.id}
+                  columnFlex={colFlex}
+                  onPress={() => navigate("EditExpense", { id: expense.id })}
+                  cells={[
+                    <Text
+                      key="d"
+                      style={{ color: desktop.text, fontSize: 13, fontWeight: "600" }}
+                      numberOfLines={2}
+                    >
+                      {expense.description}
+                      {shouldShowExpenseCategoryTag(expense)
+                        ? ` · ${expense.category}`
+                        : ""}
+                    </Text>,
+                    getExpenseScopeLabel(expense) || "—",
+                    pay.label,
+                    formatDateForDisplay(expense.date),
+                    <Text
+                      key="v"
+                      style={{
+                        color: desktop.magenta,
+                        fontWeight: "700",
+                        fontSize: 13,
+                      }}
+                    >
+                      -{formatCurrency(expense.value)}
+                    </Text>,
+                    <TouchableOpacity
+                      key="del"
+                      onPress={() =>
+                        handleDeleteExpense(expense.id, expense.description)
+                      }
+                      disabled={deletingExpenseId === expense.id}
+                      hitSlop={8}
+                    >
+                      {deletingExpenseId === expense.id ? (
+                        <ActivityIndicator size="small" color={desktop.magenta} />
+                      ) : (
+                        <Ionicons
+                          name="trash-outline"
+                          size={18}
+                          color={desktop.magenta}
+                        />
+                      )}
+                    </TouchableOpacity>,
+                  ]}
+                />
+              );
+            })}
+          </DesktopTable>
+        </DesktopPageCanvas>
+      </Layout>
+    );
+  }
+
   return (
     <Layout title="Meus Gastos" showBackButton={true} showSidebar={false}>
       <View style={styles.container}>
@@ -292,13 +416,7 @@ export const ExpenseListScreen = () => {
           </View>
 
           <View style={styles.filterRow}>
-            {[
-              { id: "all", label: "Todos" },
-              { id: "credit_card", label: "Crédito" },
-              { id: "debit_card", label: "Débito" },
-              { id: "pix", label: "PIX" },
-              { id: "cash", label: "Dinheiro" },
-            ].map((item) => {
+            {paymentFilters.map((item) => {
               const active = paymentFilter === item.id;
               return (
                 <TouchableOpacity

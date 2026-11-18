@@ -87,6 +87,7 @@ import {
   getExpenseScopeLabel,
   shouldShowExpenseCategoryTag,
 } from "../../utils/expenseScopeUtils";
+import { HomeDesktopDashboard } from "./HomeDesktopDashboard";
 
 export const HomeScreen = () => {
   const desktop = useDesktopWeb();
@@ -1119,6 +1120,7 @@ export const HomeScreen = () => {
           styles.actionCardWrapper,
           desktop && styles.actionCardDesktop,
           fullWidth && styles.actionCardFullWidth,
+          fullWidth && desktop && styles.actionCardFullWidthDesktop,
           {
             opacity: opacityAnim,
             transform: [{ scale: scaleAnim }],
@@ -1209,6 +1211,7 @@ export const HomeScreen = () => {
           style={[
             styles.transactionItem,
             styles.transactionItemExpense,
+            desktop && styles.transactionItemDesktop,
             {
               opacity: fadeAnim,
               transform: [{ translateX: slideAnim }],
@@ -1326,6 +1329,7 @@ export const HomeScreen = () => {
           style={[
             styles.transactionItem,
             styles.transactionItemIncome,
+            desktop && styles.transactionItemDesktop,
             {
               opacity: fadeAnim,
               transform: [{ translateX: slideAnim }],
@@ -1479,7 +1483,7 @@ export const HomeScreen = () => {
   // Mostrar loading apenas na primeira carga
   if (!hasLoaded && loading) {
     return (
-      <Layout showHeader={true} showSidebar={true} desktopWidth="full">
+      <Layout showHeader={true} showSidebar={true} desktopWidth={1080}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={premium.purple} />
           <Text style={styles.loadingText}>Carregando dados...</Text>
@@ -1488,8 +1492,132 @@ export const HomeScreen = () => {
     );
   }
 
+  if (desktop) {
+    return (
+      <Layout showHeader showSidebar>
+        <HomeDesktopDashboard
+          displayName={profileDisplayName(user, user?.email || "Usuário")}
+          showValues={showValues}
+          onToggleValues={toggleShowValues}
+          activePeriodLabel={activePeriodLabel}
+          expectedIncomes={expectedIncomes}
+          expectedExpenses={expectedExpenses}
+          expectedSavings={expectedSavings}
+          totalIncome={totalIncome}
+          realizedExpenseTotal={realizedExpenseTotal}
+          realizedBalance={realizedBalance}
+          isStaff={isStaffUser(user)}
+          onOpenPlanning={() => navigate("PlanningView")}
+          onOpenBudget={() => navigate("Budget")}
+          onAddIncome={() => navigate("AddIncome")}
+          onAddExpense={() => navigate("AddExpense")}
+          onIncomeList={() => navigate("IncomeList")}
+          onExpenseList={() => navigate("ExpenseList")}
+          onShowSavingsHelp={showExpectedSavingsHelp}
+          consumo={
+            consumoModeradoPerformance
+              ? {
+                  label: consumoModeradoPerformance.label,
+                  detail: consumoModeradoPerformance.detail,
+                  color: consumoModeradoPerformance.color,
+                  icon: consumoModeradoPerformance.icon as any,
+                  actualDailyAverage:
+                    consumoModeradoPerformance.actualDailyAverage,
+                  idealDailyAverage:
+                    consumoModeradoPerformance.idealDailyAverage,
+                }
+              : null
+          }
+          pieData={pieChartVisualData}
+          lineData={lineChartData}
+          filterType={filterType}
+          onFilter={handleFilterTypeChange}
+          searchTerm={searchTerm}
+          onSearch={setSearchTerm}
+          transactions={filteredTransactions}
+          onEdit={handleEditTransaction}
+          onDelete={handleDeleteTransaction}
+        />
+        <ZeroPlanilhaConfirmModal
+          visible={zeroConfirmVisible}
+          dayLabel={zeroConfirmDayLabel}
+          loading={confirmingZero}
+          onCancel={handleCancelZeroPlanilha}
+          onConfirmZero={handleConfirmZeroPlanilha}
+          trackedOptions={zeroTrackedOptions}
+          onConfirmEntries={handleRegisterOpeningExpenses}
+        />
+        <Modal
+          visible={!!trackedZerosFollowUp}
+          transparent
+          animationType="fade"
+          onRequestClose={dismissTrackedZerosFollowUp}
+        >
+          <View style={styles.trackedFollowUpOverlay}>
+            <View style={styles.trackedFollowUpCard}>
+              <Text style={styles.trackedFollowUpTitle}>
+                E para gasto acompanhado?
+              </Text>
+              <Text style={styles.trackedFollowUpBody}>
+                No dia {trackedZerosFollowUp?.dayLabel}, estes gastos acompanhados
+                ainda não têm registro:{" "}
+                {(trackedZerosFollowUp?.titles || []).join(", ")}. Deseja
+                registrar zero neles também?
+              </Text>
+              <View style={styles.trackedFollowUpActions}>
+                <TouchableOpacity
+                  style={styles.trackedFollowUpSecondary}
+                  onPress={dismissTrackedZerosFollowUp}
+                  disabled={savingTrackedZerosFollowUp}
+                >
+                  <Text style={styles.trackedFollowUpSecondaryText}>
+                    Agora não
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.trackedFollowUpPrimary}
+                  onPress={() => {
+                    void confirmTrackedZerosFollowUp();
+                  }}
+                  disabled={savingTrackedZerosFollowUp}
+                >
+                  {savingTrackedZerosFollowUp ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.trackedFollowUpPrimaryText}>
+                      Registrar zero
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+        <ConfettiCelebration active={showConfetti} />
+        <ConfirmDeleteModal
+          visible={Boolean(transactionToDelete)}
+          title="Excluir transação"
+          message={
+            transactionToDelete
+              ? `Deseja excluir ${transactionToDelete.type === "income" ? "a renda" : "o gasto"} "${transactionToDelete.description}" de ${formatCurrency(transactionToDelete.value)}?`
+              : ""
+          }
+          confirmLabel={deletingTransaction ? "Excluindo..." : "Excluir"}
+          onCancel={() => {
+            if (deletingTransaction) return;
+            setTransactionToDelete(null);
+          }}
+          onConfirm={() => {
+            if (deletingTransaction) return;
+            void confirmDeleteTransaction();
+          }}
+        />
+      </Layout>
+    );
+  }
+
   return (
-    <Layout showHeader={true} showSidebar={true} desktopWidth="full">
+    <Layout showHeader={true} showSidebar={true}>
       <CardWaveWarmup />
       <FlatList
         ref={transactionsListRef}
@@ -1525,7 +1653,7 @@ export const HomeScreen = () => {
           </View>
         }
         ListHeaderComponent={
-        <View style={styles.content}>
+        <View style={[styles.content, desktop && styles.contentDesktop]}>
           <View style={styles.pageGreeting}>
             <View style={styles.pageGreetingText}>
               <Text style={styles.pageGreetingHello}>Olá,</Text>
@@ -1776,9 +1904,17 @@ export const HomeScreen = () => {
                     activeOpacity={0.9}
                     onPress={() => navigate("Budget")}
                   >
-                    <View style={styles.consumoModeradoCard}>
+                    <View
+                      style={[
+                        styles.consumoModeradoCard,
+                        desktop && styles.consumoModeradoCardDesktop,
+                      ]}
+                    >
                       <View
-                        style={styles.consumoModeradoBgLayer}
+                        style={[
+                          styles.consumoModeradoBgLayer,
+                          desktop && styles.consumoModeradoBgLayerDesktop,
+                        ]}
                         onLayout={(e) => {
                           const { width, height } = e.nativeEvent.layout;
                           if (
@@ -1796,7 +1932,12 @@ export const HomeScreen = () => {
                         />
                       </View>
 
-                      <View style={styles.consumoModeradoForeground}>
+                      <View
+                        style={[
+                          styles.consumoModeradoForeground,
+                          desktop && styles.consumoModeradoForegroundDesktop,
+                        ]}
+                      >
                         <View style={styles.consumoModeradoHeader}>
                           <Ionicons
                             name="wallet-outline"
@@ -1838,7 +1979,12 @@ export const HomeScreen = () => {
                               )}
                         </Text>
 
-                        <View style={styles.consumoModeradoMetaBlock}>
+                        <View
+                          style={[
+                            styles.consumoModeradoMetaBlock,
+                            desktop && styles.consumoModeradoMetaBlockDesktop,
+                          ]}
+                        >
                           <View style={styles.consumoModeradoMetaRow}>
                             <Text style={styles.consumoModeradoMetaLabel}>
                               Média realizada
@@ -1870,11 +2016,16 @@ export const HomeScreen = () => {
 
                 <View style={styles.balanceCardsSection}>
                   <Text style={styles.sectionTitle}>Saldo</Text>
-                  <View style={styles.balanceCardsRow}>
+                  <View
+                    style={[
+                      styles.balanceCardsRow,
+                      desktop && styles.balanceCardsRowDesktop,
+                    ]}
+                  >
                     <View
                       style={[
                         styles.expectedSummaryColumn,
-                        desktop && styles.expectedSummaryColumnDesktop,
+                        desktop && styles.balanceColumnDesktop,
                       ]}
                     >
                       <View
@@ -1915,7 +2066,7 @@ export const HomeScreen = () => {
                     <View
                       style={[
                         styles.expectedSummaryColumn,
-                        desktop && styles.expectedSummaryColumnDesktop,
+                        desktop && styles.balanceColumnDesktop,
                       ]}
                     >
                       <View
@@ -1964,7 +2115,7 @@ export const HomeScreen = () => {
                     <View
                       style={[
                         styles.expectedSummaryColumn,
-                        desktop && styles.expectedSummaryColumnDesktop,
+                        desktop && styles.balanceColumnDesktop,
                       ]}
                     >
                       <View
@@ -2195,7 +2346,6 @@ export const HomeScreen = () => {
             <Animated.View
               style={[
                 styles.chartsContainer,
-                desktop && styles.chartsContainerDesktop,
                 {
                   opacity: fadeAnim,
                   transform: [{ translateY: slideAnim }],
@@ -2205,52 +2355,63 @@ export const HomeScreen = () => {
               <Text style={styles.sectionTitle}>Visualizações</Text>
 
               <View
-                style={[styles.chartCard, desktop && styles.chartCardDesktop]}
+                style={[
+                  styles.chartsRow,
+                  desktop && styles.chartsRowDesktop,
+                ]}
               >
-                <View style={styles.chartHeader}>
-                  <Ionicons
-                    name="pie-chart-outline"
-                    size={20}
-                    color={premium.purple}
-                  />
-                  <Text style={styles.chartTitle}>Gastos por Categoria</Text>
-                </View>
-                {pieChartVisualData.length > 0 ? (
-                  <PieChart data={pieChartVisualData} size={128} />
-                ) : (
-                  <View style={styles.chartEmptyState}>
-                    <Ionicons
-                      name="ellipse-outline"
-                      size={36}
-                      color={premium.textSecondary}
-                    />
-                    <Text style={styles.chartEmptyText}>
-                      Sem gastos por categoria no período
-                    </Text>
-                  </View>
-                )}
-              </View>
-
-              {/* Gráfico de Evolução Temporal */}
-              {lineChartData.length > 0 && (
-                <View style={[styles.chartCard, desktop && styles.chartCardDesktop]}>
+                <View
+                  style={[styles.chartCard, desktop && styles.chartCardDesktop]}
+                >
                   <View style={styles.chartHeader}>
                     <Ionicons
-                      name="trending-up-outline"
+                      name="pie-chart-outline"
                       size={20}
                       color={premium.purple}
                     />
-                    <Text style={styles.chartTitle}>
-                      Evolução (Últimos 7 dias)
-                    </Text>
+                    <Text style={styles.chartTitle}>Gastos por Categoria</Text>
                   </View>
-                  <LineChart
-                    data={lineChartData}
-                    height={120}
-                    showLabels={true}
-                  />
+                  {pieChartVisualData.length > 0 ? (
+                    <PieChart
+                      data={pieChartVisualData}
+                      size={desktop ? 168 : 128}
+                    />
+                  ) : (
+                    <View style={styles.chartEmptyState}>
+                      <Ionicons
+                        name="ellipse-outline"
+                        size={36}
+                        color={premium.textSecondary}
+                      />
+                      <Text style={styles.chartEmptyText}>
+                        Sem gastos por categoria no período
+                      </Text>
+                    </View>
+                  )}
                 </View>
-              )}
+
+                {lineChartData.length > 0 ? (
+                  <View
+                    style={[styles.chartCard, desktop && styles.chartCardDesktop]}
+                  >
+                    <View style={styles.chartHeader}>
+                      <Ionicons
+                        name="trending-up-outline"
+                        size={20}
+                        color={premium.purple}
+                      />
+                      <Text style={styles.chartTitle}>
+                        Evolução (Últimos 7 dias)
+                      </Text>
+                    </View>
+                    <LineChart
+                      data={lineChartData}
+                      height={desktop ? 168 : 120}
+                      showLabels={true}
+                    />
+                  </View>
+                ) : null}
+              </View>
             </Animated.View>
           )}
 
@@ -2259,7 +2420,12 @@ export const HomeScreen = () => {
             <Text style={styles.sectionTitle}>Transações</Text>
 
             {/* Campo de Busca */}
-            <View style={styles.searchContainer}>
+            <View
+              style={[
+                styles.searchContainer,
+                desktop && styles.searchContainerDesktop,
+              ]}
+            >
               <Ionicons
                 name="search-outline"
                 size={18}
@@ -2286,10 +2452,16 @@ export const HomeScreen = () => {
             </View>
 
             {/* Filtros de Tipo */}
-            <View style={styles.filterButtons}>
+            <View
+              style={[
+                styles.filterButtons,
+                desktop && styles.filterButtonsDesktop,
+              ]}
+            >
               <TouchableOpacity
                 style={[
                   styles.filterButton,
+                  desktop && styles.filterButtonDesktop,
                   filterType === "all" && styles.filterButtonActive,
                 ]}
                 onPress={() => handleFilterTypeChange("all")}
@@ -2312,6 +2484,7 @@ export const HomeScreen = () => {
               <TouchableOpacity
                 style={[
                   styles.filterButton,
+                  desktop && styles.filterButtonDesktop,
                   filterType === "income" && styles.filterButtonActive,
                 ]}
                 onPress={() => handleFilterTypeChange("income")}
@@ -2335,6 +2508,7 @@ export const HomeScreen = () => {
               <TouchableOpacity
                 style={[
                   styles.filterButton,
+                  desktop && styles.filterButtonDesktop,
                   filterType === "expense" && styles.filterButtonActive,
                 ]}
                 onPress={() => handleFilterTypeChange("expense")}
@@ -2453,6 +2627,17 @@ const styles = StyleSheet.create({
     padding: 8,
     backgroundColor: premium.bg,
   },
+  contentDesktop: {
+    paddingHorizontal: 24,
+    paddingTop: 12,
+    paddingBottom: 32,
+    width: "100%",
+    maxWidth: 1080,
+    alignSelf: "center",
+  },
+  listContentDesktop: {
+    paddingBottom: 48,
+  },
   pageGreeting: {
     marginBottom: 8,
     flexDirection: "row",
@@ -2499,6 +2684,15 @@ const styles = StyleSheet.create({
     alignItems: "stretch",
     marginTop: 8,
     gap: 8,
+  },
+  balanceCardsRowDesktop: {
+    gap: 14,
+  },
+  balanceColumnDesktop: {
+    flex: 1,
+    flexBasis: 0,
+    minWidth: 0,
+    alignSelf: "stretch",
   },
   balanceMetricCard: {
     flex: 1,
@@ -2609,34 +2803,42 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   summaryRowDesktop: {
-    flexWrap: "wrap",
+    flexWrap: "nowrap",
+    gap: 14,
   },
   expectedSummaryColumnDesktop: {
-    flexGrow: 1,
-    flexBasis: 280,
-    minWidth: 240,
-    maxWidth: 420,
+    flex: 1,
+    flexBasis: 0,
+    minWidth: 0,
   },
   actionCardDesktop: {
-    flexGrow: 0,
-    flexShrink: 0,
-    flexBasis: 220,
-    width: 220,
-    minWidth: 200,
-    maxWidth: 260,
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: "23%",
+    minWidth: 180,
+    maxWidth: 250,
   },
   actionsGridDesktop: {
     gap: 12,
-  },
-  chartsContainerDesktop: {
-    flexDirection: "row",
-    flexWrap: "wrap",
+    justifyContent: "flex-start",
     alignItems: "stretch",
   },
+  chartsRow: {
+    width: "100%",
+    gap: 16,
+  },
+  chartsRowDesktop: {
+    flexDirection: "row",
+    flexWrap: "nowrap",
+    alignItems: "stretch",
+    gap: 16,
+  },
   chartCardDesktop: {
-    flexGrow: 1,
-    flexBasis: 420,
-    minWidth: 320,
+    flex: 1,
+    flexBasis: 0,
+    minWidth: 0,
+    minHeight: 260,
+    justifyContent: "flex-start",
   },
   expectedSummaryColumn: {
     flex: 1,
@@ -2924,6 +3126,11 @@ const styles = StyleSheet.create({
     shadowRadius: 18,
     elevation: 6,
   },
+  consumoModeradoCardDesktop: {
+    padding: 16,
+    minHeight: 148,
+    marginBottom: 12,
+  },
   consumoModeradoBgLayer: {
     position: "absolute",
     right: -8,
@@ -2932,10 +3139,19 @@ const styles = StyleSheet.create({
     width: "58%",
     opacity: 1,
   },
+  consumoModeradoBgLayerDesktop: {
+    width: "48%",
+    top: 12,
+    right: 0,
+  },
   consumoModeradoForeground: {
     position: "relative",
     zIndex: 2,
     gap: 8,
+  },
+  consumoModeradoForegroundDesktop: {
+    maxWidth: "54%",
+    gap: 10,
   },
   consumoModeradoHeader: {
     flexDirection: "row",
@@ -2977,6 +3193,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.08)",
   },
+  consumoModeradoMetaBlockDesktop: {
+    maxWidth: "100%",
+  },
   consumoModeradoMetaRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -3011,6 +3230,16 @@ const styles = StyleSheet.create({
     width: "100%",
     minWidth: "100%",
     maxWidth: "100%",
+  },
+  actionCardFullWidthDesktop: {
+    flexGrow: 0,
+    flexShrink: 0,
+    flexBasis: "100%",
+    width: "100%",
+    maxWidth: "100%",
+    minWidth: "100%",
+    alignSelf: "stretch",
+    marginTop: 2,
   },
   actionCard: {
     backgroundColor: premium.surface,
@@ -3088,6 +3317,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: premium.border,
   },
+  searchContainerDesktop: {
+    maxWidth: 480,
+    width: "100%",
+  },
   searchIcon: {
     marginRight: 10,
   },
@@ -3104,6 +3337,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 8,
   },
+  filterButtonsDesktop: {
+    justifyContent: "flex-start",
+    flexWrap: "wrap",
+    gap: 10,
+  },
   filterButton: {
     flex: 1,
     flexDirection: "row",
@@ -3116,6 +3354,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: premium.border,
     gap: 6,
+  },
+  filterButtonDesktop: {
+    flexGrow: 0,
+    flexShrink: 0,
+    flexBasis: "auto",
+    minWidth: 128,
+    paddingHorizontal: 18,
   },
   filterButtonActive: {
     backgroundColor: premium.surfaceElevated,
@@ -3196,6 +3441,14 @@ const styles = StyleSheet.create({
   },
   transactionItemExpense: {
     borderColor: "rgba(255, 0, 138, 0.28)",
+  },
+  transactionItemDesktop: {
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    marginBottom: 10,
+    width: "100%",
+    maxWidth: "100%",
+    alignSelf: "stretch",
   },
   transactionForeground: {
     zIndex: 1,

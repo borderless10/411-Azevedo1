@@ -42,6 +42,7 @@ import {
   staffClientId,
 } from "../../utils/staffClientContext";
 import { useDesktopWeb } from "../../utils/desktopWeb";
+import { DesktopPageCanvas } from "../../components/Layout/DesktopPage";
 
 const parsePrefillDate = (value?: string): Date | null => {
   if (!value) return null;
@@ -669,6 +670,7 @@ export const AddExpenseScreen = () => {
       showBackButton={true}
       showSidebar={false}
     >
+      <DesktopPageCanvas maxWidth={680}>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         keyboardVerticalOffset={Platform.OS === "ios" ? 64 : 0}
@@ -677,6 +679,7 @@ export const AddExpenseScreen = () => {
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
+          scrollEnabled={!isDesktop}
         >
           <View style={styles.content}>
             <ActingForClientBanner clientId={actingClientId} />
@@ -1490,6 +1493,7 @@ export const AddExpenseScreen = () => {
           }}
         />
       </KeyboardAvoidingView>
+      </DesktopPageCanvas>
     </Layout>
   );
 };

@@ -27,8 +27,12 @@ import { formatCurrency } from "../../utils/currencyUtils";
 import { Income } from "../../types/income";
 import { ActingForClientBanner } from "../../components/Staff/ActingForClientBanner";
 import { staffClientId } from "../../utils/staffClientContext";
+import { useDesktopWeb } from "../../utils/desktopWeb";
+import { DesktopPageCanvas } from "../../components/Layout/DesktopPage";
 
 export const EditIncomeScreen = () => {
+
+  const desktopWeb = useDesktopWeb();
   const { user } = useAuth();
   const { navigate, params } = useNavigation();
   const incomeId = params?.id;
@@ -236,6 +240,7 @@ export const EditIncomeScreen = () => {
 
   return (
     <Layout title="Editar Renda" showBackButton={true} showSidebar={false}>
+      <DesktopPageCanvas maxWidth={680}>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.container}
@@ -243,7 +248,7 @@ export const EditIncomeScreen = () => {
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
-        >
+         scrollEnabled={!desktopWeb}>
           <View style={styles.content}>
             <ActingForClientBanner clientId={actingClientId} />
             {/* Header visual */}
@@ -397,7 +402,8 @@ export const EditIncomeScreen = () => {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-    </Layout>
+          </DesktopPageCanvas>
+</Layout>
   );
 };
 

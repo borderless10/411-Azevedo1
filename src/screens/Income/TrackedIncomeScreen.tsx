@@ -28,6 +28,8 @@ import { getStartOfDay, getEndOfDay, addDays, formatDateToString, formatDateForD
 import { Income } from "../../types/income";
 import { normalizeExpenseTitleKey } from "../../utils/expenseScopeUtils";
 import { ActingForClientBanner } from "../../components/Staff/ActingForClientBanner";
+import { useDesktopWeb } from "../../utils/desktopWeb";
+import { DesktopPageCanvas } from "../../components/Layout/DesktopPage";
 
 type DaySummary = {
   date: Date;
@@ -41,6 +43,8 @@ type CycleDailyIncome = {
 };
 
 export const TrackedIncomeScreen = () => {
+
+  const desktopWeb = useDesktopWeb();
   const { user } = useAuth();
   const { currentScreen, navigate, params } = useNavigation() as any;
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -414,7 +418,8 @@ export const TrackedIncomeScreen = () => {
       showBackButton={isSpectator}
       showSidebar={!isSpectator}
     >
-      <ScrollView style={styles.container}>
+      <DesktopPageCanvas>
+      <ScrollView style={styles.container} scrollEnabled={!desktopWeb}>
         <Animated.View
           style={[
             styles.content,
@@ -771,7 +776,8 @@ export const TrackedIncomeScreen = () => {
           </View>
         </View>
       </Modal>
-    </Layout>
+          </DesktopPageCanvas>
+</Layout>
   );
 };
 

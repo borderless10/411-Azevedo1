@@ -26,6 +26,15 @@ import {
 import { ExpectedItem } from "../../types/planning";
 import { normalizeExpenseTitleKey } from "../../utils/expenseScopeUtils";
 import { ActingForClientBanner } from "../../components/Staff/ActingForClientBanner";
+import { useDesktopWeb } from "../../utils/desktopWeb";
+import {
+  DesktopPageCanvas,
+  DesktopToolbar,
+  DesktopTable,
+  DesktopTableRow,
+  DesktopKpiStrip,
+} from "../../components/Layout/DesktopPage";
+import { desktop } from "../../theme/desktopTokens";
 
 type TrackedIncomeItem = {
   title: string;
@@ -73,6 +82,7 @@ const buildTrackedIncomeItems = (
 };
 
 export const IncomeListScreen = () => {
+  const desktopWeb = useDesktopWeb();
   const { user } = useAuth();
   const { currentScreen, navigate, params } = useNavigation() as any;
   const clientId = String(params?.clientId || "");
@@ -154,6 +164,84 @@ export const IncomeListScreen = () => {
           <ActivityIndicator size="large" color="#B900FF" />
           <Text style={styles.loadingText}>Carregando rendas...</Text>
         </View>
+      </Layout>
+    );
+  }
+
+  if (desktopWeb) {
+    const colFlex = [2.5, 1.2, 0.6];
+    const plannedSum = trackedItems.reduce((s, i) => s + i.plannedAmount, 0);
+    return (
+      <Layout
+        title="Rendas Acompanhadas"
+        showBackButton={isSpectator}
+        showSidebar={!isSpectator}
+      >
+        <DesktopPageCanvas>
+          <DesktopToolbar
+            title="Rendas acompanhadas"
+            subtitle={
+              planningCycleLabel ||
+              "Selecione uma renda para acompanhar dia a dia"
+            }
+          />
+          <ActingForClientBanner clientId={clientId} />
+          <DesktopKpiStrip
+            items={[
+              {
+                label: "Títulos",
+                value: String(trackedItems.length),
+              },
+              {
+                label: "Previsto no ciclo",
+                value: formatCurrency(plannedSum),
+                accent: desktop.purple,
+              },
+            ]}
+          />
+          <DesktopTable
+            headers={["Renda", "Previsto", ""]}
+            columnFlex={colFlex}
+            isEmpty={trackedItems.length === 0}
+            emptyText="Nenhuma renda acompanhada configurada"
+          >
+            {trackedItems.map((item) => (
+              <DesktopTableRow
+                key={item.title}
+                columnFlex={colFlex}
+                onPress={() => openTrackedIncome(item.title)}
+                cells={[
+                  <Text
+                    key="t"
+                    style={{ color: desktop.text, fontWeight: "600", fontSize: 14 }}
+                  >
+                    {item.title}
+                  </Text>,
+                  formatCurrency(item.plannedAmount),
+                  <Ionicons
+                    key="c"
+                    name="chevron-forward"
+                    size={18}
+                    color={desktop.purple}
+                  />,
+                ]}
+              />
+            ))}
+          </DesktopTable>
+          {isSpectator ? (
+            <TouchableOpacity
+              style={styles.generalIncomesLink}
+              onPress={() => navigate("ClientIncomeRecords", { clientId })}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="list-outline" size={20} color="#B900FF" />
+              <Text style={styles.generalIncomesLinkText}>
+                Ver todas as rendas (incluindo salário)
+              </Text>
+              <Ionicons name="chevron-forward" size={18} color="#B900FF" />
+            </TouchableOpacity>
+          ) : null}
+        </DesktopPageCanvas>
       </Layout>
     );
   }

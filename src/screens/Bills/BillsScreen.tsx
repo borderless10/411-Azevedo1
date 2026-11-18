@@ -55,8 +55,12 @@ import ConfirmDeleteModal from "../../components/ui/ConfirmDeleteModal";
 import { creditCardServices } from "../../services/creditCardServices";
 import { CreditCard } from "../../types/creditCard";
 import { ActingForClientBanner } from "../../components/Staff/ActingForClientBanner";
+import { useDesktopWeb } from "../../utils/desktopWeb";
+import { DesktopPageCanvas } from "../../components/Layout/DesktopPage";
 
 export const BillsScreen = () => {
+
+  const desktopWeb = useDesktopWeb();
   const { user } = useAuth();
   const { colors } = useTheme();
   const { currentScreen, navigate, params } = useNavigation() as any;
@@ -906,9 +910,10 @@ export const BillsScreen = () => {
       showBackButton={showBackButton}
       showSidebar={showSidebar}
     >
+      <DesktopPageCanvas>
       <ScrollView
         style={[styles.container, { backgroundColor: colors.background }]}
-      >
+       scrollEnabled={!desktopWeb}>
         <Animated.View
           style={[
             styles.content,
@@ -1267,7 +1272,7 @@ export const BillsScreen = () => {
                 <ScrollView
                   showsVerticalScrollIndicator={false}
                   keyboardShouldPersistTaps="handled"
-                >
+                 scrollEnabled={!desktopWeb}>
                   <View style={styles.inputGroup}>
                     <Text style={[styles.inputLabel, { color: colors.text }]}>
                       Título *
@@ -1701,7 +1706,8 @@ export const BillsScreen = () => {
           </View>
         </View>
       </Modal>
-    </Layout>
+          </DesktopPageCanvas>
+</Layout>
   );
 };
 

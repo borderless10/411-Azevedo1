@@ -45,6 +45,8 @@ import { registerOpeningExpenses } from "../../utils/openingExpenseRegistration"
 import ConfettiCelebration from "../../components/ui/ConfettiCelebration";
 import { Expense } from "../../types/expense";
 import { ActingForClientBanner } from "../../components/Staff/ActingForClientBanner";
+import { useDesktopWeb } from "../../utils/desktopWeb";
+import { DesktopPageCanvas } from "../../components/Layout/DesktopPage";
 
 type DaySummary = {
   date: Date;
@@ -52,6 +54,8 @@ type DaySummary = {
 };
 
 export const CategoryBudgetScreen = () => {
+
+  const desktopWeb = useDesktopWeb();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
 
@@ -467,7 +471,8 @@ export const CategoryBudgetScreen = () => {
       showBackButton={isSpectator}
       showSidebar={!isSpectator}
     >
-      <ScrollView style={styles.container}>
+      <DesktopPageCanvas>
+      <ScrollView style={styles.container} scrollEnabled={!desktopWeb}>
         <Animated.View
           style={[
             styles.content,
@@ -779,7 +784,8 @@ export const CategoryBudgetScreen = () => {
         active={showConfetti}
         onComplete={() => setShowConfetti(false)}
       />
-    </Layout>
+          </DesktopPageCanvas>
+</Layout>
   );
 };
 

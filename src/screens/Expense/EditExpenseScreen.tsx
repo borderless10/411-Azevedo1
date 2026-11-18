@@ -32,8 +32,12 @@ import { budgetServices } from "../../services/budgetServices";
 import { getRankingRegistrationFeedback } from "../../services/rankingPlanilhaService";
 import { ActingForClientBanner } from "../../components/Staff/ActingForClientBanner";
 import { staffClientId } from "../../utils/staffClientContext";
+import { useDesktopWeb } from "../../utils/desktopWeb";
+import { DesktopPageCanvas } from "../../components/Layout/DesktopPage";
 
 export const EditExpenseScreen = () => {
+
+  const desktopWeb = useDesktopWeb();
   const { user } = useAuth();
   const { navigate, params } = useNavigation();
   const expenseId = params?.id || params?.expenseId;
@@ -315,6 +319,7 @@ export const EditExpenseScreen = () => {
 
   return (
     <Layout title="Editar Gasto" showBackButton={true} showSidebar={false}>
+      <DesktopPageCanvas maxWidth={680}>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         keyboardVerticalOffset={Platform.OS === "ios" ? 64 : 0}
@@ -323,7 +328,7 @@ export const EditExpenseScreen = () => {
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
-        >
+         scrollEnabled={!desktopWeb}>
           <View style={styles.content}>
             <ActingForClientBanner clientId={actingClientId} />
             {/* Header visual */}
@@ -548,7 +553,8 @@ export const EditExpenseScreen = () => {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-    </Layout>
+          </DesktopPageCanvas>
+</Layout>
   );
 };
 

@@ -16,6 +16,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { Header } from "../Header/Header";
 import { Sidebar } from "../Sidebar/Sidebar";
+import { DesktopShell } from "./DesktopShell";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useUnreadChatCount } from "../../hooks/useUnreadChatCount";
 import { useAuth } from "../../hooks/useAuth";
@@ -69,7 +70,10 @@ interface LayoutProps {
   rightAction?: React.ReactNode;
   style?: ViewStyle;
   contentStyle?: ViewStyle;
+  /** @deprecated Desktop usa scroll full-bleed; mantido por compat. */
   desktopWidth?: number | "full";
+  /** Desktop: filho controla scroll (Chat split, etc.). */
+  disablePageScroll?: boolean;
   /** Chat com teclado: omitir `bottom` e deixar a barra cuidar do inset. */
   safeAreaEdges?: SafeAreaEdge[];
 }
@@ -86,6 +90,7 @@ export const Layout: React.FC<LayoutProps> = ({
   style,
   contentStyle,
   desktopWidth = 1100,
+  disablePageScroll = false,
   safeAreaEdges = ["top", "left", "right", "bottom"],
 }) => {
   const desktop = useDesktopWeb();
@@ -97,8 +102,11 @@ export const Layout: React.FC<LayoutProps> = ({
   const showCoupleBar =
     isCoupleAccount(user) &&
     (activeCoupleMember === 1 || activeCoupleMember === 2);
-  // Na Home a linha roxa do Header substitui a borda cinza.
-  const usePurpleHeaderLine = currentScreen === "Home" && !title;
+  // Risco ondulado roxo faz parte do Header no mobile (todas as seções).
+  // No desktop mantém só na Home sem título de página.
+  const usePurpleHeaderLine = desktop
+    ? currentScreen === "Home" && !title
+    : showHeader;
   const purpleHeaderGap = 10;
   // Regra central e mutuamente exclusiva: tela interna com voltar nunca
   // mostra o acesso à sidebar, mesmo se a tela pedir os dois controles.
@@ -106,76 +114,23 @@ export const Layout: React.FC<LayoutProps> = ({
   const effectiveShowSidebar = showSidebar && !showBackButton;
 
   if (desktop) {
-    const limit = desktopWidth === "full" ? null : desktopWidth;
+    void desktopWidth;
     return (
-      <SafeAreaView
-        edges={safeAreaEdges}
-        style={[styles.container, { backgroundColor: colors.background }, style]}
+      <DesktopShell
+        title={title}
+        titleAccessory={titleAccessory}
+        showBackButton={showBackButton}
+        onBack={onBack}
+        showHeader={showHeader}
+        showSidebar={showSidebar}
+        rightAction={rightAction}
+        style={style}
+        contentStyle={contentStyle}
+        disablePageScroll={disablePageScroll}
+        showPurpleHeaderLine={usePurpleHeaderLine}
       >
-        <View style={styles.desktopRow}>
-          {effectiveShowSidebar ? (
-            <Sidebar visible docked onClose={() => undefined} />
-          ) : null}
-          <View style={styles.desktopMain}>
-            {showHeader && (
-              <View
-                style={[
-                  styles.headerBlock,
-                  {
-                    backgroundColor: colors.background,
-                    borderBottomColor: colors.border,
-                    borderBottomWidth: usePurpleHeaderLine ? 0 : 1,
-                  },
-                  usePurpleHeaderLine
-                    ? { paddingBottom: purpleHeaderGap }
-                    : null,
-                ]}
-              >
-                <View style={styles.headerWrapper}>
-                  <Header
-                    title={title}
-                    titleAccessory={titleAccessory}
-                    showBackButton={showBackButton}
-                    onBack={onBack}
-                    showProfile={true}
-                    rightAction={rightAction}
-                    style={styles.header}
-                  />
-                </View>
-                {showCoupleBar ? (
-                  <TouchableOpacity
-                    style={styles.coupleBar}
-                    onPress={() => {
-                      void clearActiveCoupleMember();
-                    }}
-                    activeOpacity={0.8}
-                  >
-                    <Ionicons name="heart" size={13} color="#ff6b8a" />
-                    <Text style={styles.coupleBarName} numberOfLines={1}>
-                      {getCoupleMemberLabel(user, activeCoupleMember as 1 | 2)}
-                    </Text>
-                    <View style={styles.coupleBarDivider} />
-                    <Text style={styles.coupleBarAction}>Trocar integrante</Text>
-                  </TouchableOpacity>
-                ) : null}
-                {usePurpleHeaderLine ? <HeaderPurpleLine /> : null}
-              </View>
-            )}
-            <View
-              style={[
-                styles.content,
-                { backgroundColor: colors.background },
-                contentStyle,
-                limit ? styles.desktopContentCenter : null,
-              ]}
-            >
-              <View style={limit ? { flex: 1, width: "100%", maxWidth: limit } : styles.desktopFill}>
-                {children}
-              </View>
-            </View>
-          </View>
-        </View>
-      </SafeAreaView>
+        {children}
+      </DesktopShell>
     );
   }
 

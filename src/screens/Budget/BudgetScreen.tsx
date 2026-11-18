@@ -54,10 +54,14 @@ import { ActingForClientBanner } from "../../components/Staff/ActingForClientBan
 import {
   isConsumoModeradoHistoryExpense,
 } from "../../utils/expenseScopeUtils";
+import { useDesktopWeb } from "../../utils/desktopWeb";
+import { DesktopPageCanvas } from "../../components/Layout/DesktopPage";
 
 type CycleDailyExpense = DailyExpense & { dateKey: string };
 
 export const BudgetScreen = () => {
+
+  const desktopWeb = useDesktopWeb();
   const { user, activeCoupleMember } = useAuth();
   const { currentScreen, navigate, params } = useNavigation() as any;
   const clientId = String(params?.clientId || "");
@@ -813,12 +817,13 @@ export const BudgetScreen = () => {
       showBackButton={isSpectator}
       showSidebar={!isSpectator}
     >
+      <DesktopPageCanvas>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         keyboardVerticalOffset={Platform.OS === "ios" ? 64 : 0}
       >
-      <ScrollView style={styles.container} keyboardShouldPersistTaps="handled">
+      <ScrollView style={styles.container} keyboardShouldPersistTaps="handled" scrollEnabled={!desktopWeb}>
         <Animated.View
           style={[
             styles.content,
@@ -1253,7 +1258,8 @@ export const BudgetScreen = () => {
         active={showConfetti}
         onComplete={() => setShowConfetti(false)}
       />
-    </Layout>
+          </DesktopPageCanvas>
+</Layout>
   );
 };
 

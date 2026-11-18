@@ -13,6 +13,7 @@ import {
   ViewStyle,
   Image,
   Animated,
+  Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../hooks/useAuth";
@@ -29,6 +30,11 @@ import {
   rankingPositionFontSize,
   rankingPositionLabel,
 } from "../../utils/rankingPosition";
+import { desktop } from "../../theme/desktopTokens";
+import {
+  getDesktopSidebarRailPinned,
+  setDesktopSidebarRailPinned,
+} from "../../utils/desktopSidebarRail";
 
 interface SidebarProps {
   visible: boolean;
@@ -69,6 +75,39 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [trackedIncomeTitles, setTrackedIncomeTitles] = useState<string[]>([]);
   const [trackedExpensesExpanded, setTrackedExpensesExpanded] = useState(false);
   const [rankingPosition, setRankingPosition] = useState<number | null>(null);
+  /** Desktop web: trilho de ícones que abre no hover. */
+  const hoverRail = docked && Platform.OS === "web";
+  const [railHover, setRailHover] = useState(() =>
+    hoverRail ? getDesktopSidebarRailPinned() : false,
+  );
+  const railExpanded = !hoverRail || railHover;
+  const iconsOnly = hoverRail && !railHover;
+
+  const openDesktopRail = () => {
+    if (!hoverRail) return;
+    setDesktopSidebarRailPinned(true);
+    setRailHover(true);
+  };
+
+  const closeDesktopRail = () => {
+    if (!hoverRail) return;
+    setDesktopSidebarRailPinned(false);
+    setRailHover(false);
+    setTrackedExpensesExpanded(false);
+  };
+  const webItemProps = (active?: boolean) =>
+    Platform.OS === "web" && docked
+      ? ({
+          dataSet: {
+            sidebarItem: "1",
+            ...(active ? { sidebarActive: "1" } : {}),
+          },
+        } as object)
+      : {};
+  /** Mobile mantém divisor; desktop docked fica sem linha (hover/ativo via CSS). */
+  const itemBorderStyle = docked
+    ? { borderBottomWidth: 0, borderBottomColor: "transparent" as const }
+    : { borderBottomColor: colors.border };
   const consultationPulseAnim = useRef(new Animated.Value(1)).current;
   const {
     preferredDayLabel,
@@ -393,22 +432,31 @@ export const Sidebar: React.FC<SidebarProps> = ({
     color: "#a89fc0",
   });
 
+  const finishSidebarNavigation = () => {
+    // Mobile overlay fecha; desktop docked mantém aberta (pin do trilho).
+    if (docked) {
+      openDesktopRail();
+      return;
+    }
+    onClose();
+  };
+
   const handleNavigate = (screen: ScreenName) => {
     // If user is a consultor or admin and trying to go to Home, redirect to respective home
     if (screen === "Home") {
       if (user?.role === "consultor" || user?.role === "supervisor") {
         navigate("ConsultorHome");
-        onClose();
+        finishSidebarNavigation();
         return;
       }
       if (user?.isAdmin === true || user?.role === "admin") {
         navigate("AdminUsers");
-        onClose();
+        finishSidebarNavigation();
         return;
       }
     }
     navigate(screen);
-    onClose();
+    finishSidebarNavigation();
   };
 
   const handleNavigateWithParams = (
@@ -416,11 +464,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
     navigationParams?: any,
   ) => {
     navigate(screen, navigationParams);
-    onClose();
+    finishSidebarNavigation();
   };
 
   const handleLogout = () => {
-    onClose();
+    if (docked) {
+      closeDesktopRail();
+    } else {
+      onClose();
+    }
     setTimeout(() => {
       void signOut()
         .catch(() => undefined)
@@ -446,14 +498,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
         key="consultation-scheduling"
         style={[
           styles.menuItem,
+          docked && styles.menuItemDocked,
+          iconsOnly && styles.menuItemIconsOnly,
           styles.consultationMenuItem,
-          { borderBottomColor: colors.border },
+          itemBorderStyle,
         ]}
         activeOpacity={0.7}
         delayPressIn={0}
         onPress={() => {
           handleNavigateWithParams("ConsultationScheduling");
         }}
+        {...webItemProps()}
       >
         <Animated.View
           pointerEvents="none"
@@ -465,75 +520,90 @@ export const Sidebar: React.FC<SidebarProps> = ({
             },
           ]}
         />
-        <View style={styles.menuItemLeft}>
+        <View
+          style={[
+            styles.menuItemLeft,
+            docked && styles.menuItemLeftDocked,
+            iconsOnly && styles.menuItemLeftIconsOnly,
+          ]}
+        >
           <Ionicons
             name="calendar"
             size={24}
             color={shouldPulseConsultation ? "#FF008A" : "#B900FF"}
           />
-          <View style={styles.consultationTextWrap}>
-            <Text
-              style={[
-                styles.menuItemText,
-                { color: colors.textSecondary },
-                shouldPulseConsultation && styles.consultationMenuTextPulse,
-                hasBookedCurrentCycle && styles.consultationMenuTextBooked,
-              ]}
-            >
-              {hasBookedCurrentCycle
-                ? "Consultoria agendada"
-                : schedulingState === "awaitingConfirmation"
-                  ? "Confirme sua consultoria"
-                : "Agende sua consultoria"}
-            </Text>
-            {hasBookedCurrentCycle && bookedDayLabel ? (
-              <Text
-                style={[styles.consultationDayHint, styles.consultationDayHintBooked]}
-                numberOfLines={2}
-              >
-                Dia da consultoria: {bookedDayLabel}
-              </Text>
-            ) : schedulingState === "awaitingConfirmation" ? (
+          {!iconsOnly ? (
+            <View style={styles.consultationTextWrap}>
               <Text
                 style={[
-                  styles.consultationDayHint,
-                  { color: "#ff8fab" },
+                  styles.menuItemText,
+                  { color: colors.textSecondary },
+                  shouldPulseConsultation && styles.consultationMenuTextPulse,
+                  hasBookedCurrentCycle && styles.consultationMenuTextBooked,
                 ]}
-                numberOfLines={2}
               >
-                Informe o dia que ficou agendado
+                {hasBookedCurrentCycle
+                  ? "Consultoria agendada"
+                  : schedulingState === "awaitingConfirmation"
+                    ? "Confirme sua consultoria"
+                    : "Agende sua consultoria"}
               </Text>
-            ) : preferredDayLabel ? (
-              <Text
-                style={[
-                  styles.consultationDayHint,
-                  {
-                    color: shouldPulseConsultation
-                      ? "#ff8fab"
-                      : colors.textSecondary,
-                  },
-                ]}
-                numberOfLines={2}
-              >
-                Melhor dia: {preferredDayLabel} de cada mês
-              </Text>
-            ) : null}
-          </View>
+              {hasBookedCurrentCycle && bookedDayLabel ? (
+                <Text
+                  style={[
+                    styles.consultationDayHint,
+                    styles.consultationDayHintBooked,
+                  ]}
+                  numberOfLines={2}
+                >
+                  Dia da consultoria: {bookedDayLabel}
+                </Text>
+              ) : schedulingState === "awaitingConfirmation" ? (
+                <Text
+                  style={[styles.consultationDayHint, { color: "#ff8fab" }]}
+                  numberOfLines={2}
+                >
+                  Informe o dia que ficou agendado
+                </Text>
+              ) : preferredDayLabel ? (
+                <Text
+                  style={[
+                    styles.consultationDayHint,
+                    {
+                      color: shouldPulseConsultation
+                        ? "#ff8fab"
+                        : colors.textSecondary,
+                    },
+                  ]}
+                  numberOfLines={2}
+                >
+                  Melhor dia: {preferredDayLabel} de cada mês
+                </Text>
+              ) : null}
+            </View>
+          ) : null}
           {shouldPulseConsultation ? (
-            <View style={styles.consultationPulseDot} />
+            <View
+              style={[
+                styles.consultationPulseDot,
+                iconsOnly && styles.iconBadgeDot,
+              ]}
+            />
           ) : null}
         </View>
-        <Ionicons
-          name="open-outline"
-          size={20}
-          color={
-            shouldPulseConsultation
-              ? "#FF008A"
-              : hasBookedCurrentCycle
-                ? "#B900FF"
-                : colors.textSecondary
-          }
-        />
+        {!iconsOnly ? (
+          <Ionicons
+            name="open-outline"
+            size={20}
+            color={
+              shouldPulseConsultation
+                ? "#FF008A"
+                : hasBookedCurrentCycle
+                  ? "#B900FF"
+                  : colors.textSecondary
+            }
+          />
+        ) : null}
       </TouchableOpacity>
     );
   };
@@ -549,7 +619,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
         key={item.id}
         style={[
           styles.menuItem,
-          { borderBottomColor: colors.border },
+          docked && styles.menuItemDocked,
+          iconsOnly && styles.menuItemIconsOnly,
+          itemBorderStyle,
           isActive && [
             styles.menuItemActive,
             { backgroundColor: colors.background },
@@ -563,8 +635,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
             ? `Ranking, sua posição: ${rankingPosition}`
             : item.label
         }
+        {...webItemProps(isActive)}
       >
-        <View style={styles.menuItemLeft}>
+        <View
+          style={[
+            styles.menuItemLeft,
+            docked && styles.menuItemLeftDocked,
+            iconsOnly && styles.menuItemLeftIconsOnly,
+          ]}
+        >
           {item.id === "Ranking" ? (
             <View style={styles.rankingIconWrap}>
               <Ionicons
@@ -599,27 +678,31 @@ export const Sidebar: React.FC<SidebarProps> = ({
               }
             />
           )}
-          <Text
-            style={[
-              styles.menuItemText,
-              { color: colors.textSecondary },
-              isActive && styles.menuItemTextActive,
-              item.color && isActive && { color: item.color },
-            ]}
-          >
-            {item.label}
-          </Text>
+          {!iconsOnly ? (
+            <Text
+              style={[
+                styles.menuItemText,
+                { color: colors.textSecondary },
+                isActive && styles.menuItemTextActive,
+                item.color && isActive && { color: item.color },
+              ]}
+            >
+              {item.label}
+            </Text>
+          ) : null}
           {item.id === "Chat" && hasUnreadChats ? (
-            <View style={styles.unreadDot} />
+            <View
+              style={[styles.unreadDot, iconsOnly && styles.iconBadgeDot]}
+            />
           ) : null}
         </View>
-        {isActive && (
+        {!iconsOnly && isActive ? (
           <Ionicons
             name="chevron-forward"
             size={20}
             color={item.color || "#B900FF"}
           />
-        )}
+        ) : null}
       </TouchableOpacity>
     );
   };
@@ -633,39 +716,59 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <TouchableOpacity
           style={[
             styles.menuItem,
-            { borderBottomColor: colors.border },
+            docked && styles.menuItemDocked,
+            iconsOnly && styles.menuItemIconsOnly,
+            itemBorderStyle,
             sectionActive && !trackedExpensesExpanded && [
               styles.menuItemActive,
               { backgroundColor: colors.background },
             ],
           ]}
-          onPress={() => setTrackedExpensesExpanded((previous) => !previous)}
+          onPress={() => {
+            if (iconsOnly) {
+              openDesktopRail();
+              setTrackedExpensesExpanded(true);
+              return;
+            }
+            setTrackedExpensesExpanded((previous) => !previous);
+          }}
+          {...webItemProps(sectionActive)}
         >
-          <View style={styles.menuItemLeft}>
+          <View
+            style={[
+              styles.menuItemLeft,
+              docked && styles.menuItemLeftDocked,
+              iconsOnly && styles.menuItemLeftIconsOnly,
+            ]}
+          >
             <Ionicons
               name="analytics"
               size={24}
               color={sectionActive ? "#B900FF" : colors.textSecondary}
             />
-            <Text
-              style={[
-                styles.menuItemText,
-                { color: colors.textSecondary },
-                sectionActive && styles.menuItemTextActive,
-                sectionActive && { color: "#B900FF" },
-              ]}
-            >
-              Gastos acompanhados
-            </Text>
+            {!iconsOnly ? (
+              <Text
+                style={[
+                  styles.menuItemText,
+                  { color: colors.textSecondary },
+                  sectionActive && styles.menuItemTextActive,
+                  sectionActive && { color: "#B900FF" },
+                ]}
+              >
+                Gastos acompanhados
+              </Text>
+            ) : null}
           </View>
-          <Ionicons
-            name={trackedExpensesExpanded ? "chevron-up" : "chevron-down"}
-            size={20}
-            color={sectionActive ? "#B900FF" : colors.textSecondary}
-          />
+          {!iconsOnly ? (
+            <Ionicons
+              name={trackedExpensesExpanded ? "chevron-up" : "chevron-down"}
+              size={20}
+              color={sectionActive ? "#B900FF" : colors.textSecondary}
+            />
+          ) : null}
         </TouchableOpacity>
 
-        {trackedExpensesExpanded
+        {trackedExpensesExpanded && !iconsOnly
           ? trackedExpenseTitles.map((title) => {
               const isActive =
                 currentScreen === "CategoryBudget" &&
@@ -677,7 +780,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   key={title}
                   style={[
                     styles.trackedExpenseSubItem,
-                    { borderBottomColor: colors.border },
+                    docked && styles.trackedExpenseSubItemDocked,
+                    itemBorderStyle,
                     isActive && [
                       styles.menuItemActive,
                       { backgroundColor: colors.background },
@@ -688,6 +792,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       trackedTitle: title,
                     })
                   }
+                  {...webItemProps(isActive)}
                 >
                   <Text
                     style={[
@@ -724,20 +829,29 @@ export const Sidebar: React.FC<SidebarProps> = ({
           style={[
             styles.logoContainer,
             docked && styles.logoDocked,
-            { borderBottomColor: colors.border },
+            iconsOnly && styles.logoIconsOnly,
+            !docked ? { borderBottomColor: colors.border } : null,
           ]}
         >
           <Image
             source={require("../../../assets/logo411.png")}
-            style={[styles.logo, docked && styles.logoImageDocked]}
+            style={[
+              styles.logo,
+              docked && styles.logoImageDocked,
+              iconsOnly && styles.logoImageIconsOnly,
+            ]}
             resizeMode="contain"
           />
         </View>
 
         {/* Menu Items */}
         <ScrollView
-          style={styles.menu}
-          contentContainerStyle={styles.menuContent}
+          style={[styles.menu, docked && styles.menuDocked]}
+          contentContainerStyle={[
+            styles.menuContent,
+            docked && styles.menuContentDocked,
+          ]}
+          showsVerticalScrollIndicator={docked ? false : true}
         >
           {showTrackedExpensesAsSecond ? (
             <>
@@ -763,11 +877,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
             ))
           )}
 
-          {isCommonUser && trackedIncomeTitles.length > 0 ? (
+          {isCommonUser && trackedIncomeTitles.length > 0 && !iconsOnly ? (
             <View
               style={[
                 styles.categorySection,
-                { borderTopColor: colors.border },
+                docked && styles.categorySectionDocked,
+                !docked ? { borderTopColor: colors.border } : null,
               ]}
             >
               <Text
@@ -789,7 +904,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     key={`tracked-income-${title}`}
                     style={[
                       styles.menuItem,
-                      { borderBottomColor: colors.border },
+                      docked && styles.menuItemDocked,
+                      itemBorderStyle,
                       isActive && [
                         styles.menuItemActive,
                         { backgroundColor: colors.background },
@@ -800,8 +916,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         trackedTitle: title,
                       })
                     }
+                    {...webItemProps(isActive)}
                   >
-                    <View style={styles.menuItemLeft}>
+                    <View
+                      style={[
+                        styles.menuItemLeft,
+                        docked && styles.menuItemLeftDocked,
+                      ]}
+                    >
                       <Ionicons
                         name="cash-outline"
                         size={24}
@@ -837,26 +959,58 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <TouchableOpacity
             style={[
               styles.logoutButton,
+              iconsOnly && styles.logoutButtonIconsOnly,
               { backgroundColor: colors.background, borderColor: "#FF008A" },
             ]}
             onPress={handleLogout}
+            accessibilityLabel="Sair"
+            {...(Platform.OS === "web" && docked
+              ? ({ dataSet: { sidebarLogout: "1" } } as object)
+              : {})}
           >
             <Ionicons name="log-out-outline" size={24} color="#FF008A" />
-            <Text style={styles.logoutText}>Sair</Text>
+            {!iconsOnly ? <Text style={styles.logoutText}>Sair</Text> : null}
           </TouchableOpacity>
         </View>
     </>
   );
 
   if (docked) {
+    const railWidth = desktop.sidebarRailWidth;
+    const fullWidth = desktop.sidebarWidth;
+    const webHoverProps = hoverRail
+      ? ({
+          onMouseEnter: () => openDesktopRail(),
+          onMouseLeave: () => closeDesktopRail(),
+        } as object)
+      : {};
+
     return (
-      <View style={styles.dockedRoot}>
+      <View
+        style={[
+          styles.dockedRoot,
+          hoverRail ? { width: railWidth } : { width: fullWidth },
+        ]}
+        {...(Platform.OS === "web"
+          ? ({ dataSet: { sidebarDocked: "1" } } as object)
+          : {})}
+      >
         <View
           style={[
             styles.dockedContainer,
-            { backgroundColor: colors.card, borderRightColor: colors.border },
+            hoverRail && styles.dockedContainerRail,
+            {
+              backgroundColor: colors.card,
+              borderRightColor: colors.border,
+              width: railExpanded ? fullWidth : railWidth,
+            },
+            railExpanded && hoverRail ? styles.dockedContainerExpanded : null,
             style,
           ]}
+          {...webHoverProps}
+          {...(Platform.OS === "web"
+            ? ({ dataSet: { sidebarDocked: "1" } } as object)
+            : {})}
         >
           {panel}
         </View>
@@ -894,21 +1048,86 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
 const styles = StyleSheet.create({
   dockedRoot: {
-    width: 280,
     alignSelf: "stretch",
+    zIndex: 30,
   },
   dockedContainer: {
     flex: 1,
-    width: 280,
     borderRightWidth: 1,
+    ...(Platform.OS === "web"
+      ? ({
+          scrollbarWidth: "thin",
+          scrollbarColor: "rgba(185,0,255,0.35) transparent",
+        } as object)
+      : {}),
+  },
+  dockedContainerRail: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    bottom: 0,
+    zIndex: 30,
+    ...(Platform.OS === "web"
+      ? ({
+          transitionProperty: "width, box-shadow",
+          transitionDuration: "160ms",
+          transitionTimingFunction: "ease-out",
+        } as object)
+      : {}),
+  },
+  dockedContainerExpanded: {
+    zIndex: 50,
+    ...(Platform.OS === "web"
+      ? ({
+          boxShadow: "8px 0 28px rgba(0,0,0,0.45)",
+        } as object)
+      : {
+          shadowColor: "#000",
+          shadowOffset: { width: 6, height: 0 },
+          shadowOpacity: 0.35,
+          shadowRadius: 16,
+          elevation: 12,
+        }),
   },
   logoDocked: {
-    paddingTop: 8,
-    paddingBottom: 6,
+    paddingTop: 10,
+    paddingBottom: 8,
+    borderBottomWidth: 0,
   },
   logoImageDocked: {
-    width: 168,
-    height: 64,
+    width: 150,
+    height: 56,
+  },
+  logoIconsOnly: {
+    paddingHorizontal: 8,
+    paddingTop: 12,
+    paddingBottom: 10,
+  },
+  logoImageIconsOnly: {
+    width: 44,
+    height: 36,
+  },
+  menuItemIconsOnly: {
+    paddingHorizontal: 0,
+    justifyContent: "center",
+  },
+  menuItemLeftIconsOnly: {
+    position: "relative",
+    justifyContent: "center",
+    alignItems: "center",
+    width: "100%",
+    gap: 0,
+  },
+  iconBadgeDot: {
+    position: "absolute",
+    top: -4,
+    right: "18%",
+    marginLeft: 0,
+  },
+  logoutButtonIconsOnly: {
+    justifyContent: "center",
+    paddingHorizontal: 0,
+    minHeight: 44,
   },
   overlay: {
     position: "absolute",
@@ -971,8 +1190,30 @@ const styles = StyleSheet.create({
   menu: {
     flex: 1,
   },
+  menuDocked: {
+    ...(Platform.OS === "web"
+      ? ({
+          // @ts-expect-error web-only scrollbar
+          scrollbarWidth: "thin",
+          scrollbarColor: "rgba(185,0,255,0.3) transparent",
+        } as object)
+      : {}),
+  },
   menuContent: {
     paddingTop: 8,
+  },
+  menuContentDocked: {
+    paddingTop: 4,
+    paddingBottom: 8,
+  },
+  menuItemDocked: {
+    paddingVertical: 11,
+    paddingHorizontal: 14,
+    borderBottomWidth: 0,
+    borderBottomColor: "transparent",
+  },
+  menuItemLeftDocked: {
+    gap: 12,
   },
   trackedExpenseSubItem: {
     flexDirection: "row",
@@ -982,6 +1223,12 @@ const styles = StyleSheet.create({
     paddingRight: 20,
     paddingVertical: 14,
     borderBottomWidth: 1,
+  },
+  trackedExpenseSubItemDocked: {
+    borderBottomWidth: 0,
+    borderBottomColor: "transparent",
+    marginHorizontal: 6,
+    borderRadius: 10,
   },
   trackedExpenseSubItemText: {
     fontSize: 15,
@@ -993,6 +1240,10 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     marginTop: 8,
     paddingTop: 8,
+  },
+  categorySectionDocked: {
+    borderTopWidth: 0,
+    marginTop: 4,
   },
   categorySectionTitle: {
     fontSize: 12,

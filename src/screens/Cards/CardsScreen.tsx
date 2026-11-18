@@ -42,6 +42,8 @@ import {
   formatCurrency,
   parseCurrency,
 } from "../../utils/currencyUtils";
+import { useDesktopWeb } from "../../utils/desktopWeb";
+import { DesktopPageCanvas } from "../../components/Layout/DesktopPage";
 
 const toDay = (value: string): number =>
   Number(String(value).replace(/\D/g, "").slice(0, 2));
@@ -60,6 +62,8 @@ const toDayMask = (value: string): string => {
 };
 
 export const CardsScreen: React.FC = () => {
+
+  const desktopWeb = useDesktopWeb();
   const { user } = useAuth();
   const { colors } = useTheme();
   const { params } = useNavigation() as any;
@@ -297,8 +301,9 @@ export const CardsScreen: React.FC = () => {
       showBackButton={true}
       showSidebar={false}
     >
+      <DesktopPageCanvas>
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 24 }}>
+        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 24 }} scrollEnabled={!desktopWeb}>
           <View style={[styles.summaryRow]}>
             <View
               style={[
@@ -479,7 +484,7 @@ export const CardsScreen: React.FC = () => {
               showsHorizontalScrollIndicator={false}
               style={styles.chipsScroll}
               contentContainerStyle={styles.chipsScrollContent}
-            >
+             scrollEnabled={!desktopWeb}>
               <TouchableOpacity
                 style={[
                   styles.chip,
@@ -688,7 +693,7 @@ export const CardsScreen: React.FC = () => {
                 style={{ maxHeight: "80%" }}
                 contentContainerStyle={{ paddingBottom: 6 }}
                 keyboardShouldPersistTaps="handled"
-              >
+               scrollEnabled={!desktopWeb}>
                 <Text style={[styles.sectionTitle, { color: colors.text }]}>
                   {editingCard ? "Editar Cartão" : "Novo Cartão"}
                 </Text>
@@ -822,7 +827,8 @@ export const CardsScreen: React.FC = () => {
           </KeyboardAvoidingView>
         </Modal>
       </View>
-    </Layout>
+          </DesktopPageCanvas>
+</Layout>
   );
 };
 

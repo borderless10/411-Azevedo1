@@ -8,6 +8,8 @@ export type { CategoryData } from './CategoryBarChart';
 export { LineChart } from './LineChart';
 export type { LineChartData } from './LineChart';
 
+export { DesktopEvolutionChart } from './DesktopEvolutionChart';
+
 export { PieChart } from './PieChart';
 export type { PieChartData } from './PieChart';
 

@@ -31,8 +31,12 @@ import { CreditCard } from "../../types/creditCard";
 import { CreditCardInvoiceSummary } from "../../types/creditCard";
 import { useTheme } from "../../contexts/ThemeContext";
 import ExpenseChangeRequestPanel from "../../components/ExpenseChangeRequests/ExpenseChangeRequestPanel";
+import { useDesktopWeb } from "../../utils/desktopWeb";
+import { DesktopPageCanvas } from "../../components/Layout/DesktopPage";
 
 export const PlanningViewScreen = () => {
+
+  const desktopWeb = useDesktopWeb();
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [planning, setPlanning] = useState<any | null>(null);
@@ -201,10 +205,11 @@ export const PlanningViewScreen = () => {
 
   return (
     <Layout title="Planejamento" showBackButton={false} showSidebar={true}>
+      <DesktopPageCanvas maxWidth={960}>
       <ScrollView
         style={styles.container}
         contentContainerStyle={{ padding: 16 }}
-      >
+       scrollEnabled={!desktopWeb}>
         {loading ? (
           <View style={{ alignItems: "center", padding: 24 }}>
             <ActivityIndicator size="large" color="#B900FF" />
@@ -501,7 +506,8 @@ export const PlanningViewScreen = () => {
           </View>
         )}
       </ScrollView>
-    </Layout>
+          </DesktopPageCanvas>
+</Layout>
   );
 };
 

@@ -2224,6 +2224,7 @@ export const ChatScreen: React.FC = () => {
   return (
     <Layout
       desktopWidth={desktop ? "full" : undefined}
+      disablePageScroll={desktop}
       safeAreaEdges={["top", "left", "right"]}
       showBackButton={!desktop}
       onBack={!desktop ? () => setSelectedChatId(null) : undefined}
@@ -2234,6 +2235,7 @@ export const ChatScreen: React.FC = () => {
           ? conversationRightAction || <View style={styles.headerRight} />
           : undefined
       }
+      contentStyle={desktop ? { paddingHorizontal: 0, paddingTop: 0 } : undefined}
     >
       <View style={desktop ? styles.desktopSplit : styles.container}>
         {desktop ? chatListPane : null}

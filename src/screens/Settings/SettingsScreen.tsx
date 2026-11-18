@@ -44,8 +44,12 @@ import {
   canUseNativeNotifications,
 } from "../../lib/expoNotifications";
 import { Picker } from "@react-native-picker/picker";
+import { useDesktopWeb } from "../../utils/desktopWeb";
+import { DesktopPageCanvas } from "../../components/Layout/DesktopPage";
 
 export const SettingsScreen = () => {
+
+  const desktopWeb = useDesktopWeb();
   const { user, signOut, refreshUser } = useAuth();
   const { navigate } = useNavigation();
   const { theme, colors, isDark, setThemeMode } = useTheme();
@@ -428,9 +432,10 @@ export const SettingsScreen = () => {
 
   return (
     <Layout title="Configurações" showBackButton={false} showSidebar={true}>
+      <DesktopPageCanvas maxWidth={820}>
       <ScrollView
         style={[styles.container, { backgroundColor: colors.background }]}
-      >
+       scrollEnabled={!desktopWeb}>
         <Animated.View
           style={[
             styles.content,
@@ -1059,7 +1064,7 @@ export const SettingsScreen = () => {
                   style={styles.modalScroll}
                   showsVerticalScrollIndicator={false}
                   keyboardShouldPersistTaps="handled"
-                >
+                 scrollEnabled={!desktopWeb}>
                   {/* Senha Atual */}
                   <View style={styles.inputGroup}>
                     <Text style={[styles.inputLabel, { color: colors.text }]}>
@@ -1353,7 +1358,8 @@ export const SettingsScreen = () => {
           </TouchableOpacity>
         </KeyboardAvoidingView>
       </Modal>
-    </Layout>
+          </DesktopPageCanvas>
+</Layout>
   );
 };
 

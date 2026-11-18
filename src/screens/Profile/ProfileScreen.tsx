@@ -33,6 +33,8 @@ import type {
   BadgeDefinition,
   UserBadgeGrant,
 } from "../../types/rankingGamification";
+import { useDesktopWeb } from "../../utils/desktopWeb";
+import { DesktopPageCanvas } from "../../components/Layout/DesktopPage";
 
 const persistProfilePhoto = async (userId: string, base64: string | null) => {
   // Caminho principal: Firebase Storage. Só a URL fica no documento do
@@ -73,6 +75,8 @@ const persistProfilePhoto = async (userId: string, base64: string | null) => {
 };
 
 export const ProfileScreen = () => {
+
+  const desktopWeb = useDesktopWeb();
   const { user, refreshUser } = useAuth();
   const { navigate, params } = useNavigation();
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -210,7 +214,8 @@ export const ProfileScreen = () => {
 
   return (
     <Layout title="Perfil" showBackButton={false} showSidebar={true}>
-      <ScrollView style={styles.container}>
+      <DesktopPageCanvas maxWidth={820}>
+      <ScrollView style={styles.container} scrollEnabled={!desktopWeb}>
         <Animated.View
           style={[
             styles.content,
@@ -646,7 +651,8 @@ export const ProfileScreen = () => {
           }}
         />
       </ScrollView>
-    </Layout>
+          </DesktopPageCanvas>
+</Layout>
   );
 };
 
