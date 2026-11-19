@@ -30,7 +30,11 @@ import {
   ExpenseByDate,
   ExpenseByCategory,
 } from "../types/expense";
-import { formatDateToString } from "../utils/dateUtils";
+import {
+  formatDateToString,
+  isFutureCalendarDay,
+  normalizeToLocalMidday,
+} from "../utils/dateUtils";
 import { formatCurrency } from "../utils/currencyUtils";
 import { activityServices } from "./activityServices";
 import { creditCardServices } from "./creditCardServices";
@@ -60,7 +64,11 @@ const validateCreateExpenseData = (data: CreateExpenseData): string[] => {
     errors.push("Data é obrigatória");
   }
 
-  if (data.date && data.date > new Date()) {
+  if (
+    data.date &&
+    !data.allowFutureDate &&
+    isFutureCalendarDay(data.date)
+  ) {
     errors.push("Data não pode ser no futuro");
   }
 
@@ -89,7 +97,7 @@ const validateUpdateExpenseData = (data: UpdateExpenseData): string[] => {
     errors.push("Descrição deve ter pelo menos 3 caracteres");
   }
 
-  if (data.date && data.date > new Date()) {
+  if (data.date && isFutureCalendarDay(data.date)) {
     errors.push("Data não pode ser no futuro");
   }
 
@@ -123,6 +131,7 @@ export const expenseServices = {
 
     try {
       const now = new Date();
+      const normalizedDate = normalizeToLocalMidday(data.date);
       const paymentMethod = data.paymentMethod || "cash";
       let cardLast4: string | undefined;
       let invoiceYearMonth: string | undefined;
@@ -133,11 +142,8 @@ export const expenseServices = {
           throw new Error("Cartão não encontrado para este usuário");
         }
         cardLast4 = card.last4;
-        // Normalize purchase date to midday to avoid timezone shifts affecting day comparison
-        const purchaseDate = new Date(data.date);
-        purchaseDate.setHours(12, 0, 0, 0);
         invoiceYearMonth = creditCardServices.getInvoiceKeyForPurchase(
-          purchaseDate,
+          normalizedDate,
           card.bestDay,
         );
       }
@@ -146,7 +152,7 @@ export const expenseServices = {
         userId,
         value: data.value,
         description: data.description.trim(),
-        date: Timestamp.fromDate(data.date),
+        date: Timestamp.fromDate(normalizedDate),
         category: data.category,
         paymentMethod,
         createdAt: Timestamp.fromDate(now),
@@ -168,6 +174,10 @@ export const expenseServices = {
 
       if (data.sourceBillId) {
         expenseData.sourceBillId = data.sourceBillId;
+      }
+
+      if (data.installmentPurchaseId) {
+        expenseData.installmentPurchaseId = data.installmentPurchaseId;
       }
 
       if (data.coupleMember === 1 || data.coupleMember === 2) {
@@ -194,7 +204,7 @@ export const expenseServices = {
         userId,
         value: data.value,
         description: data.description.trim(),
-        date: data.date,
+        date: normalizedDate,
         category: data.category,
         paymentMethod,
         ...(paymentMethod === "credit_card" && data.cardId
@@ -212,6 +222,9 @@ export const expenseServices = {
         ...(data.isTrackedDaily ? { isTrackedDaily: true } : {}),
         ...(trackedTitle ? { trackedTitle } : {}),
         ...(data.sourceBillId ? { sourceBillId: data.sourceBillId } : {}),
+        ...(data.installmentPurchaseId
+          ? { installmentPurchaseId: data.installmentPurchaseId }
+          : {}),
         ...(data.coupleMember === 1 || data.coupleMember === 2
           ? { coupleMember: data.coupleMember }
           : {}),
@@ -219,17 +232,21 @@ export const expenseServices = {
         updatedAt: now,
       };
 
-      // Registrar atividade
-      await activityServices.logActivity(userId, {
-        type: "expense_created",
-        title: data.description.trim(),
-        description: `Gasto de ${formatCurrency(data.value)}`,
-        metadata: {
-          amount: data.value,
-          category: data.category,
-          ...(trackedTitle ? { trackedTitle } : {}),
-        },
-      });
+      // Não bloquear o retorno do create aguardando atividade.
+      void activityServices
+        .logActivity(userId, {
+          type: "expense_created",
+          title: data.description.trim(),
+          description: `Gasto de ${formatCurrency(data.value)}`,
+          metadata: {
+            amount: data.value,
+            category: data.category,
+            ...(trackedTitle ? { trackedTitle } : {}),
+          },
+        })
+        .catch((err) =>
+          console.warn("⚠️ [EXPENSE SERVICE] Falha ao logar atividade:", err),
+        );
 
       return expense;
     } catch (error) {
@@ -476,9 +493,10 @@ export const expenseServices = {
 
         normalizedData.cardId = mergedCardId;
         normalizedData.cardLast4 = card.last4;
-        // Normalize merged date to midday to avoid timezone shifts
-        const normalizedDate = new Date(mergedDate);
-        normalizedDate.setHours(12, 0, 0, 0);
+        const normalizedDate = normalizeToLocalMidday(mergedDate);
+        if (data.date) {
+          normalizedData.date = normalizedDate;
+        }
         normalizedData.invoiceYearMonth =
           creditCardServices.getInvoiceKeyForPurchase(
             normalizedDate,
@@ -572,23 +590,36 @@ export const expenseServices = {
 
       if (expense && isConsumoModeradoHistoryExpense(expense)) {
         const { budgetServices } = await import("./budgetServices");
-        await budgetServices.reconcileConsumoModeradoDay(
-          expense.userId,
-          new Date(expense.date),
-        );
+        void budgetServices
+          .reconcileConsumoModeradoDay(
+            expense.userId,
+            new Date(expense.date),
+          )
+          .catch((err) =>
+            console.warn(
+              "⚠️ [EXPENSE SERVICE] Falha ao reconciliar dia após delete:",
+              err,
+            ),
+          );
       }
 
-      // Registrar atividade
       if (expense) {
-        await activityServices.logActivity(expense.userId, {
-          type: "expense_deleted",
-          title: `Gasto removido: ${expense.description}`,
-          description: formatCurrency(expense.value),
-          metadata: {
-            amount: expense.value,
-            category: expense.category,
-          },
-        });
+        void activityServices
+          .logActivity(expense.userId, {
+            type: "expense_deleted",
+            title: `Gasto removido: ${expense.description}`,
+            description: formatCurrency(expense.value),
+            metadata: {
+              amount: expense.value,
+              category: expense.category,
+            },
+          })
+          .catch((err) =>
+            console.warn(
+              "⚠️ [EXPENSE SERVICE] Falha ao logar exclusão:",
+              err,
+            ),
+          );
       }
     } catch (error) {
       console.error("❌ [EXPENSE SERVICE] Erro ao deletar gasto:", error);

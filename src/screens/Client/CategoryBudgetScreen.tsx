@@ -55,6 +55,8 @@ import {
   DesktopDayLedgerItem,
   DesktopDayDragPayload,
   desktopDayDropHandlers,
+  subscribeDayDragStart,
+  subscribeDayDragEnd,
 } from "../../components/Desktop/DesktopDayLedgerItem";
 import { creditCardServices } from "../../services/creditCardServices";
 import { CreditCard } from "../../types/creditCard";
@@ -102,6 +104,11 @@ export const CategoryBudgetScreen = () => {
   const [cycleDateStart, setCycleDateStart] = useState<Date | null>(null);
   const [cycleDateEnd, setCycleDateEnd] = useState<Date | null>(null);
   const [editingDateKey, setEditingDateKey] = useState<string | null>(null);
+  const [dragOverDateKey, setDragOverDateKey] = useState<string | null>(null);
+  const [dragSourceDateKey, setDragSourceDateKey] = useState<string | null>(
+    null,
+  );
+  const [selectedEntryIds, setSelectedEntryIds] = useState<string[]>([]);
   const [inlineSaving, setInlineSaving] = useState(false);
   const [inlineDraftActive, setInlineDraftActive] = useState(false);
   const [creditCards, setCreditCards] = useState<CreditCard[]>([]);
@@ -125,13 +132,13 @@ export const CategoryBudgetScreen = () => {
     return Number.isFinite(amount) ? amount : 0;
   };
 
-  const loadData = async () => {
+  const loadData = async (options?: { silent?: boolean }) => {
     if (!ownerId || !trackedTitle) {
       setLoading(false);
       return;
     }
 
-    setLoading(true);
+    if (!options?.silent) setLoading(true);
     try {
       const today = new Date();
       const planning = await planningServices.getPlanning(ownerId);
@@ -281,6 +288,21 @@ export const CategoryBudgetScreen = () => {
   }, [currentScreen, ownerId, trackedTitle]);
 
   useEffect(() => {
+    if (!desktopWeb) return;
+    const unsubStart = subscribeDayDragStart((payload) => {
+      setDragSourceDateKey(payload.fromDateKey);
+    });
+    const unsubEnd = subscribeDayDragEnd(() => {
+      setDragOverDateKey(null);
+      setDragSourceDateKey(null);
+    });
+    return () => {
+      unsubStart();
+      unsubEnd();
+    };
+  }, [desktopWeb]);
+
+  useEffect(() => {
     if (!ownerId || !desktopWeb) {
       setCreditCards([]);
       return;
@@ -325,6 +347,64 @@ export const CategoryBudgetScreen = () => {
     return noon;
   };
 
+  const bumpDayTotal = (dateKey: string, delta: number) => {
+    setDays((prev) =>
+      prev.map((d) =>
+        formatDateToString(d.date) === dateKey
+          ? { ...d, total: Math.max(0, d.total + delta) }
+          : d,
+      ),
+    );
+  };
+
+  const applyLocalTrackedExpenseAdd = (expense: Expense) => {
+    const dateKey = formatDateToString(new Date(expense.date));
+    const value = Number(expense.value) || 0;
+    setExpenseHistory((prev) => [expense, ...prev]);
+    bumpDayTotal(dateKey, value);
+    setZeroConfirmedDateKeys((prev) => prev.filter((k) => k !== dateKey));
+  };
+
+  const replaceLocalTrackedExpenseId = (tempId: string, real: Expense) => {
+    setExpenseHistory((prev) =>
+      prev.map((e) => (e.id === tempId ? real : e)),
+    );
+  };
+
+  const applyLocalTrackedExpenseRemove = (expense: Expense) => {
+    const dateKey = formatDateToString(new Date(expense.date));
+    const value = Number(expense.value) || 0;
+    setExpenseHistory((prev) => prev.filter((e) => e.id !== expense.id));
+    bumpDayTotal(dateKey, -value);
+  };
+
+  const applyLocalTrackedExpenseMove = (
+    expense: Expense,
+    toDateKey: string,
+  ) => {
+    const fromKey = formatDateToString(new Date(expense.date));
+    if (fromKey === toDateKey) return;
+    const [y, m, d] = toDateKey.split("-").map(Number);
+    const value = Number(expense.value) || 0;
+    const moved: Expense = {
+      ...expense,
+      date: toNoon(new Date(y, m - 1, d)),
+      updatedAt: new Date(),
+    };
+    setExpenseHistory((prev) =>
+      prev.map((e) => (e.id === expense.id ? moved : e)),
+    );
+    bumpDayTotal(fromKey, -value);
+    bumpDayTotal(toDateKey, value);
+    setZeroConfirmedDateKeys((prev) => prev.filter((k) => k !== toDateKey));
+  };
+
+  const refreshTrackedInBackground = () => {
+    void loadData({ silent: true }).catch((err) =>
+      console.warn("⚠️ [CategoryBudget] Refresh falhou:", err),
+    );
+  };
+
   const submitInlineTrackedExpense = async (
     date: Date,
     payload: DesktopDayQuickEntryPayload,
@@ -332,7 +412,7 @@ export const CategoryBudgetScreen = () => {
     if (!ownerId || !trackedTitle) return;
     try {
       setInlineSaving(true);
-      await expenseServices.createExpense(ownerId, {
+      const created = await expenseServices.createExpense(ownerId, {
         value: payload.value,
         description: payload.description,
         date: toNoon(date),
@@ -345,43 +425,58 @@ export const CategoryBudgetScreen = () => {
         isTrackedDaily: true,
         trackedTitle,
       });
-      await loadData();
+      applyLocalTrackedExpenseAdd(created);
       setInlineDraftActive(false);
+      setInlineSaving(false);
+      refreshTrackedInBackground();
     } catch (err: any) {
+      setInlineSaving(false);
       Alert.alert(
         "Erro",
         err?.message || "Não foi possível salvar o lançamento.",
       );
-    } finally {
-      setInlineSaving(false);
     }
   };
 
-  const duplicateTrackedExpense = async (expense: Expense) => {
+  const duplicateTrackedExpense = (expense: Expense) => {
     if (!ownerId) return;
-    try {
-      setInlineSaving(true);
-      await expenseServices.createExpense(ownerId, {
-        value: expense.value,
-        description: expense.description || trackedTitle,
-        date: toNoon(new Date(expense.date)),
-        category: expense.category || "Acompanhamento Diário",
-        paymentMethod: expense.paymentMethod || "cash",
-        ...(expense.paymentMethod === "credit_card" && expense.cardId
-          ? { cardId: expense.cardId }
-          : {}),
-        isTrackedDaily: true,
-        trackedTitle: expense.trackedTitle || trackedTitle,
-      });
-      await loadData();
-    } catch (err: any) {
-      Alert.alert(
-        "Erro",
-        err?.message || "Não foi possível duplicar o lançamento.",
-      );
-    } finally {
-      setInlineSaving(false);
-    }
+    const noon = toNoon(new Date(expense.date));
+    const tempId = `temp-dup-${Date.now()}-${Math.random()
+      .toString(36)
+      .slice(2, 8)}`;
+    const optimistic: Expense = {
+      ...expense,
+      id: tempId,
+      date: noon,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    applyLocalTrackedExpenseAdd(optimistic);
+
+    void (async () => {
+      try {
+        const created = await expenseServices.createExpense(ownerId, {
+          value: expense.value,
+          description: expense.description || trackedTitle,
+          date: noon,
+          category: expense.category || "Acompanhamento Diário",
+          paymentMethod: expense.paymentMethod || "cash",
+          ...(expense.paymentMethod === "credit_card" && expense.cardId
+            ? { cardId: expense.cardId }
+            : {}),
+          isTrackedDaily: true,
+          trackedTitle: expense.trackedTitle || trackedTitle,
+        });
+        replaceLocalTrackedExpenseId(tempId, created);
+        refreshTrackedInBackground();
+      } catch (err: any) {
+        applyLocalTrackedExpenseRemove(optimistic);
+        Alert.alert(
+          "Erro",
+          err?.message || "Não foi possível duplicar o lançamento.",
+        );
+      }
+    })();
   };
 
   const moveTrackedExpenseToDay = async (
@@ -390,22 +485,134 @@ export const CategoryBudgetScreen = () => {
   ) => {
     if (!ownerId || payload.kind !== "expense") return;
     if (payload.fromDateKey === toDateKey) return;
+    const local =
+      expenseHistory.find((e) => e.id === payload.entryId) || null;
+    if (!local) return;
     try {
       setInlineSaving(true);
       const [y, m, d] = toDateKey.split("-").map(Number);
-      await expenseServices.updateExpense(payload.entryId, {
-        date: toNoon(new Date(y, m - 1, d)),
-      });
+      applyLocalTrackedExpenseMove(local, toDateKey);
       setEditingDateKey(toDateKey);
-      await loadData();
+      setInlineSaving(false);
+      void (async () => {
+        try {
+          await expenseServices.updateExpense(payload.entryId, {
+            date: toNoon(new Date(y, m - 1, d)),
+          });
+        } catch (err: any) {
+          Alert.alert(
+            "Erro",
+            err?.message || "Não foi possível mover o lançamento.",
+          );
+        } finally {
+          refreshTrackedInBackground();
+        }
+      })();
     } catch (err: any) {
+      setInlineSaving(false);
       Alert.alert(
         "Erro",
         err?.message || "Não foi possível mover o lançamento.",
       );
-    } finally {
-      setInlineSaving(false);
     }
+  };
+
+  const toggleEntrySelected = (entryId: string) => {
+    setSelectedEntryIds((prev) =>
+      prev.includes(entryId)
+        ? prev.filter((id) => id !== entryId)
+        : [...prev, entryId],
+    );
+  };
+
+  const toggleSelectAllDay = (items: Expense[]) => {
+    const ids = items.map((item) => item.id);
+    if (!ids.length) return;
+    const allSelected = ids.every((id) => selectedEntryIds.includes(id));
+    setSelectedEntryIds(allSelected ? [] : ids);
+  };
+
+  const closeDayEditor = () => {
+    setEditingDateKey(null);
+    setInlineDraftActive(false);
+    setSelectedEntryIds([]);
+  };
+
+  const deleteTrackedExpense = (expense: Expense) => {
+    if (!ownerId) return;
+    Alert.alert(
+      "Excluir lançamento",
+      `Remover "${expense.description || trackedTitle}" de ${formatCurrency(expense.value)}?`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Excluir",
+          style: "destructive",
+          onPress: () => {
+            applyLocalTrackedExpenseRemove(expense);
+            setSelectedEntryIds((prev) =>
+              prev.filter((id) => id !== expense.id),
+            );
+            void (async () => {
+              try {
+                await expenseServices.deleteExpense(expense.id);
+              } catch (err: any) {
+                applyLocalTrackedExpenseAdd(expense);
+                Alert.alert(
+                  "Erro",
+                  err?.message || "Não foi possível excluir o lançamento.",
+                );
+              } finally {
+                refreshTrackedInBackground();
+              }
+            })();
+          },
+        },
+      ],
+    );
+  };
+
+  const deleteSelectedTrackedExpenses = (items: Expense[]) => {
+    if (!ownerId) return;
+    const selected = items.filter((item) =>
+      selectedEntryIds.includes(item.id),
+    );
+    if (!selected.length) return;
+    Alert.alert(
+      "Excluir selecionados",
+      `Remover ${selected.length} lançamento(s) deste dia?`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Excluir",
+          style: "destructive",
+          onPress: () => {
+            selected.forEach((item) => applyLocalTrackedExpenseRemove(item));
+            setSelectedEntryIds([]);
+            void (async () => {
+              const failed: Expense[] = [];
+              await Promise.all(
+                selected.map(async (item) => {
+                  try {
+                    await expenseServices.deleteExpense(item.id);
+                  } catch {
+                    failed.push(item);
+                  }
+                }),
+              );
+              if (failed.length) {
+                failed.forEach((item) => applyLocalTrackedExpenseAdd(item));
+                Alert.alert(
+                  "Erro",
+                  `Não foi possível excluir ${failed.length} lançamento(s).`,
+                );
+              }
+              refreshTrackedInBackground();
+            })();
+          },
+        },
+      ],
+    );
   };
 
   const today = new Date();
@@ -524,6 +731,7 @@ export const CategoryBudgetScreen = () => {
     if (desktopWeb) {
       setEditingDateKey(formatDateToString(date));
       setInlineDraftActive(false);
+      setSelectedEntryIds([]);
       return;
     }
     const label = date.toLocaleDateString("pt-BR", {
@@ -776,7 +984,10 @@ export const CategoryBudgetScreen = () => {
                 const isZeroConfirmed =
                   daySummary.total <= 0 &&
                   zeroConfirmedDateKeys.includes(dateKey);
-                const isEditing = editingDateKey === dateKey;
+                const isEditing =
+                  editingDateKey === dateKey ||
+                  dragOverDateKey === dateKey ||
+                  dragSourceDateKey === dateKey;
                 const dayItems = getExpensesForDate(daySummary.date);
 
                 const dayHeader = (
@@ -818,34 +1029,91 @@ export const CategoryBudgetScreen = () => {
                       isEditing && styles.dayRowEditing,
                       !isEditing && styles.dayRowCollapsed,
                       desktopWeb && !isEditing && { padding: 0 },
+                      desktopWeb &&
+                        dragOverDateKey === dateKey &&
+                        styles.dayRowDropTarget,
                     ]}
-                    {...(desktopWeb && isEditing
+                    {...(desktopWeb
                       ? desktopDayDropHandlers(
                           dateKey,
                           moveTrackedExpenseToDay,
+                          {
+                            onHoverDay: (key) => {
+                              setDragOverDateKey(key);
+                              if (editingDateKey !== key) {
+                                setEditingDateKey(key);
+                                setInlineDraftActive(false);
+                                setSelectedEntryIds([]);
+                              }
+                            },
+                            onDragLeaveDay: (key) => {
+                              setDragOverDateKey((prev) =>
+                                prev === key ? null : prev,
+                              );
+                            },
+                          },
                         )
                       : {})}
                   >
                     {isEditing ? (
                       <>
                         {desktopWeb ? (
-                          <View
-                            style={{
-                              flexDirection: "row",
-                              justifyContent: "space-between",
-                              alignItems: "flex-start",
-                            }}
-                          >
+                          <View style={styles.dayEditHeaderDesktop}>
                             {dayHeader}
-                            <TouchableOpacity
-                              style={styles.cancelEditButton}
-                              onPress={() => {
-                                setEditingDateKey(null);
-                                setInlineDraftActive(false);
-                              }}
-                            >
-                              <Ionicons name="close" size={18} color="#fff" />
-                            </TouchableOpacity>
+                            <View style={styles.dayEditHeaderActions}>
+                              {dayItems.length > 0 ? (
+                                <TouchableOpacity
+                                  style={styles.selectAllChip}
+                                  onPress={() => toggleSelectAllDay(dayItems)}
+                                >
+                                  <Ionicons
+                                    name={
+                                      dayItems.every((item) =>
+                                        selectedEntryIds.includes(item.id),
+                                      )
+                                        ? "checkbox"
+                                        : "square-outline"
+                                    }
+                                    size={16}
+                                    color="#B900FF"
+                                  />
+                                  <Text style={styles.selectAllChipText}>
+                                    Selecionar tudo
+                                  </Text>
+                                </TouchableOpacity>
+                              ) : null}
+                              {selectedEntryIds.some((id) =>
+                                dayItems.some((item) => item.id === id),
+                              ) ? (
+                                <TouchableOpacity
+                                  style={styles.deleteSelectedBtn}
+                                  onPress={() =>
+                                    deleteSelectedTrackedExpenses(dayItems)
+                                  }
+                                >
+                                  <Ionicons
+                                    name="trash-outline"
+                                    size={16}
+                                    color="#fff"
+                                  />
+                                  <Text style={styles.deleteSelectedBtnText}>
+                                    Apagar (
+                                    {
+                                      dayItems.filter((item) =>
+                                        selectedEntryIds.includes(item.id),
+                                      ).length
+                                    }
+                                    )
+                                  </Text>
+                                </TouchableOpacity>
+                              ) : null}
+                              <TouchableOpacity
+                                style={styles.cancelEditButton}
+                                onPress={closeDayEditor}
+                              >
+                                <Ionicons name="close" size={18} color="#fff" />
+                              </TouchableOpacity>
+                            </View>
                           </View>
                         ) : (
                           dayHeader
@@ -863,10 +1131,15 @@ export const CategoryBudgetScreen = () => {
                                   item.paymentMethod,
                                 )}
                                 value={item.value}
+                                selected={selectedEntryIds.includes(item.id)}
+                                onToggleSelect={() =>
+                                  toggleEntrySelected(item.id)
+                                }
                                 onEdit={() => openExpenseEditor(item.id)}
                                 onDuplicate={() =>
                                   duplicateTrackedExpense(item)
                                 }
+                                onDelete={() => deleteTrackedExpense(item)}
                               />
                             ) : (
                               <TouchableOpacity
@@ -969,7 +1242,7 @@ export const CategoryBudgetScreen = () => {
                               </TouchableOpacity>
                               <TouchableOpacity
                                 style={styles.cancelEditButton}
-                                onPress={() => setEditingDateKey(null)}
+                                onPress={closeDayEditor}
                               >
                                 <Ionicons name="close" size={18} color="#fff" />
                               </TouchableOpacity>
@@ -983,11 +1256,14 @@ export const CategoryBudgetScreen = () => {
                           styles.dayCollapsedPressable,
                           desktopWeb && styles.dayCollapsedPressableDesktop,
                         ]}
-                        onPress={() =>
-                          daySummary.total === 0 && !isZeroConfirmed
-                            ? handleOpenNoRecordActions(daySummary.date)
-                            : setEditingDateKey(dateKey)
-                        }
+                        onPress={() => {
+                          setSelectedEntryIds([]);
+                          if (daySummary.total === 0 && !isZeroConfirmed) {
+                            handleOpenNoRecordActions(daySummary.date);
+                          } else {
+                            setEditingDateKey(dateKey);
+                          }
+                        }}
                         activeOpacity={0.85}
                       >
                         <View style={styles.dayCollapsedTop}>
@@ -1342,6 +1618,11 @@ const styles = StyleSheet.create({
     flexDirection: "column",
     alignItems: "stretch",
   },
+  dayRowDropTarget: {
+    borderColor: "#B900FF",
+    borderWidth: 2,
+    backgroundColor: "rgba(185, 0, 255, 0.12)",
+  },
   dayCollapsedPressable: {
     flex: 1,
     width: "100%",
@@ -1433,9 +1714,55 @@ const styles = StyleSheet.create({
   },
   cancelEditButton: {
     alignSelf: "flex-end",
-    backgroundColor: "#333",
+    backgroundColor: "#FF008A",
+    borderRadius: 16,
+    width: 32,
+    height: 32,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 0,
+  },
+  dayEditHeaderDesktop: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 12,
+  },
+  dayEditHeaderActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    flexShrink: 0,
+  },
+  selectAllChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
     borderRadius: 8,
-    padding: 8,
+    borderWidth: 1,
+    borderColor: "rgba(185,0,255,0.45)",
+    backgroundColor: "rgba(185,0,255,0.10)",
+  },
+  selectAllChipText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  deleteSelectedBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 8,
+    backgroundColor: "#FF008A",
+  },
+  deleteSelectedBtnText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "700",
   },
   editIconButton: {
     padding: 8,

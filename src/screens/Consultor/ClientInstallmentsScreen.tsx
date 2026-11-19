@@ -8,8 +8,9 @@ import {
   Alert,
   ActivityIndicator,
   FlatList,
-  Modal,
+  ScrollView,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { Layout } from "../../components/Layout/Layout";
 import { useNavigation } from "../../routes/NavigationContext";
 import { useAuth } from "../../hooks/useAuth";
@@ -17,6 +18,7 @@ import { useTheme } from "../../contexts/ThemeContext";
 import installmentPurchaseServices from "../../services/installmentPurchaseServices";
 import { creditCardServices } from "../../services/creditCardServices";
 import { CreditCard } from "../../types/creditCard";
+import { InstallmentPurchase } from "../../types/installmentPurchase";
 import {
   applyCurrencyMask,
   formatCurrency,
@@ -31,9 +33,12 @@ export const ClientInstallmentsScreen: React.FC = () => {
   const clientId: string = params?.clientId || "";
 
   const [loading, setLoading] = useState(false);
-  const [items, setItems] = useState<any[]>([]);
+  const [items, setItems] = useState<InstallmentPurchase[]>([]);
   const [cards, setCards] = useState<CreditCard[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
+  const [editingItem, setEditingItem] = useState<InstallmentPurchase | null>(
+    null,
+  );
   const [title, setTitle] = useState("");
   const [totalText, setTotalText] = useState("");
   const [installmentText, setInstallmentText] = useState("");
@@ -41,6 +46,7 @@ export const ClientInstallmentsScreen: React.FC = () => {
   const [purchaseDate, setPurchaseDate] = useState(new Date());
   const [cardId, setCardId] = useState("");
   const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const load = async () => {
     if (!clientId) return;
@@ -51,8 +57,9 @@ export const ClientInstallmentsScreen: React.FC = () => {
         creditCardServices.getCreditCards(clientId),
       ]);
       setItems(list);
-      setCards(cardList.filter((c) => c.isActive !== false));
-      if (!cardId && cardList[0]?.id) setCardId(cardList[0].id);
+      const active = cardList.filter((c) => c.isActive !== false);
+      setCards(active);
+      if (!cardId && active[0]?.id) setCardId(active[0].id);
     } catch (e) {
       console.warn(e);
     } finally {
@@ -63,6 +70,54 @@ export const ClientInstallmentsScreen: React.FC = () => {
   useEffect(() => {
     load();
   }, [clientId]);
+
+  useEffect(() => {
+    const count = parseInt(installmentsCount, 10);
+    const total = parseCurrency(totalText);
+    if (!Number.isFinite(count) || count < 1 || total <= 0) {
+      setInstallmentText("");
+      return;
+    }
+    setInstallmentText(formatCurrency(total / count));
+  }, [totalText, installmentsCount]);
+
+  const cardLabel = (id?: string) => {
+    if (!id) return "Cartão não informado";
+    const card = cards.find((c) => c.id === id);
+    if (!card) return "Cartão removido";
+    return `${card.bank} ····${card.last4}`;
+  };
+
+  const resetForm = () => {
+    setEditingItem(null);
+    setTitle("");
+    setTotalText("");
+    setInstallmentText("");
+    setInstallmentsCount("1");
+    setPurchaseDate(new Date());
+    setCardId(cards[0]?.id || "");
+  };
+
+  const openCreate = () => {
+    resetForm();
+    setModalVisible(true);
+  };
+
+  const openEdit = (item: InstallmentPurchase) => {
+    setEditingItem(item);
+    setTitle(item.title);
+    setTotalText(formatCurrency(item.totalAmount));
+    setInstallmentsCount(String(item.installmentsCount));
+    setInstallmentText(formatCurrency(item.installmentAmount));
+    setPurchaseDate(new Date(item.purchaseDate));
+    setCardId(item.cardId || cards[0]?.id || "");
+    setModalVisible(true);
+  };
+
+  const closeModal = () => {
+    setModalVisible(false);
+    resetForm();
+  };
 
   const handleSave = async () => {
     if (!user?.id) return;
@@ -76,29 +131,43 @@ export const ClientInstallmentsScreen: React.FC = () => {
       return;
     }
     const total = parseCurrency(totalText);
-    if (total <= 0 || count < 1) {
+    const installmentAmount = parseCurrency(installmentText);
+    if (total <= 0 || !Number.isFinite(count) || count < 1) {
       Alert.alert("Atenção", "Valor total e parcelas inválidos.");
       return;
     }
+    if (installmentAmount <= 0) {
+      Alert.alert("Atenção", "O valor da parcela é obrigatório.");
+      return;
+    }
+
+    const payload = {
+      title: title.trim(),
+      purchaseDate,
+      totalAmount: total,
+      installmentAmount,
+      cardId,
+      installmentsCount: count,
+    };
+
     try {
       setSaving(true);
-      await installmentPurchaseServices.create(user.id, clientId, {
-        title: title.trim(),
-        purchaseDate,
-        totalAmount: total,
-        installmentAmount: parseCurrency(installmentText) || total / count,
-        cardId,
-        installmentsCount: count,
-      });
-      setModalVisible(false);
-      setTitle("");
-      setTotalText("");
-      setInstallmentText("");
-      setInstallmentsCount("1");
+      if (editingItem?.id) {
+        await installmentPurchaseServices.update(
+          editingItem.id,
+          clientId,
+          payload,
+        );
+      } else {
+        await installmentPurchaseServices.create(user.id, clientId, payload);
+      }
+      closeModal();
       await load();
       Alert.alert(
         "Sucesso",
-        "Compra parcelada registrada e despesas geradas no cartão.",
+        editingItem
+          ? "Compra parcelada atualizada. As parcelas no cartão foram sincronizadas."
+          : "Compra parcelada registrada e despesas geradas no cartão.",
       );
     } catch (e: any) {
       Alert.alert("Erro", e?.message || "Falha ao salvar.");
@@ -107,12 +176,38 @@ export const ClientInstallmentsScreen: React.FC = () => {
     }
   };
 
+  const handleDelete = (item: InstallmentPurchase) => {
+    Alert.alert(
+      "Excluir compra parcelada",
+      `Remover "${item.title}" e as ${item.installmentsCount} parcelas geradas no cartão?`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Excluir",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setDeletingId(item.id);
+              await installmentPurchaseServices.remove(item.id, clientId);
+              if (editingItem?.id === item.id) closeModal();
+              await load();
+            } catch (e: any) {
+              Alert.alert("Erro", e?.message || "Falha ao excluir.");
+            } finally {
+              setDeletingId(null);
+            }
+          },
+        },
+      ],
+    );
+  };
+
   return (
     <Layout title="Compras parceladas" showBackButton showSidebar={false}>
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <TouchableOpacity
           style={[styles.primary, { backgroundColor: colors.primary }]}
-          onPress={() => setModalVisible(true)}
+          onPress={openCreate}
         >
           <Text style={styles.primaryText}>Nova compra parcelada</Text>
         </TouchableOpacity>
@@ -137,9 +232,48 @@ export const ClientInstallmentsScreen: React.FC = () => {
                 {item.remainingInstallments}/{item.installmentsCount} restantes
               </Text>
               <Text style={{ color: colors.textSecondary, marginTop: 4 }}>
+                Cartão: {cardLabel(item.cardId)}
+              </Text>
+              <Text style={{ color: colors.textSecondary, marginTop: 4 }}>
                 Início:{" "}
                 {new Date(item.purchaseDate).toLocaleDateString("pt-BR")}
+                {" · "}
+                Total {formatCurrency(item.totalAmount)}
               </Text>
+              <Text style={{ color: colors.textSecondary, marginTop: 4 }}>
+                {item.createdBy && item.createdBy === clientId
+                  ? "Registrado pelo cliente"
+                  : "Registrado pela equipe"}
+              </Text>
+
+              <View style={styles.cardActions}>
+                <TouchableOpacity
+                  style={[styles.actionBtn, { borderColor: colors.primary }]}
+                  onPress={() => openEdit(item)}
+                  disabled={deletingId === item.id}
+                >
+                  <Ionicons name="create-outline" size={16} color={colors.primary} />
+                  <Text style={[styles.actionText, { color: colors.primary }]}>
+                    Editar
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.actionBtn, styles.deleteBtn]}
+                  onPress={() => handleDelete(item)}
+                  disabled={deletingId === item.id}
+                >
+                  {deletingId === item.id ? (
+                    <ActivityIndicator size="small" color="#ff6b6b" />
+                  ) : (
+                    <>
+                      <Ionicons name="trash-outline" size={16} color="#ff6b6b" />
+                      <Text style={[styles.actionText, { color: "#ff6b6b" }]}>
+                        Excluir
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
             </View>
           )}
         />
@@ -153,90 +287,115 @@ export const ClientInstallmentsScreen: React.FC = () => {
           </Text>
         </TouchableOpacity>
 
-        <Modal visible={modalVisible} transparent animationType="slide">
+        {modalVisible ? (
           <View style={styles.overlay}>
+            <TouchableOpacity
+              style={styles.overlayDismiss}
+              activeOpacity={1}
+              onPress={closeModal}
+            />
             <View style={[styles.modal, { backgroundColor: colors.card }]}>
-              <Text style={[styles.modalTitle, { color: colors.text }]}>
-                Registrar parcelamento
-              </Text>
-              <TextInput
-                style={styles.input}
-                value={title}
-                onChangeText={setTitle}
-                placeholder="Título"
-                placeholderTextColor="#888"
-              />
-              <DatePicker
-                label="Data da compra"
-                date={purchaseDate}
-                onChangeDate={setPurchaseDate}
-              />
-              <TextInput
-                style={styles.input}
-                value={totalText}
-                onChangeText={(t) => setTotalText(applyCurrencyMask(t))}
-                placeholder="Valor total"
-                keyboardType="numeric"
-              />
-              <TextInput
-                style={styles.input}
-                value={installmentText}
-                onChangeText={(t) => setInstallmentText(applyCurrencyMask(t))}
-                placeholder="Valor da parcela (opcional)"
-                keyboardType="numeric"
-              />
-              <TextInput
-                style={styles.input}
-                value={installmentsCount}
-                onChangeText={setInstallmentsCount}
-                placeholder="Nº de parcelas"
-                keyboardType="number-pad"
-              />
-              <Text style={{ color: colors.textSecondary, marginBottom: 6 }}>
-                Cartão
-              </Text>
-              <View style={styles.cardRow}>
-                {cards.map((c) => (
-                  <TouchableOpacity
-                    key={c.id}
-                    style={[
-                      styles.cardChip,
-                      cardId === c.id && styles.cardChipActive,
-                    ]}
-                    onPress={() => setCardId(c.id)}
+              <ScrollView keyboardShouldPersistTaps="handled">
+                <Text style={[styles.modalTitle, { color: colors.text }]}>
+                  {editingItem
+                    ? "Editar parcelamento"
+                    : "Registrar parcelamento"}
+                </Text>
+                <TextInput
+                  style={styles.input}
+                  value={title}
+                  onChangeText={setTitle}
+                  placeholder="Título"
+                  placeholderTextColor="#888"
+                />
+                <DatePicker
+                  label="Data da compra"
+                  date={purchaseDate}
+                  onChangeDate={setPurchaseDate}
+                  maxDate={new Date()}
+                />
+                <TextInput
+                  style={styles.input}
+                  value={totalText}
+                  onChangeText={(t) => setTotalText(applyCurrencyMask(t))}
+                  placeholder="Valor total"
+                  keyboardType="numeric"
+                />
+                <TextInput
+                  style={styles.input}
+                  value={installmentsCount}
+                  onChangeText={(t) =>
+                    setInstallmentsCount(t.replace(/[^0-9]/g, ""))
+                  }
+                  placeholder="Nº de parcelas"
+                  keyboardType="number-pad"
+                />
+                <Text style={{ color: colors.textSecondary, marginBottom: 6 }}>
+                  Valor da parcela
+                </Text>
+                <View style={styles.computedBox}>
+                  <Text
+                    style={{
+                      color: installmentText ? colors.primary : "#888",
+                      fontWeight: installmentText ? "800" : "400",
+                      fontSize: installmentText ? 16 : 14,
+                    }}
                   >
-                    <Text
-                      style={{
-                        color: cardId === c.id ? "#fff" : colors.text,
-                        fontSize: 12,
-                      }}
+                    {installmentText || "Preencha o total e as parcelas"}
+                  </Text>
+                </View>
+                <Text style={{ color: colors.textSecondary, marginBottom: 6 }}>
+                  Cartão
+                </Text>
+                <View style={styles.cardRow}>
+                  {cards.map((c) => (
+                    <TouchableOpacity
+                      key={c.id}
+                      style={[
+                        styles.cardChip,
+                        cardId === c.id && styles.cardChipActive,
+                      ]}
+                      onPress={() => setCardId(c.id)}
                     >
-                      {`${c.bank} ····${c.last4}`}
-                    </Text>
+                      <Text
+                        style={{
+                          color: cardId === c.id ? "#fff" : colors.text,
+                          fontSize: 12,
+                        }}
+                      >
+                        {`${c.bank} ····${c.last4}`}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                {editingItem ? (
+                  <Text style={[styles.editHint, { color: colors.textSecondary }]}>
+                    Ao salvar, as parcelas antigas no cartão são substituídas
+                    pelas novas.
+                  </Text>
+                ) : null}
+                <View style={styles.modalActions}>
+                  <TouchableOpacity onPress={closeModal}>
+                    <Text style={{ color: colors.textSecondary }}>Cancelar</Text>
                   </TouchableOpacity>
-                ))}
-              </View>
-              <View style={styles.modalActions}>
-                <TouchableOpacity onPress={() => setModalVisible(false)}>
-                  <Text style={{ color: colors.textSecondary }}>Cancelar</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.saveBtn, { backgroundColor: colors.primary }]}
-                  onPress={handleSave}
-                  disabled={saving}
-                >
-                  {saving ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <Text style={{ color: "#fff", fontWeight: "700" }}>
-                      Salvar
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              </View>
+                  <TouchableOpacity
+                    style={[styles.saveBtn, { backgroundColor: colors.primary }]}
+                    onPress={handleSave}
+                    disabled={saving}
+                  >
+                    {saving ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <Text style={{ color: "#fff", fontWeight: "700" }}>
+                        {editingItem ? "Atualizar" : "Salvar"}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
             </View>
           </View>
-        </Modal>
+        ) : null}
       </View>
     </Layout>
   );
@@ -258,14 +417,39 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   cardTitle: { fontWeight: "700", fontSize: 15 },
+  cardActions: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 12,
+  },
+  actionBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  deleteBtn: {
+    borderColor: "#ff6b6b",
+  },
+  actionText: {
+    fontWeight: "700",
+    fontSize: 13,
+  },
   backLink: { marginTop: 16, alignItems: "center" },
   overlay: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(0,0,0,0.55)",
     justifyContent: "center",
     padding: 16,
+    zIndex: 50,
   },
-  modal: { borderRadius: 12, padding: 16 },
+  overlayDismiss: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  modal: { borderRadius: 12, padding: 16, maxHeight: "90%", zIndex: 2 },
   modalTitle: { fontWeight: "700", fontSize: 16, marginBottom: 10 },
   input: {
     borderWidth: 1,
@@ -274,6 +458,13 @@ const styles = StyleSheet.create({
     padding: 10,
     marginBottom: 8,
     color: "#fff",
+  },
+  computedBox: {
+    borderWidth: 1,
+    borderColor: "#B900FF",
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 8,
   },
   cardRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12 },
   cardChip: {
@@ -284,6 +475,11 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   cardChipActive: { backgroundColor: "#B900FF", borderColor: "#B900FF" },
+  editHint: {
+    fontSize: 12,
+    marginBottom: 12,
+    lineHeight: 16,
+  },
   modalActions: {
     flexDirection: "row",
     justifyContent: "space-between",

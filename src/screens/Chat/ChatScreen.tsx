@@ -116,6 +116,20 @@ export const ChatScreen: React.FC = () => {
   const [startChatUsers, setStartChatUsers] = useState<any[]>([]);
   const [startChatLoading, setStartChatLoading] = useState(false);
   const [startingChat, setStartingChat] = useState(false);
+  const [addSupervisorVisible, setAddSupervisorVisible] = useState(false);
+  const [addSupervisorStep, setAddSupervisorStep] = useState<
+    "cliente" | "consultor" | "supervisor"
+  >("cliente");
+  const [addSupervisorQuery, setAddSupervisorQuery] = useState("");
+  const [addSupervisorUsers, setAddSupervisorUsers] = useState<any[]>([]);
+  const [addSupervisorLoading, setAddSupervisorLoading] = useState(false);
+  const [addingSupervisor, setAddingSupervisor] = useState(false);
+  const [addSupervisorClient, setAddSupervisorClient] = useState<any | null>(
+    null,
+  );
+  const [addSupervisorConsultant, setAddSupervisorConsultant] = useState<
+    any | null
+  >(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const sendingRef = useRef(false);
   const [blockedUserIds, setBlockedUserIds] = useState<string[]>([]);
@@ -1074,7 +1088,15 @@ export const ChatScreen: React.FC = () => {
 
     if (isGroupChat(chat)) {
       if (chat?.id === "global" || chat?.type === "global") return "Bate-Papo";
-      if (isPrivileged) return "Grupo: Cliente + Consultor";
+      if (isPrivileged) {
+        const hasSupervisor = (chat?.participants || []).some(
+          (id: string) =>
+            String(userMap[id]?.role || "").toLowerCase() === "supervisor",
+        );
+        return hasSupervisor
+          ? "Grupo: Cliente + Consultor + Supervisor"
+          : "Grupo: Cliente + Consultor";
+      }
       return "Bate-Papo";
     }
 
@@ -1517,14 +1539,17 @@ export const ChatScreen: React.FC = () => {
     );
   };
 
+  const isClientRole = (role?: string) =>
+    ["user", "cliente", "cliente_premium"].includes(
+      String(role || "").toLowerCase(),
+    );
+  const isConsultorRole = (role?: string) =>
+    String(role || "").toLowerCase() === "consultor";
+  const isSupervisorRole = (role?: string) =>
+    String(role || "").toLowerCase() === "supervisor";
+
   const filteredStartChatUsers = useMemo(() => {
     const q = startChatQuery.trim().toLowerCase();
-    const isClientRole = (role?: string) =>
-      ["user", "cliente", "cliente_premium"].includes(
-        String(role || "").toLowerCase(),
-      );
-    const isConsultorRole = (role?: string) =>
-      String(role || "").toLowerCase() === "consultor";
 
     return startChatUsers
       .filter((person) => person?.id && person.id !== user?.id)
@@ -1544,6 +1569,49 @@ export const ChatScreen: React.FC = () => {
       });
   }, [startChatQuery, startChatRole, startChatUsers, user?.id]);
 
+  const filteredAddSupervisorUsers = useMemo(() => {
+    const q = addSupervisorQuery.trim().toLowerCase();
+    const excludeIds = new Set(
+      [
+        user?.id,
+        addSupervisorClient?.id,
+        addSupervisorConsultant?.id,
+      ].filter(Boolean),
+    );
+
+    return addSupervisorUsers
+      .filter((person) => person?.id && !excludeIds.has(person.id))
+      .filter((person) => {
+        if (addSupervisorStep === "cliente") return isClientRole(person.role);
+        if (addSupervisorStep === "consultor")
+          return isConsultorRole(person.role);
+        return isSupervisorRole(person.role);
+      })
+      .filter((person) => {
+        if (!q) return true;
+        return (
+          getStartChatLabel(person).toLowerCase().includes(q) ||
+          String(person?.email || "")
+            .toLowerCase()
+            .includes(q)
+        );
+      });
+  }, [
+    addSupervisorQuery,
+    addSupervisorStep,
+    addSupervisorUsers,
+    addSupervisorClient?.id,
+    addSupervisorConsultant?.id,
+    user?.id,
+  ]);
+
+  const ensureStartChatUsersLoaded = async () => {
+    if (startChatUsers.length > 0) return startChatUsers;
+    const list = await userService.getAllUsersLite();
+    setStartChatUsers(list || []);
+    return list || [];
+  };
+
   const openStartChat = async () => {
     setStartChatVisible(true);
     setStartChatQuery("");
@@ -1552,14 +1620,45 @@ export const ChatScreen: React.FC = () => {
 
     setStartChatLoading(true);
     try {
-      const list = await userService.getAllUsersLite();
-      setStartChatUsers(list || []);
+      await ensureStartChatUsersLoaded();
     } catch (error) {
       console.error("Erro ao carregar usuários para o chat:", error);
       Alert.alert("Erro", "Não foi possível carregar os usuários.");
     } finally {
       setStartChatLoading(false);
     }
+  };
+
+  const openAddSupervisor = async () => {
+    setAddSupervisorVisible(true);
+    setAddSupervisorStep("cliente");
+    setAddSupervisorQuery("");
+    setAddSupervisorClient(null);
+    setAddSupervisorConsultant(null);
+
+    if (addSupervisorUsers.length > 0) return;
+
+    setAddSupervisorLoading(true);
+    try {
+      const list =
+        startChatUsers.length > 0
+          ? startChatUsers
+          : await ensureStartChatUsersLoaded();
+      setAddSupervisorUsers(list || []);
+    } catch (error) {
+      console.error("Erro ao carregar usuários para incluir supervisor:", error);
+      Alert.alert("Erro", "Não foi possível carregar os usuários.");
+    } finally {
+      setAddSupervisorLoading(false);
+    }
+  };
+
+  const closeAddSupervisor = () => {
+    setAddSupervisorVisible(false);
+    setAddSupervisorStep("cliente");
+    setAddSupervisorQuery("");
+    setAddSupervisorClient(null);
+    setAddSupervisorConsultant(null);
   };
 
   const handleStartChatWithUser = async (person: any) => {
@@ -1578,6 +1677,74 @@ export const ChatScreen: React.FC = () => {
       Alert.alert("Erro", "Não foi possível iniciar o bate-papo.");
     } finally {
       setStartingChat(false);
+    }
+  };
+
+  const resolveConsultantForClient = (client: any) => {
+    const consultantId = String(client?.consultantId || "").trim();
+    if (!consultantId) return null;
+    return (
+      addSupervisorUsers.find((person) => person?.id === consultantId) ||
+      startChatUsers.find((person) => person?.id === consultantId) ||
+      userMap[consultantId] || {
+        id: consultantId,
+        name: "Consultor",
+        role: "consultor",
+      }
+    );
+  };
+
+  const handlePickAddSupervisorPerson = async (person: any) => {
+    if (!person?.id || addingSupervisor) return;
+
+    if (addSupervisorStep === "cliente") {
+      setAddSupervisorClient(person);
+      setAddSupervisorQuery("");
+      const linked = resolveConsultantForClient(person);
+      if (linked?.id) {
+        setAddSupervisorConsultant(linked);
+        setAddSupervisorStep("supervisor");
+      } else {
+        setAddSupervisorConsultant(null);
+        setAddSupervisorStep("consultor");
+      }
+      return;
+    }
+
+    if (addSupervisorStep === "consultor") {
+      setAddSupervisorConsultant(person);
+      setAddSupervisorQuery("");
+      setAddSupervisorStep("supervisor");
+      return;
+    }
+
+    if (!addSupervisorClient?.id || !addSupervisorConsultant?.id) {
+      Alert.alert("Atenção", "Selecione o cliente e o consultor antes.");
+      return;
+    }
+
+    setAddingSupervisor(true);
+    try {
+      await chatService.addSupervisorToClientConsultantChat(
+        addSupervisorClient.id,
+        addSupervisorConsultant.id,
+        person.id,
+      );
+      closeAddSupervisor();
+      Alert.alert(
+        "Supervisor incluído",
+        `${getStartChatLabel(person)} entrou no chat de ${getStartChatLabel(
+          addSupervisorClient,
+        )} com ${getStartChatLabel(addSupervisorConsultant)}.`,
+      );
+    } catch (error) {
+      console.error("Erro ao incluir supervisor no chat:", error);
+      Alert.alert(
+        "Erro",
+        "Não foi possível incluir o supervisor no chat do cliente e consultor.",
+      );
+    } finally {
+      setAddingSupervisor(false);
     }
   };
 
@@ -1605,14 +1772,34 @@ export const ChatScreen: React.FC = () => {
   const chatListPane = (
         <View style={desktop ? styles.desktopList : styles.container}>
           {isAdminUser ? (
-            <TouchableOpacity
-              style={styles.startChatButton}
-              onPress={openStartChat}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="chatbubble-ellipses-outline" size={18} color="#fff" />
-              <Text style={styles.startChatButtonText}>Iniciar bate-papo</Text>
-            </TouchableOpacity>
+            <View style={styles.adminChatActions}>
+              <TouchableOpacity
+                style={[styles.startChatButton, styles.adminChatActionButton]}
+                onPress={openStartChat}
+                activeOpacity={0.8}
+              >
+                <Ionicons
+                  name="chatbubble-ellipses-outline"
+                  size={18}
+                  color="#fff"
+                />
+                <Text style={styles.startChatButtonText}>Iniciar bate-papo</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.startChatButton,
+                  styles.adminChatActionButton,
+                  styles.addSupervisorButton,
+                ]}
+                onPress={openAddSupervisor}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="people-outline" size={18} color="#fff" />
+                <Text style={styles.startChatButtonText}>
+                  Incluir supervisor
+                </Text>
+              </TouchableOpacity>
+            </View>
           ) : null}
 
           {visibleChats.length === 0 ? (
@@ -1801,6 +1988,141 @@ export const ChatScreen: React.FC = () => {
                 >
                   <Text style={styles.startChatCloseText}>Fechar</Text>
                 </TouchableOpacity>
+              </View>
+            </View>
+          </Modal>
+
+          <Modal
+            visible={addSupervisorVisible}
+            animationType="slide"
+            transparent
+            onRequestClose={closeAddSupervisor}
+          >
+            <View style={styles.startChatBackdrop}>
+              <View style={styles.startChatCard}>
+                <Text style={styles.startChatTitle}>Incluir supervisor</Text>
+                <Text style={styles.startChatSubtitle}>
+                  {addSupervisorStep === "cliente"
+                    ? "Escolha o cliente do chat com o consultor"
+                    : addSupervisorStep === "consultor"
+                      ? "Este cliente não tem consultor vinculado. Escolha o consultor do chat"
+                      : `Escolha o supervisor para entrar no chat de ${getStartChatLabel(
+                          addSupervisorClient,
+                        )} com ${getStartChatLabel(addSupervisorConsultant)}`}
+                </Text>
+
+                {addSupervisorClient || addSupervisorConsultant ? (
+                  <View style={styles.addSupervisorSummary}>
+                    {addSupervisorClient ? (
+                      <Text style={styles.addSupervisorSummaryText}>
+                        Cliente: {getStartChatLabel(addSupervisorClient)}
+                      </Text>
+                    ) : null}
+                    {addSupervisorConsultant ? (
+                      <Text style={styles.addSupervisorSummaryText}>
+                        Consultor: {getStartChatLabel(addSupervisorConsultant)}
+                      </Text>
+                    ) : null}
+                  </View>
+                ) : null}
+
+                <TextInput
+                  placeholder={
+                    addSupervisorStep === "cliente"
+                      ? "Buscar cliente..."
+                      : addSupervisorStep === "consultor"
+                        ? "Buscar consultor..."
+                        : "Buscar supervisor..."
+                  }
+                  placeholderTextColor="#777"
+                  value={addSupervisorQuery}
+                  onChangeText={setAddSupervisorQuery}
+                  style={styles.startChatSearch}
+                />
+
+                {addSupervisorLoading ? (
+                  <ActivityIndicator color="#B900FF" style={{ marginTop: 24 }} />
+                ) : (
+                  <FlatList
+                    data={filteredAddSupervisorUsers}
+                    keyExtractor={(item) => item.id}
+                    keyboardShouldPersistTaps="handled"
+                    ListEmptyComponent={
+                      <Text style={styles.startChatEmpty}>
+                        Nenhum{" "}
+                        {addSupervisorStep === "cliente"
+                          ? "cliente"
+                          : addSupervisorStep === "consultor"
+                            ? "consultor"
+                            : "supervisor"}{" "}
+                        encontrado
+                      </Text>
+                    }
+                    renderItem={({ item }) => (
+                      <TouchableOpacity
+                        style={styles.startChatItem}
+                        onPress={() => handlePickAddSupervisorPerson(item)}
+                        disabled={addingSupervisor}
+                      >
+                        <View style={styles.startChatItemRow}>
+                          <View style={styles.startChatAvatar}>
+                            {renderUserAvatar(item, 40, "person")}
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.startChatItemName}>
+                              {getStartChatLabel(item)}
+                            </Text>
+                            {item.email ? (
+                              <Text style={styles.startChatItemEmail}>
+                                {item.email}
+                              </Text>
+                            ) : null}
+                          </View>
+                        </View>
+                      </TouchableOpacity>
+                    )}
+                  />
+                )}
+
+                <View style={styles.addSupervisorFooter}>
+                  {addSupervisorStep !== "cliente" ? (
+                    <TouchableOpacity
+                      style={styles.startChatClose}
+                      onPress={() => {
+                        setAddSupervisorQuery("");
+                        if (addSupervisorStep === "supervisor") {
+                          if (
+                            addSupervisorClient &&
+                            !String(addSupervisorClient?.consultantId || "").trim()
+                          ) {
+                            setAddSupervisorConsultant(null);
+                            setAddSupervisorStep("consultor");
+                          } else {
+                            setAddSupervisorClient(null);
+                            setAddSupervisorConsultant(null);
+                            setAddSupervisorStep("cliente");
+                          }
+                        } else {
+                          setAddSupervisorClient(null);
+                          setAddSupervisorConsultant(null);
+                          setAddSupervisorStep("cliente");
+                        }
+                      }}
+                      disabled={addingSupervisor}
+                    >
+                      <Text style={styles.startChatCloseText}>Voltar</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                  <TouchableOpacity
+                    style={styles.startChatClose}
+                    onPress={closeAddSupervisor}
+                    disabled={addingSupervisor}
+                  >
+                    <Text style={styles.startChatCloseText}>
+                      {addingSupervisor ? "Incluindo..." : "Fechar"}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
           </Modal>
@@ -2189,6 +2511,16 @@ export const ChatScreen: React.FC = () => {
               multiline
               maxLength={4000}
               textAlignVertical="center"
+              blurOnSubmit={false}
+              // RN Web sobrescreve onKeyDown interno; onKeyPress é o hook certo.
+              // Enter envia; Shift+Enter quebra linha (só desktop web).
+              onKeyPress={(event) => {
+                if (!(desktop && Platform.OS === "web")) return;
+                const native = (event as any)?.nativeEvent || event;
+                if (native?.key !== "Enter" || native?.shiftKey) return;
+                event.preventDefault();
+                void handleSendMessage();
+              }}
             />
             <TouchableOpacity
               style={[
@@ -2778,6 +3110,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   sendButtonDisabled: { opacity: 0.5 },
+  adminChatActions: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 8,
+    gap: 8,
+  },
+  adminChatActionButton: {
+    marginHorizontal: 0,
+    marginTop: 0,
+    marginBottom: 0,
+  },
   startChatButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -2790,10 +3133,31 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     minHeight: 44,
   },
+  addSupervisorButton: {
+    backgroundColor: "#6B21A8",
+  },
   startChatButtonText: {
     color: "#fff",
     fontWeight: "700",
     fontSize: 15,
+  },
+  addSupervisorSummary: {
+    backgroundColor: "#161221",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 10,
+    gap: 4,
+  },
+  addSupervisorSummaryText: {
+    color: "#d7c9ff",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  addSupervisorFooter: {
+    flexDirection: "row",
+    justifyContent: "space-evenly",
+    alignItems: "center",
   },
   startChatBackdrop: {
     flex: 1,

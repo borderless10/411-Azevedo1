@@ -1,4 +1,5 @@
 import {
+  arrayUnion,
   collection,
   deleteField,
   doc,
@@ -193,6 +194,77 @@ export async function createChatIfNotExists(
   await setDoc(chatRef, chatData);
   const created = await getDoc(chatRef);
   return { id: created.id, ...(created.data() as any) } as Chat;
+}
+
+/**
+ * Inclui um participante em um chat existente.
+ * Se passar de 2 pessoas, promove o tipo para "group".
+ */
+export async function addParticipantToChat(
+  chatId: string,
+  userId: string,
+): Promise<Chat> {
+  if (!chatId || !userId) {
+    throw new Error("chatId e userId são obrigatórios");
+  }
+
+  const chatRef = doc(db, CHATS_COL, chatId);
+  const snap = await getDoc(chatRef);
+  if (!snap.exists()) {
+    throw new Error("Chat não encontrado");
+  }
+
+  const data = snap.data() as any;
+  if (data?.type === "global" || chatId === "global") {
+    throw new Error("Não é possível alterar participantes do chat global");
+  }
+
+  const current: string[] = Array.isArray(data?.participants)
+    ? data.participants.filter(Boolean)
+    : [];
+
+  if (current.includes(userId)) {
+    return { id: snap.id, ...(data as any) } as Chat;
+  }
+
+  const nextCount = current.length + 1;
+  const patch: Record<string, unknown> = {
+    participants: arrayUnion(userId),
+  };
+  if (nextCount > 2 || data?.type === "group") {
+    patch.type = "group";
+  }
+
+  await updateDoc(chatRef, patch);
+  const updated = await getDoc(chatRef);
+  return { id: updated.id, ...(updated.data() as any) } as Chat;
+}
+
+/**
+ * Garante o chat cliente↔consultor e inclui o supervisor nele (vira grupo).
+ */
+export async function addSupervisorToClientConsultantChat(
+  clientId: string,
+  consultantId: string,
+  supervisorId: string,
+): Promise<Chat> {
+  if (!clientId || !consultantId || !supervisorId) {
+    throw new Error("clientId, consultantId e supervisorId são obrigatórios");
+  }
+  if (
+    clientId === consultantId ||
+    clientId === supervisorId ||
+    consultantId === supervisorId
+  ) {
+    throw new Error("Participantes devem ser usuários distintos");
+  }
+
+  const baseChat = await createChatIfNotExists(
+    clientId,
+    consultantId,
+    "direct",
+  );
+  return addParticipantToChat(baseChat.id, supervisorId);
 }
 
 export async function getChatById(chatId: string): Promise<Chat | null> {
@@ -631,6 +703,8 @@ export { CHAT_MESSAGE_EDIT_WINDOW_MS, CHAT_DELETED_MESSAGE_TEXT };
 export default {
   getDirectChatId,
   createChatIfNotExists,
+  addParticipantToChat,
+  addSupervisorToClientConsultantChat,
   getChatById,
   sendMessage,
   sendDirectMessage,

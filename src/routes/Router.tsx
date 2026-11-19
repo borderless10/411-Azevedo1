@@ -46,6 +46,7 @@ import { ConsultationSchedulingScreen } from "../screens/Consultation/Consultati
 import { ClientInstallmentsScreen } from "../screens/Consultor/ClientInstallmentsScreen";
 import { UserNotesScreen } from "../screens/Notes/UserNotesScreen";
 import { ShoppingListScreen } from "../screens/ShoppingList/ShoppingListScreen";
+import { InstallmentPurchasesScreen } from "../screens/Installments/InstallmentPurchasesScreen";
 
 export const Router = () => {
   const { currentScreen, navigate } = useNavigation();
@@ -211,6 +212,8 @@ export const Router = () => {
         return <UserNotesScreen />;
       case "ShoppingList":
         return <ShoppingListScreen />;
+      case "InstallmentPurchases":
+        return <InstallmentPurchasesScreen />;
       default:
         return <HomeScreen />;
     }

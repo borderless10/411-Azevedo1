@@ -29,7 +29,7 @@ import {
   IncomeSummary,
   IncomeByDate,
 } from "../types/income";
-import { formatDateToString } from "../utils/dateUtils";
+import { formatDateToString, isFutureCalendarDay } from "../utils/dateUtils";
 import { formatCurrency } from "../utils/currencyUtils";
 import { isExpenseCreatedFrom } from "../utils/expenseScopeUtils";
 import {
@@ -59,7 +59,7 @@ const validateCreateIncomeData = (data: CreateIncomeData): string[] => {
     errors.push("Data é obrigatória");
   }
 
-  if (data.date && data.date > new Date()) {
+  if (data.date && isFutureCalendarDay(data.date)) {
     errors.push("Data não pode ser no futuro");
   }
 
@@ -87,7 +87,7 @@ const validateUpdateIncomeData = (data: UpdateIncomeData): string[] => {
     errors.push("Descrição deve ter pelo menos 3 caracteres");
   }
 
-  if (data.date && data.date > new Date()) {
+  if (data.date && isFutureCalendarDay(data.date)) {
     errors.push("Data não pode ser no futuro");
   }
 
@@ -143,16 +143,19 @@ export const incomeServices = {
         updatedAt: now,
       };
 
-      // Registrar atividade
-      await activityServices.logActivity(userId, {
-        type: "income_created",
-        title: data.description.trim(),
-        description: `Renda de ${formatCurrency(data.value)}`,
-        metadata: {
-          amount: data.value,
-          category: data.category,
-        },
-      });
+      void activityServices
+        .logActivity(userId, {
+          type: "income_created",
+          title: data.description.trim(),
+          description: `Renda de ${formatCurrency(data.value)}`,
+          metadata: {
+            amount: data.value,
+            category: data.category,
+          },
+        })
+        .catch((err) =>
+          console.warn("⚠️ [INCOME SERVICE] Falha ao logar atividade:", err),
+        );
 
       return income;
     } catch (error) {
@@ -359,17 +362,23 @@ export const incomeServices = {
       await deleteDoc(docRef);
       console.log("✅ [INCOME SERVICE] Renda deletada");
 
-      // Registrar atividade
       if (income) {
-        await activityServices.logActivity(income.userId, {
-          type: "income_deleted",
-          title: `Renda removida: ${income.description}`,
-          description: formatCurrency(income.value),
-          metadata: {
-            amount: income.value,
-            category: income.category,
-          },
-        });
+        void activityServices
+          .logActivity(income.userId, {
+            type: "income_deleted",
+            title: `Renda removida: ${income.description}`,
+            description: formatCurrency(income.value),
+            metadata: {
+              amount: income.value,
+              category: income.category,
+            },
+          })
+          .catch((err) =>
+            console.warn(
+              "⚠️ [INCOME SERVICE] Falha ao logar exclusão:",
+              err,
+            ),
+          );
       }
     } catch (error) {
       console.error("❌ [INCOME SERVICE] Erro ao deletar renda:", error);

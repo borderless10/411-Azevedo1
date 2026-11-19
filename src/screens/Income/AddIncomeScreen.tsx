@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Tela de Cadastro de Renda
  */
 
@@ -26,6 +26,7 @@ import incomeServices from "../../services/incomeServices";
 import { planningServices } from "../../services/planningServices";
 import { ExpectedItem } from "../../types/planning";
 import { formatCurrency } from "../../utils/currencyUtils";
+import { isFutureCalendarDay } from "../../utils/dateUtils";
 import IncomeCreatedModal from "../../components/ui/IncomeCreatedModal";
 import CustomModal from "../../components/ui/CustomModal";
 import { ActingForClientBanner } from "../../components/Staff/ActingForClientBanner";
@@ -228,7 +229,7 @@ export const AddIncomeScreen = () => {
   };
 
   const validateDate = (selectedDate: Date): string => {
-    if (selectedDate > new Date()) {
+    if (isFutureCalendarDay(selectedDate)) {
       return "Data não pode ser no futuro";
     }
     const oneYearAgo = new Date();

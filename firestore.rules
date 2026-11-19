@@ -91,6 +91,7 @@ service cloud.firestore {
         resource == null
         || resource.data.type == 'global'
         || request.auth.uid in resource.data.participants
+        || isAdmin()
       );
     }
 
@@ -101,7 +102,8 @@ service cloud.firestore {
     function canAccessChat(chatId) {
       let chat = parentChatData(chatId);
       return chat.type == 'global'
-        || request.auth.uid in chat.participants;
+        || request.auth.uid in chat.participants
+        || isAdmin();
     }
 
     function reactionsMap(data) {
@@ -250,8 +252,9 @@ service cloud.firestore {
     match /installmentPurchases/{docId} {
       allow get: if canGetUserDocument();
       allow list: if canReadUserDocument();
-      allow create: if ownsUserDocument() && isStaffOperator();
-      allow update, delete: if canWriteUserDocument() && isStaffOperator();
+      // Cliente registra a própria compra; consultor/supervisor/admin também.
+      allow create: if ownsUserDocument();
+      allow update, delete: if canWriteUserDocument();
     }
 
     match /userNotes/{docId} {
@@ -358,6 +361,14 @@ service cloud.firestore {
         || (
           request.auth.uid in resource.data.participants
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastMessage', 'lastMessageAt', 'lastReadBy'])
+        )
+        // Admin pode incluir supervisor (ou outro participante) em chat cliente+consultor.
+        || (
+          isAdmin()
+          && resource.data.type != 'global'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['participants', 'type'])
+          && request.resource.data.participants is list
+          && request.resource.data.participants.size() >= resource.data.participants.size()
         )
       );
 

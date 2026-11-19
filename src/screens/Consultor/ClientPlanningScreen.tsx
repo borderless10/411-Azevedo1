@@ -3019,7 +3019,9 @@ export const ClientPlanningScreen = () => {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* Modal Duração do Ciclo */}
+      {/* Modal Duração do Ciclo
+          Sem dismiss por clique no overlay: no web o DatePicker nativo
+          dispara eventos fora do card e fechava o modal sozinho. */}
       <Modal
         visible={isCycleDurationModalVisible}
         transparent
@@ -3030,75 +3032,62 @@ export const ClientPlanningScreen = () => {
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           style={styles.modalOverlay}
         >
-          <TouchableOpacity
-            style={styles.modalOverlay}
-            activeOpacity={1}
-            onPress={() => setIsCycleDurationModalVisible(false)}
-          >
-            <TouchableOpacity
-              activeOpacity={1}
-              onPress={(e) => e.stopPropagation()}
-            >
-              <View
-                style={[styles.modalContent, { backgroundColor: "#07050D" }]}
+          <View style={[styles.modalContent, { backgroundColor: "#07050D" }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle]}>
+                {cycleDurationAction === "restart"
+                  ? "Renovar Ciclo"
+                  : "Editar Duração do Ciclo"}
+              </Text>
+              <TouchableOpacity
+                onPress={() => setIsCycleDurationModalVisible(false)}
               >
-                <View style={styles.modalHeader}>
-                  <Text style={[styles.modalTitle]}>
-                    {cycleDurationAction === "restart"
-                      ? "Renovar Ciclo"
-                      : "Editar Duração do Ciclo"}
-                  </Text>
-                  <TouchableOpacity
-                    onPress={() => setIsCycleDurationModalVisible(false)}
-                  >
-                    <Ionicons name="close" size={24} color="#bbb" />
-                  </TouchableOpacity>
-                </View>
+                <Ionicons name="close" size={24} color="#bbb" />
+              </TouchableOpacity>
+            </View>
 
-                {cycleDurationAction === "restart" && (
-                  <View style={styles.inputGroup}>
-                    <DatePicker
-                      label="Data de início do ciclo"
-                      date={cycleDateStart}
-                      onChangeDate={setCycleDateStart}
-                      editable={!consumptionCycleLoading}
-                    />
-                  </View>
-                )}
-
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>
-                    Quantos dias o ciclo deve durar?
-                  </Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Ex: 30"
-                    placeholderTextColor="#666"
-                    value={cycleDurationInput}
-                    onChangeText={setCycleDurationInput}
-                    keyboardType="number-pad"
-                    editable={!consumptionCycleLoading}
-                  />
-                </View>
-
-                <TouchableOpacity
-                  style={[styles.saveButton, { marginTop: 12 }]}
-                  onPress={handleSaveCycleDuration}
-                  disabled={consumptionCycleLoading}
-                >
-                  {consumptionCycleLoading ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <Text style={styles.saveButtonText}>
-                      {cycleDurationAction === "restart"
-                        ? "Renovar Ciclo"
-                        : "Salvar Duração"}
-                    </Text>
-                  )}
-                </TouchableOpacity>
+            {cycleDurationAction === "restart" && (
+              <View style={styles.inputGroup}>
+                <DatePicker
+                  label="Data de início do ciclo"
+                  date={cycleDateStart}
+                  onChangeDate={setCycleDateStart}
+                  editable={!consumptionCycleLoading}
+                />
               </View>
+            )}
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>
+                Quantos dias o ciclo deve durar?
+              </Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Ex: 30"
+                placeholderTextColor="#666"
+                value={cycleDurationInput}
+                onChangeText={setCycleDurationInput}
+                keyboardType="number-pad"
+                editable={!consumptionCycleLoading}
+              />
+            </View>
+
+            <TouchableOpacity
+              style={[styles.saveButton, { marginTop: 12 }]}
+              onPress={handleSaveCycleDuration}
+              disabled={consumptionCycleLoading}
+            >
+              {consumptionCycleLoading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.saveButtonText}>
+                  {cycleDurationAction === "restart"
+                    ? "Renovar Ciclo"
+                    : "Salvar Duração"}
+                </Text>
+              )}
             </TouchableOpacity>
-          </TouchableOpacity>
+          </View>
         </KeyboardAvoidingView>
       </Modal>
 

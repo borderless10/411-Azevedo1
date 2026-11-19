@@ -21,3 +21,5 @@ export interface CreateInstallmentPurchaseInput {
   cardId: string;
   installmentsCount: number;
 }
+
+export type UpdateInstallmentPurchaseInput = CreateInstallmentPurchaseInput;

@@ -52,6 +52,7 @@ export type ScreenName =
   | "Cartoes"
   | "ConsultationScheduling"
   | "ClientInstallments"
+  | "InstallmentPurchases"
   | "UserNotes"
   | "ShoppingList";
 

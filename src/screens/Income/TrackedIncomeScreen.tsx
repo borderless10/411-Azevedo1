@@ -38,6 +38,8 @@ import {
   DesktopDayLedgerItem,
   DesktopDayDragPayload,
   desktopDayDropHandlers,
+  subscribeDayDragStart,
+  subscribeDayDragEnd,
 } from "../../components/Desktop/DesktopDayLedgerItem";
 
 type DaySummary = {
@@ -76,6 +78,11 @@ export const TrackedIncomeScreen = () => {
   const [days, setDays] = useState<DaySummary[]>([]);
   const [incomeHistory, setIncomeHistory] = useState<Income[]>([]);
   const [editingDateKey, setEditingDateKey] = useState<string | null>(null);
+  const [dragOverDateKey, setDragOverDateKey] = useState<string | null>(null);
+  const [dragSourceDateKey, setDragSourceDateKey] = useState<string | null>(
+    null,
+  );
+  const [selectedEntryIds, setSelectedEntryIds] = useState<string[]>([]);
   const [inlineSaving, setInlineSaving] = useState(false);
   const [inlineDraftActive, setInlineDraftActive] = useState(false);
   const [loading, setLoading] = useState<boolean>(true);
@@ -200,6 +207,21 @@ export const TrackedIncomeScreen = () => {
   }, [currentScreen, ownerId, trackedTitle]);
 
   useEffect(() => {
+    if (!desktopWeb) return;
+    const unsubStart = subscribeDayDragStart((payload) => {
+      setDragSourceDateKey(payload.fromDateKey);
+    });
+    const unsubEnd = subscribeDayDragEnd(() => {
+      setDragOverDateKey(null);
+      setDragSourceDateKey(null);
+    });
+    return () => {
+      unsubStart();
+      unsubEnd();
+    };
+  }, [desktopWeb]);
+
+  useEffect(() => {
     if (!loading) {
       Animated.parallel([
         Animated.timing(fadeAnim, {
@@ -217,14 +239,14 @@ export const TrackedIncomeScreen = () => {
     }
   }, [loading]);
 
-  const loadIncomeData = async () => {
+  const loadIncomeData = async (options?: { silent?: boolean }) => {
     if (!ownerId || !trackedTitle) {
       setLoading(false);
       return;
     }
 
     try {
-      setLoading(true);
+      if (!options?.silent) setLoading(true);
 
       const planning = await planningServices.getPlanning(ownerId);
       setPlanningCycleLabel(getPlanningCycleLabel(planning) || "");
@@ -361,6 +383,61 @@ export const TrackedIncomeScreen = () => {
     return noon;
   };
 
+  const bumpDayTotal = (dateKey: string, delta: number) => {
+    setDays((prev) =>
+      prev.map((d) =>
+        formatDateToString(d.date) === dateKey
+          ? { ...d, total: Math.max(0, d.total + delta) }
+          : d,
+      ),
+    );
+  };
+
+  const applyLocalTrackedIncomeAdd = (income: Income) => {
+    const dateKey = formatDateToString(new Date(income.date));
+    const value = Number(income.value) || 0;
+    setIncomeHistory((prev) => [income, ...prev]);
+    bumpDayTotal(dateKey, value);
+    setZeroConfirmedDateKeys((prev) => prev.filter((k) => k !== dateKey));
+  };
+
+  const replaceLocalTrackedIncomeId = (tempId: string, real: Income) => {
+    setIncomeHistory((prev) =>
+      prev.map((i) => (i.id === tempId ? real : i)),
+    );
+  };
+
+  const applyLocalTrackedIncomeRemove = (income: Income) => {
+    const dateKey = formatDateToString(new Date(income.date));
+    const value = Number(income.value) || 0;
+    setIncomeHistory((prev) => prev.filter((i) => i.id !== income.id));
+    bumpDayTotal(dateKey, -value);
+  };
+
+  const applyLocalTrackedIncomeMove = (income: Income, toDateKey: string) => {
+    const fromKey = formatDateToString(new Date(income.date));
+    if (fromKey === toDateKey) return;
+    const [y, m, d] = toDateKey.split("-").map(Number);
+    const value = Number(income.value) || 0;
+    const moved: Income = {
+      ...income,
+      date: toNoon(new Date(y, m - 1, d)),
+      updatedAt: new Date(),
+    };
+    setIncomeHistory((prev) =>
+      prev.map((i) => (i.id === income.id ? moved : i)),
+    );
+    bumpDayTotal(fromKey, -value);
+    bumpDayTotal(toDateKey, value);
+    setZeroConfirmedDateKeys((prev) => prev.filter((k) => k !== toDateKey));
+  };
+
+  const refreshIncomeInBackground = () => {
+    void loadIncomeData({ silent: true }).catch((err) =>
+      console.warn("⚠️ [TrackedIncome] Refresh falhou:", err),
+    );
+  };
+
   const submitInlineTrackedIncome = async (
     date: Date,
     payload: DesktopDayQuickEntryPayload,
@@ -368,46 +445,61 @@ export const TrackedIncomeScreen = () => {
     if (!ownerId || !trackedTitle) return;
     try {
       setInlineSaving(true);
-      await incomeServices.createIncome(ownerId, {
+      const created = await incomeServices.createIncome(ownerId, {
         value: payload.value,
         description: trackedTitle,
         date: toNoon(date),
         category: "Acompanhamento Diário",
         dailyTracking: true,
       });
-      await loadIncomeData();
+      applyLocalTrackedIncomeAdd(created);
       setInlineDraftActive(false);
+      setInlineSaving(false);
+      refreshIncomeInBackground();
     } catch (error: any) {
+      setInlineSaving(false);
       Alert.alert(
         "Erro",
         error?.message || "Não foi possível salvar o lançamento.",
       );
-    } finally {
-      setInlineSaving(false);
     }
   };
 
-  const duplicateTrackedIncome = async (income: Income) => {
+  const duplicateTrackedIncome = (income: Income) => {
     if (!ownerId) return;
-    try {
-      setInlineSaving(true);
-      await incomeServices.createIncome(ownerId, {
-        value: income.value,
-        description: income.description || trackedTitle,
-        date: toNoon(new Date(income.date)),
-        category: income.category || "Acompanhamento Diário",
-        dailyTracking: true,
-        ...(income.origin ? { origin: income.origin } : {}),
-      });
-      await loadIncomeData();
-    } catch (error: any) {
-      Alert.alert(
-        "Erro",
-        error?.message || "Não foi possível duplicar o lançamento.",
-      );
-    } finally {
-      setInlineSaving(false);
-    }
+    const noon = toNoon(new Date(income.date));
+    const tempId = `temp-dup-${Date.now()}-${Math.random()
+      .toString(36)
+      .slice(2, 8)}`;
+    const optimistic: Income = {
+      ...income,
+      id: tempId,
+      date: noon,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    applyLocalTrackedIncomeAdd(optimistic);
+
+    void (async () => {
+      try {
+        const created = await incomeServices.createIncome(ownerId, {
+          value: income.value,
+          description: income.description || trackedTitle,
+          date: noon,
+          category: income.category || "Acompanhamento Diário",
+          dailyTracking: true,
+          ...(income.origin ? { origin: income.origin } : {}),
+        });
+        replaceLocalTrackedIncomeId(tempId, created);
+        refreshIncomeInBackground();
+      } catch (error: any) {
+        applyLocalTrackedIncomeRemove(optimistic);
+        Alert.alert(
+          "Erro",
+          error?.message || "Não foi possível duplicar o lançamento.",
+        );
+      }
+    })();
   };
 
   const moveTrackedIncomeToDay = async (
@@ -416,22 +508,136 @@ export const TrackedIncomeScreen = () => {
   ) => {
     if (!ownerId || payload.kind !== "income") return;
     if (payload.fromDateKey === toDateKey) return;
+    const local = incomeHistory.find((i) => i.id === payload.entryId) || null;
+    if (!local) return;
     try {
       setInlineSaving(true);
       const [y, m, d] = toDateKey.split("-").map(Number);
-      await incomeServices.updateIncome(payload.entryId, {
-        date: toNoon(new Date(y, m - 1, d)),
-      });
+      applyLocalTrackedIncomeMove(local, toDateKey);
       setEditingDateKey(toDateKey);
-      await loadIncomeData();
+      setInlineSaving(false);
+      void (async () => {
+        try {
+          await incomeServices.updateIncome(payload.entryId, {
+            date: toNoon(new Date(y, m - 1, d)),
+          });
+        } catch (error: any) {
+          Alert.alert(
+            "Erro",
+            error?.message || "Não foi possível mover o lançamento.",
+          );
+        } finally {
+          refreshIncomeInBackground();
+        }
+      })();
     } catch (error: any) {
+      setInlineSaving(false);
       Alert.alert(
         "Erro",
         error?.message || "Não foi possível mover o lançamento.",
       );
-    } finally {
-      setInlineSaving(false);
     }
+  };
+
+  const toggleEntrySelected = (entryId: string) => {
+    setSelectedEntryIds((prev) =>
+      prev.includes(entryId)
+        ? prev.filter((id) => id !== entryId)
+        : [...prev, entryId],
+    );
+  };
+
+  const toggleSelectAllDay = (items: Income[]) => {
+    const ids = items.map((item) => item.id);
+    if (!ids.length) return;
+    const allSelected = ids.every((id) => selectedEntryIds.includes(id));
+    setSelectedEntryIds(allSelected ? [] : ids);
+  };
+
+  const closeDayEditor = () => {
+    setEditingDateKey(null);
+    setInlineDraftActive(false);
+    setSelectedEntryIds([]);
+  };
+
+  const deleteTrackedIncome = (income: Income) => {
+    if (!ownerId) return;
+    const label = income.origin?.trim()
+      ? income.origin.trim()
+      : income.description || trackedTitle;
+    Alert.alert(
+      "Excluir lançamento",
+      `Remover "${label}" de ${formatCurrency(income.value)}?`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Excluir",
+          style: "destructive",
+          onPress: () => {
+            applyLocalTrackedIncomeRemove(income);
+            setSelectedEntryIds((prev) =>
+              prev.filter((id) => id !== income.id),
+            );
+            void (async () => {
+              try {
+                await incomeServices.deleteIncome(income.id);
+              } catch (error: any) {
+                applyLocalTrackedIncomeAdd(income);
+                Alert.alert(
+                  "Erro",
+                  error?.message || "Não foi possível excluir o lançamento.",
+                );
+              } finally {
+                refreshIncomeInBackground();
+              }
+            })();
+          },
+        },
+      ],
+    );
+  };
+
+  const deleteSelectedTrackedIncomes = (items: Income[]) => {
+    if (!ownerId) return;
+    const selected = items.filter((item) =>
+      selectedEntryIds.includes(item.id),
+    );
+    if (!selected.length) return;
+    Alert.alert(
+      "Excluir selecionados",
+      `Remover ${selected.length} lançamento(s) deste dia?`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Excluir",
+          style: "destructive",
+          onPress: () => {
+            selected.forEach((item) => applyLocalTrackedIncomeRemove(item));
+            setSelectedEntryIds([]);
+            void (async () => {
+              const failed: Income[] = [];
+              await Promise.all(
+                selected.map(async (item) => {
+                  try {
+                    await incomeServices.deleteIncome(item.id);
+                  } catch {
+                    failed.push(item);
+                  }
+                }),
+              );
+              if (failed.length) {
+                failed.forEach((item) => applyLocalTrackedIncomeAdd(item));
+                Alert.alert(
+                  "Erro",
+                  `Não foi possível excluir ${failed.length} lançamento(s).`,
+                );
+              }
+              refreshIncomeInBackground();
+            })();
+          },
+        },
+      ],
+    );
   };
 
   const handleConfirmZeroFromInline = async (date: Date) => {
@@ -685,7 +891,10 @@ export const TrackedIncomeScreen = () => {
                 const isZeroConfirmed =
                   daySummary.total <= 0 &&
                   zeroConfirmedDateKeys.includes(dateKey);
-                const isEditing = editingDateKey === dateKey;
+                const isEditing =
+                  editingDateKey === dateKey ||
+                  dragOverDateKey === dateKey ||
+                  dragSourceDateKey === dateKey;
                 const dayItems = getIncomesForDate(daySummary.date);
 
                 const dayHeader = (
@@ -728,31 +937,91 @@ export const TrackedIncomeScreen = () => {
                       isEditing && styles.dayRowEditing,
                       !isEditing && styles.dayRowCollapsed,
                       desktopWeb && !isEditing && { padding: 0 },
+                      desktopWeb &&
+                        dragOverDateKey === dateKey &&
+                        styles.dayRowDropTarget,
                     ]}
-                    {...(desktopWeb && isEditing
-                      ? desktopDayDropHandlers(dateKey, moveTrackedIncomeToDay)
+                    {...(desktopWeb
+                      ? desktopDayDropHandlers(
+                          dateKey,
+                          moveTrackedIncomeToDay,
+                          {
+                            onHoverDay: (key) => {
+                              setDragOverDateKey(key);
+                              if (editingDateKey !== key) {
+                                setEditingDateKey(key);
+                                setInlineDraftActive(false);
+                                setSelectedEntryIds([]);
+                              }
+                            },
+                            onDragLeaveDay: (key) => {
+                              setDragOverDateKey((prev) =>
+                                prev === key ? null : prev,
+                              );
+                            },
+                          },
+                        )
                       : {})}
                   >
                     {isEditing ? (
                       <>
                         {desktopWeb ? (
-                          <View
-                            style={{
-                              flexDirection: "row",
-                              justifyContent: "space-between",
-                              alignItems: "flex-start",
-                            }}
-                          >
+                          <View style={styles.dayEditHeaderDesktop}>
                             {dayHeader}
-                            <TouchableOpacity
-                              style={styles.cancelEditButton}
-                              onPress={() => {
-                                setEditingDateKey(null);
-                                setInlineDraftActive(false);
-                              }}
-                            >
-                              <Ionicons name="close" size={18} color="#fff" />
-                            </TouchableOpacity>
+                            <View style={styles.dayEditHeaderActions}>
+                              {dayItems.length > 0 ? (
+                                <TouchableOpacity
+                                  style={styles.selectAllChip}
+                                  onPress={() => toggleSelectAllDay(dayItems)}
+                                >
+                                  <Ionicons
+                                    name={
+                                      dayItems.every((item) =>
+                                        selectedEntryIds.includes(item.id),
+                                      )
+                                        ? "checkbox"
+                                        : "square-outline"
+                                    }
+                                    size={16}
+                                    color="#B900FF"
+                                  />
+                                  <Text style={styles.selectAllChipText}>
+                                    Selecionar tudo
+                                  </Text>
+                                </TouchableOpacity>
+                              ) : null}
+                              {selectedEntryIds.some((id) =>
+                                dayItems.some((item) => item.id === id),
+                              ) ? (
+                                <TouchableOpacity
+                                  style={styles.deleteSelectedBtn}
+                                  onPress={() =>
+                                    deleteSelectedTrackedIncomes(dayItems)
+                                  }
+                                >
+                                  <Ionicons
+                                    name="trash-outline"
+                                    size={16}
+                                    color="#fff"
+                                  />
+                                  <Text style={styles.deleteSelectedBtnText}>
+                                    Apagar (
+                                    {
+                                      dayItems.filter((item) =>
+                                        selectedEntryIds.includes(item.id),
+                                      ).length
+                                    }
+                                    )
+                                  </Text>
+                                </TouchableOpacity>
+                              ) : null}
+                              <TouchableOpacity
+                                style={styles.cancelEditButton}
+                                onPress={closeDayEditor}
+                              >
+                                <Ionicons name="close" size={18} color="#fff" />
+                              </TouchableOpacity>
+                            </View>
                           </View>
                         ) : (
                           dayHeader
@@ -772,10 +1041,15 @@ export const TrackedIncomeScreen = () => {
                                 }
                                 meta={item.category || undefined}
                                 value={item.value}
+                                selected={selectedEntryIds.includes(item.id)}
+                                onToggleSelect={() =>
+                                  toggleEntrySelected(item.id)
+                                }
                                 onEdit={() => openIncomeEditor(item.id)}
                                 onDuplicate={() =>
                                   duplicateTrackedIncome(item)
                                 }
+                                onDelete={() => deleteTrackedIncome(item)}
                               />
                             ) : (
                               <TouchableOpacity
@@ -881,7 +1155,7 @@ export const TrackedIncomeScreen = () => {
                               </TouchableOpacity>
                               <TouchableOpacity
                                 style={styles.cancelEditButton}
-                                onPress={() => setEditingDateKey(null)}
+                                onPress={closeDayEditor}
                               >
                                 <Ionicons name="close" size={18} color="#fff" />
                               </TouchableOpacity>
@@ -895,11 +1169,14 @@ export const TrackedIncomeScreen = () => {
                           styles.dayCollapsedPressable,
                           desktopWeb && styles.dayCollapsedPressableDesktop,
                         ]}
-                        onPress={() =>
-                          daySummary.total === 0 && !isZeroConfirmed
-                            ? handleOpenNoRecordActions(daySummary.date)
-                            : setEditingDateKey(dateKey)
-                        }
+                        onPress={() => {
+                          setSelectedEntryIds([]);
+                          if (daySummary.total === 0 && !isZeroConfirmed) {
+                            handleOpenNoRecordActions(daySummary.date);
+                          } else {
+                            setEditingDateKey(dateKey);
+                          }
+                        }}
                         activeOpacity={0.85}
                       >
                         <View style={styles.dayCollapsedTop}>
@@ -1291,6 +1568,11 @@ const styles = StyleSheet.create({
     flexDirection: "column",
     alignItems: "stretch",
   },
+  dayRowDropTarget: {
+    borderColor: "#B900FF",
+    borderWidth: 2,
+    backgroundColor: "rgba(185, 0, 255, 0.12)",
+  },
   dayCollapsedPressable: {
     flex: 1,
     width: "100%",
@@ -1382,9 +1664,55 @@ const styles = StyleSheet.create({
   },
   cancelEditButton: {
     alignSelf: "flex-end",
-    backgroundColor: "#333",
+    backgroundColor: "#FF008A",
+    borderRadius: 16,
+    width: 32,
+    height: 32,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 0,
+  },
+  dayEditHeaderDesktop: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 12,
+  },
+  dayEditHeaderActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    flexShrink: 0,
+  },
+  selectAllChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
     borderRadius: 8,
-    padding: 8,
+    borderWidth: 1,
+    borderColor: "rgba(185,0,255,0.45)",
+    backgroundColor: "rgba(185,0,255,0.10)",
+  },
+  selectAllChipText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  deleteSelectedBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 8,
+    backgroundColor: "#FF008A",
+  },
+  deleteSelectedBtnText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "700",
   },
   dayRowZeroConfirmed: {
     backgroundColor: "rgba(76, 175, 80, 0.08)",

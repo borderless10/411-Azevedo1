@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Tela de Edição de Renda
  */
 
@@ -24,6 +24,7 @@ import DatePicker from "../../components/DatePicker";
 import { CategoryPicker } from "../../components/CategoryPicker";
 import incomeServices from "../../services/incomeServices";
 import { formatCurrency } from "../../utils/currencyUtils";
+import { isFutureCalendarDay } from "../../utils/dateUtils";
 import { Income } from "../../types/income";
 import { ActingForClientBanner } from "../../components/Staff/ActingForClientBanner";
 import { staffClientId } from "../../utils/staffClientContext";
@@ -131,7 +132,7 @@ export const EditIncomeScreen = () => {
   };
 
   const validateDate = (selectedDate: Date): string => {
-    if (selectedDate > new Date()) {
+    if (isFutureCalendarDay(selectedDate)) {
       return "Data não pode ser no futuro";
     }
     return "";

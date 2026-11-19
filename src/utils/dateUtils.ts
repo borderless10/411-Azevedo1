@@ -3,6 +3,12 @@
  */
 
 import { PredefinedPeriod, PredefinedPeriodDates } from '../types/balance';
+import {
+  normalizeToLocalMidday,
+  isFutureCalendarDay,
+} from "./calendarDay";
+
+export { normalizeToLocalMidday, isFutureCalendarDay };
 
 /**
  * Formatar data para string YYYY-MM-DD
@@ -390,6 +396,8 @@ export default {
   subtractMonths,
   getStartOfDay,
   getEndOfDay,
+  normalizeToLocalMidday,
+  isFutureCalendarDay,
   getPredefinedPeriodDates,
   getFriendlyDateLabel,
 };

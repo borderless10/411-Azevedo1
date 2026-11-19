@@ -422,6 +422,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
       icon: "cart",
       color: "#B900FF",
     });
+    menuItems.push({
+      id: "InstallmentPurchases",
+      label: "Compra parcelada",
+      icon: "card",
+      color: "#B900FF",
+    });
   }
 
   // Perfil fica na foto do header (canto superior direito).

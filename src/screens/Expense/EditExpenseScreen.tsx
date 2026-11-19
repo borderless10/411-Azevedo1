@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Tela de Edição de Gasto
  */
 
@@ -25,6 +25,7 @@ import DatePicker from "../../components/DatePicker";
 import { CategoryPicker } from "../../components/CategoryPicker";
 import expenseServices from "../../services/expenseServices";
 import { formatCurrency } from "../../utils/currencyUtils";
+import { isFutureCalendarDay } from "../../utils/dateUtils";
 import { Expense } from "../../types/expense";
 import { creditCardServices } from "../../services/creditCardServices";
 import { CreditCard } from "../../types/creditCard";
@@ -160,7 +161,7 @@ export const EditExpenseScreen = () => {
   };
 
   const validateDate = (selectedDate: Date): string => {
-    if (selectedDate > new Date()) {
+    if (isFutureCalendarDay(selectedDate)) {
       return "Data não pode ser no futuro";
     }
     return "";

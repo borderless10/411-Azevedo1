@@ -23,6 +23,8 @@ export interface Expense {
   /** Título do acompanhamento no planejamento (ex.: Uber). A description pode ser livre. */
   trackedTitle?: string;
   sourceBillId?: string; // Vincula o gasto a uma conta paga
+  /** Vincula o gasto a uma compra parcelada (parcelas do cartão). */
+  installmentPurchaseId?: string;
   coupleMember?: CoupleMember;
   createdAt: Date;
   updatedAt: Date;
@@ -44,7 +46,10 @@ export interface CreateExpenseData {
   isTrackedDaily?: boolean; // Marcado quando cadastrado como Gasto Acompanhado
   trackedTitle?: string;
   sourceBillId?: string;
+  installmentPurchaseId?: string;
   coupleMember?: CoupleMember;
+  /** Parcelas futuras de compra parcelada (não aplicar bloqueio de data futura). */
+  allowFutureDate?: boolean;
 }
 
 /**
