@@ -231,10 +231,10 @@ export const RegisterScreen = () => {
                     name="person-outline"
                     size={20}
                     color={errors.name ? "#FF008A" : "#999"}
-                    style={styles.inputIcon}
+                    style={styles.inputIconLeading}
                   />
                   <TextInput
-                    style={styles.inputWithIcon}
+                    style={[styles.inputWithIcon, styles.inputWithSideIcons]}
                     placeholder="João Silva"
                     placeholderTextColor="#999"
                     value={name}
@@ -247,14 +247,14 @@ export const RegisterScreen = () => {
                       name="close-circle"
                       size={20}
                       color="#FF008A"
-                      style={styles.errorIcon}
+                      style={styles.inputIconTrailing}
                     />
                   ) : name.trim() && !errors.name ? (
                     <Ionicons
                       name="checkmark-circle"
                       size={20}
                       color="#B900FF"
-                      style={styles.errorIcon}
+                      style={styles.inputIconTrailing}
                     />
                   ) : null}
                 </View>
@@ -277,10 +277,10 @@ export const RegisterScreen = () => {
                     name="mail-outline"
                     size={20}
                     color={errors.email ? "#FF008A" : "#999"}
-                    style={styles.inputIcon}
+                    style={styles.inputIconLeading}
                   />
                   <TextInput
-                    style={styles.inputWithIcon}
+                    style={[styles.inputWithIcon, styles.inputWithSideIcons]}
                     placeholder="seu@email.com"
                     placeholderTextColor="#999"
                     value={email}
@@ -294,14 +294,14 @@ export const RegisterScreen = () => {
                       name="close-circle"
                       size={20}
                       color="#FF008A"
-                      style={styles.errorIcon}
+                      style={styles.inputIconTrailing}
                     />
                   ) : email.trim() && !errors.email ? (
                     <Ionicons
                       name="checkmark-circle"
                       size={20}
                       color="#B900FF"
-                      style={styles.errorIcon}
+                      style={styles.inputIconTrailing}
                     />
                   ) : null}
                 </View>
@@ -325,10 +325,10 @@ export const RegisterScreen = () => {
                     name="lock-closed-outline"
                     size={20}
                     color={errors.password ? "#FF008A" : "#999"}
-                    style={styles.inputIcon}
+                    style={styles.inputIconLeading}
                   />
                   <TextInput
-                    style={styles.inputWithIcon}
+                    style={[styles.inputWithIcon, styles.inputWithSideIcons]}
                     placeholder="Mínimo 6 caracteres"
                     placeholderTextColor="#999"
                     value={password}
@@ -341,14 +341,14 @@ export const RegisterScreen = () => {
                       name="close-circle"
                       size={20}
                       color="#FF008A"
-                      style={styles.errorIcon}
+                      style={styles.inputIconTrailing}
                     />
                   ) : password.length >= 6 ? (
                     <Ionicons
                       name="checkmark-circle"
                       size={20}
                       color="#B900FF"
-                      style={styles.errorIcon}
+                      style={styles.inputIconTrailing}
                     />
                   ) : null}
                 </View>
@@ -372,10 +372,10 @@ export const RegisterScreen = () => {
                     name="shield-checkmark-outline"
                     size={20}
                     color={errors.confirmPassword ? "#FF008A" : "#999"}
-                    style={styles.inputIcon}
+                    style={styles.inputIconLeading}
                   />
                   <TextInput
-                    style={styles.inputWithIcon}
+                    style={[styles.inputWithIcon, styles.inputWithSideIcons]}
                     placeholder="Digite a senha novamente"
                     placeholderTextColor="#999"
                     value={confirmPassword}
@@ -388,14 +388,14 @@ export const RegisterScreen = () => {
                       name="close-circle"
                       size={20}
                       color="#FF008A"
-                      style={styles.errorIcon}
+                      style={styles.inputIconTrailing}
                     />
                   ) : confirmPassword && confirmPassword === password ? (
                     <Ionicons
                       name="checkmark-circle"
                       size={20}
                       color="#B900FF"
-                      style={styles.errorIcon}
+                      style={styles.inputIconTrailing}
                     />
                   ) : null}
                 </View>
@@ -492,24 +492,28 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   inputWrapper: {
-    flexDirection: "row",
-    alignItems: "center",
+    position: "relative",
+    justifyContent: "center",
     backgroundColor: "#171321",
     borderRadius: 12,
     borderWidth: 1,
     borderColor: "#333",
-    paddingLeft: 16,
-    paddingRight: 16,
+    height: 52,
+    overflow: "hidden",
   },
   inputWrapperError: {
     borderColor: "#FF008A",
     borderWidth: 2,
   },
-  inputIcon: {
-    marginRight: 12,
+  inputIconLeading: {
+    position: "absolute",
+    left: 16,
+    zIndex: 2,
   },
-  errorIcon: {
-    marginLeft: 8,
+  inputIconTrailing: {
+    position: "absolute",
+    right: 16,
+    zIndex: 2,
   },
   input: {
     backgroundColor: "#171321",
@@ -521,10 +525,29 @@ const styles = StyleSheet.create({
     color: "#fff",
   },
   inputWithIcon: {
-    flex: 1,
-    padding: 16,
+    width: "100%",
+    height: "100%",
+    margin: 0,
+    paddingVertical: 0,
+    paddingHorizontal: 16,
     fontSize: 16,
     color: "#fff",
+    backgroundColor: "transparent",
+    borderWidth: 0,
+    ...(Platform.OS === "web"
+      ? ({
+          outlineStyle: "none",
+          outlineWidth: 0,
+          outlineColor: "transparent",
+          boxShadow: "none",
+          WebkitAppearance: "none",
+          appearance: "none",
+        } as object)
+      : null),
+  },
+  inputWithSideIcons: {
+    paddingLeft: 48,
+    paddingRight: 48,
   },
   button: {
     backgroundColor: "#B900FF",

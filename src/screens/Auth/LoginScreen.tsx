@@ -45,6 +45,9 @@ export const LoginScreen = () => {
   const [rememberEmail, setRememberEmail] = useState(false);
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [hasBiometricCredentials, setHasBiometricCredentials] = useState(false);
+  const [focusedField, setFocusedField] = useState<"email" | "password" | null>(
+    null,
+  );
 
   useEffect(() => {
     const loadLoginPreferences = async () => {
@@ -342,6 +345,7 @@ export const LoginScreen = () => {
               <View
                 style={[
                   styles.inputWrapper,
+                  focusedField === "email" ? styles.inputWrapperFocused : null,
                   errors.email ? styles.inputWrapperError : null,
                 ]}
               >
@@ -349,31 +353,37 @@ export const LoginScreen = () => {
                   name="mail-outline"
                   size={20}
                   color={errors.email ? "#FF008A" : "#999"}
-                  style={styles.inputIcon}
+                  style={styles.inputIconLeading}
                 />
                 <TextInput
-                  style={styles.inputWithIcon}
+                  style={[styles.inputWithIcon, styles.inputWithLeadingIcon]}
                   placeholder="seu@email.com"
                   placeholderTextColor="#999"
                   value={email}
                   onChangeText={handleEmailChange}
                   autoCapitalize="none"
                   keyboardType="email-address"
+                  autoComplete="email"
+                  textContentType="emailAddress"
                   editable={!loading}
+                  onFocus={() => setFocusedField("email")}
+                  onBlur={() =>
+                    setFocusedField((prev) => (prev === "email" ? null : prev))
+                  }
                 />
                 {errors.email ? (
                   <Ionicons
                     name="close-circle"
                     size={20}
                     color="#FF008A"
-                    style={styles.errorIcon}
+                    style={styles.inputIconTrailing}
                   />
                 ) : email.trim() && !errors.email ? (
                   <Ionicons
                     name="checkmark-circle"
                     size={20}
                     color="#B900FF"
-                    style={styles.errorIcon}
+                    style={styles.inputIconTrailing}
                   />
                 ) : null}
               </View>
@@ -389,6 +399,9 @@ export const LoginScreen = () => {
               <View
                 style={[
                   styles.inputWrapper,
+                  focusedField === "password"
+                    ? styles.inputWrapperFocused
+                    : null,
                   errors.password ? styles.inputWrapperError : null,
                 ]}
               >
@@ -396,44 +409,51 @@ export const LoginScreen = () => {
                   name="lock-closed-outline"
                   size={20}
                   color={errors.password ? "#FF008A" : "#999"}
-                  style={styles.inputIcon}
+                  style={styles.inputIconLeading}
                 />
                 <TextInput
-                  style={styles.inputWithIcon}
+                  style={[
+                    styles.inputWithIcon,
+                    styles.inputWithLeadingIcon,
+                    styles.inputWithTrailingActions,
+                  ]}
                   placeholder="••••••••"
                   placeholderTextColor="#999"
                   value={password}
                   onChangeText={handlePasswordChange}
                   secureTextEntry={!showPassword}
+                  autoComplete="password"
+                  textContentType="password"
                   editable={!loading}
+                  onFocus={() => setFocusedField("password")}
+                  onBlur={() =>
+                    setFocusedField((prev) =>
+                      prev === "password" ? null : prev,
+                    )
+                  }
                 />
-                <TouchableOpacity
-                  onPress={() => setShowPassword((prev) => !prev)}
-                  disabled={loading}
-                  style={styles.toggleButton}
-                >
-                  <Ionicons
-                    name={showPassword ? "eye" : "eye-off"}
-                    size={20}
-                    color="#999"
-                    style={styles.toggleIcon}
-                  />
-                </TouchableOpacity>
-                {errors.password ? (
-                  <Ionicons
-                    name="close-circle"
-                    size={20}
-                    color="#FF008A"
-                    style={styles.errorIcon}
-                  />
-                ) : password.trim() && !errors.password ? (
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={20}
-                    color="#B900FF"
-                    style={styles.errorIcon}
-                  />
-                ) : null}
+                <View style={styles.inputTrailingRow}>
+                  <TouchableOpacity
+                    onPress={() => setShowPassword((prev) => !prev)}
+                    disabled={loading}
+                    style={styles.toggleButton}
+                  >
+                    <Ionicons
+                      name={showPassword ? "eye" : "eye-off"}
+                      size={20}
+                      color="#999"
+                    />
+                  </TouchableOpacity>
+                  {errors.password ? (
+                    <Ionicons name="close-circle" size={20} color="#FF008A" />
+                  ) : password.trim() && !errors.password ? (
+                    <Ionicons
+                      name="checkmark-circle"
+                      size={20}
+                      color="#B900FF"
+                    />
+                  ) : null}
+                </View>
               </View>
               {errors.password ? (
                 <Text style={styles.errorTextSmall}>{errors.password}</Text>
@@ -524,7 +544,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   contentDesktop: {
-    flex: 0,
+    flexGrow: 0,
+    flexShrink: 0,
+    flexBasis: "auto",
+    alignSelf: "center",
     width: "100%",
     maxWidth: 440,
     backgroundColor: "#141414",
@@ -570,31 +593,42 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   inputWrapper: {
-    flexDirection: "row",
-    alignItems: "center",
+    position: "relative",
+    justifyContent: "center",
     backgroundColor: "#171321",
     borderRadius: 12,
     borderWidth: 1,
     borderColor: "#333",
-    paddingLeft: 16,
-    paddingRight: 16,
+    height: 52,
+    overflow: "hidden",
+  },
+  inputWrapperFocused: {
+    borderColor: "#B900FF",
   },
   inputWrapperError: {
     borderColor: "#FF008A",
     borderWidth: 2,
   },
-  inputIcon: {
-    marginRight: 12,
+  inputIconLeading: {
+    position: "absolute",
+    left: 16,
+    zIndex: 2,
   },
-  errorIcon: {
-    marginLeft: 8,
+  inputIconTrailing: {
+    position: "absolute",
+    right: 16,
+    zIndex: 2,
+  },
+  inputTrailingRow: {
+    position: "absolute",
+    right: 10,
+    zIndex: 2,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
   },
   toggleButton: {
-    marginLeft: 8,
     padding: 6,
-  },
-  toggleIcon: {
-    // kept for future adjustments
   },
   input: {
     backgroundColor: "#171321",
@@ -606,10 +640,32 @@ const styles = StyleSheet.create({
     color: "#fff",
   },
   inputWithIcon: {
-    flex: 1,
-    padding: 16,
+    width: "100%",
+    height: "100%",
+    margin: 0,
+    paddingVertical: 0,
+    paddingHorizontal: 16,
     fontSize: 16,
     color: "#fff",
+    backgroundColor: "transparent",
+    borderWidth: 0,
+    ...(Platform.OS === "web"
+      ? ({
+          outlineStyle: "none",
+          outlineWidth: 0,
+          outlineColor: "transparent",
+          boxShadow: "none",
+          WebkitAppearance: "none",
+          appearance: "none",
+        } as object)
+      : null),
+  },
+  inputWithLeadingIcon: {
+    paddingLeft: 48,
+    paddingRight: 48,
+  },
+  inputWithTrailingActions: {
+    paddingRight: 84,
   },
   rememberContainer: {
     flexDirection: "row",
