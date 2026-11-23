@@ -1082,12 +1082,65 @@ export const ChatScreen: React.FC = () => {
     );
   };
 
+  const findClientParticipantId = (chat: any): string | null => {
+    const participants = (chat?.participants || []).filter(
+      (id: string) => id && id !== "system",
+    ) as string[];
+    const byRole = participants.find((id) => isClientRole(userMap[id]?.role));
+    if (byRole) return byRole;
+    // Fallback: quem não é admin/consultor/supervisor
+    const byExclusion = participants.find((id) => {
+      const role = String(userMap[id]?.role || "").toLowerCase();
+      return !["admin", "consultor", "supervisor"].includes(role);
+    });
+    return byExclusion || null;
+  };
+
+  const isConsultationStaffGroup = (chat: any): boolean => {
+    if (!isGroupChat(chat)) return false;
+    if (chat?.id === "global" || chat?.type === "global") return false;
+    const participants = (chat?.participants || []) as string[];
+    if (participants.length < 2) return false;
+    const hasClient = participants.some((id) => isClientRole(userMap[id]?.role));
+    const hasStaff = participants.some((id) => {
+      const role = String(userMap[id]?.role || "").toLowerCase();
+      return role === "consultor" || role === "supervisor";
+    });
+    return hasClient && hasStaff;
+  };
+
   const getChatTitle = (chat: any): string => {
     const isClient = ["user", "cliente_premium"].includes(userRole);
     const isPrivileged = ["admin", "consultor", "supervisor"].includes(userRole);
 
     if (isGroupChat(chat)) {
       if (chat?.id === "global" || chat?.type === "global") return "Bate-Papo";
+
+      // Grupo cliente + consultor (+ supervisor):
+      // cliente vê "Consultoria financeira"; staff vê o nome do cliente.
+      if (isConsultationStaffGroup(chat) || (chat?.participants || []).length > 2) {
+        if (isClient) {
+          return "Consultoria financeira";
+        }
+        if (userRole === "consultor" || userRole === "supervisor") {
+          const clientId = findClientParticipantId(chat);
+          if (clientId) return getParticipantDisplayName(clientId);
+        }
+        if (userRole === "admin") {
+          const clientId = findClientParticipantId(chat);
+          const hasSupervisor = (chat?.participants || []).some(
+            (id: string) =>
+              String(userMap[id]?.role || "").toLowerCase() === "supervisor",
+          );
+          const clientName = clientId
+            ? getParticipantDisplayName(clientId)
+            : "Cliente";
+          return hasSupervisor
+            ? `Grupo: ${clientName} + Consultor + Supervisor`
+            : `Grupo: ${clientName} + Consultor`;
+        }
+      }
+
       if (isPrivileged) {
         const hasSupervisor = (chat?.participants || []).some(
           (id: string) =>
@@ -1818,21 +1871,32 @@ export const ChatScreen: React.FC = () => {
               keyExtractor={(item) => item.id}
               renderItem={({ item: chat }) => {
                 const group = isGroupChat(chat);
-                const otherId = group
-                  ? null
-                  : (chat.participants || []).find(
-                      (id: string) => id !== user?.id,
-                    );
+                const isGlobalGroup =
+                  chat?.id === "global" || chat?.type === "global";
+                const consultationClientId =
+                  group &&
+                  !isGlobalGroup &&
+                  (userRole === "consultor" || userRole === "supervisor")
+                    ? findClientParticipantId(chat)
+                    : null;
+                const otherId = consultationClientId
+                  ? consultationClientId
+                  : group
+                    ? null
+                    : (chat.participants || []).find(
+                        (id: string) => id !== user?.id,
+                      );
                 const otherPerson = otherId ? userMap[otherId] : null;
                 const otherPhoto = resolveProfilePhotoUri(otherPerson);
                 const otherBadge = badgeDefinitionForPerson(otherPerson);
+                const showPeopleAvatar = group && !consultationClientId;
                 return (
                 <TouchableOpacity
                   style={styles.chatRow}
                   onPress={() => setSelectedChatId(chat.id)}
                   activeOpacity={0.7}
                 >
-                  {group ? (
+                  {showPeopleAvatar ? (
                     <View style={styles.avatarContainer}>
                       {renderUserAvatar(null, 48, "people")}
                     </View>
@@ -1840,7 +1904,11 @@ export const ChatScreen: React.FC = () => {
                     <View style={styles.avatarBadgeWrap}>
                       <BadgedAvatar
                         photoUri={otherPhoto}
-                        displayName={getStartChatLabel(otherPerson)}
+                        displayName={
+                          consultationClientId
+                            ? getParticipantDisplayName(consultationClientId)
+                            : getStartChatLabel(otherPerson)
+                        }
                         size={44}
                         ringDefinition={ringDefinitionForPerson(otherPerson)}
                         badgeDefinition={otherBadge}
@@ -1850,7 +1918,11 @@ export const ChatScreen: React.FC = () => {
                             ? () =>
                                 setChatPhotoPreview({
                                   uri: otherPhoto,
-                                  name: getStartChatLabel(otherPerson),
+                                  name: consultationClientId
+                                    ? getParticipantDisplayName(
+                                        consultationClientId,
+                                      )
+                                    : getStartChatLabel(otherPerson),
                                   userId: otherId,
                                   rankingPreference:
                                     otherPerson?.rankingPreference,

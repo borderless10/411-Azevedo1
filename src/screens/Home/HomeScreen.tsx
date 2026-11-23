@@ -46,6 +46,7 @@ import {
 import { formatCurrency } from "../../utils/currencyUtils";
 import { incomeTransactionLabel } from "../../utils/incomeEntry";
 import { computePlanningTotals } from "../../utils/planningDisplayUtils";
+import { isCreditCardExpense } from "../../utils/creditCardUtils";
 import { perfMark, perfMeasure } from "../../utils/perfMarks";
 import MaskedAmount from "../../components/ui/MaskedAmount";
 import SoftCardAccent, {
@@ -180,26 +181,6 @@ export const HomeScreen = () => {
       .split("")
       .reduce((acc, char) => acc + char.charCodeAt(0), 0);
     return colors[hash % colors.length];
-  };
-
-  const isCreditCardExpense = (expense: Expense | any) => {
-    const paymentMethod = String(expense?.paymentMethod || "")
-      .trim()
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "");
-
-    const isCardMethod =
-      paymentMethod === "credit_card" ||
-      paymentMethod === "debit_card" ||
-      paymentMethod === "card" ||
-      paymentMethod === "cart" ||
-      paymentMethod === "cartao" ||
-      paymentMethod === "credito" ||
-      paymentMethod === "credit" ||
-      paymentMethod === "debito";
-
-    return isCardMethod || Boolean(expense?.cardId);
   };
 
   // Carregar dados do mês atual

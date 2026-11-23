@@ -44,6 +44,7 @@ import CustomModal from "../components/ui/CustomModal";
 import { CoupleMemberPickerScreen } from "../screens/Auth/CoupleMemberPickerScreen";
 import { ConsultationSchedulingScreen } from "../screens/Consultation/ConsultationSchedulingScreen";
 import { ClientInstallmentsScreen } from "../screens/Consultor/ClientInstallmentsScreen";
+import { ClientFollowUpPanelScreen } from "../screens/Consultor/ClientFollowUpPanelScreen";
 import { UserNotesScreen } from "../screens/Notes/UserNotesScreen";
 import { ShoppingListScreen } from "../screens/ShoppingList/ShoppingListScreen";
 import { InstallmentPurchasesScreen } from "../screens/Installments/InstallmentPurchasesScreen";
@@ -208,6 +209,8 @@ export const Router = () => {
         return <ConsultationSchedulingScreen />;
       case "ClientInstallments":
         return <ClientInstallmentsScreen />;
+      case "ClientFollowUpPanel":
+        return <ClientFollowUpPanelScreen />;
       case "UserNotes":
         return <UserNotesScreen />;
       case "ShoppingList":

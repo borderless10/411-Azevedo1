@@ -81,10 +81,11 @@ export const DesktopShell: React.FC<Props> = ({
   const showCoupleBar =
     isCoupleAccount(user) &&
     (activeCoupleMember === 1 || activeCoupleMember === 2);
-  // PC: sidebar docked sempre que a tela pediria menu OU seta voltar
-  // (ex.: Cartões usa back no mobile). Seta voltar fica só no mobile.
-  const effectiveShowSidebar = showSidebar || showBackButton;
-  const effectiveShowBack = false;
+  // PC: sidebar docked quando a tela pede menu. Se a tela for interna
+  // (showBackButton), mostra a seta para voltar no histórico (ex.: painel
+  // do consultor → registros).
+  const effectiveShowSidebar = showSidebar;
+  const effectiveShowBack = showBackButton;
 
   const mainBody = disablePageScroll ? (
     <View style={[styles.pageFill, contentStyle]}>{children}</View>

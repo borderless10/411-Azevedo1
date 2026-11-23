@@ -116,6 +116,7 @@ export const Header: React.FC<HeaderProps> = ({
       currentScreen === "ClientInvestments" ||
       currentScreen === "ClientInvestmentsView" ||
       currentScreen === "ClientPlanning" ||
+      currentScreen === "ClientFollowUpPanel" ||
       currentScreen === "Wishlist" ||
       (currentScreen === "Metas" && params && params.clientId) ||
       (params?.clientId &&
@@ -126,6 +127,7 @@ export const Header: React.FC<HeaderProps> = ({
           currentScreen === "Bills" ||
           currentScreen === "ClientExpenseRecords" ||
           currentScreen === "ClientIncomeRecords" ||
+          currentScreen === "ClientFollowUpPanel" ||
           currentScreen === "Cartoes" ||
           currentScreen === "Recomendacao"))
     ) {

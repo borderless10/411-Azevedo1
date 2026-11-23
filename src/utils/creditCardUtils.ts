@@ -1,5 +1,32 @@
 import { addMonths } from "./dateUtils";
 
+/**
+ * Compra no cartão (crédito/débito com cardId ou paymentMethod de cartão).
+ * Não deve reduzir o saldo de caixa do período (anti-dupla-contagem com fatura).
+ */
+export const isCreditCardExpense = (expense: {
+  paymentMethod?: string | null;
+  cardId?: string | null;
+}): boolean => {
+  const paymentMethod = String(expense?.paymentMethod || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+  const isCardMethod =
+    paymentMethod === "credit_card" ||
+    paymentMethod === "debit_card" ||
+    paymentMethod === "card" ||
+    paymentMethod === "cart" ||
+    paymentMethod === "cartao" ||
+    paymentMethod === "credito" ||
+    paymentMethod === "credit" ||
+    paymentMethod === "debito";
+
+  return isCardMethod || Boolean(expense?.cardId);
+};
+
 const clampDay = (day: number): number => {
   const n = Number(day) || 1;
   return Math.min(28, Math.max(1, n));
