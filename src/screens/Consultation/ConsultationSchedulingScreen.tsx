@@ -43,8 +43,8 @@ export const ConsultationSchedulingScreen: React.FC = () => {
   const { chats } = useUserChats(user?.id || null, user?.role || null);
   const {
     schedulingUrl,
-    preferredDate,
     preferredDayLabel,
+    suggestedDayOfMonth,
     bookedDay,
     bookedDayLabel,
     hasBookedCurrentCycle,
@@ -62,9 +62,9 @@ export const ConsultationSchedulingScreen: React.FC = () => {
   const [confirming, setConfirming] = useState(false);
   const [isCalendarVisible, setIsCalendarVisible] = useState(false);
   const confirmationPulse = useRef(new Animated.Value(1)).current;
-  const suggestedDay = parseConsultationPreferredDay(
-    hasBookedCurrentCycle ? bookedDay : preferredDate,
-  );
+  const suggestedDay = hasBookedCurrentCycle
+    ? parseConsultationPreferredDay(bookedDay)
+    : suggestedDayOfMonth;
   const [selectedDay, setSelectedDay] = useState<number | null>(suggestedDay);
   const dayTouchedRef = useRef(false);
   const [feedback, setFeedback] = useState<FeedbackModal>({
@@ -361,7 +361,7 @@ export const ConsultationSchedulingScreen: React.FC = () => {
               >
                 <Ionicons name="sparkles" size={18} color="#B900FF" />
                 <Text style={[styles.dayBadgeText, { color: colors.text }]}>
-                  Melhor dia sugerido: {preferredDayLabel} de cada mês
+                  Melhor dia sugerido: {preferredDayLabel}
                 </Text>
               </View>
             ) : null}

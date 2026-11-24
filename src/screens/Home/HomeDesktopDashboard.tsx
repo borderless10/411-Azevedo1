@@ -41,9 +41,11 @@ type Props = {
   activePeriodLabel: string;
   expectedIncomes: number | null;
   expectedExpenses: number | null;
+  expectedCardExpenses: number | null;
   expectedSavings: number | null;
   totalIncome: number;
   realizedExpenseTotal: number;
+  realizedCardExpenseTotal: number;
   realizedBalance: number;
   isStaff: boolean;
   onOpenPlanning: () => void;
@@ -138,11 +140,10 @@ export const HomeDesktopDashboard: React.FC<Props> = (props) => {
       {!props.isStaff ? (
         <View style={[styles.kpiGrid, { gap: 14 }]}>
           <Kpi
-            label="Recursos disponíveis"
+            label="Renda prevista"
             value={props.expectedIncomes}
             showValues={props.showValues}
             variant="income"
-            sub="Planejado"
             onPress={props.onOpenPlanning}
           />
           <Kpi
@@ -150,7 +151,12 @@ export const HomeDesktopDashboard: React.FC<Props> = (props) => {
             value={props.expectedExpenses}
             showValues={props.showValues}
             variant="expense"
-            sub="Planejado"
+            sub={
+              props.expectedCardExpenses != null &&
+              props.expectedCardExpenses > 0.005
+                ? `Cartão: ${formatCurrency(props.expectedCardExpenses)}`
+                : undefined
+            }
             onPress={props.onOpenPlanning}
           />
           <Kpi
@@ -158,28 +164,29 @@ export const HomeDesktopDashboard: React.FC<Props> = (props) => {
             value={props.expectedSavings}
             showValues={props.showValues}
             variant="savings"
-            sub={props.activePeriodLabel}
           />
           <Kpi
             label="Rendas realizadas"
             value={props.totalIncome}
             showValues={props.showValues}
             variant="income"
-            sub={props.activePeriodLabel}
           />
           <Kpi
             label="Gastos realizados"
             value={props.realizedExpenseTotal}
             showValues={props.showValues}
             variant="expense"
-            sub={props.activePeriodLabel}
+            sub={
+              props.realizedCardExpenseTotal > 0.005
+                ? `Cartão: ${formatCurrency(props.realizedCardExpenseTotal)}`
+                : undefined
+            }
           />
           <Kpi
             label="Saldo"
             value={props.realizedBalance}
             showValues={props.showValues}
             variant="balance"
-            sub={props.activePeriodLabel}
           />
         </View>
       ) : (

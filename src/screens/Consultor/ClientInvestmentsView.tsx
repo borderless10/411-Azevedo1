@@ -59,20 +59,43 @@ export const ClientInvestmentsView: React.FC = () => {
             {formatCurrencyUtil(item.totals?.ipca || 0)}
           </Text>
         </View>
-        <View style={styles.entryRow}>
-          <Text style={{ color: colors.textSecondary }}>Outros:</Text>
-          <Text style={{ color: colors.text }}>
-            {formatCurrencyUtil(item.totals?.outros || 0)}
-          </Text>
-        </View>
+        {(Array.isArray(item.totals?.custom) ? item.totals.custom : []).map(
+          (tag: any) => (
+            <View key={tag.id} style={styles.entryRow}>
+              <Text style={{ color: colors.textSecondary }}>
+                {tag.name || "Sem nome"}:
+              </Text>
+              <Text style={{ color: colors.text }}>
+                {formatCurrencyUtil(Number(tag.value) || 0)}
+              </Text>
+            </View>
+          ),
+        )}
+        {!Array.isArray(item.totals?.custom) && item.totals?.outros ? (
+          <View style={styles.entryRow}>
+            <Text style={{ color: colors.textSecondary }}>Outros:</Text>
+            <Text style={{ color: colors.text }}>
+              {formatCurrencyUtil(item.totals?.outros || 0)}
+            </Text>
+          </View>
+        ) : null}
       </View>
     );
+  };
+
+  const sumCustomTags = (totals: any): number => {
+    const custom = Array.isArray(totals?.custom) ? totals.custom : [];
+    const customSum = custom.reduce(
+      (sum: number, tag: any) => sum + (Number(tag?.value) || 0),
+      0,
+    );
+    return customSum + (Number(totals?.outros) || 0);
   };
 
   const current =
     history && history.length > 0
       ? history[0].totals
-      : { caixa: 0, ipca: 0, outros: 0 };
+      : { caixa: 0, ipca: 0, custom: [] };
 
   return (
     <Layout
@@ -98,12 +121,26 @@ export const ClientInvestmentsView: React.FC = () => {
               {formatCurrencyUtil(current.ipca || 0)}
             </Text>
           </View>
-          <View>
-            <Text style={{ color: colors.textSecondary }}>Outros</Text>
-            <Text style={{ color: colors.text, fontWeight: "700" }}>
-              {formatCurrencyUtil(current.outros || 0)}
-            </Text>
-          </View>
+          {(Array.isArray(current.custom) ? current.custom : []).map(
+            (tag: any) => (
+              <View key={tag.id}>
+                <Text style={{ color: colors.textSecondary }}>
+                  {tag.name || "Sem nome"}
+                </Text>
+                <Text style={{ color: colors.text, fontWeight: "700" }}>
+                  {formatCurrencyUtil(Number(tag.value) || 0)}
+                </Text>
+              </View>
+            ),
+          )}
+          {!Array.isArray(current.custom) && current.outros ? (
+            <View>
+              <Text style={{ color: colors.textSecondary }}>Outros</Text>
+              <Text style={{ color: colors.text, fontWeight: "700" }}>
+                {formatCurrencyUtil(current.outros || 0)}
+              </Text>
+            </View>
+          ) : null}
         </View>
 
         <Text
@@ -116,16 +153,19 @@ export const ClientInvestmentsView: React.FC = () => {
             history
               .slice()
               .reverse()
-              .map((h) => ({
-                date: new Date(h.date),
-                caixa: h.totals?.caixa || 0,
-                ipca: h.totals?.ipca || 0,
-                outros: h.totals?.outros || 0,
-                total:
-                  (h.totals?.caixa || 0) +
-                  (h.totals?.ipca || 0) +
-                  (h.totals?.outros || 0),
-              })) as InvPoint[]
+              .map((h) => {
+                const outrosAtivos = sumCustomTags(h.totals);
+                return {
+                  date: new Date(h.date),
+                  caixa: h.totals?.caixa || 0,
+                  ipca: h.totals?.ipca || 0,
+                  outros: outrosAtivos,
+                  total:
+                    (h.totals?.caixa || 0) +
+                    (h.totals?.ipca || 0) +
+                    outrosAtivos,
+                };
+              }) as InvPoint[]
           }
         />
 
@@ -180,7 +220,9 @@ const styles = StyleSheet.create({
   },
   currentRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     justifyContent: "space-between",
+    rowGap: 12,
     marginTop: 12,
   },
 });

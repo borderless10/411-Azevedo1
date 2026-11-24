@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Modal,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -24,12 +25,12 @@ import { formatCurrency } from "../../utils/currencyUtils";
 import { profileDisplayName } from "../../utils/chatDisplayNames";
 import { resolveClientMovementPeriod } from "../../utils/consultantClientMetrics";
 import {
+  buildFollowUpCardBreakdown,
   buildFollowUpPanelModel,
   FollowUpDrillTarget,
   FollowUpPanelRow,
   FollowUpPanelSection,
   formatFollowUpDifference,
-  formatFollowUpPaymentSplit,
 } from "../../utils/followUpPanelMetrics";
 import { formatDateForDisplay } from "../../utils/dateUtils";
 
@@ -45,6 +46,7 @@ export const ClientFollowUpPanelScreen: React.FC = () => {
   const [planning, setPlanning] = useState<Planning | null>(null);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [incomes, setIncomes] = useState<Income[]>([]);
+  const [cardModalVisible, setCardModalVisible] = useState(false);
 
   const load = useCallback(async () => {
     if (!clientId) return;
@@ -102,6 +104,11 @@ export const ClientFollowUpPanelScreen: React.FC = () => {
     [planning, expenses, incomes, period],
   );
 
+  const cardBreakdown = useMemo(
+    () => buildFollowUpCardBreakdown(expenses, period),
+    [expenses, period],
+  );
+
   const openDrill = (drill: FollowUpDrillTarget) => {
     const base = {
       clientId,
@@ -135,18 +142,25 @@ export const ClientFollowUpPanelScreen: React.FC = () => {
 
   const renderMoneyCell = (
     value: number,
-    options?: { emphasize?: boolean; isDiff?: boolean },
+    options?: {
+      emphasize?: boolean;
+      isDiff?: boolean;
+      /** Renda/saldo: positivo = bom (verde). Gasto: positivo = ruim (vermelho). */
+      goodWhenPositive?: boolean;
+    },
   ) => {
     const emphasize = options?.emphasize;
     const isDiff = options?.isDiff;
+    const goodWhenPositive = Boolean(options?.goodWhenPositive);
     let tone = colors.text;
     if (isDiff) {
-      tone =
-        Math.abs(value) < 0.005
-          ? colors.textSecondary
-          : value > 0
-            ? "#FF008A"
-            : "#4caf50";
+      if (Math.abs(value) < 0.005) {
+        tone = colors.textSecondary;
+      } else if (value > 0) {
+        tone = goodWhenPositive ? "#4caf50" : "#FF008A";
+      } else {
+        tone = goodWhenPositive ? "#FF008A" : "#4caf50";
+      }
     }
     return (
       <View style={styles.colMoney}>
@@ -190,7 +204,10 @@ export const ClientFollowUpPanelScreen: React.FC = () => {
     </View>
   );
 
-  const renderRow = (row: FollowUpPanelRow) => (
+  const renderRow = (
+    row: FollowUpPanelRow,
+    options?: { goodWhenPositive?: boolean },
+  ) => (
     <TouchableOpacity
       key={row.id}
       style={[styles.row, { borderBottomColor: colors.border }]}
@@ -212,7 +229,10 @@ export const ClientFollowUpPanelScreen: React.FC = () => {
       </View>
       {renderMoneyCell(row.planned)}
       {renderMoneyCell(row.actual)}
-      {renderMoneyCell(row.difference, { isDiff: true })}
+      {renderMoneyCell(row.difference, {
+        isDiff: true,
+        goodWhenPositive: options?.goodWhenPositive,
+      })}
       <Ionicons
         name="chevron-forward"
         size={16}
@@ -222,55 +242,237 @@ export const ClientFollowUpPanelScreen: React.FC = () => {
     </TouchableOpacity>
   );
 
-  const renderSection = (section: FollowUpPanelSection) => (
-    <View
-      key={section.id}
-      style={[styles.sectionCard, { borderColor: colors.border, backgroundColor: colors.card }]}
-    >
-      <Text style={[styles.sectionTitle, { color: colors.primary }]}>
-        {section.title}
-      </Text>
-      {renderHeaderRow()}
-      {section.rows.length === 0 ? (
-        <Text style={[styles.emptyRows, { color: colors.textSecondary }]}>
-          Sem itens no planejamento.
+  const renderSection = (section: FollowUpPanelSection) => {
+    const incomeTone = section.id === "rendas";
+    return (
+      <View
+        key={section.id}
+        style={[styles.sectionCard, { borderColor: colors.border, backgroundColor: colors.card }]}
+      >
+        <Text style={[styles.sectionTitle, { color: colors.primary }]}>
+          {section.title}
         </Text>
-      ) : (
-        section.rows.map(renderRow)
-      )}
-      <View style={[styles.totalRow, { borderTopColor: colors.border }]}>
-        <View style={styles.colCategory}>
-          <Text style={[styles.totalLabel, { color: colors.text }]}>
-            Total de {section.id === "rendas" ? "rendas" : "gastos"}
+        {renderHeaderRow()}
+        {section.rows.length === 0 ? (
+          <Text style={[styles.emptyRows, { color: colors.textSecondary }]}>
+            Sem itens no planejamento.
           </Text>
+        ) : (
+          section.rows.map((row) =>
+            renderRow(row, { goodWhenPositive: incomeTone }),
+          )
+        )}
+        <View style={[styles.totalRow, { borderTopColor: colors.border }]}>
+          <View style={styles.colCategory}>
+            <Text style={[styles.totalLabel, { color: colors.text }]}>
+              Total de {section.id === "rendas" ? "rendas" : "gastos"}
+            </Text>
+          </View>
+          {renderMoneyCell(section.totalPlanned, { emphasize: true })}
+          {renderMoneyCell(section.totalActual, { emphasize: true })}
+          {renderMoneyCell(section.totalDifference, {
+            emphasize: true,
+            isDiff: true,
+            goodWhenPositive: incomeTone,
+          })}
+          <View style={styles.chevronSpacer} />
         </View>
-        {renderMoneyCell(section.totalPlanned, { emphasize: true })}
-        {renderMoneyCell(section.totalActual, { emphasize: true })}
-        {renderMoneyCell(section.totalDifference, {
-          emphasize: true,
-          isDiff: true,
-        })}
-        <View style={styles.chevronSpacer} />
       </View>
-      {section.id === "gastos" ? (
-        <View style={styles.splitSummary}>
-          <Text style={[styles.splitLabel, { color: colors.textSecondary }]}>
-            Planejado ·{" "}
-            {formatFollowUpPaymentSplit(section.plannedSplit) ||
-              "Sem split caixa/cartão"}
-          </Text>
-          <Text style={[styles.splitLabel, { color: colors.textSecondary }]}>
-            Efetivo ·{" "}
-            {formatFollowUpPaymentSplit(section.actualSplit) ||
-              "Sem lançamentos"}
-          </Text>
-          <Text style={[styles.splitHint, { color: colors.textSecondary }]}>
-            Os totais da tabela usam só o caixa no saldo. O cartão aparece aqui
-            para acompanhar sem dupla contagem.
+    );
+  };
+
+  const renderCardSummary = () => {
+    const { cardSummary } = model;
+    const hasCard =
+      Math.abs(cardSummary.planned) > 0.005 ||
+      Math.abs(cardSummary.actual) > 0.005;
+    if (!hasCard) return null;
+
+    return (
+      <TouchableOpacity
+        style={[
+          styles.cardSection,
+          { borderColor: colors.primary, backgroundColor: colors.card },
+        ]}
+        onPress={() => setCardModalVisible(true)}
+        activeOpacity={0.75}
+      >
+        <View style={styles.cardSectionHeader}>
+          <Ionicons name="card-outline" size={18} color={colors.primary} />
+          <Text style={[styles.sectionTitle, styles.cardSectionTitle, { color: colors.primary }]}>
+            GASTOS NO CARTÃO
           </Text>
         </View>
-      ) : null}
-    </View>
+        <Text style={[styles.cardSectionHint, { color: colors.textSecondary }]}>
+          Separado do caixa. Toque para ver por categoria.
+        </Text>
+        {renderHeaderRow()}
+        <View style={styles.balanceRow}>
+          <View style={styles.colCategory}>
+            <Text style={[styles.totalLabel, { color: colors.text }]}>
+              Total no cartão
+            </Text>
+          </View>
+          {renderMoneyCell(cardSummary.planned, { emphasize: true })}
+          {renderMoneyCell(cardSummary.actual, { emphasize: true })}
+          {renderMoneyCell(cardSummary.difference, {
+            emphasize: true,
+            isDiff: true,
+          })}
+          <Ionicons
+            name="chevron-forward"
+            size={16}
+            color={colors.textSecondary}
+            style={styles.chevron}
+          />
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  const renderCardExpensesModal = () => (
+    <Modal
+      visible={cardModalVisible}
+      animationType="slide"
+      transparent
+      onRequestClose={() => setCardModalVisible(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View
+          style={[
+            styles.modalSheet,
+            { backgroundColor: colors.card, borderColor: colors.border },
+          ]}
+        >
+          <View style={styles.modalHeader}>
+            <View style={styles.modalHeaderText}>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>
+                Gastos no cartão
+              </Text>
+              <Text style={[styles.modalSubtitle, { color: colors.textSecondary }]}>
+                {clientName || "Cliente"} · {model.period.label}
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => setCardModalVisible(false)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Ionicons name="close" size={24} color={colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+
+          <View
+            style={[
+              styles.modalTotalBar,
+              { backgroundColor: colors.background, borderColor: colors.border },
+            ]}
+          >
+            <Text style={[styles.modalTotalLabel, { color: colors.textSecondary }]}>
+              Total efetivo no período
+            </Text>
+            <Text style={[styles.modalTotalValue, { color: colors.primary }]}>
+              {formatCurrency(cardBreakdown.total)}
+            </Text>
+          </View>
+
+          <ScrollView
+            style={styles.modalScroll}
+            contentContainerStyle={styles.modalScrollContent}
+          >
+            {cardBreakdown.categories.length === 0 ? (
+              <Text style={[styles.emptyRows, { color: colors.textSecondary }]}>
+                Nenhum lançamento no cartão neste período.
+              </Text>
+            ) : (
+              cardBreakdown.categories.map((group) => (
+                <View
+                  key={group.category}
+                  style={[
+                    styles.categoryBlock,
+                    { borderColor: colors.border },
+                  ]}
+                >
+                  <View style={styles.categoryHeader}>
+                    <Text
+                      style={[styles.categoryTitle, { color: colors.text }]}
+                      numberOfLines={1}
+                    >
+                      {group.category}
+                    </Text>
+                    <Text
+                      style={[styles.categoryTotal, { color: colors.primary }]}
+                    >
+                      {formatCurrency(group.total)}
+                    </Text>
+                  </View>
+                  <Text
+                    style={[
+                      styles.categoryCount,
+                      { color: colors.textSecondary },
+                    ]}
+                  >
+                    {group.items.length}{" "}
+                    {group.items.length === 1 ? "lançamento" : "lançamentos"}
+                  </Text>
+                  {group.items.map((item) => (
+                    <View
+                      key={item.id}
+                      style={[
+                        styles.cardExpenseRow,
+                        { borderTopColor: colors.border },
+                      ]}
+                    >
+                      <View style={styles.cardExpenseMain}>
+                        <Text
+                          style={[styles.cardExpenseDesc, { color: colors.text }]}
+                          numberOfLines={2}
+                        >
+                          {item.description}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.cardExpenseMeta,
+                            { color: colors.textSecondary },
+                          ]}
+                        >
+                          {formatDateForDisplay(item.date)} · {item.paymentLabel}
+                          {item.cardLast4 ? ` · final ${item.cardLast4}` : ""}
+                        </Text>
+                        {item.scopeLabel ? (
+                          <Text
+                            style={[
+                              styles.cardExpenseScope,
+                              { color: colors.textSecondary },
+                            ]}
+                          >
+                            {item.scopeLabel}
+                          </Text>
+                        ) : null}
+                      </View>
+                      <Text
+                        style={[
+                          styles.cardExpenseValue,
+                          { color: colors.text },
+                        ]}
+                      >
+                        {formatCurrency(item.value)}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              ))
+            )}
+          </ScrollView>
+
+          <TouchableOpacity
+            style={[styles.modalCloseBtn, { backgroundColor: colors.primary }]}
+            onPress={() => setCardModalVisible(false)}
+          >
+            <Text style={styles.modalCloseBtnText}>Fechar</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
   );
 
   if (!clientId) {
@@ -319,12 +521,12 @@ export const ClientFollowUpPanelScreen: React.FC = () => {
           </Text>
           <Text style={[styles.legend, { color: colors.textSecondary }]}>
             Planejado é só leitura. Toque numa linha para ver ou corrigir o
-            efetivo nas telas já existentes. Parte no cartão não entra no saldo
-            de caixa.
+            efetivo. Gastos de caixa e cartão ficam em cards separados.
           </Text>
 
           {renderSection(model.incomeSection)}
           {renderSection(model.expenseSection)}
+          {renderCardSummary()}
 
           <View
             style={[
@@ -347,12 +549,14 @@ export const ClientFollowUpPanelScreen: React.FC = () => {
               {renderMoneyCell(model.balanceDifference, {
                 emphasize: true,
                 isDiff: true,
+                goodWhenPositive: true,
               })}
               <View style={styles.chevronSpacer} />
             </View>
           </View>
         </ScrollView>
       )}
+      {renderCardExpensesModal()}
     </Layout>
   );
 };
@@ -397,6 +601,25 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     padding: 12,
     marginTop: 4,
+  },
+  cardSection: {
+    borderWidth: 1.5,
+    borderRadius: 14,
+    padding: 12,
+  },
+  cardSectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 4,
+  },
+  cardSectionTitle: {
+    marginBottom: 0,
+  },
+  cardSectionHint: {
+    fontSize: 11,
+    lineHeight: 15,
+    marginBottom: 8,
   },
   sectionTitle: {
     fontSize: 13,
@@ -470,20 +693,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "800",
   },
-  splitSummary: {
-    marginTop: 8,
-    gap: 4,
-  },
-  splitLabel: {
-    fontSize: 11,
-    lineHeight: 15,
-    fontWeight: "600",
-  },
-  splitHint: {
-    fontSize: 10,
-    lineHeight: 14,
-    marginTop: 2,
-  },
   emptyRows: {
     fontSize: 12,
     paddingVertical: 10,
@@ -494,6 +703,126 @@ const styles = StyleSheet.create({
   },
   chevronSpacer: {
     width: 16,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    justifyContent: "flex-end",
+  },
+  modalSheet: {
+    maxHeight: "88%",
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+    borderWidth: 1,
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 18,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+    marginBottom: 12,
+  },
+  modalHeaderText: {
+    flex: 1,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+  },
+  modalSubtitle: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  modalTotalBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 12,
+  },
+  modalTotalLabel: {
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  modalTotalValue: {
+    fontSize: 16,
+    fontWeight: "800",
+  },
+  modalScroll: {
+    flexGrow: 0,
+  },
+  modalScrollContent: {
+    paddingBottom: 8,
+    gap: 10,
+  },
+  categoryBlock: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 10,
+  },
+  categoryHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  categoryTitle: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  categoryTotal: {
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  categoryCount: {
+    fontSize: 11,
+    marginTop: 2,
+    marginBottom: 4,
+  },
+  cardExpenseRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    paddingTop: 8,
+    marginTop: 6,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  cardExpenseMain: {
+    flex: 1,
+  },
+  cardExpenseDesc: {
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  cardExpenseMeta: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  cardExpenseScope: {
+    fontSize: 10,
+    marginTop: 2,
+  },
+  cardExpenseValue: {
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  modalCloseBtn: {
+    marginTop: 12,
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: "center",
+  },
+  modalCloseBtnText: {
+    color: "#fff",
+    fontSize: 15,
+    fontWeight: "800",
   },
 });
 

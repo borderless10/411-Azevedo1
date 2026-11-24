@@ -187,14 +187,18 @@ export const PlanningViewScreen = () => {
 
   const summaryCards = [
     {
-      title: "Recursos Disponíveis",
+      title: "Renda prevista",
       value: totals.totalResources,
       color: colors.primary,
     },
     {
       title: "Gastos Esperados",
-      value: totals.totalCashExpenses,
+      value: totals.totalSpending,
       color: colors.warning,
+      subtitle:
+        totals.totalCardExpenses > 0.005
+          ? `Cartão: ${formatCurrency(totals.totalCardExpenses)}`
+          : undefined,
     },
     {
       title: "Poupança Esperada",
@@ -321,6 +325,7 @@ export const PlanningViewScreen = () => {
                         title={card.title}
                         value={card.value}
                         color={card.color}
+                        subtitle={card.subtitle}
                       />
                     </View>
                   ))}

@@ -94,7 +94,17 @@ const DatePicker: React.FC<DatePickerProps> = ({
     input.style.padding = "0";
     input.style.margin = "0";
     input.style.background = "transparent";
-    document.body.appendChild(input);
+
+    // Se o campo está dentro de um Modal (ex.: Renovar Ciclo), o
+    // ModalFocusTrap do react-native-web mantém foco preso na subárvore DOM
+    // do modal ativo. Como este <input> nativo é anexado fora dela, o foco
+    // dado por input.focus() é imediatamente "roubado" de volta pelo modal
+    // (ele acha que o foco "escapou"), fechando o seletor de data assim que
+    // abre. Anexar dentro do modal ativo (role="dialog") mantém o input
+    // "contido" e evita esse roubo de foco.
+    const activeDialog = document.querySelector('[role="dialog"]');
+    const mountNode = activeDialog || document.body;
+    mountNode.appendChild(input);
 
     let cleaned = false;
     const cleanup = () => {

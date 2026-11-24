@@ -59,6 +59,10 @@ export const PieChart: React.FC<PieChartProps> = ({
   const radius = (chartSize - stroke) / 2;
   const cx = chartSize / 2;
   const cy = chartSize / 2;
+  const innerHoleRadius = radius - stroke * 0.55;
+  // Largura segura para o valor central: precisa caber dentro do "buraco"
+  // do donut (círculo interno), não no quadrado que envolve o gráfico todo.
+  const centerLabelWidth = Math.max(44, innerHoleRadius * 2 * 0.86);
 
   useEffect(() => {
     Animated.timing(opacityAnim, {
@@ -163,25 +167,22 @@ export const PieChart: React.FC<PieChartProps> = ({
           <Circle
             cx={cx}
             cy={cy}
-            r={radius - stroke * 0.55}
+            r={innerHoleRadius}
             fill={premium.bg}
           />
         </Svg>
-        <View
-          style={[
-            styles.centerLabel,
-            { paddingHorizontal: Math.max(6, stroke * 0.35) },
-          ]}
-          pointerEvents="none"
-        >
+        <View style={styles.centerLabel} pointerEvents="none">
           <Text
             style={[
               styles.centerValue,
-              { fontSize: Math.max(11, Math.min(15, chartSize * 0.12)) },
+              {
+                width: centerLabelWidth,
+                fontSize: Math.max(10, Math.min(14, chartSize * 0.11)),
+              },
             ]}
             numberOfLines={1}
             adjustsFontSizeToFit
-            minimumFontScale={0.5}
+            minimumFontScale={0.4}
           >
             {showValues ? formatCurrency(segments.total) : "R$ •••"}
           </Text>
@@ -237,7 +238,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "800",
     textAlign: "center",
-    width: "100%",
   },
   centerSub: {
     color: premium.textSecondary,

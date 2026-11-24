@@ -84,6 +84,7 @@ import ConfettiCelebration from "../../components/ui/ConfettiCelebration";
 import ExpectedDetails from "../../components/ui/ExpectedDetails";
 import { profileDisplayName } from "../../utils/chatDisplayNames";
 import {
+  filterGeneralHistoryExpenses,
   getExpenseScopeLabel,
   shouldShowExpenseCategoryTag,
 } from "../../utils/expenseScopeUtils";
@@ -98,9 +99,13 @@ export const HomeScreen = () => {
   const [totalIncome, setTotalIncome] = useState(0);
   const [totalExpense, setTotalExpense] = useState(0);
   const [realizedExpenseTotal, setRealizedExpenseTotal] = useState(0);
+  const [realizedCardExpenseTotal, setRealizedCardExpenseTotal] = useState(0);
   const [realizedBalance, setRealizedBalance] = useState(0);
   const [balance, setBalance] = useState(0);
   const [expectedExpenses, setExpectedExpenses] = useState<number | null>(null);
+  const [expectedCardExpenses, setExpectedCardExpenses] = useState<number | null>(
+    null,
+  );
   const [expectedIncomes, setExpectedIncomes] = useState<number | null>(null);
   const [expectedSavings, setExpectedSavings] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
@@ -279,7 +284,8 @@ export const HomeScreen = () => {
           .getExpenses(user.id, {
             startDate: activeStartDate,
             endDate: activeEndDate,
-            excludeSectionOnly: true,
+            // Inclui CM e acompanhados no saldo (igual ao Painel de Acompanhamento).
+            // O histórico geral da lista continua filtrando seções abaixo.
             createdAtFrom,
           })
           .catch((err) => {
@@ -295,6 +301,8 @@ export const HomeScreen = () => {
         (sum, expense) => sum + Number(expense.value || 0),
         0,
       );
+      // Lista/histórico geral: sem CM e acompanhados (eles têm tela própria).
+      const historyExpenses = filterGeneralHistoryExpenses(allExpenses);
       const expensesByCategory = expenseServices.groupLoadedExpenses(allExpenses);
       const withinLineChart = (value: unknown) => {
         const date =
@@ -312,16 +320,20 @@ export const HomeScreen = () => {
 
       // compute expected values if planning exists
       let calcExpectedExpenses: number | null = null;
+      let calcExpectedCardExpenses: number | null = null;
       let calcExpectedIncomes: number | null = null;
       let calcExpectedSavings: number | null = null;
       if (planning) {
         const planningTotals = computePlanningTotals(planning);
-        calcExpectedExpenses = planningTotals.totalCashExpenses;
+        // Gasto esperado = caixa + cartão. Poupança continua só com caixa.
+        calcExpectedExpenses = planningTotals.totalSpending;
+        calcExpectedCardExpenses = planningTotals.totalCardExpenses;
         calcExpectedIncomes = planningTotals.totalResources;
         calcExpectedSavings = planningTotals.expectedSavings;
       }
 
       setExpectedExpenses(calcExpectedExpenses);
+      setExpectedCardExpenses(calcExpectedCardExpenses);
       setExpectedIncomes(calcExpectedIncomes);
       setExpectedSavings(calcExpectedSavings);
 
@@ -336,14 +348,14 @@ export const HomeScreen = () => {
         end: activeEndDate.toISOString(),
       });
 
-      // Combinar e ordenar por data de criação
+      // Combinar e ordenar por data de criação (histórico geral sem seções)
       const allTransactionsWithType = [
         ...allIncomes.map((inc) => ({
           item: inc as Income | Expense,
           type: "income" as const,
           createdAt: inc.createdAt,
         })),
-        ...allExpenses.map((exp) => ({
+        ...historyExpenses.map((exp) => ({
           item: exp as Income | Expense,
           type: "expense" as const,
           createdAt: exp.createdAt,
@@ -410,6 +422,11 @@ export const HomeScreen = () => {
         (sum, expense) => sum + (Number(expense.value) || 0),
         0,
       );
+      const realizedCardExpenses = allExpenses.filter(isCreditCardExpense);
+      const realizedCardTotal = realizedCardExpenses.reduce(
+        (sum, expense) => sum + (Number(expense.value) || 0),
+        0,
+      );
       const realizedExpenses = allExpenses.filter(
         (expense) => !isCreditCardExpense(expense),
       );
@@ -419,6 +436,7 @@ export const HomeScreen = () => {
       );
       const realizedBalanceTotal = incomeTotal - realizedExpenseForBalance;
       setRealizedExpenseTotal(realizedExpenseAll);
+      setRealizedCardExpenseTotal(realizedCardTotal);
       setRealizedBalance(realizedBalanceTotal);
       setBalance(calculatedBalance);
       setAllTransactions(allTransactionsWithType);
@@ -491,6 +509,8 @@ export const HomeScreen = () => {
       setTotalIncome(0);
       setTotalExpense(0);
       setRealizedExpenseTotal(0);
+      setRealizedCardExpenseTotal(0);
+      setExpectedCardExpenses(null);
       setRealizedBalance(0);
       setBalance(0);
       setAllTransactions([]);
@@ -1423,7 +1443,7 @@ export const HomeScreen = () => {
   const showExpectedSavingsHelp = () => {
     Alert.alert(
       "Poupança estimada",
-      "Valor estimado a partir do seu planejamento: recursos previstos menos gastos previstos no período ativo (ciclo de consumo moderado ou mês corrente).",
+      "Valor estimado a partir do seu planejamento: renda prevista menos gastos previstos de caixa no período ativo (ciclo de consumo moderado ou mês corrente).",
     );
   };
 
@@ -1473,9 +1493,11 @@ export const HomeScreen = () => {
           activePeriodLabel={activePeriodLabel}
           expectedIncomes={expectedIncomes}
           expectedExpenses={expectedExpenses}
+          expectedCardExpenses={expectedCardExpenses}
           expectedSavings={expectedSavings}
           totalIncome={totalIncome}
           realizedExpenseTotal={realizedExpenseTotal}
+          realizedCardExpenseTotal={realizedCardExpenseTotal}
           realizedBalance={realizedBalance}
           isStaff={isStaffUser(user)}
           onOpenPlanning={() => navigate("PlanningView")}
@@ -1700,7 +1722,7 @@ export const HomeScreen = () => {
                           />
                         </View>
                         <Text style={styles.summaryLabelIncome}>
-                          Recursos Disponíveis
+                          Renda prevista
                         </Text>
                         {expectedIncomes === null ? (
                           <Text style={styles.summaryValueSquare}>-</Text>
@@ -1710,7 +1732,6 @@ export const HomeScreen = () => {
                             style={styles.summaryValueSquare}
                           />
                         )}
-                        <Text style={styles.summarySubtext}>Este mês</Text>
                         <View style={styles.chevronContainer}>
                           <Ionicons
                             name={
@@ -1783,7 +1804,12 @@ export const HomeScreen = () => {
                             style={styles.summaryValueSquare}
                           />
                         )}
-                        <Text style={styles.summarySubtext}>Este mês</Text>
+                        {expectedCardExpenses != null &&
+                        expectedCardExpenses > 0.005 ? (
+                          <Text style={styles.summarySubtext}>
+                            Cartão: {formatCurrency(expectedCardExpenses)}
+                          </Text>
+                        ) : null}
                         <View style={styles.chevronContainer}>
                           <Ionicons
                             name={
@@ -2030,9 +2056,6 @@ export const HomeScreen = () => {
                           adjustsFontSizeToFit
                           minimumFontScale={0.7}
                         />
-                        <Text style={styles.summarySubtext}>
-                          {activePeriodLabel}
-                        </Text>
                       </View>
                     </View>
 
@@ -2079,9 +2102,11 @@ export const HomeScreen = () => {
                           adjustsFontSizeToFit
                           minimumFontScale={0.7}
                         />
-                        <Text style={styles.summarySubtext}>
-                          {activePeriodLabel}
-                        </Text>
+                        {realizedCardExpenseTotal > 0.005 ? (
+                          <Text style={styles.summarySubtext}>
+                            Cartão: {formatCurrency(realizedCardExpenseTotal)}
+                          </Text>
+                        ) : null}
                       </View>
                     </View>
 
@@ -2131,9 +2156,6 @@ export const HomeScreen = () => {
                           adjustsFontSizeToFit
                           minimumFontScale={0.7}
                         />
-                        <Text style={styles.summarySubtext}>
-                          {activePeriodLabel}
-                        </Text>
                       </View>
                     </View>
                   </View>
