@@ -65,10 +65,18 @@ export type FollowUpPanelSection = {
   actualSplit?: FollowUpPaymentSplit;
 };
 
+export type FollowUpCardSummary = {
+  planned: number;
+  actual: number;
+  difference: number;
+};
+
 export type FollowUpPanelModel = {
   period: MovementPeriod;
   incomeSection: FollowUpPanelSection;
   expenseSection: FollowUpPanelSection;
+  /** Totais só de cartão, fora do saldo de caixa. */
+  cardSummary: FollowUpCardSummary;
   balancePlanned: number;
   balanceActual: number;
   balanceDifference: number;
@@ -190,12 +198,13 @@ const matchIncomeToSource = (
   });
 };
 
-const plannedCashForEntry = (entry: {
+/** Planejado da linha = caixa + cartão (evita zerar gasto só no cartão). */
+const plannedTotalForEntry = (entry: {
   amount?: number;
   amountCard?: number;
   amountCash?: number;
   paymentMethod?: string;
-}): number => getPlannedSplitAmounts(entry).cash;
+}): number => getPlannedSplitAmounts(entry).total;
 
 const cardHintForEntry = (entry: {
   amount?: number;
@@ -208,14 +217,14 @@ const cardHintForEntry = (entry: {
   if (split.cash > 0) {
     return `Caixa: ${formatCurrency(split.cash)} · Cartão: ${formatCurrency(split.card)}`;
   }
-  return `Cartão: ${formatCurrency(split.card)} (fora do saldo de caixa)`;
+  return `Cartão: ${formatCurrency(split.card)}`;
 };
 
-const consumoPlannedCash = (planning: Planning | null): number => {
+const consumoPlannedTotal = (planning: Planning | null): number => {
   if (!planning) return 0;
   const card = Number(planning.consumoModeradoCard) || 0;
   const cash = Number(planning.consumoModeradoCash) || 0;
-  if (card !== 0 || cash !== 0) return cash;
+  if (card !== 0 || cash !== 0) return cash + card;
   return Number(planning.consumoModerado) || 0;
 };
 
@@ -227,7 +236,24 @@ const consumoCardHint = (planning: Planning | null): string | undefined => {
   if (cash > 0) {
     return `Caixa: ${formatCurrency(cash)} · Cartão: ${formatCurrency(card)}`;
   }
-  return `Cartão: ${formatCurrency(card)} (fora do saldo de caixa)`;
+  return `Cartão: ${formatCurrency(card)}`;
+};
+
+const unplannedIncomeLabel = (income: Income): string => {
+  const description = String(income.description || "").trim();
+  if (description) return description;
+  const origin = String(income.origin || "").trim();
+  if (origin) return origin;
+  const category = String(income.category || "").trim();
+  if (category) return category;
+  return "Outra renda";
+};
+
+const planningAvailableInAccount = (planning: Planning | null): number => {
+  if (!planning) return 0;
+  return (
+    Number(planning.availableInAccount ?? planning.monthlyIncome) || 0
+  );
 };
 
 const buildIncomeRows = (
@@ -237,26 +263,87 @@ const buildIncomeRows = (
 ): FollowUpPanelRow[] => {
   const periodIncomes = inPeriodIncomes(incomes, period);
   const expected = planning?.expectedIncomes || [];
+  const matchedIds = new Set<string>();
+  const rows: FollowUpPanelRow[] = [];
 
-  return expected.map((item: ExpectedItem, index) => {
-    const label = String(item.source || `Renda ${index + 1}`).trim();
-    const planned = Number(item.amount) || 0;
-    const matched = matchIncomeToSource(periodIncomes, label);
-    const actual = sumValues(matched);
-    const isTracked = Boolean(item.dailyTracking);
-
-    return {
-      id: `income-${item.id || index}-${normalizeExpenseTitleKey(label)}`,
+  // Dinheiro já na conta no planejamento (entra na renda prevista / saldo).
+  const availableInAccount = planningAvailableInAccount(planning);
+  if (availableInAccount > 0.005) {
+    rows.push({
+      id: "income-available-in-account",
       kind: "income",
-      label,
-      planned,
-      actual,
-      difference: actual - planned,
-      drill: isTracked
-        ? { screen: "IncomeList" }
-        : { screen: "ClientIncomeRecords" },
-    };
+      label: "Em conta",
+      planned: availableInAccount,
+      // Já disponível no início do ciclo; não é lançamento de renda.
+      actual: availableInAccount,
+      difference: 0,
+      cardHint: "Saldo inicial do planejamento",
+      drill: { screen: "ClientIncomeRecords" },
+    });
+  }
+
+  const plannedRows: FollowUpPanelRow[] = expected.map(
+    (item: ExpectedItem, index) => {
+      const label = String(item.source || `Renda ${index + 1}`).trim();
+      const planned = Number(item.amount) || 0;
+      const matched = matchIncomeToSource(periodIncomes, label);
+      matched.forEach((income) => matchedIds.add(income.id));
+      const actual = sumValues(matched);
+      const isTracked = Boolean(item.dailyTracking);
+
+      return {
+        id: `income-${item.id || index}-${normalizeExpenseTitleKey(label)}`,
+        kind: "income",
+        label,
+        planned,
+        actual,
+        difference: actual - planned,
+        drill: isTracked
+          ? { screen: "IncomeList" }
+          : { screen: "ClientIncomeRecords" },
+      };
+    },
+  );
+
+  // Rendas lançadas no período que não batem com nenhuma expectedIncome.
+  const unmatched = periodIncomes.filter(
+    (income) => !matchedIds.has(income.id),
+  );
+  const unplannedGroups = new Map<string, Income[]>();
+  unmatched.forEach((income) => {
+    const label = unplannedIncomeLabel(income);
+    const key =
+      normalizeExpenseTitleKey(label) ||
+      `outra-${income.id || unplannedGroups.size}`;
+    const list = unplannedGroups.get(key) || [];
+    list.push(income);
+    unplannedGroups.set(key, list);
   });
+
+  const unplannedRows: FollowUpPanelRow[] = [...unplannedGroups.entries()].map(
+    ([key, group]) => {
+      const label = unplannedIncomeLabel(group[0]);
+      const actual = sumValues(group);
+      return {
+        id: `income-unplanned-${key}`,
+        kind: "income",
+        label,
+        planned: 0,
+        actual,
+        difference: actual,
+        cardHint: "Não planejada",
+        drill: group.some((income) => Boolean(income.dailyTracking))
+          ? { screen: "IncomeList" }
+          : { screen: "ClientIncomeRecords" },
+      };
+    },
+  );
+
+  unplannedRows.sort((a, b) =>
+    a.label.localeCompare(b.label, "pt-BR", { sensitivity: "base" }),
+  );
+
+  return [...rows, ...plannedRows, ...unplannedRows];
 };
 
 const buildExpenseRows = (
@@ -264,14 +351,15 @@ const buildExpenseRows = (
   expenses: Expense[],
   period: MovementPeriod,
 ): FollowUpPanelRow[] => {
-  const cashExpenses = inPeriodCashExpenses(expenses, period);
+  // Linhas de GASTOS: planejado e efetivo consideram caixa + cartão.
+  const periodExpenses = inPeriodExpenses(expenses, period);
   const rows: FollowUpPanelRow[] = [];
 
   const bills = (planning?.bills || []).filter(isActivePlanningBill);
   bills.forEach((bill: Bill, index) => {
     const label = String(bill.name || `Conta ${index + 1}`).trim();
-    const planned = plannedCashForEntry(bill);
-    const paid = cashExpenses.filter((expense) => {
+    const planned = plannedTotalForEntry(bill);
+    const paid = periodExpenses.filter((expense) => {
       if (!isBillPaymentExpense(expense)) return false;
       if (bill.id && expense.sourceBillId) {
         return String(expense.sourceBillId) === String(bill.id);
@@ -294,9 +382,9 @@ const buildExpenseRows = (
     });
   });
 
-  const cmPlanned = consumoPlannedCash(planning);
+  const cmPlanned = consumoPlannedTotal(planning);
   const cmActual = sumValues(
-    cashExpenses.filter(isConsumoModeradoExpense),
+    periodExpenses.filter(isConsumoModeradoExpense),
   );
   rows.push({
     id: "consumo-moderado",
@@ -325,9 +413,9 @@ const buildExpenseRows = (
     );
     const plannedEntry = fromExpected || fromBill;
     const planned = plannedEntry
-      ? plannedCashForEntry(plannedEntry)
+      ? plannedTotalForEntry(plannedEntry)
       : 0;
-    const matched = filterTrackedExpensesForTitle(cashExpenses, title);
+    const matched = filterTrackedExpensesForTitle(periodExpenses, title);
     const actual = sumValues(matched);
     rows.push({
       id: `tracked-${normalizeExpenseTitleKey(title)}`,
@@ -350,8 +438,8 @@ const buildExpenseRows = (
   );
   otherExpected.forEach((item, index) => {
     const label = String(item.source || `Gasto ${index + 1}`).trim();
-    const planned = plannedCashForEntry(item);
-    const matched = cashExpenses.filter((expense) => {
+    const planned = plannedTotalForEntry(item);
+    const matched = periodExpenses.filter((expense) => {
       if (isConsumoModeradoExpense(expense)) return false;
       if (isTrackedDailyExpense(expense)) return false;
       if (isBillPaymentExpense(expense)) return false;
@@ -428,11 +516,18 @@ export const buildFollowUpPanelModel = (
   const balancePlanned =
     incomeSection.totalPlanned - plannedSplit.cash;
   const balanceActual = incomeSection.totalActual - actualCash;
+  const cardPlanned = plannedSplit.card;
+  const cardActual = actualCard;
 
   return {
     period,
     incomeSection,
     expenseSection,
+    cardSummary: {
+      planned: cardPlanned,
+      actual: cardActual,
+      difference: cardActual - cardPlanned,
+    },
     balancePlanned,
     balanceActual,
     balanceDifference: balanceActual - balancePlanned,
@@ -443,4 +538,104 @@ export const formatFollowUpDifference = (value: number): string => {
   if (Math.abs(value) < 0.005) return formatCurrency(0);
   if (value < 0) return `(${formatCurrency(Math.abs(value))})`;
   return formatCurrency(value);
+};
+
+export type FollowUpCardExpenseItem = {
+  id: string;
+  description: string;
+  category: string;
+  value: number;
+  date: Date;
+  paymentLabel: string;
+  cardLast4?: string;
+  scopeLabel?: string;
+};
+
+export type FollowUpCardCategoryGroup = {
+  category: string;
+  total: number;
+  items: FollowUpCardExpenseItem[];
+};
+
+export type FollowUpCardBreakdown = {
+  total: number;
+  categories: FollowUpCardCategoryGroup[];
+};
+
+const paymentMethodLabel = (expense: Expense): string => {
+  const method = String(expense.paymentMethod || "")
+    .trim()
+    .toLowerCase();
+  if (method === "credit_card" || method === "credit" || method === "credito") {
+    return "Crédito";
+  }
+  if (method === "debit_card" || method === "debit" || method === "debito") {
+    return "Débito";
+  }
+  if (method === "card" || method === "cartao" || method === "cart") {
+    return "Cartão";
+  }
+  if (expense.cardId) return "Cartão";
+  return "Cartão";
+};
+
+const cardExpenseScopeLabel = (expense: Expense): string | undefined => {
+  if (expense.isConsumoModerado) return "Consumo Moderado";
+  if (expense.isTrackedDaily) {
+    const title = String(expense.trackedTitle || "").trim();
+    return title ? `Acompanhado · ${title}` : "Gasto acompanhado";
+  }
+  if (expense.sourceBillId) return "Conta / fatura";
+  if (expense.installmentPurchaseId) return "Compra parcelada";
+  return undefined;
+};
+
+/** Gastos efetivos no cartão do período, agrupados por categoria. */
+export const buildFollowUpCardBreakdown = (
+  expenses: Expense[],
+  period: MovementPeriod,
+): FollowUpCardBreakdown => {
+  const cardExpenses = inPeriodCardExpenses(expenses, period)
+    .slice()
+    .sort((a, b) => {
+      const tb = new Date(b.date).getTime();
+      const ta = new Date(a.date).getTime();
+      return tb - ta;
+    });
+
+  const byCategory = new Map<string, FollowUpCardExpenseItem[]>();
+
+  cardExpenses.forEach((expense) => {
+    const category =
+      String(expense.category || "").trim() || "Sem categoria";
+    const item: FollowUpCardExpenseItem = {
+      id: expense.id,
+      description:
+        String(expense.description || "").trim() || "Sem descrição",
+      category,
+      value: Number(expense.value) || 0,
+      date: expense.date instanceof Date ? expense.date : new Date(expense.date),
+      paymentLabel: paymentMethodLabel(expense),
+      cardLast4: expense.cardLast4
+        ? String(expense.cardLast4).trim()
+        : undefined,
+      scopeLabel: cardExpenseScopeLabel(expense),
+    };
+    const list = byCategory.get(category) || [];
+    list.push(item);
+    byCategory.set(category, list);
+  });
+
+  const categories: FollowUpCardCategoryGroup[] = [...byCategory.entries()]
+    .map(([category, items]) => ({
+      category,
+      total: items.reduce((sum, item) => sum + item.value, 0),
+      items,
+    }))
+    .sort((a, b) => b.total - a.total);
+
+  return {
+    total: categories.reduce((sum, group) => sum + group.total, 0),
+    categories,
+  };
 };

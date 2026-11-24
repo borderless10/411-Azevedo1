@@ -15,7 +15,6 @@ import { useTheme } from "../../contexts/ThemeContext";
 import { userService, isAdminUser } from "../../services/userServices";
 import { adminUpdateUserCredentials } from "../../services/adminUserServices";
 import ConsultantPicker from "../../components/ui/ConsultantPicker";
-import { ConsultationPreferredDayPicker } from "../../components/Consultation/ConsultationPreferredDayPicker";
 import CustomModal from "../../components/ui/CustomModal";
 import { AccountType } from "../../types/auth";
 import { UserBadgeGrantEditor } from "../../components/Gamification/UserBadgeGrantEditor";
@@ -24,11 +23,8 @@ import {
   isCoupleAccount,
 } from "../../utils/coupleAccount";
 import {
-  defaultConsultationPreferredDay,
   formatConsultationPreferredDay,
   hasConsultationBookingLock,
-  parseConsultationPreferredDay,
-  toConsultationPreferredDayStorage,
 } from "../../utils/consultationScheduling";
 
 export const EditUserScreen: React.FC = ({}: any) => {
@@ -53,11 +49,6 @@ export const EditUserScreen: React.FC = ({}: any) => {
   const [coupleMember2Name, setCoupleMember2Name] = useState("");
   const [consultationSchedulingUrl, setConsultationSchedulingUrl] =
     useState("");
-  const [consultationPreferredDay, setConsultationPreferredDay] = useState<
-    number | null
-  >(null);
-  const [hasConsultationPreferredDay, setHasConsultationPreferredDay] =
-    useState(false);
   const [consultationBookedDay, setConsultationBookedDay] = useState("");
   const [consultationBookedCycleStartedAt, setConsultationBookedCycleStartedAt] =
     useState("");
@@ -119,13 +110,6 @@ export const EditUserScreen: React.FC = ({}: any) => {
           u.consultationBookedCycleStartedAt || "",
         );
         setConfirmingBookingRelease(false);
-        const parsedPreferredDay = parseConsultationPreferredDay(
-          u.consultationPreferredDate,
-        );
-        setHasConsultationPreferredDay(parsedPreferredDay !== null);
-        setConsultationPreferredDay(
-          parsedPreferredDay ?? defaultConsultationPreferredDay(),
-        );
       }
     } catch (error) {
       console.error("Erro ao carregar usuário para edição", error);
@@ -162,12 +146,6 @@ export const EditUserScreen: React.FC = ({}: any) => {
         consultationSchedulingUrl:
           role === "user" || role === "cliente_premium"
             ? consultationSchedulingUrl.trim()
-            : null,
-        consultationPreferredDate:
-          role === "user" || role === "cliente_premium"
-            ? hasConsultationPreferredDay
-              ? toConsultationPreferredDayStorage(consultationPreferredDay)
-              : ""
             : null,
         ...coupleFields,
       });
@@ -628,26 +606,10 @@ export const EditUserScreen: React.FC = ({}: any) => {
                   Melhor dia para consultoria
                 </Text>
                 <Text style={[styles.fieldHint, { color: colors.textSecondary }]}>
-                  Opcional. Dia fixo do mês (ex.: dia 15) — o cliente verá na sidebar.
+                  Calculado automaticamente: último dia do ciclo de Consumo
+                  Moderado menos 7 dias. O cliente vê a data na sidebar e no
+                  agendamento.
                 </Text>
-                <ConsultationPreferredDayPicker
-                  day={hasConsultationPreferredDay ? consultationPreferredDay : null}
-                  onChangeDay={(day) => {
-                    setConsultationPreferredDay(day);
-                    setHasConsultationPreferredDay(true);
-                  }}
-                  style={styles.datePicker}
-                />
-                {hasConsultationPreferredDay ? (
-                  <TouchableOpacity
-                    onPress={() => {
-                      setHasConsultationPreferredDay(false);
-                      setConsultationPreferredDay(null);
-                    }}
-                  >
-                    <Text style={styles.clearDateText}>Remover melhor dia</Text>
-                  </TouchableOpacity>
-                ) : null}
 
                 {hasBookedConsultation ? (
                   <View

@@ -364,7 +364,11 @@ export const planningServices = {
   async addInvestmentsEntry(
     consultantId: string,
     userId: string,
-    totals: { caixa?: number; ipca?: number; outros?: number },
+    totals: {
+      caixa?: number;
+      ipca?: number;
+      custom?: Array<{ id: string; name: string; value: number }>;
+    },
   ): Promise<any> {
     try {
       await planningServices.ensureOwnerOrAdmin(consultantId, userId);
@@ -392,7 +396,11 @@ export const planningServices = {
         totals: {
           caixa: totals.caixa || 0,
           ipca: totals.ipca || 0,
-          outros: totals.outros || 0,
+          custom: (totals.custom || []).map((tag) => ({
+            id: tag.id,
+            name: tag.name,
+            value: Number(tag.value) || 0,
+          })),
         },
         createdAt: now,
         updatedAt: now,
@@ -438,7 +446,11 @@ export const planningServices = {
     consultantId: string,
     userId: string,
     entryId: string,
-    totals: { caixa?: number; ipca?: number; outros?: number },
+    totals: {
+      caixa?: number;
+      ipca?: number;
+      custom?: Array<{ id: string; name: string; value: number }>;
+    },
   ): Promise<void> {
     await planningServices.ensureOwnerOrAdmin(consultantId, userId);
     const docRef = getUserPlanningDoc(userId);
@@ -459,12 +471,41 @@ export const planningServices = {
       totals: {
         caixa: totals.caixa ?? current.totals?.caixa ?? 0,
         ipca: totals.ipca ?? current.totals?.ipca ?? 0,
-        outros: totals.outros ?? current.totals?.outros ?? 0,
+        custom:
+          totals.custom !== undefined
+            ? totals.custom.map((tag) => ({
+                id: tag.id,
+                name: tag.name,
+                value: Number(tag.value) || 0,
+              }))
+            : current.totals?.custom || [],
       },
       updatedAt: now,
     };
     const investments = [...existing];
     investments[idx] = updatedEntry;
+    await updateDoc(docRef, { investments, updatedAt: now });
+  },
+
+  async deleteInvestmentsEntry(
+    consultantId: string,
+    userId: string,
+    entryId: string,
+  ): Promise<void> {
+    await planningServices.ensureOwnerOrAdmin(consultantId, userId);
+    const docRef = getUserPlanningDoc(userId);
+    const snap = await getDoc(docRef);
+    if (!snap.exists()) {
+      throw new Error("Planejamento não encontrado");
+    }
+    const data = snap.data() as any;
+    const existing = data.investments || [];
+    const idx = existing.findIndex((e: any) => e.id === entryId);
+    if (idx < 0) {
+      throw new Error("Lançamento de investimento não encontrado");
+    }
+    const now = Timestamp.now();
+    const investments = existing.filter((e: any) => e.id !== entryId);
     await updateDoc(docRef, { investments, updatedAt: now });
   },
 

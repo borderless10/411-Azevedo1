@@ -44,7 +44,7 @@ export const isPlanningCycleEnded = (
   return false;
 };
 
-const getPlanningCycleLastDay = (
+export const getPlanningCycleLastDay = (
   planning: Planning | null | undefined,
 ): Date | null => {
   if (!planning?.consumoModeradoCycleStartedAt) return null;
@@ -60,6 +60,18 @@ const getPlanningCycleLastDay = (
   }
 
   return null;
+};
+
+/**
+ * Melhor dia sugerido para agendar consultoria neste ciclo:
+ * último dia do ciclo menos CONSULTATION_RENEWAL_LEAD_DAYS (7).
+ */
+export const getConsultationSuggestedDate = (
+  planning: Planning | null | undefined,
+): Date | null => {
+  const lastDay = getPlanningCycleLastDay(planning);
+  if (!lastDay) return null;
+  return getStartOfDay(addDays(lastDay, -CONSULTATION_RENEWAL_LEAD_DAYS));
 };
 
 export const isPlanningCycleInRenewalWindow = (

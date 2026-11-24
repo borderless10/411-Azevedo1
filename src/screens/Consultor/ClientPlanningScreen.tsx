@@ -680,7 +680,7 @@ export const ClientPlanningScreen = () => {
     const totalExpectedIncomes = sum(expectedIncomes);
     const totalResources = (Number(availableInAccount) || 0) + totalExpectedIncomes;
     const totalSpending = totalCashExpenses + totalCardExpenses;
-    // Poupança = recursos menos o que sai do caixa (dinheiro/pix). Cartão não reduz recursos disponíveis.
+    // Poupança = renda prevista menos o que sai do caixa (dinheiro/pix). Cartão não reduz a poupança.
     const expectedSavings = totalResources - totalCashExpenses;
     const dailyTrackedCount =
       (bills || []).filter((bill) => bill.dailyTracking).length +
@@ -2161,7 +2161,7 @@ export const ClientPlanningScreen = () => {
         {activeTab === "rendas" && (
           <View style={styles.tabPanel}>
             <View style={styles.highlightCardFull}>
-              <Text style={styles.highlightLabel}>Recursos Disponíveis</Text>
+              <Text style={styles.highlightLabel}>Renda prevista</Text>
               <Text style={styles.highlightValue}>
                 {formatCurrency(totals.totalResources)}
               </Text>
@@ -2338,7 +2338,7 @@ export const ClientPlanningScreen = () => {
         <View style={styles.fixedFooter}>
           <View style={styles.summaryRow}>
             <View style={styles.summaryBlock}>
-              <Text style={styles.summaryLabel}>Recursos disponíveis</Text>
+              <Text style={styles.summaryLabel}>Renda prevista</Text>
               <Text style={styles.summaryValue}>
                 {formatCurrency(totals.totalResources)}
               </Text>
@@ -2346,8 +2346,13 @@ export const ClientPlanningScreen = () => {
             <View style={styles.summaryBlock}>
               <Text style={styles.summaryLabel}>Gastos esperados</Text>
               <Text style={styles.summaryValue}>
-                {formatCurrency(totals.totalCashExpenses)}
+                {formatCurrency(totals.totalSpending)}
               </Text>
+              {totals.totalCardExpenses > 0.005 ? (
+                <Text style={styles.summaryHint}>
+                  Cartão: {formatCurrency(totals.totalCardExpenses)}
+                </Text>
+              ) : null}
             </View>
             <View style={styles.summaryBlock}>
               <Text style={styles.summaryLabel}>Poupança esperada</Text>
@@ -3190,8 +3195,8 @@ export const ClientPlanningScreen = () => {
             <Text style={styles.modalTitle}>Em conta</Text>
             <Text style={{ color: "#ccc", lineHeight: 22 }}>
               Valor que o cliente já possui disponível na conta bancária, fora
-              das rendas previstas. Entra no total de Recursos Disponíveis junto
-              com as rendas esperadas.
+              das rendas previstas. Entra no total de Renda prevista junto com
+              as rendas esperadas.
             </Text>
             <TouchableOpacity
               style={[styles.saveButton, { marginTop: 16 }]}
@@ -3847,6 +3852,11 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 14,
     fontWeight: "700",
+  },
+  summaryHint: {
+    color: "#999",
+    fontSize: 11,
+    marginTop: 2,
   },
   positiveValue: {
     color: "#4caf50",

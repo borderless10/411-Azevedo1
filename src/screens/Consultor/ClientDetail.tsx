@@ -43,13 +43,9 @@ import {
 } from "../../utils/chatDisplayNames";
 import { isCoupleAccount } from "../../utils/coupleAccount";
 import {
-  defaultConsultationPreferredDay,
   formatConsultationPreferredDay,
   hasConsultationBookingLock,
-  parseConsultationPreferredDay,
-  toConsultationPreferredDayStorage,
 } from "../../utils/consultationScheduling";
-import { ConsultationPreferredDayPicker } from "../../components/Consultation/ConsultationPreferredDayPicker";
 
 export const ClientDetail: React.FC = () => {
   const { params, navigate } = useNavigation() as any;
@@ -74,11 +70,6 @@ export const ClientDetail: React.FC = () => {
   const [sendingMessage, setSendingMessage] = useState(false);
   const [consultationSchedulingUrl, setConsultationSchedulingUrl] =
     useState("");
-  const [consultationPreferredDay, setConsultationPreferredDay] = useState<
-    number | null
-  >(null);
-  const [hasConsultationPreferredDay, setHasConsultationPreferredDay] =
-    useState(false);
   const [savingConsultationUrl, setSavingConsultationUrl] = useState(false);
   const [confirmingBookingRelease, setConfirmingBookingRelease] =
     useState(false);
@@ -121,18 +112,7 @@ export const ClientDetail: React.FC = () => {
 
   useEffect(() => {
     setConsultationSchedulingUrl(clientDoc?.consultationSchedulingUrl || "");
-    const parsedPreferredDay = parseConsultationPreferredDay(
-      clientDoc?.consultationPreferredDate,
-    );
-    setHasConsultationPreferredDay(parsedPreferredDay !== null);
-    setConsultationPreferredDay(
-      parsedPreferredDay ?? defaultConsultationPreferredDay(),
-    );
-  }, [
-    clientDoc?.consultationPreferredDate,
-    clientDoc?.consultationSchedulingUrl,
-    clientDoc?.id,
-  ]);
+  }, [clientDoc?.consultationSchedulingUrl, clientDoc?.id]);
 
   const handleSaveConsultationUrl = async () => {
     if (!clientId) return;
@@ -141,15 +121,12 @@ export const ClientDetail: React.FC = () => {
       setSavingConsultationUrl(true);
       await userService.updateUser(clientId, {
         consultationSchedulingUrl: consultationSchedulingUrl.trim(),
-        consultationPreferredDate: hasConsultationPreferredDay
-          ? toConsultationPreferredDayStorage(consultationPreferredDay)
-          : "",
       });
       const refreshed = await userService.getUserById(clientId);
       setClientDoc(refreshed);
       Alert.alert(
         "Link salvo",
-        "O cliente verá o botão Agende sua consultoria na sidebar.",
+        "O cliente verá o botão Agende sua consultoria na sidebar. O melhor dia sugerido sai automaticamente do ciclo (fim − 7 dias).",
       );
     } catch (error: any) {
       console.error("Erro ao salvar link de consultoria:", error);
@@ -482,39 +459,9 @@ export const ClientDetail: React.FC = () => {
                 { color: colors.textSecondary },
               ]}
             >
-              Opcional. Dia fixo do mês — aparece na sidebar do cliente.
+              O melhor dia sugerido ao cliente é calculado automaticamente:
+              último dia do ciclo de Consumo Moderado menos 7 dias.
             </Text>
-            <ConsultationPreferredDayPicker
-              day={hasConsultationPreferredDay ? consultationPreferredDay : null}
-              onChangeDay={(day) => {
-                setConsultationPreferredDay(day);
-                setHasConsultationPreferredDay(true);
-              }}
-            />
-            {hasConsultationPreferredDay ? (
-              <>
-                <Text
-                  style={[
-                    styles.consultationPreview,
-                    { color: colors.textSecondary },
-                  ]}
-                >
-                  Cliente verá:{" "}
-                  {formatConsultationPreferredDay(
-                    toConsultationPreferredDayStorage(consultationPreferredDay),
-                  )}{" "}
-                  de cada mês
-                </Text>
-                <TouchableOpacity
-                  onPress={() => {
-                    setHasConsultationPreferredDay(false);
-                    setConsultationPreferredDay(null);
-                  }}
-                >
-                  <Text style={styles.consultationClearDate}>Remover melhor dia</Text>
-                </TouchableOpacity>
-              </>
-            ) : null}
 
             {hasBookedConsultation ? (
               <View
@@ -536,7 +483,7 @@ export const ClientDetail: React.FC = () => {
                   ]}
                 >
                   Se o cliente confirmou sem querer, libere para ele poder
-                  agendar de novo. O link e o melhor dia não serão apagados.
+                  agendar de novo. O link de agendamento não será apagado.
                 </Text>
                 {confirmingBookingRelease ? (
                   <>

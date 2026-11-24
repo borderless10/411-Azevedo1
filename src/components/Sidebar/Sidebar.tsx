@@ -583,7 +583,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   ]}
                   numberOfLines={2}
                 >
-                  Melhor dia: {preferredDayLabel} de cada mês
+                  Melhor dia: {preferredDayLabel}
                 </Text>
               ) : null}
             </View>

@@ -10,6 +10,31 @@ html, body, #root {
   cursor: pointer;
 }
 
+/* Chrome autofill: evita caixa clara “duplicada” sobre o wrapper escuro */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active,
+textarea:-webkit-autofill,
+textarea:-webkit-autofill:hover,
+textarea:-webkit-autofill:focus,
+textarea:-webkit-autofill:active {
+  -webkit-text-fill-color: #ffffff !important;
+  caret-color: #ffffff;
+  transition: background-color 99999s ease-in-out 0s;
+  box-shadow: 0 0 0 1000px #171321 inset !important;
+  -webkit-box-shadow: 0 0 0 1000px #171321 inset !important;
+  border: 0 !important;
+  outline: none !important;
+  filter: none !important;
+}
+
+input,
+textarea {
+  outline: none !important;
+  outline-offset: 0 !important;
+}
+
 /* Desktop Visão (≥1024): scroll + sidebar hover */
 @media (min-width: 1024px) {
   html {

@@ -14,7 +14,9 @@ import { db } from "../lib/firebase";
 import { Planning } from "../types/planning";
 import { isAppClientUser, userService } from "../services/userServices";
 import { toLinkHref, openChatLink } from "../utils/chatMessageText";
+import { formatDateForDisplay } from "../utils/dateUtils";
 import {
+  getConsultationSuggestedDate,
   getPlanningCycleStartKey,
   isPlanningCycleEnded,
   isPlanningCycleInRenewalWindow,
@@ -236,9 +238,23 @@ function useConsultationSchedulingState() {
     schedulingState === "awaitingConfirmation" ||
     schedulingState === "booked";
 
+  // Opção B: dia sugerido = último dia do ciclo − 7 (não usa dia fixo do consultor).
+  const consultationSuggestedDate = useMemo(
+    () => getConsultationSuggestedDate(planning),
+    [planning],
+  );
+
   const preferredDayLabel = useMemo(
-    () => formatConsultationPreferredDay(preferredDate),
-    [preferredDate],
+    () =>
+      consultationSuggestedDate
+        ? formatDateForDisplay(consultationSuggestedDate)
+        : null,
+    [consultationSuggestedDate],
+  );
+
+  const suggestedDayOfMonth = useMemo(
+    () => (consultationSuggestedDate ? consultationSuggestedDate.getDate() : null),
+    [consultationSuggestedDate],
   );
 
   const bookedDayLabel = useMemo(
@@ -303,6 +319,7 @@ function useConsultationSchedulingState() {
       schedulingUrl,
       preferredDate,
       preferredDayLabel,
+      suggestedDayOfMonth,
       bookedDay,
       bookedDayLabel,
       hasBookedCurrentCycle,
@@ -333,6 +350,7 @@ function useConsultationSchedulingState() {
       planning,
       preferredDate,
       preferredDayLabel,
+      suggestedDayOfMonth,
       schedulingState,
       schedulingUrl,
     ],
