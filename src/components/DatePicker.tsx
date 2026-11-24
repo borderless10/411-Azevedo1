@@ -5,7 +5,7 @@
  * - Native: seletor em Modal
  */
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -17,6 +17,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { formatDateForDisplay } from "../utils/dateUtils";
+import { useDesktopWeb } from "../utils/desktopWeb";
 
 interface DatePickerProps {
   label?: string;
@@ -53,6 +54,26 @@ const clampDate = (value: Date, minDate?: Date, maxDate?: Date) => {
   return next;
 };
 
+const WEEKDAYS = ["D", "S", "T", "Q", "Q", "S", "S"];
+
+const atNoon = (value: Date) => {
+  const next = new Date(value);
+  next.setHours(12, 0, 0, 0);
+  return next;
+};
+
+const isSameDay = (a: Date, b: Date) =>
+  a.getFullYear() === b.getFullYear() &&
+  a.getMonth() === b.getMonth() &&
+  a.getDate() === b.getDate();
+
+const isOutOfRange = (day: Date, minDate?: Date, maxDate?: Date) => {
+  const noon = atNoon(day);
+  if (minDate && noon < atNoon(minDate)) return true;
+  if (maxDate && noon > atNoon(maxDate)) return true;
+  return false;
+};
+
 const DatePicker: React.FC<DatePickerProps> = ({
   label = "Data",
   showLabel = true,
@@ -64,8 +85,10 @@ const DatePicker: React.FC<DatePickerProps> = ({
   editable = true,
   style,
 }) => {
+  const isDesktop = useDesktopWeb();
   const [showPicker, setShowPicker] = useState(false);
   const [tempDate, setTempDate] = useState<Date>(date);
+  const [cursor, setCursor] = useState<Date>(date);
 
   const openWebNativeDateInput = () => {
     if (typeof document === "undefined") {
@@ -140,10 +163,15 @@ const DatePicker: React.FC<DatePickerProps> = ({
       }
     } catch {
       cleanup();
-      // Fallback: seletor custom (também no web).
-      setTempDate(clampDate(date, minDate, maxDate));
-      setShowPicker(true);
+      openCalendarModal();
     }
+  };
+
+  const openCalendarModal = () => {
+    const next = clampDate(date, minDate, maxDate);
+    setTempDate(next);
+    setCursor(next);
+    setShowPicker(true);
   };
 
   const handlePress = (event?: any) => {
@@ -157,33 +185,45 @@ const DatePicker: React.FC<DatePickerProps> = ({
     } catch {
       // ignore
     }
-    if (Platform.OS === "web") {
+    if (Platform.OS === "web" && isDesktop) {
       // Defer mínimo: deixa o evento do TouchableOpacity terminar antes
       // de montar o input nativo (senão o overlay pai ainda “ouve” o click).
       setTimeout(() => openWebNativeDateInput(), 0);
       return;
     }
-    setTempDate(clampDate(date, minDate, maxDate));
-    setShowPicker(true);
+    openCalendarModal();
   };
 
-  const changeDay = (delta: number) => {
-    const d = new Date(tempDate);
-    d.setDate(d.getDate() + delta);
-    setTempDate(clampDate(d, minDate, maxDate));
+  const shiftMonth = (delta: number) => {
+    const next = new Date(cursor.getFullYear(), cursor.getMonth() + delta, 1, 12);
+    const monthEnd = new Date(next.getFullYear(), next.getMonth() + 1, 0, 12);
+    if (delta > 0 && maxDate && atNoon(next) > atNoon(maxDate)) return;
+    if (delta < 0 && minDate && atNoon(monthEnd) < atNoon(minDate)) return;
+    setCursor(next);
   };
 
-  const changeMonth = (delta: number) => {
-    const d = new Date(tempDate);
-    d.setMonth(d.getMonth() + delta);
-    setTempDate(clampDate(d, minDate, maxDate));
-  };
+  const monthLabel = useMemo(() => {
+    const label = cursor.toLocaleDateString("pt-BR", {
+      month: "long",
+      year: "numeric",
+    });
+    return label.charAt(0).toUpperCase() + label.slice(1);
+  }, [cursor]);
 
-  const changeYear = (delta: number) => {
-    const d = new Date(tempDate);
-    d.setFullYear(d.getFullYear() + delta);
-    setTempDate(clampDate(d, minDate, maxDate));
-  };
+  const calendarCells = useMemo(() => {
+    const year = cursor.getFullYear();
+    const month = cursor.getMonth();
+    const firstWeekday = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const cells: Array<Date | null> = Array.from(
+      { length: firstWeekday },
+      () => null,
+    );
+    for (let day = 1; day <= daysInMonth; day += 1) {
+      cells.push(new Date(year, month, day, 12));
+    }
+    return cells;
+  }, [cursor]);
 
   const handleConfirm = () => {
     setShowPicker(false);
@@ -198,61 +238,72 @@ const DatePicker: React.FC<DatePickerProps> = ({
   const pickerBody = (
     <View style={styles.backdrop}>
       <TouchableOpacity
-        style={StyleSheet.absoluteFillObject}
+        style={StyleSheet.absoluteFill}
         activeOpacity={1}
         onPress={handleCancel}
       />
       <View style={styles.modalContainer}>
         <Text style={styles.modalTitle}>Selecionar data</Text>
 
-        <View style={styles.pickerRow}>
+        <View style={styles.monthHeader}>
           <TouchableOpacity
             style={styles.smallButton}
-            onPress={() => changeDay(-1)}
-          >
-            <Ionicons name="remove" size={20} color="#fff" />
-          </TouchableOpacity>
-          <Text style={styles.pickerText}>{tempDate.getDate()}</Text>
-          <TouchableOpacity
-            style={styles.smallButton}
-            onPress={() => changeDay(1)}
-          >
-            <Ionicons name="add" size={20} color="#fff" />
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.pickerRow}>
-          <TouchableOpacity
-            style={styles.smallButton}
-            onPress={() => changeMonth(-1)}
+            onPress={() => shiftMonth(-1)}
           >
             <Ionicons name="chevron-back" size={20} color="#fff" />
           </TouchableOpacity>
-          <Text style={styles.pickerText}>
-            {tempDate.toLocaleString(undefined, { month: "long" })}
-          </Text>
+          <Text style={styles.monthLabel}>{monthLabel}</Text>
           <TouchableOpacity
             style={styles.smallButton}
-            onPress={() => changeMonth(1)}
+            onPress={() => shiftMonth(1)}
           >
             <Ionicons name="chevron-forward" size={20} color="#fff" />
           </TouchableOpacity>
         </View>
 
-        <View style={styles.pickerRow}>
-          <TouchableOpacity
-            style={styles.smallButton}
-            onPress={() => changeYear(-1)}
-          >
-            <Ionicons name="remove" size={20} color="#fff" />
-          </TouchableOpacity>
-          <Text style={styles.pickerText}>{tempDate.getFullYear()}</Text>
-          <TouchableOpacity
-            style={styles.smallButton}
-            onPress={() => changeYear(1)}
-          >
-            <Ionicons name="add" size={20} color="#fff" />
-          </TouchableOpacity>
+        <View style={styles.weekRow}>
+          {WEEKDAYS.map((label, index) => (
+            <Text key={`${label}-${index}`} style={styles.weekday}>
+              {label}
+            </Text>
+          ))}
+        </View>
+
+        <View style={styles.daysGrid}>
+          {calendarCells.map((day, index) => {
+            if (!day) {
+              return <View key={`empty-${index}`} style={styles.dayCell} />;
+            }
+            const disabled = isOutOfRange(day, minDate, maxDate);
+            const selected = isSameDay(day, tempDate);
+            const today = isSameDay(day, new Date());
+            return (
+              <TouchableOpacity
+                key={day.toISOString()}
+                style={styles.dayCell}
+                disabled={disabled}
+                onPress={() => setTempDate(atNoon(day))}
+              >
+                <View
+                  style={[
+                    styles.dayBubble,
+                    selected && styles.dayBubbleSelected,
+                    today && !selected && styles.dayBubbleToday,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.dayText,
+                      selected && styles.dayTextSelected,
+                      disabled && styles.dayTextDisabled,
+                    ]}
+                  >
+                    {day.getDate()}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
         </View>
 
         <View style={styles.modalActions}>
@@ -396,22 +447,74 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     fontWeight: "700",
   },
-  pickerRow: {
+  monthHeader: {
     width: "100%",
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    marginVertical: 8,
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+  monthLabel: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "700",
   },
   smallButton: {
     backgroundColor: "#B900FF",
     padding: 8,
     borderRadius: 8,
   },
-  pickerText: {
+  weekRow: {
+    width: "100%",
+    flexDirection: "row",
+  },
+  weekday: {
+    width: "14.28%",
+    textAlign: "center",
+    color: "#a89fc0",
+    fontSize: 12,
+    fontWeight: "700",
+    marginBottom: 6,
+  },
+  daysGrid: {
+    width: "100%",
+    flexDirection: "row",
+    flexWrap: "wrap",
+  },
+  dayCell: {
+    width: "14.28%",
+    height: 40,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  dayBubble: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  dayBubbleSelected: {
+    backgroundColor: "#B900FF",
+  },
+  dayBubbleToday: {
+    borderWidth: 1,
+    borderColor: "rgba(185,0,255,0.7)",
+  },
+  dayText: {
     color: "#fff",
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "600",
+    lineHeight: 18,
+    textAlign: "center",
+    includeFontPadding: false,
+  },
+  dayTextSelected: {
+    color: "#fff",
+    fontWeight: "800",
+  },
+  dayTextDisabled: {
+    color: "rgba(255,255,255,0.28)",
   },
   modalActions: {
     flexDirection: "row",

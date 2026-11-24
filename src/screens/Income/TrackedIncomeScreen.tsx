@@ -328,12 +328,14 @@ export const TrackedIncomeScreen = () => {
         dayMap.set(dateKey, prev + amount);
       });
 
-      const list: DaySummary[] = Array.from(dayMap.entries()).map(
-        ([dateKey, total]) => ({
+      const list: DaySummary[] = Array.from(dayMap.entries())
+        .map(([dateKey, total]) => ({
           date: new Date(`${dateKey}T12:00:00`),
           total,
-        }),
-      );
+        }))
+        .sort(
+          (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+        );
 
       setDays(list);
 
@@ -345,7 +347,7 @@ export const TrackedIncomeScreen = () => {
           amount,
         });
       });
-      merged.sort((a, b) => a.dateKey.localeCompare(b.dateKey));
+      merged.sort((a, b) => b.dateKey.localeCompare(a.dateKey));
       setDailyIncomes(merged);
       const recordedKeys = new Set(
         filteredIncomes.map((income) =>

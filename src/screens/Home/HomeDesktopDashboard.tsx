@@ -84,6 +84,13 @@ type Props = {
   ) => void;
 };
 
+/** Largura da barra: realizada em relação ao ideal (100% = no ideal ou acima). */
+const consumoFillPercent = (actual: number, ideal: number): number => {
+  if (!Number.isFinite(actual) || actual <= 0) return 0;
+  if (!Number.isFinite(ideal) || ideal <= 0) return 100;
+  return Math.max(6, Math.min(100, (actual / ideal) * 100));
+};
+
 const Kpi: React.FC<{
   label: string;
   value: number | null;
@@ -269,12 +276,12 @@ export const HomeDesktopDashboard: React.FC<Props> = (props) => {
             <SoftCardAccent
               tone={a.tone}
               strength="filled"
-              intensity={0.7}
-              borderRadius={12}
+              intensity={0.82}
+              borderRadius={14}
             />
             <Ionicons
               name={a.icon}
-              size={18}
+              size={20}
               color={a.color}
               style={styles.actionBtnFg}
             />
@@ -296,10 +303,27 @@ export const HomeDesktopDashboard: React.FC<Props> = (props) => {
               variant={
                 props.consumo.color === "#FF008A" ? "magenta" : "income"
               }
-              contentStyle={{ gap: 12 }}
+              style={styles.consumoCardFill}
+              contentStyle={styles.consumoCardContent}
             >
               <View style={styles.rowBetween}>
-                <Text style={styles.sectionTitle}>Consumo moderado</Text>
+                <View style={styles.consumoTitleRow}>
+                  <View
+                    style={[
+                      styles.consumoIconBadge,
+                      { backgroundColor: `${props.consumo.color}18` },
+                    ]}
+                  >
+                    <Ionicons
+                      name="speedometer-outline"
+                      size={16}
+                      color={props.consumo.color}
+                    />
+                  </View>
+                  <Text style={[styles.sectionTitle, styles.consumoSectionTitle]}>
+                    Consumo moderado
+                  </Text>
+                </View>
                 <View
                   style={[
                     styles.consumoStatusPill,
@@ -315,36 +339,52 @@ export const HomeDesktopDashboard: React.FC<Props> = (props) => {
                     color={props.consumo.color}
                   />
                   <Text
-                    style={[styles.consumoStatusText, { color: props.consumo.color }]}
+                    style={[
+                      styles.consumoStatusText,
+                      { color: props.consumo.color },
+                    ]}
                   >
                     {props.consumo.label}
                   </Text>
                 </View>
               </View>
-              <Text style={styles.detail}>
+              <Text style={styles.consumoDetail} numberOfLines={2}>
                 {props.showValues
                   ? props.consumo.detail
                   : props.consumo.detail.replace(/R\$\s*[\d.,]+/g, "R$ •••")}
               </Text>
-              <View style={styles.consumoMetaGrid}>
-                <View style={styles.consumoMetaCell}>
-                  <Text style={styles.metaLabel}>Realizada</Text>
+              <View style={styles.consumoStats}>
+                <View style={styles.consumoStat}>
+                  <Text style={styles.metaLabel}>Realizada / dia</Text>
                   <MaskedAmount
                     value={props.consumo.actualDailyAverage}
                     style={[
-                      styles.consumoMetaValue,
+                      styles.consumoStatValue,
                       { color: props.consumo.color },
                     ]}
                   />
                 </View>
-                <View style={styles.consumoMetaSep} />
-                <View style={styles.consumoMetaCell}>
+                <View style={styles.consumoStat}>
                   <Text style={styles.metaLabel}>Ideal / dia</Text>
                   <MaskedAmount
                     value={props.consumo.idealDailyAverage}
-                    style={styles.consumoMetaValue}
+                    style={styles.consumoStatValue}
                   />
                 </View>
+              </View>
+              <View style={styles.consumoTrack}>
+                <View
+                  style={[
+                    styles.consumoTrackFill,
+                    {
+                      width: `${consumoFillPercent(
+                        props.consumo.actualDailyAverage,
+                        props.consumo.idealDailyAverage,
+                      )}%`,
+                      backgroundColor: props.consumo.color,
+                    },
+                  ]}
+                />
               </View>
             </DesktopGlowCard>
           </TouchableOpacity>
@@ -354,12 +394,13 @@ export const HomeDesktopDashboard: React.FC<Props> = (props) => {
           <View style={styles.pieCol}>
             <DesktopGlowCard
               variant="neutral"
-              contentStyle={{ alignItems: "center", flexGrow: 1 }}
+              style={styles.pieCardFill}
+              contentStyle={styles.pieCardContent}
             >
               <Text style={[styles.sectionTitle, { alignSelf: "flex-start" }]}>
                 Gastos por categoria
               </Text>
-              <PieChart data={props.pieData} size={168} />
+              <PieChart data={props.pieData} size={196} />
             </DesktopGlowCard>
           </View>
         ) : null}
@@ -569,27 +610,41 @@ const styles = StyleSheet.create({
   actionsRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 10,
+    gap: 12,
   },
   actionBtn: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    paddingVertical: 11,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-    backgroundColor: "#0c0a12",
+    gap: 10,
+    minHeight: 52,
+    paddingVertical: 16,
+    paddingHorizontal: 18,
+    borderRadius: 14,
+    backgroundColor: "#100c18",
     borderWidth: 1,
     borderColor: desktop.border,
     overflow: "hidden",
+    ...Platform.select({
+      web: {
+        boxShadow: "0 0 18px rgba(185,0,255,0.10)",
+      } as object,
+      default: {
+        shadowColor: "#B900FF",
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.18,
+        shadowRadius: 10,
+        elevation: 3,
+      },
+    }),
   },
   actionBtnFg: {
     zIndex: 1,
   },
   actionBtnText: {
     color: desktop.text,
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "700",
+    letterSpacing: 0.1,
   },
   analyticsRow: {
     flexDirection: "row",
@@ -598,13 +653,92 @@ const styles = StyleSheet.create({
     alignItems: "stretch",
   },
   analyticsMain: {
-    flex: 1.35,
+    flex: 1,
+    flexBasis: 0,
     minWidth: 280,
+    alignSelf: "stretch",
   },
   pieCol: {
-    flex: 0.9,
-    minWidth: 260,
-    maxWidth: 380,
+    flex: 1,
+    flexBasis: 0,
+    minWidth: 280,
+    alignSelf: "stretch",
+  },
+  consumoCardFill: {
+    flex: 1,
+    height: "100%",
+    minHeight: 280,
+  },
+  pieCardFill: {
+    flex: 1,
+    height: "100%",
+    minHeight: 280,
+  },
+  pieCardContent: {
+    alignItems: "stretch",
+    flexGrow: 1,
+    flex: 1,
+    width: "100%",
+  },
+  consumoCardContent: {
+    flex: 1,
+    gap: 14,
+    minHeight: 248,
+  },
+  consumoTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    minWidth: 0,
+    flex: 1,
+  },
+  consumoSectionTitle: {
+    marginBottom: 0,
+  },
+  consumoIconBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  consumoDetail: {
+    color: desktop.textSecondary,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  consumoStats: {
+    flex: 1,
+    flexDirection: "row",
+    gap: 12,
+    minHeight: 108,
+  },
+  consumoStat: {
+    flex: 1,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.06)",
+    backgroundColor: "rgba(0,0,0,0.28)",
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    justifyContent: "center",
+    gap: 10,
+  },
+  consumoStatValue: {
+    color: desktop.text,
+    fontSize: 26,
+    fontWeight: "800",
+    letterSpacing: -0.5,
+  },
+  consumoTrack: {
+    height: 8,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    overflow: "hidden",
+  },
+  consumoTrackFill: {
+    height: "100%",
+    borderRadius: 999,
   },
   evolutionCardContent: {
     gap: 10,
@@ -631,30 +765,6 @@ const styles = StyleSheet.create({
   },
   consumoStatusText: {
     fontSize: 12,
-    fontWeight: "800",
-  },
-  consumoMetaGrid: {
-    flexDirection: "row",
-    alignItems: "stretch",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.06)",
-    backgroundColor: "rgba(0,0,0,0.28)",
-    overflow: "hidden",
-  },
-  consumoMetaCell: {
-    flex: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    gap: 4,
-  },
-  consumoMetaSep: {
-    width: 1,
-    backgroundColor: "rgba(255,255,255,0.08)",
-  },
-  consumoMetaValue: {
-    color: desktop.text,
-    fontSize: 16,
     fontWeight: "800",
   },
   sectionTitle: {

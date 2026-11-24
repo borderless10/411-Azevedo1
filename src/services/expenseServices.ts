@@ -700,37 +700,21 @@ export const expenseServices = {
    * Buscar gastos por data específica
    */
   async getExpensesByDate(userId: string, date: Date): Promise<Expense[]> {
-    console.log("💸 [EXPENSE SERVICE] Buscando gastos do dia:", date);
+    const startOfDay = new Date(date);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(date);
+    endOfDay.setHours(23, 59, 59, 999);
 
-    try {
-      const startOfDay = new Date(date);
-      startOfDay.setHours(0, 0, 0, 0);
-
-      const endOfDay = new Date(date);
-      endOfDay.setHours(23, 59, 59, 999);
-
-      const q = query(
-        getExpensesCollection(),
-        where("userId", "==", userId),
-        where("date", ">=", Timestamp.fromDate(startOfDay)),
-        where("date", "<=", Timestamp.fromDate(endOfDay)),
-        orderBy("date", "desc"),
-      );
-
-      const snapshot = await getDocs(q);
-      const expenses = snapshot.docs.map((doc) =>
-        convertExpenseFromFirestore(getDocData(doc)),
-      );
-
-      console.log("💸 [EXPENSE SERVICE] Gastos do dia:", expenses.length);
-      return expenses;
-    } catch (error) {
-      console.error(
-        "❌ [EXPENSE SERVICE] Erro ao buscar gastos por data:",
-        error,
-      );
-      throw error;
-    }
+    // Mesma consulta de getExpenses (userId + intervalo), sem orderBy.
+    // orderBy("date","desc") junto com o intervalo exige índice composto
+    // e quebrava ao escolher o dia no lançamento de Consumo moderado.
+    const expenses = await this.getExpenses(userId, {
+      startDate: startOfDay,
+      endDate: endOfDay,
+    });
+    return expenses.sort(
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+    );
   },
 
   /**

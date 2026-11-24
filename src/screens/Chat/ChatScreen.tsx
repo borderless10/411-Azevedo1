@@ -1873,6 +1873,11 @@ export const ChatScreen: React.FC = () => {
                 const group = isGroupChat(chat);
                 const isGlobalGroup =
                   chat?.id === "global" || chat?.type === "global";
+                const isConsultationGroup =
+                  group &&
+                  !isGlobalGroup &&
+                  (isConsultationStaffGroup(chat) ||
+                    (chat?.participants || []).length > 2);
                 const consultationClientId =
                   group &&
                   !isGlobalGroup &&
@@ -1898,7 +1903,11 @@ export const ChatScreen: React.FC = () => {
                 >
                   {showPeopleAvatar ? (
                     <View style={styles.avatarContainer}>
-                      {renderUserAvatar(null, 48, "people")}
+                      {renderUserAvatar(
+                        null,
+                        48,
+                        isConsultationGroup ? "briefcase-outline" : "people",
+                      )}
                     </View>
                   ) : (
                     <View style={styles.avatarBadgeWrap}>

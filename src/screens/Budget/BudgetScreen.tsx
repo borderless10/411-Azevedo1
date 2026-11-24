@@ -510,7 +510,8 @@ export const BudgetScreen = () => {
         cycleDates.push(new Date(dateCursor));
         dateCursor = addDays(dateCursor, 1);
       }
-      setDailyExpenseDates(cycleDates);
+      // Mais recente em cima na lista de dias.
+      setDailyExpenseDates([...cycleDates].reverse());
 
       const monthYears = listMonthYearsInRange(start, end);
       const monthsToLoad = Array.from(
@@ -635,7 +636,7 @@ export const BudgetScreen = () => {
             amount: realAmount > 0 ? realAmount : 0,
           });
         });
-        merged.sort((a, b) => a.dateKey.localeCompare(b.dateKey));
+        merged.sort((a, b) => b.dateKey.localeCompare(a.dateKey));
         setDailyExpenses(merged);
         setZeroConfirmedDateKeys(
           zeroKeys.filter((key) => (amountByDateKey.get(key) ?? 0) <= 0),

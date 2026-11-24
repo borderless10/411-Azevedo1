@@ -968,6 +968,7 @@ export const ClientDetail: React.FC = () => {
           ) {
             days.push(new Date(d));
           }
+          days.reverse();
 
           const rendered = days.map((day) => {
             const dayExpenses = expenses.filter((e) =>

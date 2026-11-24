@@ -9,6 +9,7 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Pressable,
   Animated,
   Modal,
   TextInput,
@@ -82,6 +83,7 @@ export const BillsScreen = () => {
   // Estados
   const [bills, setBills] = useState<Bill[]>([]);
   const [loading, setLoading] = useState(true);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [isDeleteModalVisible, setIsDeleteModalVisible] = useState(false);
   const [billToDelete, setBillToDelete] = useState<Bill | null>(null);
@@ -251,7 +253,10 @@ export const BillsScreen = () => {
     if (!user || !billsOwnerId) return;
 
     try {
-      setLoading(true);
+      // Só bloqueia a tela no 1º load. Reload com modal aberto não desmonta o modal.
+      if (!hasLoadedOnce) {
+        setLoading(true);
+      }
       if (usePlanningBills) {
         setIsPlanningSource(true);
 
@@ -470,6 +475,7 @@ export const BillsScreen = () => {
       Alert.alert("Erro", "Não foi possível carregar as contas");
     } finally {
       setLoading(false);
+      setHasLoadedOnce(true);
     }
   };
 
@@ -1244,189 +1250,186 @@ export const BillsScreen = () => {
           keyboardVerticalOffset={Platform.OS === "ios" ? 24 : 0}
           style={styles.modalOverlay}
         >
-          <TouchableOpacity
-            style={styles.modalOverlay}
-            activeOpacity={1}
+          {/* Backdrop irmão (não pai) do card: evita fechar ao tocar chips/opções no Android/web */}
+          <Pressable
+            style={styles.modalBackdrop}
             onPress={() => setIsModalVisible(false)}
+            accessibilityRole="button"
+            accessibilityLabel="Fechar"
+          />
+          <View
+            style={[styles.modalContent, { backgroundColor: colors.card }]}
           >
-            <TouchableOpacity
-              activeOpacity={1}
-              onPress={(e) => e.stopPropagation()}
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>
+                Nova Conta
+              </Text>
+              <TouchableOpacity onPress={() => setIsModalVisible(false)}>
+                <Ionicons
+                  name="close"
+                  size={24}
+                  color={colors.textSecondary}
+                />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              scrollEnabled={!desktopWeb}
             >
-              <View
-                style={[styles.modalContent, { backgroundColor: colors.card }]}
-              >
-                <View style={styles.modalHeader}>
-                  <Text style={[styles.modalTitle, { color: colors.text }]}>
-                    Nova Conta
-                  </Text>
-                  <TouchableOpacity onPress={() => setIsModalVisible(false)}>
-                    <Ionicons
-                      name="close"
-                      size={24}
-                      color={colors.textSecondary}
-                    />
-                  </TouchableOpacity>
-                </View>
-
-                <ScrollView
-                  showsVerticalScrollIndicator={false}
-                  keyboardShouldPersistTaps="handled"
-                 scrollEnabled={!desktopWeb}>
-                  <View style={styles.inputGroup}>
-                    <Text style={[styles.inputLabel, { color: colors.text }]}>
-                      Título *
-                    </Text>
-                    <TextInput
-                      style={[
-                        styles.input,
-                        {
-                          backgroundColor: colors.inputBackground,
-                          borderColor: colors.border,
-                          color: colors.text,
-                        },
-                      ]}
-                      value={title}
-                      onChangeText={setTitle}
-                      placeholder="Ex: Conta de Luz"
-                      placeholderTextColor={colors.placeholder}
-                    />
-                  </View>
-
-                  <View style={styles.inputGroup}>
-                    <Text style={[styles.inputLabel, { color: colors.text }]}>
-                      Descrição
-                    </Text>
-                    <TextInput
-                      style={[
-                        styles.input,
-                        {
-                          backgroundColor: colors.inputBackground,
-                          borderColor: colors.border,
-                          color: colors.text,
-                        },
-                      ]}
-                      value={description}
-                      onChangeText={setDescription}
-                      placeholder="Detalhes opcionais"
-                      placeholderTextColor={colors.placeholder}
-                    />
-                  </View>
-
-                  <View style={styles.inputGroup}>
-                    <Text style={[styles.inputLabel, { color: colors.text }]}>
-                      Valor *
-                    </Text>
-                    <TextInput
-                      style={[
-                        styles.input,
-                        {
-                          backgroundColor: colors.inputBackground,
-                          borderColor: colors.border,
-                          color: colors.text,
-                        },
-                      ]}
-                      value={amount}
-                      onChangeText={(text) => setAmount(sanitizeDecimalInput(text))}
-                      placeholder="Ex: 150,00"
-                      placeholderTextColor={colors.placeholder}
-                      keyboardType={DECIMAL_INPUT_KEYBOARD}
-                    />
-                  </View>
-
-                  <View style={styles.inputGroup}>
-                    <Text style={[styles.inputLabel, { color: colors.text }]}>
-                      Forma de pagamento *
-                    </Text>
-                    <View style={styles.paymentMethodsRow}>
-                      {(
-                        [
-                          { id: "cash", label: "Dinheiro" },
-                          { id: "pix", label: "PIX" },
-                          { id: "debit_card", label: "Débito" },
-                          { id: "credit_card", label: "Crédito" },
-                        ] as const
-                      ).map((method) => {
-                        const active = formPaymentMethod === method.id;
-                        return (
-                          <TouchableOpacity
-                            key={method.id}
-                            style={[
-                              styles.paymentMethodChip,
-                              {
-                                backgroundColor: colors.inputBackground,
-                                borderColor: colors.border,
-                              },
-                              active && {
-                                backgroundColor: colors.primary,
-                                borderColor: colors.primary,
-                              },
-                            ]}
-                            onPress={() => setFormPaymentMethod(method.id)}
-                          >
-                            <Text
-                              style={[
-                                styles.paymentMethodChipText,
-                                { color: colors.text },
-                                active && { color: "#fff" },
-                              ]}
-                            >
-                              {method.label}
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </View>
-                  </View>
-
-                  <View style={styles.inputGroup}>
-                    <Text style={[styles.inputLabel, { color: colors.text }]}>
-                      Data de Vencimento
-                    </Text>
-                    <TouchableOpacity
-                      style={{ marginBottom: 8 }}
-                      onPress={() => setBillRecurring((current) => !current)}
-                    >
-                      <Text style={{ color: colors.text }}>
-                        {billRecurring ? "Recorrente: sim" : "Recorrente: não"}
-                      </Text>
-                    </TouchableOpacity>
-                    <TextInput
-                      style={[
-                        styles.input,
-                        {
-                          backgroundColor: colors.inputBackground,
-                          borderColor: colors.border,
-                          color: colors.text,
-                        },
-                      ]}
-                      value={dueDate}
-                      onChangeText={handleDateChange}
-                      placeholder="Dia ou DD/MM/YYYY"
-                      placeholderTextColor={colors.placeholder}
-                      keyboardType="numeric"
-                      maxLength={10}
-                    />
-                  </View>
-
-                  <TouchableOpacity
-                    style={[
-                      styles.saveButton,
-                      { backgroundColor: colors.primary },
-                    ]}
-                    onPress={handleCreateBill}
-                    disabled={saving}
-                  >
-                    {saving ? (
-                      <ActivityIndicator color="#fff" />
-                    ) : (
-                      <Text style={styles.saveButtonText}>Cadastrar Conta</Text>
-                    )}
-                  </TouchableOpacity>
-                </ScrollView>
+              <View style={styles.inputGroup}>
+                <Text style={[styles.inputLabel, { color: colors.text }]}>
+                  Título *
+                </Text>
+                <TextInput
+                  style={[
+                    styles.input,
+                    {
+                      backgroundColor: colors.inputBackground,
+                      borderColor: colors.border,
+                      color: colors.text,
+                    },
+                  ]}
+                  value={title}
+                  onChangeText={setTitle}
+                  placeholder="Ex: Conta de Luz"
+                  placeholderTextColor={colors.placeholder}
+                />
               </View>
-            </TouchableOpacity>
-          </TouchableOpacity>
+
+              <View style={styles.inputGroup}>
+                <Text style={[styles.inputLabel, { color: colors.text }]}>
+                  Descrição
+                </Text>
+                <TextInput
+                  style={[
+                    styles.input,
+                    {
+                      backgroundColor: colors.inputBackground,
+                      borderColor: colors.border,
+                      color: colors.text,
+                    },
+                  ]}
+                  value={description}
+                  onChangeText={setDescription}
+                  placeholder="Detalhes opcionais"
+                  placeholderTextColor={colors.placeholder}
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={[styles.inputLabel, { color: colors.text }]}>
+                  Valor *
+                </Text>
+                <TextInput
+                  style={[
+                    styles.input,
+                    {
+                      backgroundColor: colors.inputBackground,
+                      borderColor: colors.border,
+                      color: colors.text,
+                    },
+                  ]}
+                  value={amount}
+                  onChangeText={(text) => setAmount(sanitizeDecimalInput(text))}
+                  placeholder="Ex: 150,00"
+                  placeholderTextColor={colors.placeholder}
+                  keyboardType={DECIMAL_INPUT_KEYBOARD}
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={[styles.inputLabel, { color: colors.text }]}>
+                  Forma de pagamento *
+                </Text>
+                <View style={styles.paymentMethodsRow}>
+                  {(
+                    [
+                      { id: "cash", label: "Dinheiro" },
+                      { id: "pix", label: "PIX" },
+                      { id: "debit_card", label: "Débito" },
+                      { id: "credit_card", label: "Crédito" },
+                    ] as const
+                  ).map((method) => {
+                    const active = formPaymentMethod === method.id;
+                    return (
+                      <TouchableOpacity
+                        key={method.id}
+                        style={[
+                          styles.paymentMethodChip,
+                          {
+                            backgroundColor: colors.inputBackground,
+                            borderColor: colors.border,
+                          },
+                          active && {
+                            backgroundColor: colors.primary,
+                            borderColor: colors.primary,
+                          },
+                        ]}
+                        onPress={() => setFormPaymentMethod(method.id)}
+                      >
+                        <Text
+                          style={[
+                            styles.paymentMethodChipText,
+                            { color: colors.text },
+                            active && { color: "#fff" },
+                          ]}
+                        >
+                          {method.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={[styles.inputLabel, { color: colors.text }]}>
+                  Data de Vencimento
+                </Text>
+                <TouchableOpacity
+                  style={{ marginBottom: 8 }}
+                  onPress={() => setBillRecurring((current) => !current)}
+                >
+                  <Text style={{ color: colors.text }}>
+                    {billRecurring ? "Recorrente: sim" : "Recorrente: não"}
+                  </Text>
+                </TouchableOpacity>
+                <TextInput
+                  style={[
+                    styles.input,
+                    {
+                      backgroundColor: colors.inputBackground,
+                      borderColor: colors.border,
+                      color: colors.text,
+                    },
+                  ]}
+                  value={dueDate}
+                  onChangeText={handleDateChange}
+                  placeholder="Dia ou DD/MM/YYYY"
+                  placeholderTextColor={colors.placeholder}
+                  keyboardType="numeric"
+                  maxLength={10}
+                />
+              </View>
+
+              <TouchableOpacity
+                style={[
+                  styles.saveButton,
+                  { backgroundColor: colors.primary },
+                ]}
+                onPress={handleCreateBill}
+                disabled={saving}
+              >
+                {saving ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.saveButtonText}>Cadastrar Conta</Text>
+                )}
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
         </KeyboardAvoidingView>
       </Modal>
 
@@ -1437,8 +1440,14 @@ export const BillsScreen = () => {
         onRequestClose={closePayModal}
       >
         <View style={styles.payModalBackdrop}>
+          <Pressable
+            style={styles.modalBackdrop}
+            onPress={closePayModal}
+            accessibilityRole="button"
+            accessibilityLabel="Fechar"
+          />
           <View
-            style={[styles.payModalCard, { backgroundColor: colors.card }]}
+            style={[styles.payModalCard, { backgroundColor: colors.card, zIndex: 1 }]}
           >
             <Text style={[styles.payModalTitle, { color: colors.text }]}>
               Como essa conta foi paga?
@@ -1868,6 +1877,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+  },
   modalContent: {
     width: "96%",
     maxWidth: 700,
@@ -1875,6 +1887,7 @@ const styles = StyleSheet.create({
     padding: 20,
     maxHeight: "92%",
     minWidth: 320,
+    zIndex: 1,
   },
   modalHeader: {
     flexDirection: "row",

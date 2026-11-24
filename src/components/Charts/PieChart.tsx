@@ -218,6 +218,8 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: "row",
     alignItems: "center",
+    alignSelf: "stretch",
+    width: "100%",
     gap: 16,
   },
   containerStacked: {

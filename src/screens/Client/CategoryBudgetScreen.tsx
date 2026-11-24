@@ -235,9 +235,11 @@ export const CategoryBudgetScreen = () => {
         dayMap.set(key, prev + value);
       });
 
-      const list: DaySummary[] = Array.from(dayMap.entries()).map(
-        ([key, value]) => ({ date: new Date(key), total: value }),
-      );
+      const list: DaySummary[] = Array.from(dayMap.entries())
+        .map(([key, value]) => ({ date: new Date(key), total: value }))
+        .sort(
+          (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+        );
 
       setDays(list);
 

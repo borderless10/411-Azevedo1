@@ -205,13 +205,15 @@ export const ClientIncomeRecordsScreen: React.FC = () => {
         dayMap.set(dateKey, prev + value);
       });
 
-      const list: DaySummary[] = Array.from(dayMap.entries()).map(
-        ([dateKey, total]) => ({
+      const list: DaySummary[] = Array.from(dayMap.entries())
+        .map(([dateKey, total]) => ({
           date: new Date(`${dateKey}T12:00:00`),
           dateKey,
           total,
-        }),
-      );
+        }))
+        .sort(
+          (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+        );
       setDays(list);
     } catch (error) {
       console.warn("Erro ao carregar rendas do cliente", error);

@@ -1732,6 +1732,13 @@ export const HomeScreen = () => {
                             style={styles.summaryValueSquare}
                           />
                         )}
+                        {/* Reserva a mesma linha do subtexto do card de gasto (Cartão). */}
+                        <Text
+                          style={styles.summarySubtext}
+                          numberOfLines={1}
+                        >
+                          {"\u00A0"}
+                        </Text>
                         <View style={styles.chevronContainer}>
                           <Ionicons
                             name={
@@ -1804,12 +1811,12 @@ export const HomeScreen = () => {
                             style={styles.summaryValueSquare}
                           />
                         )}
-                        {expectedCardExpenses != null &&
-                        expectedCardExpenses > 0.005 ? (
-                          <Text style={styles.summarySubtext}>
-                            Cartão: {formatCurrency(expectedCardExpenses)}
-                          </Text>
-                        ) : null}
+                        <Text style={styles.summarySubtext} numberOfLines={1}>
+                          {expectedCardExpenses != null &&
+                          expectedCardExpenses > 0.005
+                            ? `Cartão: ${formatCurrency(expectedCardExpenses)}`
+                            : "\u00A0"}
+                        </Text>
                         <View style={styles.chevronContainer}>
                           <Ionicons
                             name={
@@ -2793,7 +2800,7 @@ const styles = StyleSheet.create({
   // Cards Quadrados (Total Gasto e Total Recebido)
   summaryRow: {
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "stretch",
     marginBottom: 12,
     gap: 12,
   },
@@ -2842,6 +2849,7 @@ const styles = StyleSheet.create({
   },
   expectedCardPressable: {
     width: "100%",
+    flex: 1,
   },
   expectedCardSquare: {
     backgroundColor: "#0E0B14",
@@ -2851,7 +2859,8 @@ const styles = StyleSheet.create({
     borderWidth: 1.2,
     borderColor: "rgba(190,130,255,0.22)",
     ...premiumCardShadow,
-    minHeight: 86,
+    flex: 1,
+    minHeight: 98,
     alignItems: "center",
     justifyContent: "center",
     width: "100%",
@@ -2870,6 +2879,7 @@ const styles = StyleSheet.create({
     elevation: 5,
     borderWidth: 1.2,
     borderColor: "rgba(190,130,255,0.28)",
+    flex: 1,
     minHeight: 140,
     alignItems: "center",
     justifyContent: "center",
@@ -3083,6 +3093,8 @@ const styles = StyleSheet.create({
   },
   summarySubtext: {
     fontSize: 9,
+    lineHeight: 12,
+    minHeight: 12,
     color: premium.textSecondary,
     marginTop: 1,
     textAlign: "center",
