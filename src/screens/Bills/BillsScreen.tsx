@@ -877,10 +877,10 @@ export const BillsScreen = () => {
   const filteredBills = getFilteredBills();
   const totalPending = activeBills
     .filter((b) => b.status === "pending")
-    .reduce((sum, b) => sum + b.amount, 0);
+    .reduce((sum, b) => sum + (Number(b.amount) || 0), 0);
   const totalOverdue = activeBills
     .filter((b) => b.status === "overdue")
-    .reduce((sum, b) => sum + b.amount, 0);
+    .reduce((sum, b) => sum + (Number(b.amount) || 0), 0);
 
   const screenTitle = isConsultorManagingClient
     ? "Contas do Cliente"

@@ -202,6 +202,21 @@ export const planningServices = {
           billsCount: ((data as any)?.bills || []).length,
         });
       }
+      const toJsDate = (value: any): Date | undefined => {
+        if (!value) return undefined;
+        if (typeof value?.toDate === "function") {
+          const converted = value.toDate();
+          return converted instanceof Date && !Number.isNaN(converted.getTime())
+            ? converted
+            : undefined;
+        }
+        if (value instanceof Date) {
+          return Number.isNaN(value.getTime()) ? undefined : value;
+        }
+        const parsed = new Date(value);
+        return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+      };
+
       // convert nested arrays with Timestamps to Date objects
       const bills = (data.bills || []).map((b) => ({
         id: b.id,
@@ -210,18 +225,18 @@ export const planningServices = {
         dailyTracking: Boolean(b.dailyTracking),
         paymentMethod: b.paymentMethod,
         dueDay: b.dueDay,
-        dueDate: b.dueDate ? b.dueDate.toDate() : undefined,
+        dueDate: toJsDate(b.dueDate),
         amountCard: b.amountCard,
         amountCash: b.amountCash,
         categoryId: b.categoryId,
         recurring: b.recurring,
         notes: b.notes,
         status: b.status,
-        paidDate: b.paidDate ? b.paidDate.toDate() : undefined,
+        paidDate: toJsDate(b.paidDate),
         markedOverdue: b.markedOverdue === true,
         inactive: b.inactive === true,
-        createdAt: b.createdAt ? b.createdAt.toDate() : undefined,
-        updatedAt: b.updatedAt ? b.updatedAt.toDate() : undefined,
+        createdAt: toJsDate(b.createdAt),
+        updatedAt: toJsDate(b.updatedAt),
       }));
 
       if (__DEV__) {
@@ -248,8 +263,8 @@ export const planningServices = {
         notes: it.notes,
         amountCard: it.amountCard,
         amountCash: it.amountCash,
-        createdAt: it.createdAt ? it.createdAt.toDate() : undefined,
-        updatedAt: it.updatedAt ? it.updatedAt.toDate() : undefined,
+        createdAt: toJsDate(it.createdAt),
+        updatedAt: toJsDate(it.updatedAt),
       }));
 
       const expectedExpenses = (data.expectedExpenses || []).map((it) => ({
@@ -263,8 +278,8 @@ export const planningServices = {
         notes: it.notes,
         amountCard: it.amountCard,
         amountCash: it.amountCash,
-        createdAt: it.createdAt ? it.createdAt.toDate() : undefined,
-        updatedAt: it.updatedAt ? it.updatedAt.toDate() : undefined,
+        createdAt: toJsDate(it.createdAt),
+        updatedAt: toJsDate(it.updatedAt),
       }));
 
       const consultantCardInvoices = (data.consultantCardInvoices || []).map(
@@ -276,7 +291,7 @@ export const planningServices = {
             item.expectedAmount !== undefined && item.expectedAmount !== null
               ? Number(item.expectedAmount)
               : undefined,
-          updatedAt: item.updatedAt ? item.updatedAt.toDate() : undefined,
+          updatedAt: toJsDate(item.updatedAt),
         }),
       );
 
@@ -292,14 +307,12 @@ export const planningServices = {
               : undefined,
         monthlyIncome: data.monthlyIncome,
         consumoModerado: data.consumoModerado,
-        consumoModeradoCycleStartedAt: data.consumoModeradoCycleStartedAt
-          ? data.consumoModeradoCycleStartedAt.toDate()
-          : null,
+        consumoModeradoCycleStartedAt:
+          toJsDate(data.consumoModeradoCycleStartedAt) || null,
         consumoModeradoCard: data.consumoModeradoCard,
         consumoModeradoCash: data.consumoModeradoCash,
-        consumoModeradoCycleEndedAt: data.consumoModeradoCycleEndedAt
-          ? data.consumoModeradoCycleEndedAt.toDate()
-          : null,
+        consumoModeradoCycleEndedAt:
+          toJsDate(data.consumoModeradoCycleEndedAt) || null,
         consumoModeradoCycleStatus: data.consumoModeradoCycleStatus,
         consumoModeradoCycleDurationDays: data.consumoModeradoCycleDurationDays,
         categoryReleases: mapCategoryReleasesFromFirestore(

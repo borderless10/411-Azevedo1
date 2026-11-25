@@ -21,9 +21,21 @@ type BillNotificationInput = {
   id: string;
   title: string;
   amount: number;
-  dueDate: Date;
+  dueDate?: Date | null;
   status?: string;
   _isExpectedExpense?: boolean;
+};
+
+const toValidDate = (value: unknown): Date | null => {
+  if (value == null || value === "") return null;
+  const date =
+    value instanceof Date
+      ? value
+      : typeof (value as { toDate?: () => Date })?.toDate === "function"
+        ? (value as { toDate: () => Date }).toDate()
+        : new Date(value as string | number | Date);
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return null;
+  return date;
 };
 
 type ExpectedIncomeNotificationInput = {
@@ -172,13 +184,20 @@ export const scheduleBillNotification = async (
   }
 
   try {
+    const validDueDate = toValidDate(dueDate);
+    // Invalid Date no trigger nativo derruba o app (iOS/Android).
+    if (!validDueDate) {
+      await cancelBillNotification(billId);
+      return null;
+    }
+
     const hasPermission = await requestNotificationPermissions();
     if (!hasPermission) return null;
 
     await cancelBillNotification(billId);
 
     const now = new Date();
-    const baseDate = new Date(dueDate);
+    const baseDate = new Date(validDueDate);
     baseDate.setHours(9, 0, 0, 0);
 
     const reminders = [
@@ -213,7 +232,10 @@ export const scheduleBillNotification = async (
     for (const reminder of reminders) {
       const triggerDate = new Date(baseDate);
       triggerDate.setDate(triggerDate.getDate() + reminder.offsetDays);
-      if (triggerDate <= now) {
+      if (
+        Number.isNaN(triggerDate.getTime()) ||
+        triggerDate.getTime() <= now.getTime()
+      ) {
         continue;
       }
 
@@ -454,8 +476,9 @@ export const syncBillNotifications = async (
       .trim()
       .toLowerCase();
     const isPaid = status === "paid" || status === "paga";
+    const dueDate = toValidDate(bill.dueDate);
 
-    if (isPaid || bill._isExpectedExpense) {
+    if (isPaid || bill._isExpectedExpense || !dueDate) {
       await cancelBillNotification(bill.id);
       continue;
     }
@@ -464,7 +487,7 @@ export const syncBillNotifications = async (
       bill.id,
       bill.title,
       Number(bill.amount) || 0,
-      new Date(bill.dueDate),
+      dueDate,
     );
   }
 };

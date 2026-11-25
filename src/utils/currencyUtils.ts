@@ -31,10 +31,12 @@ export const formatCurrency = (
   locale: string = "pt-BR",
   currency: string = "BRL",
 ): string => {
+  const amount = Number(value);
+  const safeValue = Number.isFinite(amount) ? amount : 0;
   return new Intl.NumberFormat(locale, {
     style: "currency",
     currency,
-  }).format(value);
+  }).format(safeValue);
 };
 
 /**
